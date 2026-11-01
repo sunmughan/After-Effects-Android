@@ -31,4 +31,6 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 ## Development status
 
+The M0 repository/dependency audit is tracked in [docs/M0_REPOSITORY_AUDIT.md](docs/M0_REPOSITORY_AUDIT.md). M0 is not considered complete until the current-head Android CI, resolved dependency-license inventory, and exact Rust toolchain pin are verified.
+
 See [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge, build commands, and engine integration gates.
