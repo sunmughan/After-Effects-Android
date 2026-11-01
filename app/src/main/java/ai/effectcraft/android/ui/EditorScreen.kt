@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -38,6 +41,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,7 +89,8 @@ fun EditorScreen(
     onScrub: (Int) -> Unit,
     onTogglePlayback: () -> Unit
 ) {
-    val selectedTool = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("Select") }
+    val selectedTool = remember { mutableStateOf("Select") }
+    var showPhoneInspector by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -133,6 +141,7 @@ fun EditorScreen(
             ToolBar(
                 selectedTool = selectedTool.value,
                 onSelectTool = { selectedTool.value = it },
+                onOpenInspector = { showPhoneInspector = true },
                 onAddLayer = onAddLayer
             )
 
@@ -149,6 +158,25 @@ fun EditorScreen(
                     .height(if (isTabletLayout) 222.dp else 204.dp)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
             )
+        }
+
+        if (showPhoneInspector && !isTabletLayout) {
+            ModalBottomSheet(
+                onDismissRequest = { showPhoneInspector = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = EditorPalette.background,
+                contentColor = EditorPalette.text
+            ) {
+                InspectorPanel(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 320.dp, max = 560.dp)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    layer = selectedLayer,
+                    onOpacityChange = onOpacityChange,
+                    onDeleteLayer = onDeleteLayer
+                )
+            }
         }
     }
 }
@@ -471,6 +499,7 @@ private fun PropertyValueLine(label: String, value: String) {
 private fun ToolBar(
     selectedTool: String,
     onSelectTool: (String) -> Unit,
+    onOpenInspector: () -> Unit,
     onAddLayer: () -> Unit
 ) {
     Row(
@@ -496,9 +525,13 @@ private fun ToolBar(
             }
         }
 
+        TextButton(onClick = onOpenInspector) {
+            Icon(Icons.Outlined.Tune, contentDescription = null, tint = EditorPalette.violet)
+            Text("Props", color = EditorPalette.violet, fontSize = 11.sp)
+        }
         TextButton(onClick = onAddLayer) {
             Icon(Icons.Outlined.Add, contentDescription = null, tint = EditorPalette.violet)
-            Text("Layer", color = EditorPalette.violet, fontSize = 12.sp)
+            Text("Layer", color = EditorPalette.violet, fontSize = 11.sp)
         }
     }
 }
