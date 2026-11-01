@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: bootstrap in progress.** This repository started empty. The first milestone establishes the Android application shell, adaptive editing workspace, and local draft persistence. It is not yet the full EffectCraft rendering engine, and its starter draft format is not yet compatible with upstream `.ecproj` projects.
+> **Current status: bootstrap in progress.** This repository started empty. The first milestone establishes the Android application shell, adaptive editing workspace, and local draft persistence. The first JNI bridge now uses the pinned upstream Rust `effectcraft-project` model to inspect canonical `.ecproj` JSON. Full session editing, composition rendering, media decoding, and export are still being integrated.
 
 ## Product direction
 
@@ -27,8 +27,8 @@ The minimum Android version and required SDK packages are documented in [docs/AN
 
 ## Offline by design
 
-The Android manifest intentionally does not request the `INTERNET` permission. The bootstrap application stores draft projects in app-private storage. Import/export through Android's Storage Access Framework and upstream project-format compatibility are tracked as implementation milestones.
+The Android manifest intentionally does not request the `INTERNET` permission. The bootstrap application stores draft projects in app-private storage. The ARM64 JNI bridge is built in CI; Android Storage Access Framework import/export and complete project editing/rendering remain implementation milestones.
 
 ## Development status
 
-See [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for architecture decisions, milestone boundaries, and the known limitations of the current bootstrap.
+See [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge, build commands, and engine integration gates.
