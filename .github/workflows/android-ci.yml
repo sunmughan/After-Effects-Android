@@ -62,6 +62,8 @@ jobs:
           python3 scripts/generate-rust-license-inventory.py < build/audit/cargo-metadata.json > build/audit/rust-license-inventory.md
           cargo tree --manifest-path native/Cargo.toml -e normal --prefix none > build/audit/rust-runtime-dependency-tree.txt
           gradle --no-daemon :app:dependencies --configuration debugRuntimeClasspath > build/audit/android-runtime-dependency-tree.txt
+          gradle --no-daemon --no-parallel :app:generateLicenseReport
+          cp -R app/build/reports/dependency-license build/audit/android-license-report
 
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
