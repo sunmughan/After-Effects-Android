@@ -31,7 +31,7 @@ fn inspect_project(source: &str) -> Result<String, String> {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_inspectEcproj(
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_inspectEcprojNative(
     mut env: JNIEnv,
     _class: JClass,
     source: JString,
