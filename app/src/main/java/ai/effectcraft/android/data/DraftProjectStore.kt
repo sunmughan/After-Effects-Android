@@ -1,0 +1,124 @@
+package ai.effectcraft.android.data
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
+/**
+ * Stores bootstrap editor drafts in app-private storage.
+ *
+ * This deliberately uses the explicit .efx-draft extension. It is not the
+ * upstream EffectCraft .ecproj format; conversion is gated on engine integration.
+ */
+class DraftProjectStore(context: Context) {
+    private val projectDirectory = File(context.filesDir, "projects")
+
+    @Throws(IOException::class)
+    fun save(project: ProjectDocument): File {
+        if (!projectDirectory.exists() && !projectDirectory.mkdirs()) {
+            throw IOException("Unable to create the local projects directory")
+        }
+
+        val updated = project.copy(updatedAtEpochMillis = System.currentTimeMillis())
+        val fileName = "${safeName(updated.name)}-${updated.id.take(8)}.efx-draft"
+        val target = File(projectDirectory, fileName)
+        val temporary = File(projectDirectory, "$fileName.tmp")
+        temporary.writeText(encode(updated).toString(2), Charsets.UTF_8)
+
+        try {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (_: Exception) {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        }
+        return target
+    }
+
+    fun loadLatest(): ProjectDocument? {
+        val candidates = projectDirectory.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".efx-draft") }
+            ?.sortedByDescending(File::lastModified)
+            .orEmpty()
+
+        return candidates.firstNotNullOfOrNull { file ->
+            runCatching { decode(JSONObject(file.readText(Charsets.UTF_8))) }.getOrNull()
+        }
+    }
+
+    private fun encode(project: ProjectDocument): JSONObject = JSONObject().apply {
+        put("format", "effectcraft-android-draft")
+        put("formatVersion", 1)
+        put("id", project.id)
+        put("name", project.name)
+        put("width", project.width)
+        put("height", project.height)
+        put("frameRate", project.frameRate)
+        put("durationFrames", project.durationFrames)
+        put("updatedAtEpochMillis", project.updatedAtEpochMillis)
+        put("layers", JSONArray().apply {
+            project.layers.forEach { layer ->
+                put(JSONObject().apply {
+                    put("id", layer.id)
+                    put("name", layer.name)
+                    put("kind", layer.kind)
+                    put("opacity", layer.opacity.toDouble())
+                    put("tint", layer.tint)
+                })
+            }
+        })
+    }
+
+    private fun decode(json: JSONObject): ProjectDocument {
+        require(json.optString("format") == "effectcraft-android-draft") {
+            "Unsupported draft format"
+        }
+        require(json.optInt("formatVersion") == 1) { "Unsupported draft version" }
+
+        val layersJson = json.optJSONArray("layers") ?: JSONArray()
+        val layers = buildList {
+            for (index in 0 until layersJson.length()) {
+                val layer = layersJson.getJSONObject(index)
+                add(
+                    LayerDocument(
+                        id = layer.getString("id"),
+                        name = layer.getString("name"),
+                        kind = layer.getString("kind"),
+                        opacity = layer.optDouble("opacity", 1.0).toFloat().coerceIn(0f, 1f),
+                        tint = layer.optLong("tint", 0xFF9278F6)
+                    )
+                )
+            }
+        }
+
+        return ProjectDocument(
+            id = json.getString("id"),
+            name = json.optString("name", "Untitled Composition"),
+            width = json.optInt("width", 1080).coerceAtLeast(1),
+            height = json.optInt("height", 1920).coerceAtLeast(1),
+            frameRate = json.optInt("frameRate", 30).coerceIn(1, 240),
+            durationFrames = json.optInt("durationFrames", 150).coerceAtLeast(1),
+            layers = layers,
+            updatedAtEpochMillis = json.optLong("updatedAtEpochMillis", 0L)
+        )
+    }
+
+    private fun safeName(value: String): String {
+        val normalized = value.trim()
+            .replace(Regex("[^A-Za-z0-9_-]+"), "-")
+            .trim('-')
+            .take(48)
+        return normalized.ifBlank { "untitled" }
+    }
+}
