@@ -55,16 +55,27 @@ jobs:
       - name: Test Rust bridge
         run: cargo test --manifest-path native/Cargo.toml
 
+      - name: Generate resolved dependency and license inventory
+        run: |
+          mkdir -p build/audit
+          cargo metadata --format-version 1 --manifest-path native/Cargo.toml > build/audit/cargo-metadata.json
+          python3 scripts/generate-rust-license-inventory.py < build/audit/cargo-metadata.json > build/audit/rust-license-inventory.md
+          cargo tree --manifest-path native/Cargo.toml -e normal --prefix none > build/audit/rust-runtime-dependency-tree.txt
+          gradle --no-daemon :app:dependencies --configuration debugRuntimeClasspath > build/audit/android-runtime-dependency-tree.txt
+
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
 
-      - name: Upload debug APK
+      - name: Upload Android build and audit reports
         uses: actions/upload-artifact@v4
         with:
-          name: effectcraft-android-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: effectcraft-android-build-and-audit
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            native/Cargo.lock
+            build/audit/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
