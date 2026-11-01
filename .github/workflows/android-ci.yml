@@ -12,6 +12,9 @@ jobs:
   android:
     name: Assemble and test
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -33,11 +36,11 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" --licenses
 
       - name: Install Android NDK
         run: |
-          sdkmanager --install "ndk;28.2.13676358"
+          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" --install "ndk;28.2.13676358"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
       - name: Install cargo-ndk
