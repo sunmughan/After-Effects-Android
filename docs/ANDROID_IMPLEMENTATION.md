@@ -60,14 +60,14 @@ The current Kotlin draft store is intentionally isolated. Once the upstream proj
 
 ## Milestones
 
-### M0 — Android shell (started)
+### M1 — Native Android shell (bootstrap implemented)
 - [x] Empty repository initialized.
 - [x] Native app module and offline manifest.
 - [x] Adaptive phone/tablet editor shell.
 - [x] Basic layer, opacity, timeline and draft-save interactions.
 - [ ] First successful Android CI build and device smoke test.
 
-### M1 — Upstream engine integration
+### M2 — Shared Rust project and engine integration
 - [x] Pin upstream EffectCraft commit and audit project/engine crate boundaries.
 - [x] Add a standalone Rust JNI library using the upstream `effectcraft-project` model.
 - [x] Add an ARM64 `cargo-ndk` build and Rust bridge tests to Android CI.
@@ -77,20 +77,20 @@ The current Kotlin draft store is intentionally isolated. Once the upstream proj
 - [ ] Add engine session commands, undo/redo and composition frame rendering.
 - [ ] Prove a rendered frame on a physical ARM64 phone and tablet.
 
-### M2 — Real editor workflows
+### M3 — Adaptive real editor workflows
 - [ ] Replace placeholder viewer with engine-backed composition rendering.
 - [ ] Implement transform, keyframe, mask, text, shape and effect editors.
 - [ ] Add undo/redo, robust selection, multi-touch gestures and stylus pressure.
 - [ ] Add SAF import/export, persisted URI grants and media relinking.
 - [ ] Migrate draft documents to the canonical versioned project format.
 
-### M3 — Offline media and rendering
+### M4 — Offline media and rendering
 - [ ] Integrate audio preview and timeline synchronization.
 - [ ] Validate software decode/encode, then add Android MediaCodec paths.
 - [ ] Add render queue, progress, cancellation and foreground export service.
 - [ ] Add proxy/cache controls, thermal and memory budgeting, GPU-loss recovery.
 
-### M4 — Production hardening
+### M5 — Production hardening
 - [ ] Test low/mid/high-end phones, tablets and foldables.
 - [ ] Validate save recovery, process death, rotation and background/foreground lifecycle.
 - [ ] Benchmark 720p, 1080p and 4K workflows; define device capability tiers.
