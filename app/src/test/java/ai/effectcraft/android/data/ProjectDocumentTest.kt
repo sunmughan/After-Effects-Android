@@ -24,6 +24,6 @@ class ProjectDocumentTest {
 
         assertNotEquals(first.id, second.id)
         assertEquals("Shape", first.kind)
-        assertEquals(1f, first.opacity)
+        assertEquals(1f, first.opacity, 0f)
     }
 }
