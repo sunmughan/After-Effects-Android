@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.github.jk1.dependency-license-report") version "3.1.4"
 }
 
 android {
@@ -44,4 +45,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+licenseReport {
+    configurations = arrayOf("debugRuntimeClasspath")
 }
