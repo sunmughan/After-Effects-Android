@@ -27,6 +27,26 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
+      - name: Set up Rust Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: sdkmanager --install "ndk;28.2.13676358"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build shared Rust project bridge (ARM64)
+        run: cargo ndk -t arm64-v8a -o app/src/main/jniLibs build --release --manifest-path native/Cargo.toml
+
+      - name: Test Rust bridge
+        run: cargo test --manifest-path native/Cargo.toml
+
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
 
