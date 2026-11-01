@@ -27,9 +27,10 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Set up Rust Android target
+      - name: Set up pinned Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.99.1
           targets: aarch64-linux-android
 
       - name: Set up Android SDK and NDK
@@ -40,7 +41,9 @@ jobs:
           accept-android-sdk-licenses: true
 
       - name: Configure Android NDK
-        run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
