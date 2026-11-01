@@ -14,11 +14,14 @@ An offline-first Android editor project targeting phones, tablets, and foldables
 
 ## Build
 
-Open the project in Android Studio with a compatible JDK and Android SDK, or use the Gradle wrapper:
+Open the project in Android Studio with JDK 17 and Android SDK Platform 37, or install Gradle 9.5.0 and run:
 
 ```bash
-./gradlew :app:assembleDebug
+gradle :app:assembleDebug
+gradle :app:testDebugUnitTest
 ```
+
+A Gradle Wrapper JAR has not been committed in this bootstrap; the CI workflow provisions Gradle 9.5.0 directly.
 
 The minimum Android version and required SDK packages are documented in [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md).
 
