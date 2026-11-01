@@ -65,13 +65,16 @@ The current Kotlin draft store is intentionally isolated. Once the upstream proj
 - [x] Native app module and offline manifest.
 - [x] Adaptive phone/tablet editor shell.
 - [x] Basic layer, opacity, timeline and draft-save interactions.
-- [ ] First Android CI build and device smoke test.
+- [ ] First successful Android CI build and device smoke test.
 
 ### M1 — Upstream engine integration
-- [ ] Pin an EffectCraft upstream commit and audit its license/dependency graph.
-- [ ] Add a Rust Android library build for arm64-v8a.
-- [ ] Split desktop-only UI/OS dependencies away from shared crates.
-- [ ] Add JNI contracts for project open/save, composition metadata and frame rendering.
+- [x] Pin upstream EffectCraft commit and audit project/engine crate boundaries.
+- [x] Add a standalone Rust JNI library using the upstream `effectcraft-project` model.
+- [x] Add an ARM64 `cargo-ndk` build and Rust bridge tests to Android CI.
+- [x] Add Kotlin lazy-loading boundary for the native library.
+- [ ] Add valid upstream `.ecproj` fixtures and round-trip compatibility tests.
+- [ ] Wire SAF-backed project open/save and persisted URI grants.
+- [ ] Add engine session commands, undo/redo and composition frame rendering.
 - [ ] Prove a rendered frame on a physical ARM64 phone and tablet.
 
 ### M2 — Real editor workflows
@@ -96,3 +99,8 @@ The current Kotlin draft store is intentionally isolated. Once the upstream proj
 ## Offline acceptance checklist
 
 A production release must be able to launch, create/open/save projects, edit, preview, render and export without an account, network access, cloud service, or remote license check. User media must remain accessible through app-managed storage or persisted SAF permissions. This bootstrap currently satisfies offline launch and local draft persistence only.
+
+
+## Native bridge progress (2026-11-01)
+
+The separate [native integration note](NATIVE_ENGINE_INTEGRATION.md) records the exact upstream pin and staged build gates. The first JNI slice validates project JSON through the upstream project model and reports composition metadata. The Android workflow is being expanded to compile and package the ARM64 shared library; a successful CI result is still required before calling this slice build-verified.
