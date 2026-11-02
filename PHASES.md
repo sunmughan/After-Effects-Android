@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-03 (M0 CI hardening in progress; M1 acceptance pending; M2–M4 remain sequenced after M1)
-Latest implementation commit before this run: `9743f95268b4efc7a9044f90a30627df0d0fcd27` fixed four instrumentation failures from CI #236: wide-window test Activity export/process configuration, phone inspector dismissal after deleting its selected layer, Save status using the project name rather than draft filename, and strictly increasing persisted save timestamps so `loadLatest()` selects the newest save. CI #237 reached ARM64 native compilation successfully, then began x86_64 compilation; this run is being superseded by a cache/timeout hardening commit before test execution. No current-head instrumentation pass is claimed.
+Latest implementation commit: `fb2c9bc504e0ab0dd20a964e899f78d78864b180` fixes selected-layer deletion behavior: deleting a selected layer now selects the surviving layer at the removed stack index (or the previous last layer), rather than potentially leaving selection pointing at a deleted ID. Added a pure reducer regression test for first/middle/only-layer deletion. CI #240 is pending on this exact implementation head; no new test pass is claimed.
 
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
@@ -29,6 +29,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Add/select/remove layers, opacity slider, timeline scrubbing and transport simulation.
 - [x] Emulator smoke tests for launch, New, add-layer action and draft round-trip.
 - [x] Layer reorder (up/down) wired in the inspector; pure reducer has tests for order, identity, edge clamping and unknown IDs (CI verification pending for this implementation commit).
+- [x] Delete-selection continuity: reducer chooses the adjacent surviving layer after deleting the selected first/middle layer and preserves selection when the last-layer invariant blocks deletion; regression test `deletingSelectedLayerSelectsAdjacentLayerAndPreservesSelectionWhenDeletionIsRejected` added in `fb2c9bc5` (CI #240 pending).
 - [x] Bounded (50 snapshots) project undo/redo history wired for new composition, add/remove/reorder and opacity changes; emulator test covers add-layer undo/redo (CI pending).
 - [x] Layer visibility toggle is stateful, persisted in `.efx-draft` schema v1 with backward-compatible default `true`, and undoable; instrumentation draft round-trip covers hidden layer.
 - [x] CI failure diagnosis: unit test had an incorrect expected ID for moving first layer to end; corrected in `427f54a112a0167d6d3272613d94a7518bac6d78` (the subsequent run's unit tests passed; emulator infrastructure failed before test installation).

@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** Gradle Wrapper 9.5.0 is committed (`eb2c6498`) with distribution checksum. CI #236 built/tested Kotlin/Rust but failed 3 instrumentation cases; latest source fix `9743f952` addresses the four reported assertions/state defects. CI #237 completed ARM64 compilation and was superseded during x86_64 compile to add Cargo caching and a 90-minute cold-build budget; the replacement run must pass all 14 instrumentation tests before M0/M1 acceptance. See [PHASES.md](PHASES.md).
+ > **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** Gradle Wrapper 9.5.0 is committed (`eb2c6498`) with distribution checksum. CI #236's instrumentation defects were corrected in `9743f952`; CI #237 was superseded during x86_64 compilation to add Cargo caching and a 90-minute cold-build budget. Latest editor fix `fb2c9bc5` keeps layer selection valid after deleting the selected layer and adds a reducer regression test. CI #240 is pending on this head; no current-head pass is claimed. See [PHASES.md](PHASES.md).
 
 ## Product direction
 
