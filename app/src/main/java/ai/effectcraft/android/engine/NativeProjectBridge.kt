@@ -45,6 +45,13 @@ object NativeProjectBridge {
             .getOrNull()?.takeIf { it.size >= 8 }
     }
 
+    /** Sets canonical Transform/Position X and Y while preserving the existing Z value. */
+    fun setLayerPositionEcproj(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerPositionEcprojNative(json, compositionId, layerId, x, y) }.getOrNull()
+    }
+
     /** Sets the upstream Transform/Opacity property (0–100 percent). */
     fun setLayerOpacityEcproj(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String? {
         ensureLoaded()
@@ -90,6 +97,9 @@ object NativeProjectBridge {
             loadAttempted = true
         }
     }
+
+    @JvmStatic
+    private external fun setLayerPositionEcprojNative(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String
 
     @JvmStatic
     private external fun setLayerOpacityEcprojNative(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String
