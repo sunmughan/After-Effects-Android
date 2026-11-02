@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 # Avoid spending runners on stale commits while the PR is actively changing.
 concurrency:
@@ -39,7 +39,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
-          targets: aarch64-linux-android
+          targets: aarch64-linux-android,x86_64-linux-android
 
       - name: Set up Android SDK and NDK
         uses: android-actions/setup-android@v3
@@ -59,6 +59,17 @@ jobs:
       - name: Build shared Rust project bridge (ARM64)
         working-directory: native
         run: cargo ndk -t arm64-v8a -o ../app/src/main/jniLibs build --release
+
+      - name: Build shared Rust project bridge (x86_64 emulator)
+        working-directory: native
+        run: cargo ndk -t x86_64 -o ../app/src/main/jniLibs build --release
+
+      - name: Verify packaged JNI ABIs
+        run: |
+          test -s app/src/main/jniLibs/arm64-v8a/libeffectcraft_android.so
+          test -s app/src/main/jniLibs/x86_64/libeffectcraft_android.so
+          file app/src/main/jniLibs/arm64-v8a/libeffectcraft_android.so
+          file app/src/main/jniLibs/x86_64/libeffectcraft_android.so
 
       - name: Test Rust bridge
         run: cargo test --manifest-path native/Cargo.toml
