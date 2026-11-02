@@ -1,6 +1,10 @@
 package ai.effectcraft.android
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onNode
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -44,6 +48,16 @@ class EditorSmokeTest {
         compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
         compose.onNodeWithText("Redo").performClick()
         compose.onNodeWithText("Redo · unsaved").assertIsDisplayed()
+    }
+
+
+    @Test
+    fun inspectorRenamesSelectedLayer() {
+        compose.onNodeWithText("Props").performClick()
+        compose.onNode(hasSetTextAction()).performTextClearance()
+        compose.onNode(hasSetTextAction()).performTextInput("Mobile title")
+        compose.onNodeWithText("Apply").performClick()
+        compose.onNodeWithText("Mobile title").assertIsDisplayed()
     }
 
     @Test
