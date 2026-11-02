@@ -50,7 +50,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Native metadata lists composition and layer IDs/names/source/visibility; Android canonical-project sheet selects composition/layer and renames via Rust project model, reserializes and atomically caches the edited `.ecproj` (ARM64 runtime only; CI x86_64 bridge cannot execute JNI).
 - [x] Instrumentation test verifies the canonical document cache preserves source bytes.
 - [x] Wire native canonical rename operation into imported-project editor UI and update imported document cache after edits.
-- [x] Add tested Rust canonical Text-layer creation operation (`build::layer` with upstream `LayerSource::Text`), including trimmed-name validation, composition existence checks, generated stable layer ID, canonical serialization and metadata round-trip; expose it via JNI/Kotlin bridge (`3c10203`, `83985cb`).
+- [x] Add Rust canonical Text-layer creation operation (`build::layer` with upstream `LayerSource::Text`), trimmed-name validation, composition existence checks, generated layer ID, serialization/metadata tests; expose JNI/Kotlin bridge (`3c10203`, `83985cb`).
+- [x] CI root-cause fix: `cargo test` had unresolved direct fixture crates `effectcraft_color`/`effectcraft_time` despite transitive upstream dependencies; add exact pinned upstream dependencies (`69507b8`).
 - [x] Add Text-layer creation action to imported-project UI; native unit tests cover real model creation, invalid names/missing composition and serialization.
 - [ ] Verify canonical import → add/rename → export through JNI on physical ARM64 device.
 - [x] Restore canonical project metadata from app-private cache on app restart; composition/layer list uses scrollable selection.
