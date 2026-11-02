@@ -1,6 +1,9 @@
 package ai.effectcraft.android
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -14,6 +17,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import ai.effectcraft.android.ui.EditorScreen
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.data.ProjectDocument
@@ -26,6 +30,58 @@ import org.junit.Test
 class EditorSmokeTest {
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+
+
+    @Test
+    fun wideWindowKeepsInspectorAndPreviewSideBySide() {
+        val project = ProjectDocument.starter()
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                EditorScreen(
+                    project = project,
+                    selectedLayer = project.layers.first(),
+                    selectedLayerId = project.layers.first().id,
+                    playheadFrame = 0,
+                    isPlaying = false,
+                    saveMessage = "Saved",
+                    canUndo = false,
+                    canRedo = false,
+                    onUndo = {},
+                    onRedo = {},
+                    onSave = {},
+                    onValidateEcproj = {},
+                    onExportEcproj = {},
+                    onNewProject = {},
+                    onAddLayer = {},
+                    onSelectLayer = {},
+                    onDeleteLayer = {},
+                    onMoveLayer = {},
+                    onVisibilityChange = {},
+                    onRenameLayer = {},
+                    onOpacityChange = {},
+                    onScrub = {},
+                    onTogglePlayback = {},
+                    onApplyComposition = { _, _, _, _ -> },
+                    canonicalProject = null,
+                    canEditCanonicalProject = false,
+                    onRenameCanonicalLayer = { _, _, _ -> },
+                    onAddCanonicalTextLayer = { _, _ -> },
+                    onSetCanonicalLayerVisibility = { _, _, _ -> },
+                    onMoveCanonicalLayer = { _, _, _ -> },
+                    onDeleteCanonicalLayer = { _, _ -> },
+                    onSetCanonicalLayerOpacity = { _, _, _ -> },
+                    onSetCanonicalLayerPosition = { _, _, _, _ -> },
+                    onSetCanonicalLayerScale = { _, _, _, _ -> },
+                    onSetCanonicalLayerRotation = { _, _, _ -> },
+                    onRelinkCanonicalAsset = {},
+                    onRenderCanonicalFrame = { _, _ -> null }
+                )
+            }
+        }
+
+        compose.onNodeWithText("COMPOSITION VIEWER").assertIsDisplayed()
+        compose.onNodeWithText("PROPERTIES").assertIsDisplayed()
+    }
 
     @Test
     fun editorLaunchesWithOfflineCompositionWorkspace() {
