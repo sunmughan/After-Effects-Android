@@ -87,7 +87,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 ## M4 — Editing/effects/timeline parity
 **Status: IN PROGRESS (first canonical property edit)**
 - [x] Canonical Transform/Opacity is now a real upstream `Property` mutation (0–100, key-aware at frame zero), exposed by JNI, reflected in metadata and edited with a commit-on-release slider; each change reserializes the `.ecproj` and refreshes CPU preview (`9a0af7d`, `340e601`, `7997036`, `1166a2c`, `71509df`). Rust tests cover property mutation/range/ID; Kotlin parser test covers opacity metadata (`e049130`). CI/device validation pending.
-- [ ] Position/anchor/scale/rotation editing and text/shape/effect parameter UI; canonical layer lock and selection parity.
+- [x] Canonical Transform/Position X/Y edits preserve Z and key-aware set at frame zero; native model test verifies exact vector and rejects non-finite coordinates/unknown IDs (`b2422dc`); JNI/Kotlin bridge and inspector numeric controls Apply into project cache (`a8a94c2`, `764c311`, `21f4a80`). Parser tests cover X/Y metadata (`0a96985`). CI/device validation pending.
+- [ ] Anchor/scale/rotation editing and text/shape/effect parameter UI; canonical layer lock and selection parity.
 - [ ] Keyframe authoring, interpolation and timeline tracks.
 - [ ] Undo/redo, gestures, multi-selection and selection persistence.
 - [ ] Verify every edit updates engine preview and canonical project data.
