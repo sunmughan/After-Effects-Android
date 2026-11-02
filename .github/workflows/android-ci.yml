@@ -79,6 +79,16 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
 
+      - name: Enable KVM access for Android emulator
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+            ls -l /dev/kvm
+          else
+            echo "GitHub runner has no /dev/kvm device; emulator instrumentation cannot run on this host."
+            exit 1
+          fi
+
       - name: Run Android emulator smoke tests (M1)
         uses: reactivecircus/android-emulator-runner@v2
         with:
