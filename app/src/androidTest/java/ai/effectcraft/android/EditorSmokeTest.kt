@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -126,16 +127,28 @@ class EditorSmokeTest {
     }
 
     @Test
-    fun inspectorOpacityAndVisibilityControlsUpdateSelectedLayer() {
+    fun inspectorOpacityAndVisibilityControlsUpdateSelectedLayerAndUndoRedo() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Props").performClick()
-        compose.onNodeWithContentDescription("Layer visibility").assertIsOn()
-        compose.onNodeWithContentDescription("Layer visibility").performClick()
-        compose.onNodeWithContentDescription("Layer visibility").assertIsOff()
+        val visibility = compose.onNodeWithContentDescription("Layer visibility")
+        visibility.assertIsOn()
+        visibility.performClick()
+        visibility.assertIsOff()
 
-        compose.onNodeWithContentDescription("Layer opacity")
-            .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(0.5f) }
+        val opacity = compose.onNodeWithContentDescription("Layer opacity")
+        opacity.performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(0.5f) }
+        assertEquals(0.5f, opacity.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0.001f)
         compose.onNodeWithText("50%").assertIsDisplayed()
+
+        // Each property mutation is a separate undo snapshot; redo restores the exact values.
+        compose.onNodeWithText("Undo").performClick()
+        assertEquals(1f, opacity.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0.001f)
+        compose.onNodeWithText("Undo").performClick()
+        visibility.assertIsOn()
+        compose.onNodeWithText("Redo").performClick()
+        visibility.assertIsOff()
+        compose.onNodeWithText("Redo").performClick()
+        assertEquals(0.5f, opacity.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0.001f)
     }
 
     @Test
