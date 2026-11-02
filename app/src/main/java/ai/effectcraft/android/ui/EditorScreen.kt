@@ -1,6 +1,8 @@
 package ai.effectcraft.android.ui
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,6 +62,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +74,9 @@ import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectDocument
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.nio.ByteBuffer
 
 private object EditorPalette {
     val background = Color(0xFF0A0C11)
@@ -117,7 +124,8 @@ fun EditorScreen(
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
-    onRelinkCanonicalAsset: (Long) -> Unit
+    onRelinkCanonicalAsset: (Long) -> Unit,
+    onRenderCanonicalFrame: (Long, Long) -> ByteArray?
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
@@ -239,6 +247,7 @@ fun EditorScreen(
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
                     onRelinkAsset = onRelinkCanonicalAsset,
+                    onRenderFrame = onRenderCanonicalFrame,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
@@ -617,6 +626,7 @@ private fun CanonicalProjectEditor(
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
     onRelinkAsset: (Long) -> Unit,
+    onRenderFrame: (Long, Long) -> ByteArray?,
     modifier: Modifier = Modifier
 ) {
     var compositionId by remember { mutableStateOf<Long?>(null) }
@@ -625,6 +635,20 @@ private fun CanonicalProjectEditor(
     val composition = project.compositions.firstOrNull { it.id == compositionId } ?: project.compositions.firstOrNull()
     val layer = composition?.layers?.firstOrNull { it.id == layerId } ?: composition?.layers?.firstOrNull()
     var nameDraft by remember(composition?.id, layer?.id, layer?.name) { mutableStateOf(layer?.name.orEmpty()) }
+    var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
+    var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
+    var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
+    LaunchedEffect(project, composition?.id, previewFrame, canEdit) {
+        if (composition != null && canEdit) {
+            previewMessage = "Rendering frame ${previewFrame}…"
+            renderedFrameBytes = withContext(Dispatchers.Default) { onRenderFrame(composition.id, previewFrame.toLong()) }
+            previewMessage = if (renderedFrameBytes != null) "CPU frame ready · ${previewFrame}" else "Native preview unavailable"
+        } else {
+            renderedFrameBytes = null
+            previewMessage = "ARM64 native renderer required"
+        }
+    }
+    val previewBitmap = remember(renderedFrameBytes) { renderedFrameBytes?.let(::decodeRenderedFrame) }
 
     Column(modifier = modifier.heightIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("CANONICAL .ECPROJ", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
@@ -643,6 +667,24 @@ private fun CanonicalProjectEditor(
                 }
             }
             Text("${composition.width} × ${composition.height} · ${composition.layers.size} layers", color = EditorPalette.muted, fontSize = 11.sp)
+            Text("CPU PREVIEW · ${composition.frameRateNum}/${composition.frameRateDen} FPS", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
+            if (previewBitmap != null) {
+                Image(
+                    bitmap = previewBitmap.asImageBitmap(),
+                    contentDescription = "EffectCraft rendered composition frame",
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                Text(previewMessage, color = EditorPalette.muted, fontSize = 11.sp)
+            }
+            Text("Frame ${previewFrame} / ${composition.durationFrames - 1}", color = EditorPalette.muted, fontSize = 10.sp)
+            Slider(
+                value = previewFrame.toFloat(),
+                onValueChange = { previewFrame = it.roundToInt().coerceIn(0, composition.durationFrames - 1) },
+                valueRange = 0f..(composition.durationFrames - 1).coerceAtLeast(1).toFloat(),
+                modifier = Modifier.semantics { contentDescription = "Canonical preview frame" }
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BasicTextField(
                     value = newTextName,
@@ -736,6 +778,23 @@ private fun CanonicalProjectEditor(
         if (!canEdit) Text("Native editor bridge unavailable for this ABI; import/export remains read-only.", color = EditorPalette.amber, fontSize = 11.sp)
         Spacer(Modifier.height(8.dp))
     }
+}
+
+private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? {
+    if (bytes.size < 8) return null
+    val width = ByteBuffer.wrap(bytes, 0, 4).int
+    val height = ByteBuffer.wrap(bytes, 4, 4).int
+    if (width !in 1..2048 || height !in 1..2048 || bytes.size != 8 + width * height * 4) return null
+    val pixels = IntArray(width * height)
+    for (index in pixels.indices) {
+        val offset = 8 + index * 4
+        val red = bytes[offset].toInt() and 0xff
+        val green = bytes[offset + 1].toInt() and 0xff
+        val blue = bytes[offset + 2].toInt() and 0xff
+        val alpha = bytes[offset + 3].toInt() and 0xff
+        pixels[index] = android.graphics.Color.argb(alpha, red, green, blue)
+    }
+    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
 }
 
 @Composable
