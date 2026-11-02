@@ -45,6 +45,7 @@ class ProjectDocumentTest {
         assertEquals("Shape", first.kind)
         assertEquals(1f, first.opacity, 0f)
     }
+
     @Test
     fun renamingLayerTrimsNameAndPreservesStableIdentity() {
         val layers = ProjectDocument.starter().layers
@@ -69,7 +70,9 @@ class ProjectDocumentTest {
         val removed = ProjectEditorActions.deleteLayer(layers, layers[1].id)
         assertEquals(2, removed.size)
         assertEquals(setOf(layers[0].id, layers[2].id), removed.map { it.id }.toSet())
-        assertEquals(layers, ProjectEditorActions.deleteLayer(listOf(layers[0]), layers[0].id))
+
+        val onlyLayer = listOf(layers[0])
+        assertEquals(onlyLayer, ProjectEditorActions.deleteLayer(onlyLayer, layers[0].id))
         assertEquals(layers, ProjectEditorActions.deleteLayer(layers, "unknown"))
     }
 
