@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 complete (owner accepted); M1 is NOT complete; M2–M4 paused.** Latest M1 implementation commit `77001484` adds offline project validation and playback-progress instrumentation. Follow-up commits only update `PHASES.md`/README; current-head CI is pending after those updates. The unsupported Compose `assertCountEquals` in run #192 was fixed at `77efd7df` without weakening the deletion assertion. The `.efx-draft` preview remains a placeholder, not a real render engine. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
+ > **Current status: M0 complete (owner accepted); M1 remains IN PROGRESS; M2–M4 paused.** M1 code now includes a responsive two-row phone header and status semantics (`9ec1a3f5`), corrected status/rename instrumentation (`3cfcfbd`), and isolated wide-window test activity (`14e6d9b`, `4e91c149`, `1acb7756`). Run #204 passed Rust, ARM64 cross-build, APK assembly and JVM unit tests but failed 7 of 14 Android instrumentation tests; these were actual header/status visibility and test-harness issues, now fixed in code. Fresh current-head CI after `25e1521a` and tracker commit is pending; M1 is not accepted. The draft preview is still a placeholder, not a real renderer. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
 
 ## Product direction
 
