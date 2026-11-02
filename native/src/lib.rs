@@ -50,6 +50,18 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_re
     }
 }
 
+fn layer_opacity_percent(layer: &effectcraft_project::Layer) -> f64 {
+    let mut opacity = None;
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        transform.walk("", &mut |_, property| {
+            if property.match_id == "opacity" {
+                if let Value::Scalar(value) = property.value { opacity = Some(value); }
+            }
+        });
+    }
+    opacity.unwrap_or(100.0)
+}
+
 fn inspect_project(source: &str) -> Result<String, String> {
     let project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -61,7 +73,8 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "id": layer.id.0,
                 "name": layer.name,
                 "source": layer.source.type_name(),
-                "visible": layer.switches.video
+                "visible": layer.switches.video,
+                "opacityPercent": layer_opacity_percent(layer)
             })).collect();
             json!({
                 "id": id.0,
