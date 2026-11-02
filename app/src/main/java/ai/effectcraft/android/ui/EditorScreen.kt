@@ -116,7 +116,8 @@ fun EditorScreen(
     onAddCanonicalTextLayer: (Long, String) -> Unit,
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
-    onDeleteCanonicalLayer: (Long, Long) -> Unit
+    onDeleteCanonicalLayer: (Long, Long) -> Unit,
+    onRelinkCanonicalAsset: (Long) -> Unit
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
@@ -237,6 +238,7 @@ fun EditorScreen(
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
+                    onRelinkAsset = onRelinkCanonicalAsset,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
@@ -614,6 +616,7 @@ private fun CanonicalProjectEditor(
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
+    onRelinkAsset: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var compositionId by remember { mutableStateOf<Long?>(null) }
@@ -715,13 +718,16 @@ private fun CanonicalProjectEditor(
             Text("PROJECT ASSETS · ${mediaItems.size}", color = EditorPalette.muted, fontSize = 10.sp, letterSpacing = 1.1.sp)
             Column(Modifier.heightIn(max = 120.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 mediaItems.forEach { asset ->
-                    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                        Text(
-                            "${asset.name} · ${asset.type}${if (asset.missing) " · MISSING" else ""}",
-                            color = if (asset.missing) EditorPalette.amber else EditorPalette.text,
-                            fontSize = 11.sp
-                        )
-                        Text(asset.path.orEmpty(), color = EditorPalette.muted, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "${asset.name} · ${asset.type}${if (asset.missing) " · MISSING" else ""}",
+                                color = if (asset.missing) EditorPalette.amber else EditorPalette.text,
+                                fontSize = 11.sp
+                            )
+                            Text(asset.path.orEmpty(), color = EditorPalette.muted, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        TextButton(enabled = canEdit, onClick = { onRelinkAsset(asset.id) }) { Text("Relink", color = EditorPalette.violet, fontSize = 10.sp) }
                     }
                 }
                 if (mediaItems.isEmpty()) Text("No linked media assets in this project.", color = EditorPalette.muted, fontSize = 11.sp)
