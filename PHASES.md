@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (automation implementation pass)
-Latest commit: `462fa27cd7ed0bfcc8d0bc7dfaad4dec47803292` (persisted layer visibility + inspector switch; validation pending)
+Latest commit: `8080b7dc2a2444b28d6880289a305527e32923ec` (layer visibility persistence + canonical upstream project JSON test; CI validation pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
