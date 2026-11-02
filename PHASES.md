@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation/test commit: `a61ad38417b12f4eb2bb155f7aac911e85f0592e` (M1 interaction/save tests plus canonical layer stack mutation, asset inventory parsing, offline SAF relinking and Rust validation tests; latest-head CI pending)
+Latest implementation commit: `4c86391915e2df213b0f09b75e97aec6198fc38c` (M1 instrumentation, canonical project/layer/media edits, SAF offline relink, and first upstream CPU frame-render JNI + imported-project preview; latest-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -42,7 +42,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
 
 ## M2 — Project formats, import/save and media
-**Status: IN PROGRESS / canonical model inspection**
+**Status: IN PROGRESS**
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
@@ -71,12 +71,15 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Format boundary:** bootstrap `.efx-draft` is private Android JSON, not `.ecproj`. Adobe `.aep` is proprietary; native import is not promised without a legally available compatible parser/conversion route.
 
 ## M3 — Actual preview/render engine
-**Status: NOT STARTED**
-- [ ] Integrate upstream engine/session APIs into Android native library with Android-compatible feature gates.
-- [ ] Replace Compose placeholder canvas with renderer-backed frame surface.
-- [ ] JNI session lifecycle, frame request/output, error propagation and teardown.
-- [ ] GPU/Vulkan path plus tested fallback/device-loss recovery.
-- [ ] Prove first real composition frame on ARM64 phone/tablet (record device, ABI, SHA).
+**Status: IN PROGRESS (CPU compositor path started; device/media gates remain)**
+- [x] Pin upstream `effectcraft-render` at the same immutable revision; native `render_frame_rgba` parses canonical `.ecproj`, renders through the real CPU `Renderer`/`NoFootage`, and emits bounded RGBA with dimensions. Rust test asserts a 320×180 composition produces a real 160×90 frame payload and rejects bad IDs/negative frames (`b75fe05`, `4f0aa79`).
+- [x] JNI frame request/output bridge and Kotlin wrapper (`4f0aa79`, `5fa1cf2`).
+- [x] Imported canonical editor now renders frames off the UI thread, displays returned pixels as an image, and scrubs frame index (`05e2c4a`, `4c86391`). This is actual upstream CPU compositing—not the decorative draft viewer.
+- [ ] Replace main `.efx-draft` placeholder canvas with project/session-backed rendering; no shared native session yet.
+- [ ] Add Android media `FootageSource` backed by app-private copied assets; current `NoFootage` deliberately leaves footage/video/audio sources undecoded.
+- [ ] JNI session lifecycle, native ownership/threading, cancellation, resize and renderer teardown.
+- [ ] GPU/Vulkan acceleration plus tested CPU fallback/device-loss recovery.
+- [ ] Verify ARM64 native frame on physical phone/tablet; record device, ABI, SHA and pixel evidence.
 
 ## M4 — Editing/effects/timeline parity
 **Status: NOT STARTED**
