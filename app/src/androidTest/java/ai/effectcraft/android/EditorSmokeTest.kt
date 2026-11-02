@@ -24,6 +24,7 @@ import ai.effectcraft.android.data.ProjectDocument
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -171,7 +172,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("Move ↑", substring = true).performClick()
         compose.onNodeWithText("Remove layer", substring = true).performClick()
         compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed()
-        compose.onAllNodesWithText("Shape 4").assertCountEquals(0)
+        assertTrue("Removed layer should no longer be present", compose.onAllNodesWithText("Shape 4").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
