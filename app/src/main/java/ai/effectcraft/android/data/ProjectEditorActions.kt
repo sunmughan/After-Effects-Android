@@ -5,6 +5,9 @@ package ai.effectcraft.android.data
  * unit tested independently of UI layout and Android lifecycle.
  */
 object ProjectEditorActions {
+    /** Rounded frame interval in milliseconds for the composition's configured FPS. */
+    fun frameIntervalMillis(frameRate: Int): Long = (1_000.0 / frameRate.coerceIn(1, 120)).roundToLong().coerceAtLeast(1L)
+
     /**
      * Moves [layerId] by [offset] slots (negative = toward the beginning).
      * The order is clamped to the list bounds; unknown IDs and empty lists

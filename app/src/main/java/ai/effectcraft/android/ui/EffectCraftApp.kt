@@ -136,9 +136,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
-    LaunchedEffect(isPlaying, project.durationFrames) {
+    LaunchedEffect(isPlaying, project.durationFrames, project.frameRate) {
         while (isPlaying) {
-            delay(33L)
+            delay(ProjectEditorActions.frameIntervalMillis(project.frameRate))
             playheadFrame = (playheadFrame + 1) % project.durationFrames.coerceAtLeast(1)
         }
     }

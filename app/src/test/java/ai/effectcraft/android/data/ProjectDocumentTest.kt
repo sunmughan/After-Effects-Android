@@ -7,6 +7,16 @@ import org.junit.Test
 
 class ProjectDocumentTest {
     @Test
+    fun playbackFrameIntervalTracksCompositionFrameRateAndBoundsInvalidValues() {
+        assertEquals(1_000L, ProjectEditorActions.frameIntervalMillis(1))
+        assertEquals(33L, ProjectEditorActions.frameIntervalMillis(30))
+        assertEquals(17L, ProjectEditorActions.frameIntervalMillis(60))
+        assertEquals(8L, ProjectEditorActions.frameIntervalMillis(120))
+        assertEquals(1_000L, ProjectEditorActions.frameIntervalMillis(0))
+        assertEquals(8L, ProjectEditorActions.frameIntervalMillis(240))
+    }
+
+    @Test
     fun starterCompositionUsesVerticalVideoDefaults() {
         val project = ProjectDocument.starter()
 
