@@ -21,4 +21,13 @@ object ProjectEditorActions {
             add(to, removeAt(from))
         }
     }
-}
+
+    /**
+     * Renames a layer without changing its stable ID. Blank names and unknown IDs
+     * are ignored so a UI draft can never corrupt the project model.
+     */
+    fun renameLayer(layers: List<LayerDocument>, layerId: String, name: String): List<LayerDocument> {
+        val normalized = name.trim()
+        if (normalized.isEmpty() || layers.none { it.id == layerId }) return layers
+        return layers.map { if (it.id == layerId) it.copy(name = normalized) else it }
+    }
