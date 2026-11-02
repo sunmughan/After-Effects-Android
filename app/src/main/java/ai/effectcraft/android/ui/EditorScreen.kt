@@ -53,6 +53,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -546,7 +548,7 @@ private fun InspectorPanel(
                 value = layer.opacity,
                 onValueChange = onOpacityChange,
                 valueRange = 0f..1f,
-                modifier = Modifier.padding(top = 3.dp)
+                modifier = Modifier.padding(top = 3.dp).semantics { contentDescription = "Layer opacity" }
             )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -799,6 +801,7 @@ private fun TimelinePanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(28.dp)
+                .semantics { contentDescription = "Timeline playhead" }
         )
 
         Row(
