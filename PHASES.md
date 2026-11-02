@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-03 (M0 closure implementation active; M1 held; M2–M4 paused)
-Latest implementation fix: fb336098ef288745d07a2bda00475d4a5f8daf1d (Compose BorderStroke import). CI #204 at `9ddc9fe9` passed Rust host tests, ARM64 bridge cross-build, APK assembly and JVM unit tests, but Android instrumentation executed 14 tests and failed 7. Exact root causes: compact-phone header's fixed desktop actions squeezed the save/status Text to zero width (status assertions failed in add/save/undo/redo/composition/delete); rename assertion matched both inspector BasicTextField and timeline label; the wide-window test called ComposeTestRule.setContent on MainActivity which already owns content. Fixes committed: `9ec1a3f5` responsive two-row phone header plus explicit Editor status semantics; `3cfcfbd` status-semantic assertions and unambiguous rename count; `14e6d9b` isolated empty EditorTestActivity; `4e91c149` androidTest manifest registration; `1acb7756` actual wide-window instrumentation; `25e1521a` test import cleanup. A fresh full CI run on this exact HEAD is required; no instrumentation pass is claimed yet.
+Updated: 2026-11-03 (M0 CI hardening in progress; M1 acceptance pending; M2–M4 remain sequenced after M1)
+Latest implementation commit before this run: `9743f95268b4efc7a9044f90a30627df0d0fcd27` fixed four instrumentation failures from CI #236: wide-window test Activity export/process configuration, phone inspector dismissal after deleting its selected layer, Save status using the project name rather than draft filename, and strictly increasing persisted save timestamps so `loadLatest()` selects the newest save. CI #237 reached ARM64 native compilation successfully, then began x86_64 compilation; this run is being superseded by a cache/timeout hardening commit before test execution. No current-head instrumentation pass is claimed.
 
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
@@ -12,16 +12,16 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] CI: Rust tests, ARM64 bridge build, APK assembly, Kotlin unit tests, emulator instrumentation, dependency/license inventory.
 - [x] CI concurrency group cancels stale PR commits so only the newest revision consumes a runner.
 - [x] Current-head CI run [41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104) completed **success** (2026-11-02).
-- [ ] Current-head CI must pass dual-ABI packaging and emulator JNI load/parser instrumentation (new tests committed; run pending).
-- [ ] Commit and verify Gradle Wrapper files and use `./gradlew` from clean checkout.
+- [ ] Current-head CI must pass dual-ABI packaging and emulator JNI load/parser instrumentation. Run #237 built ARM64 successfully but was superseded during x86_64 build; hardened run must complete all steps.
+- [x] Official Gradle Wrapper (9.5.0) committed in `eb2c6498e75079550c0c3fb0a5441b36102a2207`; distribution SHA-256 pinned in `gradle/wrapper/gradle-wrapper.properties`; CI selects `./gradlew` when present. Exact-head clean-checkout build is still pending.
 - [x] Validate corrected layer-move edge test and visibility persistence changes: assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`; subsequent unit tests passed on run #92 (emulator infrastructure failed before instrumentation). Latest interaction instrumentation is awaiting run #97.
 - [x] M0 runtime gate is emulator x86_64 JNI invocation; physical ARM64 device validation is explicitly moved to M6 compatibility (not a foundation blocker).
 - [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets in `8f6b406e6934f9c9fc9177f1d88a2c607e33325c`; the run remains slow/in progress and a fresh latest-head CI must verify this configuration.
 - [x] CI root-cause follow-up: an earlier emulator instrumentation attempt failed before tests because Android `activity`/`package` services were unavailable (`cmd: Can't find service`). Workflow now waits for `sys.boot_completed` and package service readiness before connected tests; current-head validation is pending.
-- [ ] Finish repository audit, dependency/license review and release build reproducibility.
-- [ ] Add and verify official Gradle Wrapper (wrapper JAR + scripts + properties), pin distribution checksum, and run a clean-checkout build through `./gradlew`.
+- [x] Repository structure, direct/transitive dependency and license inventory are audited in `docs/M0_REPOSITORY_AUDIT.md`; owner-selected Android license and full release NOTICE/legal review are release governance gates (M7), not a reason to block technical M0. Wrapper reproducibility is in CI; exact-head clean-checkout proof pending.
+- [x] Wrapper JAR/scripts/properties and distribution checksum are committed (`eb2c6498e75079550c0c3fb0a5441b36102a2207`); current CI invokes `./gradlew`. Exact-head validation pending.
 - [ ] Confirm native ABI load and an actual JNI parser call on emulator; ARM64 device smoke test is M6.
-- **Exit gate:** pinned clean-checkout build, Rust + Kotlin tests, dual ABI package, Android emulator JNI test, audit inventory generated/reviewed; CI green on exact HEAD.
+- **Exit gate:** pinned clean-checkout build, Rust + Kotlin tests, dual ABI package, Android emulator JNI test, audit inventory generated/reviewed; CI green on exact HEAD. Run #238 (cache-enabled, 90-minute job budget) is the next validation; no pass claimed yet.
 
 ## M1 — Professional native editor foundation
 **Status: HELD — M0 closure must pass first (existing implementation/test suite retained)**
@@ -150,3 +150,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - M0 runtime test gap closed in source: c4d93e44 pins the Android emulator Rust target; a0d035dc builds and checks both arm64-v8a and x86_64 JNI .so packages and CI instrumentation calls NativeProjectBridge.isAvailable() plus the native parser through JNI. This is emulator ABI execution, not physical ARM64 device evidence (physical validation remains M6).
 - 2ff85b80 adds one-time official Gradle Wrapper generation (Gradle 9.5.0, distribution SHA-256) and switches CI tasks to ./gradlew; the first workflow execution must produce and push gradlew, gradlew.bat, wrapper JAR and properties. Wrapper generation/commit and a clean-checkout Wrapper build are not yet verified.
 - Fresh CI #229 (2ff85b80) was queued at last check; it has not produced jobs or a result. Current-head M0 remains INCOMPLETE; M1 is held. Next: inspect #229/#230 logs, confirm wrapper bootstrap commit, fix every failure, and require green JNI instrumentation + clean Wrapper build before M0 completion.
+
+
+### Run 11 — CI runtime hardening (2026-11-03)
+- CI #237 on `9743f952` completed ARM64 native compilation successfully; x86_64 compilation was still active at 22:33 UTC. Because a cold dual-ABI compile was approaching the former 45-minute job timeout, it is superseded rather than treated as a test result.
+- Workflow now caches Cargo registry/git/target and `cargo-ndk`, with a lockfile/toolchain-keyed cache and restore prefix; Android job timeout raised to 90 minutes so first cache-miss dual-ABI build can finish. This is a build-time optimization, not a test bypass.
+- The replacement CI run must verify both ABIs, Rust tests, dependency/license report, Gradle Wrapper build, APK/unit tests and all 14 emulator instrumentation cases. M0 remains INCOMPLETE and M1 remains pending until that exact-head run passes.

@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 closure IN PROGRESS (dual-ABI emulator JNI test and official Gradle Wrapper bootstrap now in code; fresh CI verification pending); M1 held; M2–M4 paused.** CI #216 exposed two Kotlin compile issues: missing `roundToLong` import and wrong `BorderStroke` package. Fixed in `262b4aba` and `f3444c97`; latest-head CI #218/#219 is pending, so no build or instrumentation pass is claimed. See [PHASES.md](PHASES.md).
+ > **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** Gradle Wrapper 9.5.0 is committed (`eb2c6498`) with distribution checksum. CI #236 built/tested Kotlin/Rust but failed 3 instrumentation cases; latest source fix `9743f952` addresses the four reported assertions/state defects. CI #237 completed ARM64 compilation and was superseded during x86_64 compile to add Cargo caching and a 90-minute cold-build budget; the replacement run must pass all 14 instrumentation tests before M0/M1 acceptance. See [PHASES.md](PHASES.md).
 
 ## Product direction
 
@@ -14,14 +14,14 @@ An offline-first Android editor project targeting phones, tablets, and foldables
 
 ## Build
 
-Open the project in Android Studio with JDK 17 and Android SDK Platform 37, or use the pinned Gradle Wrapper (being bootstrapped by CI) once committed:
+Open the project in Android Studio with JDK 17 and Android SDK Platform 37, or use the committed pinned Gradle Wrapper:
 
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ```
 
-The official Gradle Wrapper (9.5.0 with distribution SHA-256) is generated/committed by the first CI run; do not consider it available until the files appear on the branch.
+The official Gradle Wrapper (9.5.0 with distribution SHA-256) is committed: `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, and `gradle-wrapper.properties`.
 
 The minimum Android version and required SDK packages are documented in [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md).
 
@@ -33,4 +33,4 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 The M0 repository/dependency audit is tracked in [docs/M0_REPOSITORY_AUDIT.md](docs/M0_REPOSITORY_AUDIT.md). M0 is not complete yet. Its remaining closure gates are tracked in [PHASES.md](PHASES.md); M1 remains held until the exact current HEAD passes them.
 
-See [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge, build commands, and engine integration gates.
+See [PHASES.md](PHASES.md) for per-phase acceptance, test evidence, commits and blockers; [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones; and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge and engine integration gates.

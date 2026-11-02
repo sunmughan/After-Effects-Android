@@ -10,7 +10,7 @@ Upstream source pin: `storytold/effectcraft@e71dd629c56c78a82959ee50c271da9209c5
 - Android module: `app/`; JNI crate: `native/`; Gradle settings are centralized in `settings.gradle.kts`.
 - The Android manifest does not request `INTERNET`; the bootstrap draft store writes to app-private storage.
 - No root `Cargo.toml`, Rust workspace, or Gradle version catalog exists in this Android repository. Rust is isolated in `native/Cargo.toml`.
-- No Gradle Wrapper JAR is currently committed. CI installs a pinned Gradle distribution directly. This is reproducible in CI but less convenient for local contributors; wrapper generation remains a follow-up.
+- Official Gradle Wrapper 9.5.0 is committed (`eb2c6498e75079550c0c3fb0a5441b36102a2207`): wrapper JAR, Unix/Windows launchers, properties, and pinned distribution SHA-256. CI selects `./gradlew` when present. The current-head workflow is the clean-checkout verification.
 - No root project license has been selected for the new Android-specific source. Do not infer one from the upstream dependency.
 
 ## Toolchain and dependency inventory
@@ -65,4 +65,4 @@ A successful workflow must complete all of: ARM64 native build, Rust tests, debu
 - [x] Current-head CI succeeds with dependency inventory reports uploaded (artifact ID `13073284848`).
 - [x] Reviewed generated Rust license expressions and Android runtime Maven license metadata; release-time NOTICE/attribution and legal review remain required.
 
-M0 repository/dependency audit and hosted build baseline are **complete**. Remaining repository-owner/release gates are: select and publish the Android repository's own license (not chosen on the owner's behalf), add a committed Gradle Wrapper for contributor ergonomics, and perform full legal/NOTICE review before external distribution. The passing build proves the hosted build/test path, not a physical phone/tablet smoke test. No claim of production readiness or device validation is made here.
+M0 repository/dependency audit and hosted build baseline are **complete**. Remaining repository-owner/release gates are: select and publish the Android repository's own license (not chosen on the owner's behalf), and perform full legal/NOTICE review before external distribution. The Gradle Wrapper has since been committed; exact-head clean-checkout verification remains in CI. The passing build proves the hosted build/test path, not a physical phone/tablet smoke test. No claim of production readiness or device validation is made here.

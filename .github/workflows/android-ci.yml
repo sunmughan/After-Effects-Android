@@ -19,7 +19,7 @@ jobs:
   android:
     name: Assemble and test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -61,6 +61,18 @@ jobs:
           else
             echo "GRADLE_CMD=gradle" >> "$GITHUB_ENV"
           fi
+
+      - name: Cache Cargo registry, git sources, native target outputs and cargo-ndk
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-ndk
+            native/target
+          key: rust-${{ runner.os }}-${{ hashFiles('native/Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
 
       - name: Set up pinned Rust toolchain
         uses: dtolnay/rust-toolchain@stable
