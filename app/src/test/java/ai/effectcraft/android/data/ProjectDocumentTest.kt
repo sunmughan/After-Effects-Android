@@ -45,4 +45,22 @@ class ProjectDocumentTest {
         assertEquals("Shape", first.kind)
         assertEquals(1f, first.opacity, 0f)
     }
+    @Test
+    fun renamingLayerTrimsNameAndPreservesStableIdentity() {
+        val layers = ProjectDocument.starter().layers
+        val target = layers[1]
+        val renamed = ProjectEditorActions.renameLayer(layers, target.id, "  Main title  ")
+
+        assertEquals("Main title", renamed[1].name)
+        assertEquals(target.id, renamed[1].id)
+        assertEquals(layers[0], renamed[0])
+    }
+
+    @Test
+    fun renamingLayerRejectsBlankAndUnknownTargets() {
+        val layers = ProjectDocument.starter().layers
+        assertEquals(layers, ProjectEditorActions.renameLayer(layers, layers[0].id, "  "))
+        assertEquals(layers, ProjectEditorActions.renameLayer(layers, "missing", "New name"))
+    }
+
 }
