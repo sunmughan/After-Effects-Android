@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0/M1/M2 in progress; M3 CPU preview integration started.** Latest-head CI is pending (run #138) after adding M1 settings/selection/save and canonical project/media/render changes; prior CI has passed native ARM64 build, Rust tests, APK and unit tests, but emulator cold-boot/ADB failures have prevented a clean current-head instrumentation result. The main offline `.efx-draft` viewer remains a placeholder. Imported canonical `.ecproj` projects now support upstream-model text add/rename, visibility, reorder/delete, media inventory and SAF footage relinking into app-private offline storage; their editor sheet invokes the pinned upstream CPU compositor and decodes copied media with `MediaPool`, displays actual rendered frames with frame scrubbing, and edits canonical Transform/Opacity (0–100) plus Position X/Y through the native model. The native preview now uses upstream `MediaPool` to decode app-private relinked footage; codec/performance behavior and ARM64 JNI/device rendering remain unverified. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
+ > **Current status: M0 complete (owner accepted); M1 ~80% implementation and priority; M2–M4 paused by owner until M1 acceptance.** Latest-head CI is pending (run #138) after adding M1 settings/selection/save and canonical project/media/render changes; prior CI has passed native ARM64 build, Rust tests, APK and unit tests, but emulator cold-boot/ADB failures have prevented a clean current-head instrumentation result. The main offline `.efx-draft` viewer remains a placeholder. Imported canonical `.ecproj` projects now support upstream-model text add/rename, visibility, reorder/delete, media inventory and SAF footage relinking into app-private offline storage; their editor sheet invokes the pinned upstream CPU compositor and decodes copied media with `MediaPool`, displays actual rendered frames with frame scrubbing, and edits canonical Transform/Opacity (0–100) plus Position X/Y through the native model. The native preview now uses upstream `MediaPool` to decode app-private relinked footage; codec/performance behavior and ARM64 JNI/device rendering remain unverified. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
 
 ## Product direction
 
@@ -31,6 +31,6 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 ## Development status
 
-The M0 repository/dependency audit is tracked in [docs/M0_REPOSITORY_AUDIT.md](docs/M0_REPOSITORY_AUDIT.md). M0 is not considered complete until the current-head Android CI, resolved dependency-license inventory, and exact Rust toolchain pin are verified.
+The M0 repository/dependency audit is tracked in [docs/M0_REPOSITORY_AUDIT.md](docs/M0_REPOSITORY_AUDIT.md). M0 is accepted complete by the project owner. Remaining reproducibility/device/release hardening is tracked separately; M1 is the active delivery focus.
 
 See [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge, build commands, and engine integration gates.
