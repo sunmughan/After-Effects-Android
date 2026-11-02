@@ -184,6 +184,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
             onTogglePlayback = { isPlaying = !isPlaying },
+            onApplyComposition = { width, height, fps, duration ->
+                if (width in 320..3840 && height in 320..3840 && fps in 1..120 && duration in 1..3600) {
+                    applyProjectChange(
+                        project.copy(width = width, height = height, frameRate = fps, durationFrames = duration),
+                        "Composition updated · unsaved"
+                    )
+                    playheadFrame = playheadFrame.coerceIn(0, duration - 1)
+                } else {
+                    saveMessage = "Composition settings outside supported limits"
+                }
+            },
             canonicalProject = canonicalProjectInfo,
             canEditCanonicalProject = NativeProjectBridge.isAvailable(),
             onRenameCanonicalLayer = { compositionId, layerId, name ->
