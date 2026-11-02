@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import ai.effectcraft.android.data.DraftProjectStore
+import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.data.ProjectDocument
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -43,6 +44,16 @@ class EditorSmokeTest {
         compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
         compose.onNodeWithText("Redo").performClick()
         compose.onNodeWithText("Redo · unsaved").assertIsDisplayed()
+    }
+
+    @Test
+    fun canonicalEcprojCachePreservesSourceBytes() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = EcprojDocumentStore(context)
+        val source = "{\\\"schema\\\":1,\\\"items\\\":{}}"
+
+        store.save(source)
+        assertEquals(source, store.load())
     }
 
     @Test

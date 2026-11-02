@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (automation implementation pass)
-Latest implementation commit: `42e6982293b466b7678d4e33edc4b87a012031db` (emulator boot/service wait + push CI trigger; source changes still require fresh run)
+Latest implementation commit: `ea06621959c07f8fd63f93fcd36ec9f7e6636dc1` (SAF `.ecproj` import/validation and byte-preserving export; current-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -41,6 +41,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
 - [ ] Add non-empty upstream `.ecproj` fixture and Kotlin/native round-trip tests.
 - [x] SAF document picker, persisted URI read permission, app-private raw canonical document retention, and byte-preserving export; validation is read-only, not project editing.
+- [x] Instrumentation test verifies the canonical document cache preserves source bytes.
 - [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
 - [ ] Media asset manifest, URI relinking and offline asset handling.
