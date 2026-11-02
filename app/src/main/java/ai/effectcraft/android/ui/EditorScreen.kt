@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -98,6 +99,7 @@ fun EditorScreen(
     onDeleteLayer: () -> Unit,
     onMoveLayer: (Int) -> Unit,
     onVisibilityChange: (Boolean) -> Unit,
+    onRenameLayer: (String) -> Unit,
     onOpacityChange: (Float) -> Unit,
     onScrub: (Int) -> Unit,
     onTogglePlayback: () -> Unit
@@ -143,7 +145,8 @@ fun EditorScreen(
                         onOpacityChange = onOpacityChange,
                         onDeleteLayer = onDeleteLayer,
                         onMoveLayer = onMoveLayer,
-                        onVisibilityChange = onVisibilityChange
+                        onVisibilityChange = onVisibilityChange,
+                        onRenameLayer = onRenameLayer
                     )
                 }
             } else {
@@ -197,7 +200,8 @@ fun EditorScreen(
                     onOpacityChange = onOpacityChange,
                     onDeleteLayer = onDeleteLayer,
                     onMoveLayer = onMoveLayer,
-                    onVisibilityChange = onVisibilityChange
+                    onVisibilityChange = onVisibilityChange,
+                    onRenameLayer = onRenameLayer
                 )
             }
         }
@@ -428,7 +432,8 @@ private fun InspectorPanel(
     onOpacityChange: (Float) -> Unit,
     onDeleteLayer: () -> Unit,
     onMoveLayer: (Int) -> Unit,
-    onVisibilityChange: (Boolean) -> Unit
+    onVisibilityChange: (Boolean) -> Unit,
+    onRenameLayer: (String) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -455,15 +460,37 @@ private fun InspectorPanel(
         if (layer == null) {
             Text("No layer selected", color = EditorPalette.muted, modifier = Modifier.padding(top = 8.dp))
         } else {
-            Text(
-                layer.name,
-                modifier = Modifier.padding(top = 6.dp),
-                color = EditorPalette.text,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            var layerNameDraft by remember(layer.id, layer.name) { mutableStateOf(layer.name) }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BasicTextField(
+                    value = layerNameDraft,
+                    onValueChange = { layerNameDraft = it.take(120) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = EditorPalette.text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (layerNameDraft.isEmpty()) {
+                                Text("Layer name", color = EditorPalette.muted, fontSize = 13.sp)
+                            }
+                            innerTextField()
+                        }
+                    }
+                )
+                TextButton(
+                    onClick = { onRenameLayer(layerNameDraft) },
+                    enabled = layerNameDraft.trim().isNotEmpty() && layerNameDraft.trim() != layer.name
+                ) {
+                    Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
+                }
+            }
             Text(layer.kind.uppercase(Locale.US), color = EditorPalette.violet, fontSize = 9.sp, letterSpacing = 1.1.sp)
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
