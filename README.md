@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: bootstrap in progress.** This repository started empty. The first milestone establishes the Android application shell, adaptive editing workspace, and local draft persistence. The first JNI bridge now uses the pinned upstream Rust `effectcraft-project` model to inspect canonical `.ecproj` JSON. Full session editing, composition rendering, media decoding, and export are still being integrated.
+> **Current status: M0/M1 in progress; not a complete editor yet.** CI currently passes the native ARM64 bridge build, Rust tests, APK assembly, Kotlin tests, and emulator smoke tests. The Android UI still has a placeholder composition viewer; canonical `.ecproj` inspection is not full project editing/rendering. Roadmap acceptance and phase evidence are tracked in [PHASES.md](PHASES.md).
 
 ## Product direction
 
