@@ -199,7 +199,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onSave = {
                 runCatching { projectStore.save(project) }
-                    .onSuccess { saveMessage = "Saved locally · ${it.name}" }
+                    .onSuccess { saveMessage = "Saved locally · ${project.name}" }
                     .onFailure { saveMessage = "Save failed · ${it.message ?: "storage error"}" }
             },
             onNewProject = {

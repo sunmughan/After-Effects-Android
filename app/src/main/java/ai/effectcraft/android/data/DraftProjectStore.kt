@@ -25,7 +25,12 @@ class DraftProjectStore(context: Context) {
             throw IOException("Unable to create the local projects directory")
         }
 
-        val updated = project.copy(updatedAtEpochMillis = System.currentTimeMillis())
+        // File timestamps are too coarse to order saves reliably (two saves in
+        // quick succession can share a file timestamp), so keep the stored
+        // timestamp strictly increasing: the newest save always wins.
+        val latestUpdated = loadLatest()?.updatedAtEpochMillis ?: 0L
+        val updatedTime = maxOf(System.currentTimeMillis(), latestUpdated + 1L)
+        val updated = project.copy(updatedAtEpochMillis = updatedTime)
         val fileName = "${safeName(updated.name)}-${updated.id.take(8)}.efx-draft"
         val target = File(projectDirectory, fileName)
         val temporary = File(projectDirectory, "$fileName.tmp")
@@ -51,12 +56,25 @@ class DraftProjectStore(context: Context) {
     fun loadLatest(): ProjectDocument? {
         val candidates = projectDirectory.listFiles()
             ?.filter { it.isFile && it.name.endsWith(".efx-draft") }
-            ?.sortedByDescending(File::lastModified)
             .orEmpty()
 
-        return candidates.firstNotNullOfOrNull { file ->
-            runCatching { decode(JSONObject(file.readText(Charsets.UTF_8))) }.getOrNull()
-        }
+        // Order by the stored save timestamp, not the file timestamp: the
+        // stored timestamp is strictly increasing per save, while file
+        // timestamps can tie. File timestamp and name break ties for drafts
+        // written before this ordering existed.
+        return candidates
+            .mapNotNull { file ->
+                runCatching {
+                    decode(JSONObject(file.readText(Charsets.UTF_8))) to file
+                }.getOrNull()
+            }
+            .sortedWith(
+                compareByDescending<Pair<ProjectDocument, File>> { it.first.updatedAtEpochMillis }
+                    .thenByDescending { it.second.lastModified() }
+                    .thenByDescending { it.second.name }
+            )
+            .firstOrNull()
+            ?.first
     }
 
     private fun encode(project: ProjectDocument): JSONObject = JSONObject().apply {

@@ -136,6 +136,13 @@ fun EditorScreen(
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
+    // Deleting the inspected layer removes the inspector's subject, so on a
+    // phone the inspector sheet must close and reveal the updated editor and
+    // its status message instead of staying open over them.
+    val handleDeleteLayer: () -> Unit = {
+        onDeleteLayer()
+        showPhoneInspector = false
+    }
     var showCompositionSettings by remember { mutableStateOf(false) }
     var showCanonicalEditor by remember { mutableStateOf(false) }
 
@@ -177,7 +184,7 @@ fun EditorScreen(
                             .fillMaxHeight(),
                         layer = selectedLayer,
                         onOpacityChange = onOpacityChange,
-                        onDeleteLayer = onDeleteLayer,
+                        onDeleteLayer = handleDeleteLayer,
                         onMoveLayer = onMoveLayer,
                         onVisibilityChange = onVisibilityChange,
                         onRenameLayer = onRenameLayer
@@ -278,7 +285,7 @@ fun EditorScreen(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     layer = selectedLayer,
                     onOpacityChange = onOpacityChange,
-                    onDeleteLayer = onDeleteLayer,
+                    onDeleteLayer = handleDeleteLayer,
                     onMoveLayer = onMoveLayer,
                     onVisibilityChange = onVisibilityChange,
                     onRenameLayer = onRenameLayer
