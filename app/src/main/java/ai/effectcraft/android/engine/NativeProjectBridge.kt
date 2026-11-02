@@ -37,6 +37,27 @@ object NativeProjectBridge {
         return runCatching { addTextLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
 
+    /** Updates the canonical EffectCraft video/visibility switch. */
+    fun setLayerVisibilityEcproj(json: String, compositionId: Long, layerId: Long, visible: Boolean): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerVisibilityEcprojNative(json, compositionId, layerId, visible) }.getOrNull()
+    }
+
+    /** Reorders a canonical layer by a relative stack offset; upstream model clamps at stack edges. */
+    fun moveLayerEcproj(json: String, compositionId: Long, layerId: Long, offset: Int): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { moveLayerEcprojNative(json, compositionId, layerId, offset.toLong()) }.getOrNull()
+    }
+
+    /** Removes a layer from the canonical composition while preserving all other IDs. */
+    fun deleteLayerEcproj(json: String, compositionId: Long, layerId: Long): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { deleteLayerEcprojNative(json, compositionId, layerId) }.getOrNull()
+    }
+
     private fun ensureLoaded() {
         if (loadAttempted) return
         synchronized(this) {
@@ -47,6 +68,15 @@ object NativeProjectBridge {
             loadAttempted = true
         }
     }
+
+    @JvmStatic
+    private external fun setLayerVisibilityEcprojNative(json: String, compositionId: Long, layerId: Long, visible: Boolean): String
+
+    @JvmStatic
+    private external fun moveLayerEcprojNative(json: String, compositionId: Long, layerId: Long, offset: Long): String
+
+    @JvmStatic
+    private external fun deleteLayerEcprojNative(json: String, compositionId: Long, layerId: Long): String
 
     @JvmStatic
     private external fun addTextLayerEcprojNative(json: String, compositionId: Long, name: String): String
