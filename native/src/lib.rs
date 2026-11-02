@@ -4,8 +4,12 @@ use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId};
-use effectcraft_render::{NoFootage, RenderOpts, Renderer};
+use effectcraft_media::MediaPool;
+use effectcraft_render::{RenderOpts, Renderer};
+use std::sync::OnceLock;
 use effectcraft_time::Tick;
+
+static MEDIA_POOL: OnceLock<MediaPool> = OnceLock::new();
 
 fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u32) -> Result<Vec<u8>, String> {
     if frame < 0 { return Err("Frame must be non-negative".into()); }
@@ -16,7 +20,8 @@ fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u3
     let long = comp.width.max(comp.height).max(1) as f64;
     let scale = if max_side == 0 { 1.0 } else { (max_side as f64 / long).min(1.0) };
     let time = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
-    let renderer = Renderer::new(&project, &NoFootage, RenderOpts { scale, ..Default::default() });
+    let footage = MEDIA_POOL.get_or_init(MediaPool::new);
+    let renderer = Renderer::new(&project, footage, RenderOpts { scale, ..Default::default() });
     let image = renderer.comp_frame(ItemId(composition_id), time);
     let rgba = image.to_rgba8_over(comp.background);
     let mut output = Vec::with_capacity(8 + rgba.len());
