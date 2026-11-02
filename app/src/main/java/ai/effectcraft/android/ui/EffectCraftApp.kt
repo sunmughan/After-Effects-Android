@@ -202,6 +202,23 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     canonicalProjectInfo = parsed
                     saveMessage = "Canonical layer renamed · saved locally"
                 }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
+            },
+            onAddCanonicalTextLayer = { compositionId, name ->
+                runCatching {
+                    val source = importedEcproj ?: error("Import a canonical .ecproj first")
+                    val envelope = NativeProjectBridge.addTextLayerEcproj(source, compositionId, name)
+                        ?: error("Native EffectCraft bridge unavailable on this ABI")
+                    val response = JSONObject(envelope)
+                    check(response.optBoolean("valid")) { response.optString("error", "Text layer creation failed") }
+                    val updated = response.getString("project")
+                    val metadata = NativeProjectBridge.inspectEcproj(updated)
+                        ?: error("Unable to inspect updated canonical project")
+                    val parsed = CanonicalProjectInfo.parse(metadata)
+                    ecprojStore.save(updated)
+                    importedEcproj = updated
+                    canonicalProjectInfo = parsed
+                    saveMessage = "Canonical Text layer added · saved locally"
+                }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
             }
         )
     }
