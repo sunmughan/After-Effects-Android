@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.LayerDocument
+import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
 import kotlinx.coroutines.delay
 
@@ -75,6 +76,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 } else {
                     saveMessage = "A composition must keep at least one layer"
                 }
+            },
+            onMoveLayer = { offset ->
+                project = project.copy(
+                    layers = ProjectEditorActions.moveLayer(project.layers, selectedLayerId, offset)
+                )
+                saveMessage = "Unsaved changes"
             },
             onOpacityChange = { opacity ->
                 project = project.copy(
