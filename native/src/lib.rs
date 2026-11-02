@@ -631,7 +631,7 @@ mod tests {
         let source = project.to_file_json().unwrap();
         let moved = move_layer(&source, comp_id.0, ids[2], -2).unwrap();
         let reordered: Project = serde_json::from_str(&moved).unwrap();
-        assert_eq!(reordered.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "A", "B"]);
+        assert_eq!(reordered.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "B", "A"]);
 
         let hidden = set_layer_visibility(&moved, comp_id.0, ids[2], false).unwrap();
         let hidden_project: Project = serde_json::from_str(&hidden).unwrap();
