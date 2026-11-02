@@ -71,7 +71,16 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
 
-      - name: Run Android emulator smoke tests (M1)\n        uses: reactivecircus/android-emulator-runner@v2\n        with:\n          api-level: 35\n          target: google_apis\n          arch: x86_64\n          profile: pixel_6\n          emulator-options: -no-window -no-audio -no-boot-anim -camera-back none\n          disable-animations: true\n          script: gradle --no-daemon :app:connectedDebugAndroidTest\n\n      - name: Upload Android build and audit reports
+      - name: Run Android emulator smoke tests (M1)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -no-audio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: gradle --no-daemon :app:connectedDebugAndroidTest\n\n      - name: Upload Android build and audit reports
         uses: actions/upload-artifact@v4
         with:
           name: effectcraft-android-build-and-audit
