@@ -101,6 +101,19 @@ class EditorSmokeTest {
     }
 
     @Test
+    fun compositionSettingsApplyAndParticipateInUndo() {
+        compose.onNodeWithText("Comp").performClick()
+        compose.onNodeWithContentDescription("Composition frame rate")
+            .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
+        compose.onNodeWithText("Frame rate · 60 FPS").assertIsDisplayed()
+        compose.onNodeWithText("Apply settings").performClick()
+        compose.onNodeWithText("Composition updated · unsaved").assertIsDisplayed()
+
+        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
+    }
+
+    @Test
     fun canonicalEcprojCachePreservesSourceBytes() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = EcprojDocumentStore(context)
