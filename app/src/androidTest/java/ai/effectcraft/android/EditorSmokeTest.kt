@@ -1,10 +1,16 @@
 package ai.effectcraft.android
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNode
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -58,6 +64,40 @@ class EditorSmokeTest {
         compose.onNode(hasSetTextAction()).performTextInput("Mobile title")
         compose.onNodeWithText("Apply").performClick()
         compose.onNodeWithText("Mobile title").assertIsDisplayed()
+    }
+
+    @Test
+    fun inspectorOpacityAndVisibilityControlsUpdateSelectedLayer() {
+        compose.onNodeWithText("Props").performClick()
+        compose.onNodeWithContentDescription("Layer visibility").assertIsOn()
+        compose.onNodeWithContentDescription("Layer visibility").performClick()
+        compose.onNodeWithContentDescription("Layer visibility").assertIsOff()
+
+        compose.onNodeWithContentDescription("Layer opacity")
+            .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(0.5f) }
+        compose.onNodeWithText("50%").assertIsDisplayed()
+    }
+
+    @Test
+    fun timelinePlayheadScrubsAndTransportToggles() {
+        compose.onNodeWithContentDescription("Timeline playhead")
+            .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
+        compose.onNodeWithText("00:00:02:00").assertIsDisplayed()
+
+        compose.onNodeWithContentDescription("Play timeline").performClick()
+        compose.onNodeWithContentDescription("Pause timeline").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Pause timeline").performClick()
+        compose.onNodeWithContentDescription("Play timeline").assertIsDisplayed()
+    }
+
+    @Test
+    fun inspectorCanReorderAndDeleteAddedLayer() {
+        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Props").performClick()
+        compose.onNodeWithText("Move ↑", substring = true).performClick()
+        compose.onNodeWithText("Remove layer", substring = true).performClick()
+        compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed()
+        compose.onNodeWithText("Shape 4").assertDoesNotExist()
     }
 
     @Test
