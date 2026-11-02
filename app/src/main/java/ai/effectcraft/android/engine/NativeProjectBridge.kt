@@ -18,6 +18,13 @@ object NativeProjectBridge {
         return runCatching { inspectEcprojNative(json) }.getOrNull()
     }
 
+    /** Returns a JSON envelope containing the edited canonical project or a validation error. */
+    fun renameLayerEcproj(json: String, compositionId: Long, layerId: Long, name: String): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { renameLayerEcprojNative(json, compositionId, layerId, name) }.getOrNull()
+    }
+
     private fun ensureLoaded() {
         if (loadAttempted) return
         synchronized(this) {
@@ -31,4 +38,7 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun inspectEcprojNative(json: String): String
+
+    @JvmStatic
+    private external fun renameLayerEcprojNative(json: String, compositionId: Long, layerId: Long, name: String): String
 }
