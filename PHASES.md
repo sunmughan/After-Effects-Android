@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation commit: `3d33285e6417e41c29c6f3895068ba361da5921d` (composition settings panel, undoable dimension/fps/duration updates, and instrumentation for settings/undo plus layer/timeline/property interactions; latest-head CI pending)
+Latest implementation commit: `e2c11a89afde128fbfa05aa3ea5f99f932250ab3` (composition settings, undoable edits, timeline selection, and offline Save persistence instrumentation; latest-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -37,7 +37,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Verify the expanded interaction instrumentation on current head (latest CI run pending); fix test/API failures rather than weakening assertions.
 - [x] Composition settings panel edits width/height (320–3840 px), frame rate (1–120), and duration (1–3600 frames); changes enter bounded undo history and clamp the playhead when duration shrinks.
 - [x] Instrumentation for composition frame-rate apply + undo; CI validation pending.
-- [ ] Explicit selection-state instrumentation and tablet/foldable layout smoke coverage.
+- [x] Instrumentation for timeline layer selection (inspector reflects selected layer opacity) and editor Save → app-private draft reload.
+- [ ] Verify all new M1 instrumentation on latest CI head; tablet/foldable layout smoke coverage.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
 
 ## M2 — Project formats, import/save and media
