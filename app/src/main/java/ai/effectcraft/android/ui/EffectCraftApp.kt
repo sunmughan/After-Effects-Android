@@ -103,6 +103,13 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "A composition must keep at least one layer"
                 }
             },
+            onVisibilityChange = { visible ->
+                applyProjectChange(project.copy(
+                    layers = project.layers.map { layer ->
+                        if (layer.id == selectedLayerId) layer.copy(visible = visible) else layer
+                    }
+                ))
+            },
             onMoveLayer = { offset ->
                 applyProjectChange(project.copy(
                     layers = ProjectEditorActions.moveLayer(project.layers, selectedLayerId, offset)

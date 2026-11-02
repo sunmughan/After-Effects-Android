@@ -53,7 +53,7 @@ class EditorSmokeTest {
             name = "M1 Persistence Check",
             durationFrames = 240,
             layers = ProjectDocument.starter().layers.mapIndexed { index, layer ->
-                if (index == 0) layer.copy(opacity = 0.42f) else layer
+                if (index == 0) layer.copy(opacity = 0.42f, visible = false) else layer
             }
         )
 
@@ -64,6 +64,7 @@ class EditorSmokeTest {
         assertEquals("M1 Persistence Check", restored?.name)
         assertEquals(240, restored?.durationFrames)
         assertEquals(0.42f, restored?.layers?.first()?.opacity ?: -1f, 0.001f)
+        assertEquals(false, restored?.layers?.first()?.visible)
         assertEquals(source.layers.size, restored?.layers?.size)
     }
 }

@@ -39,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -92,6 +93,7 @@ fun EditorScreen(
     onSelectLayer: (String) -> Unit,
     onDeleteLayer: () -> Unit,
     onMoveLayer: (Int) -> Unit,
+    onVisibilityChange: (Boolean) -> Unit,
     onOpacityChange: (Float) -> Unit,
     onScrub: (Int) -> Unit,
     onTogglePlayback: () -> Unit
@@ -134,7 +136,8 @@ fun EditorScreen(
                         layer = selectedLayer,
                         onOpacityChange = onOpacityChange,
                         onDeleteLayer = onDeleteLayer,
-                        onMoveLayer = onMoveLayer
+                        onMoveLayer = onMoveLayer,
+                        onVisibilityChange = onVisibilityChange
                     )
                 }
             } else {
@@ -187,7 +190,8 @@ fun EditorScreen(
                     layer = selectedLayer,
                     onOpacityChange = onOpacityChange,
                     onDeleteLayer = onDeleteLayer,
-                    onMoveLayer = onMoveLayer
+                    onMoveLayer = onMoveLayer,
+                    onVisibilityChange = onVisibilityChange
                 )
             }
         }
@@ -409,7 +413,8 @@ private fun InspectorPanel(
     layer: LayerDocument?,
     onOpacityChange: (Float) -> Unit,
     onDeleteLayer: () -> Unit,
-    onMoveLayer: (Int) -> Unit
+    onMoveLayer: (Int) -> Unit,
+    onVisibilityChange: (Boolean) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -446,7 +451,13 @@ private fun InspectorPanel(
                 overflow = TextOverflow.Ellipsis
             )
             Text(layer.kind.uppercase(Locale.US), color = EditorPalette.violet, fontSize = 9.sp, letterSpacing = 1.1.sp)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Visible", color = EditorPalette.text, fontSize = 12.sp)
+                Spacer(Modifier.weight(1f))
+                Switch(checked = layer.visible, onCheckedChange = onVisibilityChange)
+            }
+            Spacer(Modifier.height(12.dp))
             PropertyLine("Transform", "›")
             PropertyValueLine("Position", "540, 960")
             PropertyValueLine("Scale", "100%")

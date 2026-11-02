@@ -75,6 +75,7 @@ class DraftProjectStore(context: Context) {
                     put("kind", layer.kind)
                     put("opacity", layer.opacity.toDouble())
                     put("tint", layer.tint)
+                    put("visible", layer.visible)
                 })
             }
         })
@@ -96,7 +97,8 @@ class DraftProjectStore(context: Context) {
                         name = layer.getString("name"),
                         kind = layer.getString("kind"),
                         opacity = layer.optDouble("opacity", 1.0).toFloat().coerceIn(0f, 1f),
-                        tint = layer.optLong("tint", 0xFF9278F6)
+                        tint = layer.optLong("tint", 0xFF9278F6),
+                        visible = layer.optBoolean("visible", true)
                     )
                 )
             }

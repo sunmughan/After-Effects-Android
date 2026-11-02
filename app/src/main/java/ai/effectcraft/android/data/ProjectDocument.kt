@@ -52,7 +52,8 @@ data class LayerDocument(
     val name: String,
     val kind: String,
     val opacity: Float,
-    val tint: Long
+    val tint: Long,
+    val visible: Boolean = true
 ) {
     companion object {
         fun newShape(index: Int): LayerDocument = LayerDocument(
