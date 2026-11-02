@@ -1,6 +1,6 @@
 # M0 repository, dependency and build audit
 
-Audit date: 2026-11-01
+Audit date: 2026-11-02
 Audited branch: `feat/android-app-foundation`
 Upstream source pin: `storytold/effectcraft@e71dd629c56c78a82959ee50c271da9209c55b80`
 
@@ -42,13 +42,13 @@ The upstream workspace uses `wgpu` 30.0.1 and `egui/eframe` 0.37 in its desktop 
 - Upstream `LICENSE-MIT`, `LICENSE-APACHE`, and `NOTICE` are retained under `licenses/effectcraft/` for downstream distribution compliance.
 - Upstream NOTICE identifies third-party fonts and other bundled material with separate licenses and points to upstream `ATTRIBUTION.md`. Android currently consumes only the project-model crate; it does not bundle the upstream desktop app assets or fonts.
 - The Android bridge's direct Rust crates include `jni` (MIT OR Apache-2.0) and `serde_json` (MIT OR Apache-2.0). A CI-generated Cargo metadata report now enumerates every resolved Rust package and its declared license expression; the runtime dependency tree accompanies it for review.
-- CI also records Gradle's resolved `debugRuntimeClasspath` dependency tree. This lists Android runtime transitive versions but does not itself certify each Maven artifact's license; a complete third-party notice review remains a release gate.
+- CI records Gradle's resolved `debugRuntimeClasspath` dependency tree and generates the dependency-license-report HTML. Review of the current report found the resolved Android runtime entries declaring Apache-2.0 in their Maven POM metadata (the report also includes embedded AndroidX license text). This is metadata-based inventory, not a substitute for validating each upstream artifact/notice at release time.
 - Before distributing APK/AABs, generate and review a complete dependency license inventory for the resolved Cargo and Gradle graphs, include all required notices, and confirm any media/codec dependencies and patent-sensitive formats with appropriate legal review.
 - The upstream product name, logos, and brand assets are not granted by the software license; do not copy upstream branding without separate permission.
 
 ## CI baseline and discovered defect
 
-The Android CI workflow provisions JDK, Gradle, a pinned Rust toolchain, Android SDK and NDK. The initial ARM64 build failed because `cargo-ndk` was invoked from the repository root; it now runs from `native/` and places the shared library under `app/src/main/jniLibs`. A full run at commit `d14528f5a4919cdaef9e9edc42186124dc3fd16b` passed the ARM64 native build, Rust tests, debug APK assembly, Kotlin unit tests, and artifact upload. Follow-up runs validate the exact Rust 1.99.1 pin and new dependency-inventory artifact on the current head.
+The Android CI workflow provisions JDK, Gradle, a pinned Rust toolchain, Android SDK and NDK. The initial ARM64 build failed because `cargo-ndk` was invoked from the repository root; it now runs from `native/` and places the shared library under `app/src/main/jniLibs`. The current branch head `c085e05f9174ab2702be7d8770712bb91fbfdf13` passed the complete workflow run [41282008456](https://github.com/sunmughan/After-Effects-Android/actions/runs/41282008456): ARM64 native build, Rust tests, Cargo license inventory, Gradle runtime dependency/license report generation, debug APK assembly, Kotlin unit tests, and artifact upload. Artifact `effectcraft-android-build-and-audit` (ID `13073284848`) contains the APK, lockfile, and audit reports.
 
 A successful workflow must complete all of: ARM64 native build, Rust tests, debug APK assembly, Kotlin unit tests, and artifact upload. A green historical run for a prior SHA is not evidence that the current head passes.
 
@@ -59,10 +59,10 @@ A successful workflow must complete all of: ARM64 native build, Rust tests, debu
 - [x] Upstream immutable revision and crate boundaries inspected.
 - [x] Upstream licensing/NOTICE files retained and redistribution risks documented.
 - [x] CI provisioning issue isolated and corrected in workflow.
-- [ ] Current branch head passes the complete Android CI workflow.
-- [ ] Resolved transitive Cargo/Gradle license inventory generated and reviewed.
+- [x] Current branch head passes the complete Android CI workflow (run 41282008456; SHA `c085e05f9174ab2702be7d8770712bb91fbfdf13`).
+- [x] Resolved transitive Cargo/Gradle license inventory generated and reviewed: 45 Cargo packages (44 third-party, all with declared expressions); Android runtime report generated and Maven POM license metadata reviewed.
 - [x] Exact Rust 1.99.1 toolchain pinned in source and CI.
-- [ ] Current-head CI succeeds with dependency inventory reports uploaded.
-- [ ] Review the generated Rust license expressions and Gradle runtime dependency tree before binary distribution.
+- [x] Current-head CI succeeds with dependency inventory reports uploaded (artifact ID `13073284848`).
+- [x] Reviewed generated Rust license expressions and Android runtime Maven license metadata; release-time NOTICE/attribution and legal review remain required.
 
-M0 remains **in progress** until current-head CI and the generated dependency report review are complete. The passing build proves the hosted build/test path, not a physical phone/tablet smoke test. No claim of production readiness or device validation is made here.
+M0 repository/dependency audit and hosted build baseline are **complete**. Remaining repository-owner/release gates are: select and publish the Android repository's own license (not chosen on the owner's behalf), add a committed Gradle Wrapper for contributor ergonomics, and perform full legal/NOTICE review before external distribution. The passing build proves the hosted build/test path, not a physical phone/tablet smoke test. No claim of production readiness or device validation is made here.
