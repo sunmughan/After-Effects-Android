@@ -55,7 +55,7 @@ fn layer_opacity_percent(layer: &effectcraft_project::Layer) -> f64 {
     if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
         transform.walk("", &mut |_, property| {
             if property.match_id == "opacity" {
-                if let Value::Scalar(value) = property.value { opacity = Some(value); }
+                if let Value::Scalar(value) = &property.value { opacity = Some(*value); }
             }
         });
     }
