@@ -406,11 +406,10 @@ mod tests {
         let relinked_json = relink_footage(&source, item_id.0, "/data/user/0/app/files/assets/clip.mp4").unwrap();
         let relinked: Project = serde_json::from_str(&relinked_json).unwrap();
         let item = relinked.item(item_id).unwrap();
+        assert!(matches!(&item.kind, ItemKind::Footage(_)));
         if let ItemKind::Footage(media) = &item.kind {
             assert_eq!(media.path, "/data/user/0/app/files/assets/clip.mp4");
             assert!(!media.missing);
-        } else {
-            panic!("relinked item must remain footage");
         }
         assert!(relink_footage(&source, 999, "/tmp/clip.mp4").is_err());
         assert!(relink_footage(&source, item_id.0, " ").is_err());
