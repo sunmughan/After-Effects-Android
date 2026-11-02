@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 closure IN PROGRESS (baseline CI passed; dual-ABI emulator JNI gate and official Wrapper still being verified); M1 held; M2–M4 paused.** CI #216 exposed two Kotlin compile issues: missing `roundToLong` import and wrong `BorderStroke` package. Fixed in `262b4aba` and `f3444c97`; latest-head CI #218/#219 is pending, so no build or instrumentation pass is claimed. See [PHASES.md](PHASES.md).
+ > **Current status: M0 closure IN PROGRESS (dual-ABI emulator JNI test and official Gradle Wrapper bootstrap now in code; fresh CI verification pending); M1 held; M2–M4 paused.** CI #216 exposed two Kotlin compile issues: missing `roundToLong` import and wrong `BorderStroke` package. Fixed in `262b4aba` and `f3444c97`; latest-head CI #218/#219 is pending, so no build or instrumentation pass is claimed. See [PHASES.md](PHASES.md).
 
 ## Product direction
 
@@ -14,14 +14,14 @@ An offline-first Android editor project targeting phones, tablets, and foldables
 
 ## Build
 
-Open the project in Android Studio with JDK 17 and Android SDK Platform 37, or install Gradle 9.5.0 and run:
+Open the project in Android Studio with JDK 17 and Android SDK Platform 37, or use the pinned Gradle Wrapper (being bootstrapped by CI) once committed:
 
 ```bash
 gradle :app:assembleDebug
 gradle :app:testDebugUnitTest
 ```
 
-A Gradle Wrapper JAR has not been committed in this bootstrap; the CI workflow provisions Gradle 9.5.0 directly.
+The official Gradle Wrapper (9.5.0 with distribution SHA-256) is generated/committed by the first CI run; do not consider it available until the files appear on the branch.
 
 The minimum Android version and required SDK packages are documented in [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md).
 
