@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 complete (owner accepted); M1 remains IN PROGRESS; M2–M4 paused.** CI #212 failed at Kotlin compile due to two unresolved androidx.foundation.BorderStroke references in EditorScreen.kt; corrected by importing androidx.compose.foundation.BorderStroke in commit fb336098. Current-head CI #213 is queued; no latest-head test pass is claimed. M1 instrumentation has 14 cases (including playback progression, visibility/opacity Undo/Redo, reorder/delete, composition FPS Undo, offline save/reload and wide-window layout), but acceptance awaits current-head execution. See [PHASES.md](PHASES.md).
+ > **Current status: M0 complete (owner accepted); M1 remains IN PROGRESS; M2–M4 paused.** Fixed the CI #212 Kotlin compile error by importing `androidx.compose.foundation.BorderStroke` (commit `fb336098`). Additional M1 code review caught fixed-30-FPS playback; timeline now derives frame interval from composition FPS, with JVM tests for 1/30/60/120 FPS and bounds (commit `aad16bf2`). Latest-head CI is pending; no current-head pass or M1 acceptance is claimed. See [PHASES.md](PHASES.md).
 
 ## Product direction
 

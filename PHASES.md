@@ -126,3 +126,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Latest CI #213 is queued on fb336098; no successful build or instrumentation claim until it completes.
 - M1 instrumentation source at this head contains 14 cases covering launch/offline workspace, New, add layer, undo/redo, rename, visibility/opacity with exact Undo/Redo values, timeline scrub/play/pause, reorder/delete, composition FPS/Undo, selection/inspector, local save/reload, .ecproj byte cache and draft round-trip. Current acceptance remains pending execution on latest HEAD.
 - Next action: inspect #213 all jobs/logs; fix any compile/test/runner failures without reducing assertions; then run full current-head acceptance. No M2/M3/M4 work started.
+
+
+### Run 8 follow-up — composition-FPS playback correction
+- Code review found M1 timeline playback advanced every fixed 33 ms regardless of composition FPS. This made 60/120 FPS compositions preview at approximately 30 FPS.
+- Implemented ProjectEditorActions.frameIntervalMillis(frameRate) (rounded, FPS bounded 1–120) and wired LaunchedEffect to project.frameRate; effect restarts when FPS changes. Commit aad16bf2e8eb19720fc10599ed72c28095174236.
+- Added JVM tests for 1/30/60/120 FPS and invalid lower/upper inputs. Current-head CI has been triggered; no pass claimed yet.
+- Compile fix fb336098 is included in this code ancestry; CI #213 was running at last inspection, but the latest branch includes additional playback change and docs. Verify current-head run rather than extrapolating older status.
