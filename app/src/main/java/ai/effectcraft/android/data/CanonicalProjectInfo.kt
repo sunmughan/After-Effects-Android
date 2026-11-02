@@ -6,7 +6,8 @@ data class CanonicalLayerInfo(
     val id: Long,
     val name: String,
     val source: String,
-    val visible: Boolean
+    val visible: Boolean,
+    val opacityPercent: Double
 )
 
 data class CanonicalCompositionInfo(
@@ -54,7 +55,8 @@ data class CanonicalProjectInfo(
                         id = layer.getLong("id"),
                         name = layer.optString("name", "Layer"),
                         source = layer.optString("source", "Unknown"),
-                        visible = layer.optBoolean("visible", true)
+                        visible = layer.optBoolean("visible", true),
+                        opacityPercent = layer.optDouble("opacityPercent", 100.0)
                     )
                 }
                 CanonicalCompositionInfo(
