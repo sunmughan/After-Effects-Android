@@ -12,3 +12,6 @@ crate-type = ["cdylib"]
 effectcraft-project = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
 jni = "0.21.1"
 serde_json = "1"
+
+effectcraft-color = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
+effectcraft-time = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
