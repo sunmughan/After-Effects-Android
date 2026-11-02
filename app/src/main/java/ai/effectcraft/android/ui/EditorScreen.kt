@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Layers
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectDocument
 import java.util.Locale
@@ -102,10 +104,14 @@ fun EditorScreen(
     onRenameLayer: (String) -> Unit,
     onOpacityChange: (Float) -> Unit,
     onScrub: (Int) -> Unit,
-    onTogglePlayback: () -> Unit
+    onTogglePlayback: () -> Unit,
+    canonicalProject: CanonicalProjectInfo?,
+    canEditCanonicalProject: Boolean,
+    onRenameCanonicalLayer: (Long, Long, String) -> Unit
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
+    var showCanonicalEditor by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -121,7 +127,9 @@ fun EditorScreen(
                 onSave = onSave,
                 onValidateEcproj = onValidateEcproj,
                 onExportEcproj = onExportEcproj,
-                onNewProject = onNewProject
+                onNewProject = onNewProject,
+                hasCanonicalProject = canonicalProject != null,
+                onOpenCanonicalEditor = { showCanonicalEditor = true }
             )
 
             if (isTabletLayout) {
@@ -184,6 +192,22 @@ fun EditorScreen(
             )
         }
 
+        if (showCanonicalEditor && canonicalProject != null) {
+            ModalBottomSheet(
+                onDismissRequest = { showCanonicalEditor = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = EditorPalette.background,
+                contentColor = EditorPalette.text
+            ) {
+                CanonicalProjectEditor(
+                    project = canonicalProject,
+                    canEdit = canEditCanonicalProject,
+                    onRenameLayer = onRenameCanonicalLayer,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
+
         if (showPhoneInspector && !isTabletLayout) {
             ModalBottomSheet(
                 onDismissRequest = { showPhoneInspector = false },
@@ -215,7 +239,9 @@ private fun HeaderBar(
     onSave: () -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
-    onNewProject: () -> Unit
+    onNewProject: () -> Unit,
+    hasCanonicalProject: Boolean,
+    onOpenCanonicalEditor: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -282,6 +308,9 @@ private fun HeaderBar(
 
         IconButton(onClick = onValidateEcproj) {
             Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text)
+        }
+        IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
+            Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
         }
         IconButton(onClick = onExportEcproj) {
             Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
@@ -539,6 +568,80 @@ private fun InspectorPanel(
             fontSize = 9.sp,
             letterSpacing = 1.5.sp
         )
+    }
+}
+
+@Composable
+private fun CanonicalProjectEditor(
+    project: CanonicalProjectInfo,
+    canEdit: Boolean,
+    onRenameLayer: (Long, Long, String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var compositionId by remember { mutableStateOf<Long?>(null) }
+    var layerId by remember { mutableStateOf<Long?>(null) }
+    val composition = project.compositions.firstOrNull { it.id == compositionId } ?: project.compositions.firstOrNull()
+    val layer = composition?.layers?.firstOrNull { it.id == layerId } ?: composition?.layers?.firstOrNull()
+    var nameDraft by remember(composition?.id, layer?.id, layer?.name) { mutableStateOf(layer?.name.orEmpty()) }
+
+    Column(modifier = modifier.heightIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("CANONICAL .ECPROJ", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text("Native project model · ${project.compositions.size} compositions", color = EditorPalette.muted, fontSize = 12.sp)
+        if (composition == null) {
+            Text("No compositions found in this project.", color = EditorPalette.muted)
+        } else {
+            Text("Composition", color = EditorPalette.muted, fontSize = 10.sp)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                project.compositions.forEach { item ->
+                    FilterChip(
+                        selected = item.id == composition.id,
+                        onClick = { compositionId = item.id; layerId = item.layers.firstOrNull()?.id },
+                        label = { Text(item.name, fontSize = 11.sp) }
+                    )
+                }
+            }
+            Text("${composition.width} × ${composition.height} · ${composition.layers.size} layers", color = EditorPalette.muted, fontSize = 11.sp)
+            Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
+            Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
+                composition.layers.forEach { item ->
+                    TextButton(
+                        onClick = { layerId = item.id; nameDraft = item.name },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "${if (item.id == layer?.id) "● " else "○ "}${item.name}  ·  ${item.source}",
+                            color = if (item.id == layer?.id) EditorPalette.mint else EditorPalette.text,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            if (layer != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicTextField(
+                        value = nameDraft,
+                        onValueChange = { nameDraft = it.take(120) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 14.sp),
+                        modifier = Modifier.weight(1f),
+                        decorationBox = { inner ->
+                            Box {
+                                if (nameDraft.isEmpty()) Text("Layer name", color = EditorPalette.muted)
+                                inner()
+                            }
+                        }
+                    )
+                    TextButton(
+                        enabled = canEdit && nameDraft.trim().isNotEmpty() && nameDraft.trim() != layer.name,
+                        onClick = { onRenameLayer(composition.id, layer.id, nameDraft) }
+                    ) { Text("Apply", color = EditorPalette.violet) }
+                }
+            }
+        }
+        if (!canEdit) Text("Native editor bridge unavailable for this ABI; import/export remains read-only.", color = EditorPalette.amber, fontSize = 11.sp)
+        Spacer(Modifier.height(8.dp))
     }
 }
 
