@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 complete (owner accepted); M1 remains IN PROGRESS; M2–M4 paused.** CI #216 exposed two Kotlin compile issues: missing `roundToLong` import and wrong `BorderStroke` package. Fixed in `262b4aba` and `f3444c97`; latest-head CI #218/#219 is pending, so no build or instrumentation pass is claimed. See [PHASES.md](PHASES.md).
+ > **Current status: M0 INCOMPLETE (baseline CI passed; ARM64 device runtime, wrapper, and owner license/acceptance gates remain); M1 held; M2–M4 paused.** CI #216 exposed two Kotlin compile issues: missing `roundToLong` import and wrong `BorderStroke` package. Fixed in `262b4aba` and `f3444c97`; latest-head CI #218/#219 is pending, so no build or instrumentation pass is claimed. See [PHASES.md](PHASES.md).
 
 ## Product direction
 
@@ -31,6 +31,6 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 ## Development status
 
-The M0 repository/dependency audit is tracked in [docs/M0_REPOSITORY_AUDIT.md](docs/M0_REPOSITORY_AUDIT.md). M0 is accepted complete by the project owner. Remaining reproducibility/device/release hardening is tracked separately; M1 is the active delivery focus.
+The M0 repository/dependency audit is tracked in [docs/M0_REPOSITORY_AUDIT.md](docs/M0_REPOSITORY_AUDIT.md). M0 has not been accepted complete by the project owner. Its remaining closure gates are tracked in [PHASES.md](PHASES.md); do not advance M1 until M0 is closed.
 
 See [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge, build commands, and engine integration gates.
