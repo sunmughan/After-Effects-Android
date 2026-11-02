@@ -28,6 +28,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var playheadFrame by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
     var saveMessage by remember { mutableStateOf("Stored on this device") }
+    var undoStack by remember { mutableStateOf(emptyList<ProjectDocument>()) }
+    var redoStack by remember { mutableStateOf(emptyList<ProjectDocument>()) }
+
+    fun applyProjectChange(next: ProjectDocument, message: String = "Unsaved changes") {
+        undoStack = (undoStack + project).takeLast(50)
+        redoStack = emptyList()
+        project = next
+        saveMessage = message
+    }
 
     LaunchedEffect(isPlaying, project.durationFrames) {
         while (isPlaying) {
@@ -49,47 +58,62 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             playheadFrame = playheadFrame,
             isPlaying = isPlaying,
             saveMessage = saveMessage,
+            canUndo = undoStack.isNotEmpty(),
+            canRedo = redoStack.isNotEmpty(),
+            onUndo = {
+                if (undoStack.isNotEmpty()) {
+                    redoStack = redoStack + project
+                    project = undoStack.last()
+                    undoStack = undoStack.dropLast(1)
+                    if (project.layers.none { it.id == selectedLayerId }) selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
+                    saveMessage = "Undo · unsaved"
+                }
+            },
+            onRedo = {
+                if (redoStack.isNotEmpty()) {
+                    undoStack = (undoStack + project).takeLast(50)
+                    project = redoStack.last()
+                    redoStack = redoStack.dropLast(1)
+                    if (project.layers.none { it.id == selectedLayerId }) selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
+                    saveMessage = "Redo · unsaved"
+                }
+            },
             onSave = {
                 runCatching { projectStore.save(project) }
                     .onSuccess { saveMessage = "Saved locally · ${it.name}" }
                     .onFailure { saveMessage = "Save failed · ${it.message ?: "storage error"}" }
             },
             onNewProject = {
-                project = ProjectDocument.starter()
+                applyProjectChange(ProjectDocument.starter(), "New offline composition")
                 selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
                 playheadFrame = 0
                 isPlaying = false
-                saveMessage = "New offline composition"
             },
             onAddLayer = {
                 val layer = LayerDocument.newShape(project.layers.size + 1)
-                project = project.copy(layers = project.layers + layer)
+                applyProjectChange(project.copy(layers = project.layers + layer))
                 selectedLayerId = layer.id
-                saveMessage = "Unsaved changes"
             },
             onSelectLayer = { selectedLayerId = it },
             onDeleteLayer = {
                 if (project.layers.size > 1 && selectedLayer != null) {
-                    project = project.copy(layers = project.layers.filterNot { it.id == selectedLayer.id })
+                    applyProjectChange(project.copy(layers = project.layers.filterNot { it.id == selectedLayer.id }), "Layer removed · unsaved")
                     selectedLayerId = project.layers.first().id
-                    saveMessage = "Layer removed · unsaved"
                 } else {
                     saveMessage = "A composition must keep at least one layer"
                 }
             },
             onMoveLayer = { offset ->
-                project = project.copy(
+                applyProjectChange(project.copy(
                     layers = ProjectEditorActions.moveLayer(project.layers, selectedLayerId, offset)
-                )
-                saveMessage = "Unsaved changes"
+                ))
             },
             onOpacityChange = { opacity ->
-                project = project.copy(
+                applyProjectChange(project.copy(
                     layers = project.layers.map { layer ->
                         if (layer.id == selectedLayerId) layer.copy(opacity = opacity) else layer
                     }
-                )
-                saveMessage = "Unsaved changes"
+                ))
             },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
             onTogglePlayback = { isPlaying = !isPlaying }
