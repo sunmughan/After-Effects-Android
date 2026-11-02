@@ -1,6 +1,6 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (canonical Transform Scale/Rotation implementation staged; CI validation pending)
+Updated: 2026-11-02 (M0 accepted per owner direction; M1 isolated as priority; no M2–M4 work until M1 exit)
 Latest implementation/test commit: `6b1b45f4cc779f3eaa914a8956837044bfeb68cb` (canonical Transform Scale X/Y and Z Rotation native mutation, JNI, inspector controls and Rust/Kotlin metadata tests; CI #168 pending (scale/rotation test))
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
@@ -8,13 +8,13 @@ PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
 ## M0 — Foundation, toolchain and CI
-**Status: IN PROGRESS** · Evidence commit: `1f32b1a11a468f9433d4781f831c56d6abd2702a`
+**Status: COMPLETE (owner accepted)** · Evidence commit: `1f32b1a11a468f9433d4781f831c56d6abd2702a`
 - [x] Native Android/Compose project and offline manifest.
 - [x] Pinned upstream EffectCraft revision, Rust bridge crate, ARM64 cross-build and Rust host tests.
 - [x] CI: Rust tests, ARM64 bridge build, APK assembly, Kotlin unit tests, emulator instrumentation, dependency/license inventory.
 - [x] CI concurrency group cancels stale PR commits so only the newest revision consumes a runner.
 - [x] Current-head CI run [41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104) completed **success** (2026-11-02).
-- [ ] Commit Gradle Wrapper and verify wrapper-based reproducible build.
+- [x] M0 accepted by project owner based on repository foundation, pinned native toolchain and successful baseline CI evidence [run 41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104). Remaining wrapper/physical ARM64 items are tracked as M6/M7 hardening, not M0 blockers.
 - [x] Validate corrected layer-move edge test and visibility persistence changes: assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`; subsequent unit tests passed on run #92 (emulator infrastructure failed before instrumentation). Latest interaction instrumentation is awaiting run #97.
 - [ ] Verify native ABI packaging/loading on an Android ARM64 device (emulator CI currently compiles ARM64 but instrumentation runs x86_64).
 - [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets in `8f6b406e6934f9c9fc9177f1d88a2c607e33325c`; the run remains slow/in progress and a fresh latest-head CI must verify this configuration.
@@ -23,7 +23,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Exit gate:** clean checkout builds/tests with pinned wrapper/toolchain; native library loads on ARM64 device; audit evidence checked in.
 
 ## M1 — Professional native editor foundation
-**Status: IN PROGRESS**
+**Status: IN PROGRESS — PRIORITY ONLY (estimated implementation 80%; not acceptance-complete)**
 - [x] Adaptive Compose phone/tablet workspace, offline starter composition and local draft persistence.
 - [x] Add/select/remove layers, opacity slider, timeline scrubbing and transport simulation.
 - [x] Emulator smoke tests for launch, New, add-layer action and draft round-trip.
@@ -38,11 +38,14 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Composition settings panel edits width/height (320–3840 px), frame rate (1–120), and duration (1–3600 frames); changes enter bounded undo history and clamp the playhead when duration shrinks.
 - [x] Instrumentation for composition frame-rate apply + undo; CI validation pending.
 - [x] Instrumentation for timeline layer selection (inspector reflects selected layer opacity) and editor Save → app-private draft reload.
-- [ ] Verify all new M1 instrumentation on latest CI head; tablet/foldable layout smoke coverage.
+- [ ] Fix CI prerequisite Rust test mismatch on current head (run #168 failure: layer-stack test expected `C,A,B`, implementation swap correctly yields `C,B,A`; correct assertion and rerun).
+- [ ] Run all expanded M1 instrumentation on current head; fix actual failures without reducing assertions.
+- [ ] Add tablet/foldable responsive layout smoke coverage and confirm controls remain accessible/scrollable at compact widths.
+- [ ] Final M1 acceptance audit: offline create/edit/save/reload, layer select/add/delete/reorder/rename/visibility/opacity, composition settings + undo/redo, timeline scrub/play/pause, persistence and adaptive UI all pass.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
 
 ## M2 — Project formats, import/save and media
-**Status: IN PROGRESS**
+**Status: PAUSED BY OWNER UNTIL M1 COMPLETE (existing work preserved; no further scope now)**
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
@@ -72,7 +75,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Format boundary:** bootstrap `.efx-draft` is private Android JSON, not `.ecproj`. Adobe `.aep` is proprietary; native import is not promised without a legally available compatible parser/conversion route.
 
 ## M3 — Actual preview/render engine
-**Status: IN PROGRESS (CPU compositor path started; device/media gates remain)**
+**Status: PAUSED BY OWNER UNTIL M1 COMPLETE (existing work preserved; no further scope now)**
 - [x] Pin upstream `effectcraft-render` at the same immutable revision; native `render_frame_rgba` parses canonical `.ecproj`, renders through the real CPU `Renderer`/persistent `MediaPool`, and emits bounded RGBA with dimensions. Rust test asserts a 320×180 composition produces a real 160×90 frame payload and rejects bad IDs/negative frames (`b75fe05`, `4f0aa79`).
 - [x] JNI frame request/output bridge and Kotlin wrapper (`4f0aa79`, `5fa1cf2`).
 - [x] Imported canonical editor now renders frames off the UI thread, displays returned pixels as an image, and scrubs frame index (`05e2c4a`, `4c86391`). This is actual upstream CPU compositing—not the decorative draft viewer.
@@ -85,7 +88,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Verify ARM64 native frame on physical phone/tablet; record device, ABI, SHA and pixel evidence.
 
 ## M4 — Editing/effects/timeline parity
-**Status: IN PROGRESS (first canonical property edit)**
+**Status: PAUSED BY OWNER UNTIL M1 COMPLETE (existing work preserved; no further scope now)**
 - [x] Canonical Transform/Opacity is now a real upstream `Property` mutation (0–100, key-aware at frame zero), exposed by JNI, reflected in metadata and edited with a commit-on-release slider; each change reserializes the `.ecproj` and refreshes CPU preview (`9a0af7d`, `340e601`, `7997036`, `1166a2c`, `71509df`). Rust tests cover property mutation/range/ID; Kotlin parser test covers opacity metadata (`e049130`). CI/device validation pending.
 - [x] Canonical Transform/Position X/Y edits preserve Z and key-aware set at frame zero; native model test verifies exact vector and rejects non-finite coordinates/unknown IDs (`b2422dc`); JNI/Kotlin bridge and inspector numeric controls Apply into project cache (`a8a94c2`, `764c311`, `21f4a80`). Parser tests cover X/Y metadata (`0a96985`). CI/device validation pending.
 - [x] Canonical Transform Scale X/Y and Z Rotation editing: Rust mutations preserve Scale Z and set key-aware frame-zero values, bounded finite input validation, JNI/Kotlin APIs, metadata parsing, inspector Apply controls and CPU preview refresh; Rust round-trip/error tests and Kotlin metadata test added (`6b1b45f`). Current-head CI validation pending.
