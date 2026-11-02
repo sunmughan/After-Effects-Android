@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation commit: `e2c11a89afde128fbfa05aa3ea5f99f932250ab3` (composition settings, undoable edits, timeline selection, and offline Save persistence instrumentation; latest-head CI pending)
+Latest implementation commit: `84d50661143591a0c1c78d4409ce8db29cf332c1` (composition settings, undoable edits, timeline selection, offline Save persistence, and isolated smoke tests; latest-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
