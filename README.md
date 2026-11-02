@@ -17,8 +17,8 @@ An offline-first Android editor project targeting phones, tablets, and foldables
 Open the project in Android Studio with JDK 17 and Android SDK Platform 37, or use the pinned Gradle Wrapper (being bootstrapped by CI) once committed:
 
 ```bash
-gradle :app:assembleDebug
-gradle :app:testDebugUnitTest
+./gradlew :app:assembleDebug
+./gradlew :app:testDebugUnitTest
 ```
 
 The official Gradle Wrapper (9.5.0 with distribution SHA-256) is generated/committed by the first CI run; do not consider it available until the files appear on the branch.
