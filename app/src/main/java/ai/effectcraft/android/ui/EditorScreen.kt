@@ -82,6 +82,10 @@ fun EditorScreen(
     playheadFrame: Int,
     isPlaying: Boolean,
     saveMessage: String,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onSave: () -> Unit,
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
@@ -144,6 +148,10 @@ fun EditorScreen(
 
             ToolBar(
                 selectedTool = selectedTool.value,
+                canUndo = canUndo,
+                canRedo = canRedo,
+                onUndo = onUndo,
+                onRedo = onRedo,
                 onSelectTool = { selectedTool.value = it },
                 onOpenInspector = { showPhoneInspector = true },
                 onAddLayer = onAddLayer
@@ -513,6 +521,10 @@ private fun PropertyValueLine(label: String, value: String) {
 @Composable
 private fun ToolBar(
     selectedTool: String,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onSelectTool: (String) -> Unit,
     onOpenInspector: () -> Unit,
     onAddLayer: () -> Unit
@@ -540,6 +552,12 @@ private fun ToolBar(
             }
         }
 
+        TextButton(onClick = onUndo, enabled = canUndo) {
+            Text("Undo", color = if (canUndo) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp)
+        }
+        TextButton(onClick = onRedo, enabled = canRedo) {
+            Text("Redo", color = if (canRedo) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp)
+        }
         TextButton(onClick = onOpenInspector) {
             Icon(Icons.Outlined.Tune, contentDescription = null, tint = EditorPalette.violet)
             Text("Props", color = EditorPalette.violet, fontSize = 11.sp)
