@@ -1,24 +1,27 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-03 (M0 accepted; M1 sole active phase; M2–M4 paused)
+Updated: 2026-11-03 (M0 NOT COMPLETE; M0 closure work active; M1 held; M2–M4 paused)
 Latest implementation fix: fb336098ef288745d07a2bda00475d4a5f8daf1d (Compose BorderStroke import). CI #204 at `9ddc9fe9` passed Rust host tests, ARM64 bridge cross-build, APK assembly and JVM unit tests, but Android instrumentation executed 14 tests and failed 7. Exact root causes: compact-phone header's fixed desktop actions squeezed the save/status Text to zero width (status assertions failed in add/save/undo/redo/composition/delete); rename assertion matched both inspector BasicTextField and timeline label; the wide-window test called ComposeTestRule.setContent on MainActivity which already owns content. Fixes committed: `9ec1a3f5` responsive two-row phone header plus explicit Editor status semantics; `3cfcfbd` status-semantic assertions and unambiguous rename count; `14e6d9b` isolated empty EditorTestActivity; `4e91c149` androidTest manifest registration; `1acb7756` actual wide-window instrumentation; `25e1521a` test import cleanup. A fresh full CI run on this exact HEAD is required; no instrumentation pass is claimed yet.
 
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
 ## M0 — Foundation, toolchain and CI
-**Status: COMPLETE (owner accepted)** · Evidence commit: `1f32b1a11a468f9433d4781f831c56d6abd2702a`
+**Status: INCOMPLETE — baseline CI green, closure gates remain** · Baseline evidence commit: `1f32b1a11a468f9433d4781f831c56d6abd2702a`
 - [x] Native Android/Compose project and offline manifest.
 - [x] Pinned upstream EffectCraft revision, Rust bridge crate, ARM64 cross-build and Rust host tests.
 - [x] CI: Rust tests, ARM64 bridge build, APK assembly, Kotlin unit tests, emulator instrumentation, dependency/license inventory.
 - [x] CI concurrency group cancels stale PR commits so only the newest revision consumes a runner.
 - [x] Current-head CI run [41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104) completed **success** (2026-11-02).
-- [x] M0 accepted by project owner based on repository foundation, pinned native toolchain and successful baseline CI evidence [run 41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104). Remaining wrapper/physical ARM64 items are tracked as M6/M7 hardening, not M0 blockers.
+- [ ] Owner acceptance: NOT received. Do not mark M0 complete without explicit owner acceptance.
+- [ ] Verify JNI library actually loads and executes on a physical ARM64 Android device (cross-compilation alone is not runtime ABI evidence).
 - [x] Validate corrected layer-move edge test and visibility persistence changes: assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`; subsequent unit tests passed on run #92 (emulator infrastructure failed before instrumentation). Latest interaction instrumentation is awaiting run #97.
 - [ ] Verify native ABI packaging/loading on an Android ARM64 device (emulator CI currently compiles ARM64 but instrumentation runs x86_64).
 - [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets in `8f6b406e6934f9c9fc9177f1d88a2c607e33325c`; the run remains slow/in progress and a fresh latest-head CI must verify this configuration.
 - [x] CI root-cause follow-up: an earlier emulator instrumentation attempt failed before tests because Android `activity`/`package` services were unavailable (`cmd: Can't find service`). Workflow now waits for `sys.boot_completed` and package service readiness before connected tests; current-head validation is pending.
 - [ ] Finish repository audit, dependency/license review and release build reproducibility.
-- **Exit gate:** clean checkout builds/tests with pinned wrapper/toolchain; native library loads on ARM64 device; audit evidence checked in.
+- [ ] Add and verify Gradle Wrapper (wrapper JAR + properties) so clean checkout has a pinned, self-contained Gradle entry point.
+- [ ] Owner must choose the Android-specific repository license; do not choose legal terms on owner's behalf.
+- **Exit gate:** clean checkout builds/tests with pinned wrapper/toolchain; native library loads on ARM64 device; audit evidence checked in; owner license decision and acceptance recorded.
 
 ## M1 — Professional native editor foundation
 **Status: IN PROGRESS — PRIORITY ONLY (implementation substantially present; acceptance not yet verified)**
