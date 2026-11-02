@@ -52,6 +52,20 @@ object NativeProjectBridge {
         return runCatching { setLayerPositionEcprojNative(json, compositionId, layerId, x, y) }.getOrNull()
     }
 
+    /** Sets canonical Transform/Scale X and Y percent while preserving Z. */
+    fun setLayerScaleEcproj(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerScaleEcprojNative(json, compositionId, layerId, x, y) }.getOrNull()
+    }
+
+    /** Sets canonical Transform/Rotation in degrees. */
+    fun setLayerRotationEcproj(json: String, compositionId: Long, layerId: Long, degrees: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerRotationEcprojNative(json, compositionId, layerId, degrees) }.getOrNull()
+    }
+
     /** Sets the upstream Transform/Opacity property (0–100 percent). */
     fun setLayerOpacityEcproj(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String? {
         ensureLoaded()
@@ -100,6 +114,12 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerPositionEcprojNative(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String
+
+    @JvmStatic
+    private external fun setLayerScaleEcprojNative(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String
+
+    @JvmStatic
+    private external fun setLayerRotationEcprojNative(json: String, compositionId: Long, layerId: Long, degrees: Double): String
 
     @JvmStatic
     private external fun setLayerOpacityEcprojNative(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String

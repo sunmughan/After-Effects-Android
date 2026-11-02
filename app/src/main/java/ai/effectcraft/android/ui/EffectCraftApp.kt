@@ -316,6 +316,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical position updated · saved locally"
                 )
             },
+            onSetCanonicalLayerScale = { compositionId, layerId, x, y ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerScaleEcproj(source, compositionId, layerId, x, y),
+                    "Canonical scale updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerRotation = { compositionId, layerId, degrees ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerRotationEcproj(source, compositionId, layerId, degrees),
+                    "Canonical rotation updated · saved locally"
+                )
+            },
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))

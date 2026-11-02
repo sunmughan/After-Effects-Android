@@ -9,7 +9,10 @@ data class CanonicalLayerInfo(
     val visible: Boolean,
     val opacityPercent: Double,
     val positionX: Double,
-    val positionY: Double
+    val positionY: Double,
+    val scaleX: Double,
+    val scaleY: Double,
+    val rotationDegrees: Double
 )
 
 data class CanonicalCompositionInfo(
@@ -54,6 +57,7 @@ data class CanonicalProjectInfo(
                 val layers = (0 until (layerArray?.length() ?: 0)).map { layerIndex ->
                     val layer = layerArray!!.getJSONObject(layerIndex)
                     val position = layer.optJSONArray("position")
+                    val scale = layer.optJSONArray("scale")
                     CanonicalLayerInfo(
                         id = layer.getLong("id"),
                         name = layer.optString("name", "Layer"),
@@ -61,7 +65,10 @@ data class CanonicalProjectInfo(
                         visible = layer.optBoolean("visible", true),
                         opacityPercent = layer.optDouble("opacityPercent", 100.0),
                         positionX = position?.optDouble(0) ?: 0.0,
-                        positionY = position?.optDouble(1) ?: 0.0
+                        positionY = position?.optDouble(1) ?: 0.0,
+                        scaleX = scale?.optDouble(0) ?: 100.0,
+                        scaleY = scale?.optDouble(1) ?: 100.0,
+                        rotationDegrees = layer.optDouble("rotationDegrees", 0.0)
                     )
                 }
                 CanonicalCompositionInfo(

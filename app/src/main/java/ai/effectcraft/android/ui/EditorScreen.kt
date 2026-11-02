@@ -127,6 +127,8 @@ fun EditorScreen(
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
     onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
+    onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
+    onSetCanonicalLayerRotation: (Long, Long, Double) -> Unit,
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?
 ) {
@@ -251,6 +253,8 @@ fun EditorScreen(
                     onDeleteLayer = onDeleteCanonicalLayer,
                     onSetLayerOpacity = onSetCanonicalLayerOpacity,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
+                    onSetLayerScale = onSetCanonicalLayerScale,
+                    onSetLayerRotation = onSetCanonicalLayerRotation,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
@@ -632,6 +636,8 @@ private fun CanonicalProjectEditor(
     onDeleteLayer: (Long, Long) -> Unit,
     onSetLayerOpacity: (Long, Long, Double) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
+    onSetLayerScale: (Long, Long, Double, Double) -> Unit,
+    onSetLayerRotation: (Long, Long, Double) -> Unit,
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
     modifier: Modifier = Modifier
@@ -645,6 +651,9 @@ private fun CanonicalProjectEditor(
     var opacityDraft by remember(composition?.id, layer?.id, layer?.opacityPercent) { mutableFloatStateOf((layer?.opacityPercent ?: 100.0).toFloat()) }
     var positionXDraft by remember(composition?.id, layer?.id, layer?.positionX) { mutableStateOf((layer?.positionX ?: 0.0).toString()) }
     var positionYDraft by remember(composition?.id, layer?.id, layer?.positionY) { mutableStateOf((layer?.positionY ?: 0.0).toString()) }
+    var scaleXDraft by remember(composition?.id, layer?.id, layer?.scaleX) { mutableStateOf((layer?.scaleX ?: 100.0).toString()) }
+    var scaleYDraft by remember(composition?.id, layer?.id, layer?.scaleY) { mutableStateOf((layer?.scaleY ?: 100.0).toString()) }
+    var rotationDraft by remember(composition?.id, layer?.id, layer?.rotationDegrees) { mutableStateOf((layer?.rotationDegrees ?: 0.0).toString()) }
     var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
     var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
     var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
@@ -762,6 +771,44 @@ private fun CanonicalProjectEditor(
                     TextButton(
                         enabled = canEdit && positionXDraft.toDoubleOrNull()?.isFinite() == true && positionYDraft.toDoubleOrNull()?.isFinite() == true,
                         onClick = { onSetLayerPosition(composition.id, layer.id, positionXDraft.toDouble(), positionYDraft.toDouble()) }
+                    ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Text("Scale · X / Y (%)", color = EditorPalette.text, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicTextField(
+                        value = scaleXDraft,
+                        onValueChange = { scaleXDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical scale X" },
+                        decorationBox = { inner -> Box { if (scaleXDraft.isEmpty()) Text("X %", color = EditorPalette.muted); inner() } }
+                    )
+                    BasicTextField(
+                        value = scaleYDraft,
+                        onValueChange = { scaleYDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical scale Y" },
+                        decorationBox = { inner -> Box { if (scaleYDraft.isEmpty()) Text("Y %", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = canEdit && scaleXDraft.toDoubleOrNull()?.isFinite() == true && scaleYDraft.toDoubleOrNull()?.isFinite() == true,
+                        onClick = { onSetLayerScale(composition.id, layer.id, scaleXDraft.toDouble(), scaleYDraft.toDouble()) }
+                    ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Rotation · °", color = EditorPalette.text, fontSize = 12.sp)
+                    BasicTextField(
+                        value = rotationDraft,
+                        onValueChange = { rotationDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical rotation degrees" },
+                        decorationBox = { inner -> Box { if (rotationDraft.isEmpty()) Text("Degrees", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = canEdit && rotationDraft.toDoubleOrNull()?.isFinite() == true,
+                        onClick = { onSetLayerRotation(composition.id, layer.id, rotationDraft.toDouble()) }
                     ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
                 Text("Opacity · ${opacityDraft.roundToInt()}%", color = EditorPalette.text, fontSize = 12.sp)
