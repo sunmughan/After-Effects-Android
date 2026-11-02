@@ -117,7 +117,9 @@ fn add_text_layer(source: &str, composition_id: u64, name: &str) -> Result<Strin
         .cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let layer = build::layer(&mut project, &comp, normalized, LayerSource::Text,
         (comp.width, comp.height), None);
-    project.comp_mut(ItemId(composition_id)).unwrap().layers.push(layer);
+    project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?
+        .layers.push(layer);
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
@@ -210,7 +212,8 @@ mod tests {
         assert_eq!(layers.len(), 1);
         assert_eq!(layers[0].name, "Headline");
         assert_eq!(layers[0].source.type_name(), "Text");
-        assert_eq!(layers[0].size, (640, 360));
+        assert_eq!(updated.comp(comp_id).unwrap().width, 640);
+        assert_eq!(updated.comp(comp_id).unwrap().height, 360);
         assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
         let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&updated_json).unwrap()).unwrap();
         assert_eq!(metadata["compositions"][0]["layerCount"], 1);
