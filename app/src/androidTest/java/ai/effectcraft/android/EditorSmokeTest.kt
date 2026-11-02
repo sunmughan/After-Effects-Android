@@ -114,6 +114,26 @@ class EditorSmokeTest {
     }
 
     @Test
+    fun timelineSelectionUpdatesInspectorProperties() {
+        compose.onNodeWithText("Accent Shapes").performClick()
+        compose.onNodeWithText("Props").performClick()
+        compose.onNodeWithText("82%").assertIsDisplayed()
+    }
+
+    @Test
+    fun editorSaveButtonPersistsTheCurrentOfflineLayerStack() {
+        compose.onNodeWithText("New").performClick()
+        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithContentDescription("Save draft").performClick()
+        compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val restored = DraftProjectStore(context).loadLatest()
+        assertNotNull(restored)
+        assertEquals("Shape 4", restored?.layers?.last()?.name)
+    }
+
+    @Test
     fun canonicalEcprojCachePreservesSourceBytes() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = EcprojDocumentStore(context)
