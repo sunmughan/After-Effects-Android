@@ -30,6 +30,13 @@ object NativeProjectBridge {
         return runCatching { renameLayerEcprojNative(json, compositionId, layerId, name) }.getOrNull()
     }
 
+    /** Adds a real upstream Text layer and returns a canonical project JSON envelope. */
+    fun addTextLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { addTextLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
     private fun ensureLoaded() {
         if (loadAttempted) return
         synchronized(this) {
@@ -40,6 +47,9 @@ object NativeProjectBridge {
             loadAttempted = true
         }
     }
+
+    @JvmStatic
+    private external fun addTextLayerEcprojNative(json: String, compositionId: Long, name: String): String
 
     @JvmStatic
     private external fun inspectEcprojNative(json: String): String
