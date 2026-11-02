@@ -63,6 +63,9 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "name": project.item(*id).map(|item| item.name.as_str()).unwrap_or("Composition"),
                 "width": comp.width,
                 "height": comp.height,
+                "frameRateNum": comp.frame_rate.num,
+                "frameRateDen": comp.frame_rate.den,
+                "durationSeconds": comp.duration.seconds(),
                 "layerCount": layers.len(),
                 "layers": layers
             })
