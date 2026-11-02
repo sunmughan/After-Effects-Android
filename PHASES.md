@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (CI emulator stabilization pass)
-Latest implementation commit: `8f6b406e6934f9c9fc9177f1d88a2c607e33325c` (CI emulator configuration; verification pending)
+Updated: 2026-11-02 (layer naming + JNI edit groundwork)
+Latest implementation commit: `9a96d5bec685eeefe7c6d104d15068b197e28bb0` (canonical `.ecproj` layer rename JNI operation + Android wrapper; CI queued)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -17,7 +17,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Commit Gradle Wrapper and verify wrapper-based reproducible build.
 - [ ] Validate corrected layer-move edge test and visibility persistence changes on current head; run 41415700009 failed at unit assertion (test expected wrong edge result); assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`, current implementation `462fa27cd7ed0bfcc8d0bc7dfaad4dec47803292` not yet observed in a fresh CI run.
 - [ ] Verify native ABI packaging/loading on an Android ARM64 device (emulator CI currently compiles ARM64 but instrumentation runs x86_64).
-- [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets; verify fresh run.
+- [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets in `8f6b406e6934f9c9fc9177f1d88a2c607e33325c`; current workflow is queued/running for verification.
 - [x] CI root-cause follow-up: an earlier emulator instrumentation attempt failed before tests because Android `activity`/`package` services were unavailable (`cmd: Can't find service`). Workflow now waits for `sys.boot_completed` and package service readiness before connected tests; current-head validation is pending.
 - [ ] Finish repository audit, dependency/license review and release build reproducibility.
 - **Exit gate:** clean checkout builds/tests with pinned wrapper/toolchain; native library loads on ARM64 device; audit evidence checked in.
@@ -31,7 +31,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Bounded (50 snapshots) project undo/redo history wired for new composition, add/remove/reorder and opacity changes; emulator test covers add-layer undo/redo (CI pending).
 - [x] Layer visibility toggle is stateful, persisted in `.efx-draft` schema v1 with backward-compatible default `true`, and undoable; instrumentation draft round-trip covers hidden layer.
 - [x] CI failure diagnosis: unit test had an incorrect expected ID for moving first layer to end; corrected in `427f54a112a0167d6d3272613d94a7518bac6d78` (the subsequent run's unit tests passed; emulator infrastructure failed before test installation).
-- [ ] Robust project/layer naming and composition settings UI.
+- [x] Layer naming UI in inspector with Apply/trim/blank validation; pure rename reducer unit tests preserve stable IDs.
+- [ ] Composition settings UI.
 - [ ] Strong instrumentation assertions for selection, reorder, delete, visibility, opacity and timeline state.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
 
@@ -40,9 +41,11 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
+- [x] Rust non-empty canonical project fixture exercises layer rename, stable ID preservation and JSON round-trip; Kotlin JNI wrapper exposes rename envelope.
 - [ ] Add non-empty upstream `.ecproj` fixture and Kotlin/native round-trip tests.
 - [x] SAF document picker, persisted URI read permission, app-private raw canonical document retention, and byte-preserving export; validation is read-only, not project editing.
 - [x] Instrumentation test verifies the canonical document cache preserves source bytes.
+- [ ] Wire native canonical rename operation into imported-project editor UI and update imported document cache after edits.
 - [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
 - [ ] Media asset manifest, URI relinking and offline asset handling.
