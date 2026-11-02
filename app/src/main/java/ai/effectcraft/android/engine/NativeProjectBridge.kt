@@ -18,6 +18,11 @@ object NativeProjectBridge {
         return runCatching { inspectEcprojNative(json) }.getOrNull()
     }
 
+    fun isAvailable(): Boolean {
+        ensureLoaded()
+        return available
+    }
+
     /** Returns a JSON envelope containing the edited canonical project or a validation error. */
     fun renameLayerEcproj(json: String, compositionId: Long, layerId: Long, name: String): String? {
         ensureLoaded()
