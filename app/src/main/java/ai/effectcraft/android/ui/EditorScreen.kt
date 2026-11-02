@@ -49,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -108,6 +109,7 @@ fun EditorScreen(
     onOpacityChange: (Float) -> Unit,
     onScrub: (Int) -> Unit,
     onTogglePlayback: () -> Unit,
+    onApplyComposition: (Int, Int, Int, Int) -> Unit,
     canonicalProject: CanonicalProjectInfo?,
     canEditCanonicalProject: Boolean,
     onRenameCanonicalLayer: (Long, Long, String) -> Unit,
@@ -115,6 +117,7 @@ fun EditorScreen(
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
+    var showCompositionSettings by remember { mutableStateOf(false) }
     var showCanonicalEditor by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
@@ -178,6 +181,7 @@ fun EditorScreen(
                 onRedo = onRedo,
                 onSelectTool = { selectedTool.value = it },
                 onOpenInspector = { showPhoneInspector = true },
+                onOpenCompositionSettings = { showCompositionSettings = true },
                 onAddLayer = onAddLayer
             )
 
@@ -194,6 +198,25 @@ fun EditorScreen(
                     .height(if (isTabletLayout) 222.dp else 204.dp)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
             )
+        }
+
+        if (showCompositionSettings) {
+            ModalBottomSheet(
+                onDismissRequest = { showCompositionSettings = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = EditorPalette.background,
+                contentColor = EditorPalette.text
+            ) {
+                CompositionSettingsPanel(
+                    project = project,
+                    onApply = { width, height, fps, duration ->
+                        onApplyComposition(width, height, fps, duration)
+                        showCompositionSettings = false
+                    },
+                    onCancel = { showCompositionSettings = false },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
         }
 
         if (showCanonicalEditor && canonicalProject != null) {
@@ -672,6 +695,40 @@ private fun CanonicalProjectEditor(
 }
 
 @Composable
+private fun CompositionSettingsPanel(
+    project: ProjectDocument,
+    onApply: (Int, Int, Int, Int) -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var width by remember(project.width) { mutableIntStateOf(project.width) }
+    var height by remember(project.height) { mutableIntStateOf(project.height) }
+    var fps by remember(project.frameRate) { mutableIntStateOf(project.frameRate) }
+    var duration by remember(project.durationFrames) { mutableIntStateOf(project.durationFrames) }
+
+    Column(
+        modifier = modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text("COMPOSITION SETTINGS", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text("Changes apply to this offline draft and participate in undo/redo.", color = EditorPalette.muted, fontSize = 12.sp)
+        Text("Width · ${width} px", color = EditorPalette.text, fontSize = 12.sp)
+        Slider(value = width.toFloat(), onValueChange = { width = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.semantics { contentDescription = "Composition width" })
+        Text("Height · ${height} px", color = EditorPalette.text, fontSize = 12.sp)
+        Slider(value = height.toFloat(), onValueChange = { height = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.semantics { contentDescription = "Composition height" })
+        Text("Frame rate · ${fps} FPS", color = EditorPalette.text, fontSize = 12.sp)
+        Slider(value = fps.toFloat(), onValueChange = { fps = it.roundToInt() }, valueRange = 1f..120f, modifier = Modifier.semantics { contentDescription = "Composition frame rate" })
+        Text("Duration · ${duration} frames", color = EditorPalette.text, fontSize = 12.sp)
+        Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..3600f, modifier = Modifier.semantics { contentDescription = "Composition duration" })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = onCancel) { Text("Cancel", color = EditorPalette.muted) }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { onApply(width, height, fps, duration) }) { Text("Apply settings", color = EditorPalette.violet) }
+        }
+    }
+}
+
+@Composable
 private fun PropertyLine(title: String, trailing: String) {
     Row(
         modifier = Modifier
@@ -708,6 +765,7 @@ private fun ToolBar(
     onRedo: () -> Unit,
     onSelectTool: (String) -> Unit,
     onOpenInspector: () -> Unit,
+    onOpenCompositionSettings: () -> Unit,
     onAddLayer: () -> Unit
 ) {
     Row(
@@ -742,6 +800,9 @@ private fun ToolBar(
         TextButton(onClick = onOpenInspector) {
             Icon(Icons.Outlined.Tune, contentDescription = null, tint = EditorPalette.violet)
             Text("Props", color = EditorPalette.violet, fontSize = 11.sp)
+        }
+        TextButton(onClick = onOpenCompositionSettings) {
+            Text("Comp", color = EditorPalette.violet, fontSize = 11.sp)
         }
         TextButton(onClick = onAddLayer) {
             Icon(Icons.Outlined.Add, contentDescription = null, tint = EditorPalette.violet)
