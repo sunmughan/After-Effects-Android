@@ -21,6 +21,8 @@ import ai.effectcraft.android.ui.EditorScreen
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.data.ProjectDocument
+import ai.effectcraft.android.engine.NativeProjectBridge
+import org.json.JSONObject
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -33,7 +35,8 @@ class EditorSmokeTest {
     val compose = createAndroidComposeRule<MainActivity>()
 
     private fun assertEditorStatus(message: String) {
-        compose.onNodeWithContentDescription("Editor status: $message").assertIsDisplayed()
+        compose.onNodeWithText(message).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Editor status: $message").assertExists()
     }
 
 
@@ -174,6 +177,16 @@ class EditorSmokeTest {
         val restored = DraftProjectStore(context).loadLatest()
         assertNotNull(restored)
         assertEquals("Shape 4", restored?.layers?.last()?.name)
+    }
+
+    @Test
+    fun nativeBridgeLoadsAndInvokesCanonicalParserOnEmulator() {
+        assertTrue("The emulator ABI must load libeffectcraft_android", NativeProjectBridge.isAvailable())
+        val envelope = NativeProjectBridge.inspectEcproj("{}")
+        assertNotNull("JNI parser call must return a JSON envelope", envelope)
+        val result = JSONObject(envelope!!)
+        assertTrue("Invalid input must be reported by the native parser", !result.optBoolean("valid"))
+        assertTrue("Native parser must include a validation error", result.optString("error").isNotBlank())
     }
 
     @Test
