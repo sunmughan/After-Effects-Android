@@ -192,6 +192,22 @@ fn move_layer(source: &str, composition_id: u64, layer_id: u64, offset: i64) -> 
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+fn relink_footage(source: &str, item_id: u64, path: &str) -> Result<String, String> {
+    let normalized = path.trim();
+    if normalized.is_empty() { return Err("Media path cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let item = project.item_mut(ItemId(item_id))
+        .ok_or_else(|| format!("Project item {item_id} was not found"))?;
+    let footage = match &mut item.kind {
+        ItemKind::Footage(footage) => footage,
+        _ => return Err(format!("Project item {item_id} is not footage")),
+    };
+    footage.path = normalized.to_owned();
+    footage.missing = false;
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 fn delete_layer(source: &str, composition_id: u64, layer_id: u64) -> Result<String, String> {
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -227,6 +243,24 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_mo
     };
     let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
         else { move_layer(&source, composition_id as u64, layer_id as u64, offset as i64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_relinkFootageEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, item_id: jlong, path: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let path: String = match env.get_string(&path) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if item_id < 0 { Err("Project item ID must be non-negative".to_owned()) }
+        else { relink_footage(&source, item_id as u64, &path) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -356,6 +390,30 @@ mod tests {
         let final_project: Project = serde_json::from_str(&deleted).unwrap();
         assert_eq!(final_project.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "B"]);
         assert_eq!(serde_json::from_str::<Project>(&final_project.to_file_json().unwrap()).unwrap(), final_project);
+    }
+
+    #[test]
+    fn relink_footage_updates_path_and_clears_missing_flag() {
+        use effectcraft_project::{Footage, ItemKind};
+        use effectcraft_color::Label;
+
+        let mut project = Project::default();
+        let mut footage = Footage::default();
+        footage.path = "missing/old.mp4".into();
+        footage.missing = true;
+        let item_id = project.add_item("Clip", Label::Sandstone, None, ItemKind::Footage(footage));
+        let source = project.to_file_json().unwrap();
+        let relinked_json = relink_footage(&source, item_id.0, "/data/user/0/app/files/assets/clip.mp4").unwrap();
+        let relinked: Project = serde_json::from_str(&relinked_json).unwrap();
+        let item = relinked.item(item_id).unwrap();
+        if let ItemKind::Footage(media) = &item.kind {
+            assert_eq!(media.path, "/data/user/0/app/files/assets/clip.mp4");
+            assert!(!media.missing);
+        } else {
+            panic!("relinked item must remain footage");
+        }
+        assert!(relink_footage(&source, 999, "/tmp/clip.mp4").is_err());
+        assert!(relink_footage(&source, item_id.0, " ").is_err());
     }
 
     #[test]
