@@ -45,6 +45,13 @@ object NativeProjectBridge {
             .getOrNull()?.takeIf { it.size >= 8 }
     }
 
+    /** Sets the upstream Transform/Opacity property (0–100 percent). */
+    fun setLayerOpacityEcproj(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerOpacityEcprojNative(json, compositionId, layerId, opacityPercent) }.getOrNull()
+    }
+
     /** Relinks a canonical footage item to an app-private offline media copy. */
     fun relinkFootageEcproj(json: String, itemId: Long, path: String): String? {
         ensureLoaded()
@@ -83,6 +90,9 @@ object NativeProjectBridge {
             loadAttempted = true
         }
     }
+
+    @JvmStatic
+    private external fun setLayerOpacityEcprojNative(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String
 
     @JvmStatic
     private external fun renderEcprojFrameNative(json: String, compositionId: Long, frame: Long, maxSide: Long): ByteArray
