@@ -37,6 +37,15 @@ class EditorSmokeTest {
     }
 
     @Test
+    fun layerMutationCanBeUndoneAndRedone() {
+        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
+        compose.onNodeWithText("Redo").performClick()
+        compose.onNodeWithText("Redo · unsaved").assertIsDisplayed()
+    }
+
+    @Test
     fun draftStoreRoundTripsCompositionAndLayerValues() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = DraftProjectStore(context)
