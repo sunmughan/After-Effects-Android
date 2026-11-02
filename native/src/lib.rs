@@ -321,7 +321,7 @@ mod tests {
         let source = project.to_file_json().unwrap();
         let moved = move_layer(&source, comp_id.0, ids[2], -2).unwrap();
         let reordered: Project = serde_json::from_str(&moved).unwrap();
-        assert_eq!(reordered.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), ["C", "A", "B"]);
+        assert_eq!(reordered.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "A", "B"]);
 
         let hidden = set_layer_visibility(&moved, comp_id.0, ids[2], false).unwrap();
         let hidden_project: Project = serde_json::from_str(&hidden).unwrap();
@@ -329,7 +329,7 @@ mod tests {
 
         let deleted = delete_layer(&hidden, comp_id.0, ids[0]).unwrap();
         let final_project: Project = serde_json::from_str(&deleted).unwrap();
-        assert_eq!(final_project.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), ["C", "B"]);
+        assert_eq!(final_project.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "B"]);
         assert_eq!(serde_json::from_str::<Project>(&final_project.to_file_json().unwrap()).unwrap(), final_project);
     }
 
