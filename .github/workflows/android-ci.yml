@@ -19,7 +19,7 @@ jobs:
   android:
     name: Assemble and test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -82,12 +82,14 @@ jobs:
       - name: Run Android emulator smoke tests (M1)
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
           target: google_apis
           arch: x86_64
-          profile: pixel_6
+          profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -camera-back none
           disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 900
           script: |
             adb wait-for-device
             timeout 240 bash -c 'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" == "1" ]]; do sleep 3; done'
