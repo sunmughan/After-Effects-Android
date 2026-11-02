@@ -300,6 +300,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical layer removed · saved locally"
                 )
             },
+            onSetCanonicalLayerOpacity = { compositionId, layerId, opacityPercent ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerOpacityEcproj(source, compositionId, layerId, opacityPercent),
+                    "Canonical opacity updated · saved locally"
+                )
+            },
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))
