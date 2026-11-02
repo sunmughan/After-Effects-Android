@@ -3,7 +3,7 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
-use effectcraft_project::{ItemId, LayerId};
+use effectcraft_project::{ItemId, ItemKind, LayerId};
 
 fn inspect_project(source: &str) -> Result<String, String> {
     let project: Project = serde_json::from_str(source)
@@ -29,10 +29,34 @@ fn inspect_project(source: &str) -> Result<String, String> {
         })
         .collect();
 
+    let items: Vec<_> = project.items.values().map(|item| {
+        let media = match &item.kind {
+            ItemKind::Footage(footage) => json!({
+                "path": footage.path,
+                "width": footage.width,
+                "height": footage.height,
+                "hasVideo": footage.has_video,
+                "hasAudio": footage.has_audio,
+                "missing": footage.missing,
+                "sequence": footage.sequence
+            }),
+            ItemKind::Solid(solid) => json!({"width": solid.width, "height": solid.height}),
+            _ => json!({}),
+        };
+        json!({
+            "id": item.id.0,
+            "name": item.name,
+            "type": item.type_name(),
+            "parentId": item.parent.map(|parent| parent.0),
+            "media": media
+        })
+    }).collect();
+
     Ok(json!({
         "valid": true,
         "schema": project.schema,
         "itemCount": project.items.len(),
+        "items": items,
         "compositionCount": compositions.len(),
         "compositions": compositions
     })
@@ -239,6 +263,7 @@ mod tests {
         assert_eq!(metadata["itemCount"], original.items.len());
         assert_eq!(metadata["compositionCount"], 0);
         assert!(metadata["compositions"].as_array().is_some());
+        assert!(metadata["items"].as_array().is_some());
     }
 
 
