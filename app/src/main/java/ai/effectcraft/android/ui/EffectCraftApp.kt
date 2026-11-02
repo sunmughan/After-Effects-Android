@@ -97,6 +97,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
 
     val selectedLayer = project.layers.firstOrNull { it.id == selectedLayerId }
+    fun applyCanonicalEdit(envelope: String?, successMessage: String) {
+        runCatching {
+            val response = JSONObject(envelope ?: error("Native EffectCraft bridge unavailable on this ABI"))
+            check(response.optBoolean("valid")) { response.optString("error", "Canonical edit failed") }
+            val updated = response.getString("project")
+            val metadata = NativeProjectBridge.inspectEcproj(updated)
+                ?: error("Unable to inspect updated canonical project")
+            val parsed = CanonicalProjectInfo.parse(metadata)
+            ecprojStore.save(updated)
+            importedEcproj = updated
+            canonicalProjectInfo = parsed
+            saveMessage = successMessage
+        }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
+    }
+
+
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -198,38 +214,44 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             canonicalProject = canonicalProjectInfo,
             canEditCanonicalProject = NativeProjectBridge.isAvailable(),
             onRenameCanonicalLayer = { compositionId, layerId, name ->
-                runCatching {
-                    val source = importedEcproj ?: error("Import a canonical .ecproj first")
-                    val envelope = NativeProjectBridge.renameLayerEcproj(source, compositionId, layerId, name)
-                        ?: error("Native EffectCraft bridge unavailable on this ABI")
-                    val response = JSONObject(envelope)
-                    check(response.optBoolean("valid")) { response.optString("error", "Layer rename failed") }
-                    val updated = response.getString("project")
-                    val metadata = NativeProjectBridge.inspectEcproj(updated)
-                        ?: error("Unable to inspect updated canonical project")
-                    val parsed = CanonicalProjectInfo.parse(metadata)
-                    ecprojStore.save(updated)
-                    importedEcproj = updated
-                    canonicalProjectInfo = parsed
-                    saveMessage = "Canonical layer renamed · saved locally"
-                }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.renameLayerEcproj(source, compositionId, layerId, name),
+                    "Canonical layer renamed · saved locally"
+                )
             },
             onAddCanonicalTextLayer = { compositionId, name ->
-                runCatching {
-                    val source = importedEcproj ?: error("Import a canonical .ecproj first")
-                    val envelope = NativeProjectBridge.addTextLayerEcproj(source, compositionId, name)
-                        ?: error("Native EffectCraft bridge unavailable on this ABI")
-                    val response = JSONObject(envelope)
-                    check(response.optBoolean("valid")) { response.optString("error", "Text layer creation failed") }
-                    val updated = response.getString("project")
-                    val metadata = NativeProjectBridge.inspectEcproj(updated)
-                        ?: error("Unable to inspect updated canonical project")
-                    val parsed = CanonicalProjectInfo.parse(metadata)
-                    ecprojStore.save(updated)
-                    importedEcproj = updated
-                    canonicalProjectInfo = parsed
-                    saveMessage = "Canonical Text layer added · saved locally"
-                }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.addTextLayerEcproj(source, compositionId, name),
+                    "Canonical Text layer added · saved locally"
+                )
+            },
+            onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerVisibilityEcproj(source, compositionId, layerId, visible),
+                    "Canonical visibility updated · saved locally"
+                )
+            },
+            onMoveCanonicalLayer = { compositionId, layerId, offset ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.moveLayerEcproj(source, compositionId, layerId, offset),
+                    "Canonical layer reordered · saved locally"
+                )
+            },
+            onDeleteCanonicalLayer = { compositionId, layerId ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.deleteLayerEcproj(source, compositionId, layerId),
+                    "Canonical layer removed · saved locally"
+                )
             }
         )
     }
