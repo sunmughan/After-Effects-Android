@@ -108,7 +108,8 @@ fun EditorScreen(
     onTogglePlayback: () -> Unit,
     canonicalProject: CanonicalProjectInfo?,
     canEditCanonicalProject: Boolean,
-    onRenameCanonicalLayer: (Long, Long, String) -> Unit
+    onRenameCanonicalLayer: (Long, Long, String) -> Unit,
+    onAddCanonicalTextLayer: (Long, String) -> Unit
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
@@ -204,6 +205,7 @@ fun EditorScreen(
                     project = canonicalProject,
                     canEdit = canEditCanonicalProject,
                     onRenameLayer = onRenameCanonicalLayer,
+                    onAddTextLayer = onAddCanonicalTextLayer,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
@@ -577,10 +579,12 @@ private fun CanonicalProjectEditor(
     project: CanonicalProjectInfo,
     canEdit: Boolean,
     onRenameLayer: (Long, Long, String) -> Unit,
+    onAddTextLayer: (Long, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var compositionId by remember { mutableStateOf<Long?>(null) }
     var layerId by remember { mutableStateOf<Long?>(null) }
+    var newTextName by remember { mutableStateOf("Text") }
     val composition = project.compositions.firstOrNull { it.id == compositionId } ?: project.compositions.firstOrNull()
     val layer = composition?.layers?.firstOrNull { it.id == layerId } ?: composition?.layers?.firstOrNull()
     var nameDraft by remember(composition?.id, layer?.id, layer?.name) { mutableStateOf(layer?.name.orEmpty()) }
@@ -602,6 +606,25 @@ private fun CanonicalProjectEditor(
                 }
             }
             Text("${composition.width} × ${composition.height} · ${composition.layers.size} layers", color = EditorPalette.muted, fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BasicTextField(
+                    value = newTextName,
+                    onValueChange = { newTextName = it.take(120) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 13.sp),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        Box {
+                            if (newTextName.isEmpty()) Text("New text layer name", color = EditorPalette.muted)
+                            inner()
+                        }
+                    }
+                )
+                TextButton(
+                    enabled = canEdit && newTextName.trim().isNotEmpty(),
+                    onClick = { onAddTextLayer(composition.id, newTextName) }
+                ) { Text("Add Text", color = EditorPalette.violet) }
+            }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
             Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
                 composition.layers.forEach { item ->
