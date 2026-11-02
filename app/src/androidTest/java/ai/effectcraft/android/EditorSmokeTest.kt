@@ -158,8 +158,12 @@ class EditorSmokeTest {
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
         compose.onNodeWithText("00:00:02:00").assertIsDisplayed()
 
+        val playhead = compose.onNodeWithContentDescription("Timeline playhead")
         compose.onNodeWithContentDescription("Play timeline").performClick()
         compose.onNodeWithContentDescription("Pause timeline").assertIsDisplayed()
+        compose.waitUntil(timeoutMillis = 3_000) {
+            playhead.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current > 60f
+        }
         compose.onNodeWithContentDescription("Pause timeline").performClick()
         compose.onNodeWithContentDescription("Play timeline").assertIsDisplayed()
     }
