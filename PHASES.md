@@ -37,6 +37,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 **Status: IN PROGRESS / canonical model inspection**
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
+- [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
 - [ ] Add non-empty upstream `.ecproj` fixture and Kotlin/native round-trip tests.
 - [ ] SAF document picker, open/save, persisted URI permissions and error/recovery flows.
 - [ ] Canonical project repository adapter; version/schema validation and migration.

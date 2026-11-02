@@ -7,7 +7,7 @@ Last updated: 2026-11-02
 - A native Android application module using Kotlin and Jetpack Compose.
 - Adaptive layout breakpoint: narrow layouts use a stacked phone workspace; wider layouts place the inspector beside the composition viewer.
 - A starter 1080 × 1920 composition with selectable layer rows.
-- Working layer add/select/remove interactions and an editable opacity property.
+- Working layer add/select/remove/reorder interactions, visibility toggle, and editable opacity property.
 - Timeline scrubbing and a lightweight transport/playhead simulation.
 - Local draft persistence in app-private storage with temp-file replacement.
 - No network permission and no cloud dependency.
@@ -64,8 +64,10 @@ The current Kotlin draft store is intentionally isolated. Once the upstream proj
 - [x] Empty repository initialized.
 - [x] Native app module and offline manifest.
 - [x] Adaptive phone/tablet editor shell.
-- [x] Basic layer, opacity, timeline and draft-save interactions.
-- [x] Hosted Android CI builds the ARM64 JNI bridge, runs Rust and Kotlin unit tests, and generates dependency/license inventories (latest M1 change awaits CI).\n- [x] Android emulator instrumentation covers launch/offline workspace, New composition, layer addition, and draft persistence round-trip.\n- [x] Emulator smoke-test execution is wired into the pull-request CI workflow; latest current-head verification remains pending.
+- [x] Layer add/select/remove/reorder, visibility/opacity controls, timeline and draft-save interactions.
+- [x] Hosted Android CI builds the ARM64 JNI bridge, runs Rust and Kotlin unit tests, and generates dependency/license inventories (latest M1 change awaits CI).
+- [x] Android emulator instrumentation covers launch/offline workspace, New composition, layer addition, and draft persistence round-trip.
+- [x] Emulator smoke-test execution is wired into the pull-request CI workflow; latest current-head verification remains pending.
 
 ### M2 — Shared Rust project and engine integration
 - [x] Pin upstream EffectCraft commit and audit project/engine crate boundaries.
