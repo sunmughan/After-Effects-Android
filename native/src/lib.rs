@@ -144,6 +144,10 @@ mod tests {
         let renamed: Project = serde_json::from_str(&renamed_json).unwrap();
         assert_eq!(renamed.comp(comp_id).unwrap().layers[0].name, "Mobile title");
         assert_eq!(renamed.comp(comp_id).unwrap().layers[0].id.0, layer_id);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&renamed_json).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["id"], comp_id.0);
+        assert_eq!(metadata["compositions"][0]["layers"][0]["id"], layer_id);
+        assert_eq!(metadata["compositions"][0]["layers"][0]["name"], "Mobile title");
         assert_eq!(serde_json::from_str::<Project>(&renamed.to_file_json().unwrap()).unwrap(), renamed);
     }
 
