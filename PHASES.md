@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M0 accepted; M1 remains the sole active phase; M2–M4 paused)
-Latest M1 test-strengthening commit: (this commit) asserts composition frame rate returns to exactly 30 FPS after Undo, not only that the toolbar status changes. CI infrastructure fix `5a4d3d732d4419582c4ce85ca249700540362982` adds an explicit `/dev/kvm` permission step before emulator launch. Run #185 (HEAD `43211772`) passed Rust bridge, ARM64 native build, APK assembly, and all JVM unit tests, then failed before instrumentation because GitHub runner user lacked KVM permissions (`ERROR | x86_64 emulation currently requires hardware acceleration`, `/dev/kvm` permission denied). This is an environment/bootstrap failure, not an M1 assertion failure. The workflow now chmods `/dev/kvm` to 0666 on hosted runner and fails with an explicit diagnostic if absent; fresh CI is triggered by the fix commit. The 11 M1 instrumentation scenarios are checked in but have not yet executed successfully on a booted emulator.
+Latest M1 commits: `0460e741a72cb374b30b6772c06d133d39ca58ec` asserts composition frame rate returns to exactly 30 FPS after Undo, not only that the toolbar status changes; `6b139f12e1da2aee124d3d4b8bad45b0c3336328` fixes Android-test compilation by removing unsupported `assertDoesNotExist`/`onNode` imports and using `onAllNodesWithText(...).assertCountEquals(0)`. CI infrastructure fix `5a4d3d732d4419582c4ce85ca249700540362982` adds an explicit `/dev/kvm` permission step before emulator launch. Run #185 (HEAD `43211772`) passed Rust bridge, ARM64 native build, APK assembly, and all JVM unit tests, then failed before instrumentation because GitHub runner user lacked KVM permissions (`ERROR | x86_64 emulation currently requires hardware acceleration`, `/dev/kvm` permission denied). This is an environment/bootstrap failure, not an M1 assertion failure. The workflow now chmods `/dev/kvm` to 0666 on hosted runner and fails with an explicit diagnostic if absent; fresh CI is triggered by the fix commit. The 11 M1 instrumentation scenarios are checked in. Run #189 at `0460e741` failed at Android-test Kotlin compilation due to invalid imports; the compile fix is `6b139f12`. Run #190 at `6b139f12` was started to verify the corrected test source; its current status is tracked below.
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -23,7 +23,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Exit gate:** clean checkout builds/tests with pinned wrapper/toolchain; native library loads on ARM64 device; audit evidence checked in.
 
 ## M1 — Professional native editor foundation
-**Status: IN PROGRESS — PRIORITY ONLY (estimated implementation 80%; not acceptance-complete)**
+**Status: IN PROGRESS — PRIORITY ONLY (implementation substantially present; acceptance not yet verified)**
 - [x] Adaptive Compose phone/tablet workspace, offline starter composition and local draft persistence.
 - [x] Add/select/remove layers, opacity slider, timeline scrubbing and transport simulation.
 - [x] Emulator smoke tests for launch, New, add-layer action and draft round-trip.
@@ -34,7 +34,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Layer naming UI in inspector with Apply/trim/blank validation; pure rename reducer unit tests preserve stable IDs.
 - [x] Phone inspector layer rename instrumentation assertion.
 - [x] Accessible semantics labels for layer visibility, layer opacity and timeline playhead; instrumentation asserts visibility toggle, exact 50% opacity, playhead scrub to frame 60/timecode 00:00:02:00, play/pause, and added-layer reorder/delete. `cceea410` extends the property test to verify exact values across Undo/Redo.
-- [ ] Verify expanded interaction instrumentation on current head. Run #185 at `43211772` passed JVM unit tests after the fixes: (1) `CanonicalProjectInfoTest.parsesCompositionLayerAndLinkedMediaInventory`, (2) `CanonicalProjectInfoTest.rejectsInvalidNativeMetadataEnvelope` now use JVM `org.json` dependency from `b151a301`; (3) deletion invariant test fixed in `c30385e1`. No assertions were removed or weakened. Instrumentation was blocked before test execution by runner lacking `/dev/kvm` permissions; workflow fix `5a4d3d73` now attempts to grant access; rerun pending.
+- [ ] Verify expanded interaction instrumentation on current head. Run #185 at `43211772` passed JVM unit tests after the fixes: (1) `CanonicalProjectInfoTest.parsesCompositionLayerAndLinkedMediaInventory`, (2) `CanonicalProjectInfoTest.rejectsInvalidNativeMetadataEnvelope` now use JVM `org.json` dependency from `b151a301`; (3) deletion invariant test fixed in `c30385e1`. No assertions were removed or weakened. Instrumentation was blocked before test execution by runner lacking `/dev/kvm` permissions; workflow fix `5a4d3d73` now attempts to grant access; run #189 reached emulator startup but failed earlier at Android-test Kotlin compilation; corrected test imports committed in `6b139f12`; fresh run #190 is in progress.
 - [x] Composition settings panel edits width/height (320–3840 px), frame rate (1–120), and duration (1–3600 frames); changes enter bounded undo history and clamp the playhead when duration shrinks.
 - [x] Instrumentation for composition frame-rate apply + undo, now verifies exact 30 FPS model restoration after Undo; CI validation pending.
 - [x] Instrumentation for timeline layer selection (inspector reflects selected layer opacity) and editor Save → app-private draft reload.
@@ -42,7 +42,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Run all expanded M1 instrumentation on current head; fix actual failures without reducing assertions. Earlier compile error at `EditorScreen.kt:660` (`LaunchedEffect` unresolved) was fixed in `d86fab9`. Run #185 skipped tests due to emulator startup failure (KVM access denied); workflow fix `5a4d3d73` awaits fresh run. JVM unit tests and APK assembly are green at `43211772`.
 - [x] Added wide-window adaptive workspace instrumentation (forces 1080dp test width and asserts persistent PROPERTIES + COMPOSITION VIEWER side-by-side) in `b967c90`; CI verification pending. Foldable physical/posture and compact-width scrolling still need device validation.
 - [ ] Final M1 acceptance audit: offline create/edit/save/reload, layer select/add/delete/reorder/rename/visibility/opacity, composition settings + undo/redo, timeline scrub/play/pause, persistence and adaptive UI all pass.
-- **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
+- **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature. Latest attempted test compile: #189 failed on invalid test imports; fix `6b139f12`; current-head full CI/emulator evidence still required.
 
 ## M2 — Project formats, import/save and media
 **Status: PAUSED BY OWNER UNTIL M1 COMPLETE (existing work preserved; no further scope now)**
