@@ -50,6 +50,8 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.9.4")
 
+    // Android's org.json methods are SDK stubs in local JVM tests; use the real implementation.
+    testImplementation("org.json:json:20250517")
     testImplementation("junit:junit:4.13.2")
 }
 
