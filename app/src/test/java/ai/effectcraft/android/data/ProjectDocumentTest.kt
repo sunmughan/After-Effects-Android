@@ -33,7 +33,7 @@ class ProjectDocumentTest {
         val layers = ProjectDocument.starter().layers
         assertEquals(layers, ProjectEditorActions.moveLayer(layers, layers.first().id, -1))
         assertEquals(layers, ProjectEditorActions.moveLayer(layers, "missing", 1))
-        assertEquals(layers.last().id, ProjectEditorActions.moveLayer(layers, layers.first().id, 99).last().id)
+        assertEquals(layers.first().id, ProjectEditorActions.moveLayer(layers, layers.first().id, 99).last().id)
     }
 
     @Test
