@@ -42,6 +42,19 @@ object ProjectEditorActions {
         return layers.filterNot { it.id == layerId }
     }
 
+    /**
+     * Deletes the selected layer and chooses the next layer at the removed
+     * stack index (or the previous final layer). If deletion is rejected
+     * because it is the only layer, selection remains unchanged.
+     */
+    fun deleteLayerAndSelection(layers: List<LayerDocument>, selectedLayerId: String): Pair<List<LayerDocument>, String?> {
+        val remaining = deleteLayer(layers, selectedLayerId)
+        if (remaining.any { it.id == selectedLayerId }) return remaining to selectedLayerId
+        val removedIndex = layers.indexOfFirst { it.id == selectedLayerId }
+        val next = remaining.getOrNull(removedIndex.coerceAtLeast(0)) ?: remaining.lastOrNull()
+        return remaining to next?.id
+    }
+
     /** Updates visibility without changing identity or other layer properties. */
     fun setLayerVisibility(layers: List<LayerDocument>, layerId: String, visible: Boolean): List<LayerDocument> {
         if (layers.none { it.id == layerId }) return layers

@@ -87,6 +87,23 @@ class ProjectDocumentTest {
     }
 
     @Test
+    fun deletingSelectedLayerSelectsAdjacentLayerAndPreservesSelectionWhenDeletionIsRejected() {
+        val layers = ProjectDocument.starter().layers
+
+        val (afterFirst, firstSelection) = ProjectEditorActions.deleteLayerAndSelection(layers, layers.first().id)
+        assertEquals(2, afterFirst.size)
+        assertEquals(layers[1].id, firstSelection)
+
+        val (afterMiddle, middleSelection) = ProjectEditorActions.deleteLayerAndSelection(layers, layers[1].id)
+        assertEquals(2, afterMiddle.size)
+        assertEquals(layers[2].id, middleSelection)
+
+        val (unchanged, onlySelection) = ProjectEditorActions.deleteLayerAndSelection(listOf(layers.first()), layers.first().id)
+        assertEquals(listOf(layers.first()), unchanged)
+        assertEquals(layers.first().id, onlySelection)
+    }
+
+    @Test
     fun visibilityAndOpacityReducersPreserveOtherLayerValuesAndClampOpacity() {
         val layers = ProjectDocument.starter().layers
         val target = layers[1]

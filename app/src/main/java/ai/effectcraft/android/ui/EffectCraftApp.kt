@@ -216,8 +216,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onSelectLayer = { selectedLayerId = it },
             onDeleteLayer = {
                 if (project.layers.size > 1 && selectedLayer != null) {
-                    applyProjectChange(project.copy(layers = ProjectEditorActions.deleteLayer(project.layers, selectedLayer.id)), "Layer removed · unsaved")
-                    selectedLayerId = project.layers.first().id
+                    val (remainingLayers, nextSelection) = ProjectEditorActions.deleteLayerAndSelection(project.layers, selectedLayer.id)
+                    applyProjectChange(project.copy(layers = remainingLayers), "Layer removed · unsaved")
+                    selectedLayerId = nextSelection.orEmpty()
                 } else {
                     saveMessage = "A composition must keep at least one layer"
                 }
