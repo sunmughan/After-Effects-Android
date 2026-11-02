@@ -1,7 +1,6 @@
 package ai.effectcraft.android.ui
 
 import android.graphics.Bitmap
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -324,7 +323,7 @@ private fun HeaderBar(
                     Surface(
                         color = Color(0xFF13231F),
                         shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color(0xFF24453E))
+                        border = androidx.foundation.BorderStroke(1.dp, Color(0xFF24453E))
                     ) {
                         Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
                             color = EditorPalette.mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)

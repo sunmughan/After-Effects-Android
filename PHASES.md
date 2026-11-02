@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (M0 accepted; M1 remains the sole active phase; M2–M4 paused)
-Latest verified code HEAD before this tracker edit: `25e1521afa7148c9cb858e85f059efdd3bbffc1d`. CI #204 at `9ddc9fe9` passed Rust host tests, ARM64 bridge cross-build, APK assembly and JVM unit tests, but Android instrumentation executed 14 tests and failed 7. Exact root causes: compact-phone header's fixed desktop actions squeezed the save/status Text to zero width (status assertions failed in add/save/undo/redo/composition/delete); rename assertion matched both inspector BasicTextField and timeline label; the wide-window test called ComposeTestRule.setContent on MainActivity which already owns content. Fixes committed: `9ec1a3f5` responsive two-row phone header plus explicit Editor status semantics; `3cfcfbd` status-semantic assertions and unambiguous rename count; `14e6d9b` isolated empty EditorTestActivity; `4e91c149` androidTest manifest registration; `1acb7756` actual wide-window instrumentation; `25e1521a` test import cleanup. A fresh full CI run on this exact HEAD is required; no instrumentation pass is claimed yet.
+Updated: 2026-11-03 (M0 accepted; M1 sole active phase; M2–M4 paused)
+Latest implementation fix: fb336098ef288745d07a2bda00475d4a5f8daf1d (Compose BorderStroke import). CI #204 at `9ddc9fe9` passed Rust host tests, ARM64 bridge cross-build, APK assembly and JVM unit tests, but Android instrumentation executed 14 tests and failed 7. Exact root causes: compact-phone header's fixed desktop actions squeezed the save/status Text to zero width (status assertions failed in add/save/undo/redo/composition/delete); rename assertion matched both inspector BasicTextField and timeline label; the wide-window test called ComposeTestRule.setContent on MainActivity which already owns content. Fixes committed: `9ec1a3f5` responsive two-row phone header plus explicit Editor status semantics; `3cfcfbd` status-semantic assertions and unambiguous rename count; `14e6d9b` isolated empty EditorTestActivity; `4e91c149` androidTest manifest registration; `1acb7756` actual wide-window instrumentation; `25e1521a` test import cleanup. A fresh full CI run on this exact HEAD is required; no instrumentation pass is claimed yet.
 
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
@@ -118,3 +118,11 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Physical ARM64 install/run and smoke evidence; documented known limitations.
 - [ ] Release notes, licenses/notices, support matrix and artifact retention.
 - **Final exit:** real supported projects can open, edit, preview/render and export on Android offline; all evidence reviewed. Do not mark complete on shell-only CI.
+
+
+### Run 8 — current-head compile failure and correction (2026-11-03)
+- Inspected PR #1 (open) and branch HEAD ff01549c33c4b2a5ae4aac3960e8b6d79f033872; latest CI #212 failed at :app:compileDebugKotlin (job 125451748029). Exact diagnostics at EditorScreen.kt:326 and :387: unresolved reference androidx.foundation in fully qualified androidx.foundation.BorderStroke.
+- Root cause: Compose BorderStroke belongs to androidx.compose.foundation, and the file did not import it. Fixed in implementation commit fb336098ef288745d07a2bda00475d4a5f8daf1d: added import androidx.compose.foundation.BorderStroke and replaced both bad references with BorderStroke(...).
+- Latest CI #213 is queued on fb336098; no successful build or instrumentation claim until it completes.
+- M1 instrumentation source at this head contains 14 cases covering launch/offline workspace, New, add layer, undo/redo, rename, visibility/opacity with exact Undo/Redo values, timeline scrub/play/pause, reorder/delete, composition FPS/Undo, selection/inspector, local save/reload, .ecproj byte cache and draft round-trip. Current acceptance remains pending execution on latest HEAD.
+- Next action: inspect #213 all jobs/logs; fix any compile/test/runner failures without reducing assertions; then run full current-head acceptance. No M2/M3/M4 work started.
