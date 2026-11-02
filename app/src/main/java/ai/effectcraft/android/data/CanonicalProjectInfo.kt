@@ -17,7 +17,24 @@ data class CanonicalCompositionInfo(
     val layers: List<CanonicalLayerInfo>
 )
 
-data class CanonicalProjectInfo(val compositions: List<CanonicalCompositionInfo>) {
+data class CanonicalProjectItemInfo(
+    val id: Long,
+    val name: String,
+    val type: String,
+    val parentId: Long?,
+    val path: String?,
+    val width: Int,
+    val height: Int,
+    val hasVideo: Boolean,
+    val hasAudio: Boolean,
+    val missing: Boolean,
+    val sequence: List<String>
+)
+
+data class CanonicalProjectInfo(
+    val compositions: List<CanonicalCompositionInfo>,
+    val items: List<CanonicalProjectItemInfo> = emptyList()
+) {
     companion object {
         fun parse(metadataJson: String): CanonicalProjectInfo {
             val root = JSONObject(metadataJson)
@@ -43,7 +60,27 @@ data class CanonicalProjectInfo(val compositions: List<CanonicalCompositionInfo>
                     layers = layers
                 )
             }
-            return CanonicalProjectInfo(compositions)
+            val itemArray = root.optJSONArray("items")
+            val items = (0 until (itemArray?.length() ?: 0)).map { index ->
+                val item = itemArray!!.getJSONObject(index)
+                val media = item.optJSONObject("media")
+                val sequenceArray = media?.optJSONArray("sequence")
+                val sequence = (0 until (sequenceArray?.length() ?: 0)).map { sequenceArray!!.getString(it) }
+                CanonicalProjectItemInfo(
+                    id = item.getLong("id"),
+                    name = item.optString("name", "Item"),
+                    type = item.optString("type", "Unknown"),
+                    parentId = if (item.isNull("parentId")) null else item.optLong("parentId"),
+                    path = media?.optString("path")?.takeIf { it.isNotBlank() },
+                    width = media?.optInt("width") ?: 0,
+                    height = media?.optInt("height") ?: 0,
+                    hasVideo = media?.optBoolean("hasVideo") ?: false,
+                    hasAudio = media?.optBoolean("hasAudio") ?: false,
+                    missing = media?.optBoolean("missing") ?: false,
+                    sequence = sequence
+                )
+            }
+            return CanonicalProjectInfo(compositions, items)
         }
     }
 }
