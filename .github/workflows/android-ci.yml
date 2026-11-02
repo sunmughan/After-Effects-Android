@@ -35,6 +35,21 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
+      # Bootstrap the official Wrapper once; GITHUB_TOKEN avoids exposing any personal credential.
+      # The resulting files are committed to this feature branch for reproducible clean checkouts.
+      - name: Generate and commit pinned Gradle Wrapper if missing
+        run: |
+          if [[ ! -f gradle/wrapper/gradle-wrapper.jar ]]; then
+            gradle --no-daemon wrapper --gradle-version=9.5.0 --distribution-type=bin
+            checksum="$(curl -fsSL https://services.gradle.org/distributions/gradle-9.5.0-bin.zip.sha256)"
+            printf '\ndistributionSha256Sum=%s\n' "$checksum" >> gradle/wrapper/gradle-wrapper.properties
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
+            git commit -m "build: add pinned Gradle wrapper"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
       - name: Set up pinned Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -80,15 +95,15 @@ jobs:
           cargo metadata --format-version 1 --manifest-path native/Cargo.toml > build/audit/cargo-metadata.json
           python3 scripts/generate-rust-license-inventory.py < build/audit/cargo-metadata.json > build/audit/rust-license-inventory.md
           cargo tree --manifest-path native/Cargo.toml -e normal --prefix none > build/audit/rust-runtime-dependency-tree.txt
-          gradle --no-daemon :app:dependencies --configuration debugRuntimeClasspath > build/audit/android-runtime-dependency-tree.txt
-          gradle --no-daemon --no-parallel :app:generateLicenseReport
+          ./gradlew --no-daemon :app:dependencies --configuration debugRuntimeClasspath > build/audit/android-runtime-dependency-tree.txt
+          ./gradlew --no-daemon --no-parallel :app:generateLicenseReport
           cp -R app/build/reports/dependency-license build/audit/android-license-report
 
       - name: Assemble debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: ./gradlew --no-daemon :app:assembleDebug
 
       - name: Run unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
 
       - name: Enable KVM access for Android emulator
         run: |
@@ -116,7 +131,7 @@ jobs:
             timeout 240 bash -c 'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" == "1" ]]; do sleep 3; done'
             timeout 60 bash -c 'until adb shell cmd package list packages >/dev/null 2>&1; do sleep 2; done'
             adb shell settings put global animator_duration_scale 0
-            gradle --no-daemon :app:connectedDebugAndroidTest
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest
 
       - name: Upload Android build and audit reports
         uses: actions/upload-artifact@v4
