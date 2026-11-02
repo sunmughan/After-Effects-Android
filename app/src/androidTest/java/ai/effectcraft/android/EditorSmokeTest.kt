@@ -4,12 +4,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performSemanticsAction
@@ -172,7 +171,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("Move ↑", substring = true).performClick()
         compose.onNodeWithText("Remove layer", substring = true).performClick()
         compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed()
-        compose.onNodeWithText("Shape 4").assertDoesNotExist()
+        compose.onAllNodesWithText("Shape 4").assertCountEquals(0)
     }
 
     @Test
