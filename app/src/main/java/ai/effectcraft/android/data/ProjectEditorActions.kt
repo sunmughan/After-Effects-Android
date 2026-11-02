@@ -31,3 +31,4 @@ object ProjectEditorActions {
         if (normalized.isEmpty() || layers.none { it.id == layerId }) return layers
         return layers.map { if (it.id == layerId) it.copy(name = normalized) else it }
     }
+}
