@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (automation implementation pass)
-Latest implementation commit: `3048d7a2f3a2fa8202efd9adefd99d7f1758bb00` (undo/redo + layer reorder; CI pending)
+Latest commit: `a24c83c8860df03724702a99e0c4ea2ee10b6dcf` (layer reorder + undo/redo + CI stale-run cancellation; latest validation pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -12,6 +12,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Native Android/Compose project and offline manifest.
 - [x] Pinned upstream EffectCraft revision, Rust bridge crate, ARM64 cross-build and Rust host tests.
 - [x] CI: Rust tests, ARM64 bridge build, APK assembly, Kotlin unit tests, emulator instrumentation, dependency/license inventory.
+- [x] CI concurrency group cancels stale PR commits so only the newest revision consumes a runner.
 - [x] Current-head CI run [41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104) completed **success** (2026-11-02).
 - [ ] Commit Gradle Wrapper and verify wrapper-based reproducible build.
 - [ ] Verify native ABI packaging/loading on an Android ARM64 device (emulator CI currently compiles ARM64 but instrumentation runs x86_64).
@@ -32,6 +33,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 ## M2 — Project formats, import/save and media
 **Status: NOT STARTED / bridge inspection only**
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
+- [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
 - [ ] Add upstream-valid `.ecproj` fixtures and Kotlin/native round-trip tests.
 - [ ] SAF document picker, open/save, persisted URI permissions and error/recovery flows.
 - [ ] Canonical project repository adapter; version/schema validation and migration.
