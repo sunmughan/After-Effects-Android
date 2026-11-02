@@ -187,6 +187,15 @@ class EditorSmokeTest {
 
         compose.onNodeWithText("Undo").performClick()
         compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
+
+        // Reopen settings and verify the model value, not merely the status label.
+        compose.onNodeWithText("Comp").performClick()
+        assertEquals(
+            30f,
+            compose.onNodeWithContentDescription("Composition frame rate")
+                .fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current,
+            0.001f
+        )
     }
 
     @Test
