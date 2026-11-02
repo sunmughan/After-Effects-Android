@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
+import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.engine.NativeProjectBridge
@@ -30,6 +31,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
+    var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null)
     var project by remember {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
     }
@@ -57,15 +59,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     ?: error("Unable to read selected document")
                 JSONObject(source)
                 val native = NativeProjectBridge.inspectEcproj(source)
-                val status = if (native != null) {
-                    val result = JSONObject(native)
-                    check(result.optBoolean("valid")) { result.optString("error", "Invalid EffectCraft project") }
-                    "Canonical .ecproj validated · ${result.optInt("compositionCount")} compositions (read-only import)"
+                val parsedInfo = native?.let { CanonicalProjectInfo.parse(it) }
+                val status = if (parsedInfo != null) {
+                    "Canonical .ecproj validated · ${parsedInfo.compositions.size} compositions"
                 } else {
                     ".ecproj JSON imported · native schema validation unavailable on this ABI"
                 }
                 ecprojStore.save(source)
                 importedEcproj = source
+                canonicalProjectInfo = parsedInfo
                 saveMessage = status
             }.onFailure { error -> saveMessage = "Import failed · ${error.message ?: "invalid project"}" }
         }
@@ -175,7 +177,26 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 ))
             },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
-            onTogglePlayback = { isPlaying = !isPlaying }
+            onTogglePlayback = { isPlaying = !isPlaying },
+            canonicalProject = canonicalProjectInfo,
+            canEditCanonicalProject = NativeProjectBridge.isAvailable(),
+            onRenameCanonicalLayer = { compositionId, layerId, name ->
+                runCatching {
+                    val source = importedEcproj ?: error("Import a canonical .ecproj first")
+                    val envelope = NativeProjectBridge.renameLayerEcproj(source, compositionId, layerId, name)
+                        ?: error("Native EffectCraft bridge unavailable on this ABI")
+                    val response = JSONObject(envelope)
+                    check(response.optBoolean("valid")) { response.optString("error", "Layer rename failed") }
+                    val updated = response.getString("project")
+                    val metadata = NativeProjectBridge.inspectEcproj(updated)
+                        ?: error("Unable to inspect updated canonical project")
+                    val parsed = CanonicalProjectInfo.parse(metadata)
+                    ecprojStore.save(updated)
+                    importedEcproj = updated
+                    canonicalProjectInfo = parsed
+                    saveMessage = "Canonical layer renamed · saved locally"
+                }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
+            }
         )
     }
 }
