@@ -83,6 +83,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    LaunchedEffect(importedEcproj) {
+        canonicalProjectInfo = importedEcproj?.let { source ->
+            NativeProjectBridge.inspectEcproj(source)?.let { runCatching { CanonicalProjectInfo.parse(it) }.getOrNull() }
+        }
+    }
+
     LaunchedEffect(isPlaying, project.durationFrames) {
         while (isPlaying) {
             delay(33L)
