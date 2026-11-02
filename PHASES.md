@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation commit: `4c86391915e2df213b0f09b75e97aec6198fc38c` (M1 instrumentation, canonical project/layer/media edits, SAF offline relink, and first upstream CPU frame-render JNI + imported-project preview; latest-head CI pending)
+Latest implementation/test commit: `3da9fb97f4a4fffa000a9c853752c62d375f6df1` (canonical editing/media relink, upstream CPU frame JNI/UI, persistent MediaPool footage decoding and PNG render test; latest-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -76,7 +76,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] JNI frame request/output bridge and Kotlin wrapper (`4f0aa79`, `5fa1cf2`).
 - [x] Imported canonical editor now renders frames off the UI thread, displays returned pixels as an image, and scrubs frame index (`05e2c4a`, `4c86391`). This is actual upstream CPU compositing—not the decorative draft viewer.
 - [ ] Replace main `.efx-draft` placeholder canvas with project/session-backed rendering; no shared native session yet.
-- [ ] Add Android media `FootageSource` backed by app-private copied assets; current `NoFootage` deliberately leaves footage/video/audio sources undecoded.
+- [x] Add pinned upstream `effectcraft-media::MediaPool` as a persistent native `FootageSource`; renderer now decodes app-private relinked still/video/audio files through upstream FilmCraft codecs instead of `NoFootage` (`bc7ddc7`, `de7bce1`).
+- [x] Host Rust test writes a PNG fixture to a local path and asserts its red pixels appear in the CPU composition frame (`b76e545`, `3da9fb9`); latest CI must validate cross-build and decode test.
+- [ ] Verify media decoder feature/codec support and memory cache limits on Android ARM64; video/audio performance and cancellation are not yet measured.
 - [ ] JNI session lifecycle, native ownership/threading, cancellation, resize and renderer teardown.
 - [ ] GPU/Vulkan acceleration plus tested CPU fallback/device-loss recovery.
 - [ ] Verify ARM64 native frame on physical phone/tablet; record device, ABI, SHA and pixel evidence.
