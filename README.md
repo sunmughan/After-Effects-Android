@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0/M1 in progress; not a complete editor yet.** CI has passed native ARM64 bridge build, Rust tests, APK assembly and Kotlin unit tests on prior revisions; latest emulator smoke test is being stabilized after a cold-boot/ADB failure. The Android UI still has a placeholder composition viewer; canonical `.ecproj` SAF cache/validation/export is not full project editing/rendering. Layer visibility is persisted in local drafts. SAF `.ecproj` source validation/cache/export has been added as a read-only workflow; canonical model editing and real rendering are still future phases. Roadmap acceptance and phase evidence are tracked in [PHASES.md](PHASES.md).
+> **Current status: M0/M1 in progress; not a complete editor yet.** CI has passed native ARM64 bridge build, Rust tests, APK assembly and Kotlin unit tests on prior revisions; latest emulator smoke test is being stabilized after a cold-boot/ADB failure. The Android UI still has a placeholder composition viewer; canonical `.ecproj` SAF cache/validation/export is not full project editing/rendering. Layer visibility and names are editable/persisted in local drafts; layer rename also has a tested native canonical-project mutation API. SAF `.ecproj` source validation/cache/export has been added as a read-only workflow; the canonical rename bridge is groundwork only and is not yet wired into the imported-project UI; real rendering remains a future phase. Roadmap acceptance and phase evidence are tracked in [PHASES.md](PHASES.md).
 
 ## Product direction
 
