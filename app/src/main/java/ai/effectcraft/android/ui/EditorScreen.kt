@@ -530,7 +530,7 @@ private fun InspectorPanel(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Visible", color = EditorPalette.text, fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
-                Switch(checked = layer.visible, onCheckedChange = onVisibilityChange)
+                Switch(checked = layer.visible, onCheckedChange = onVisibilityChange, modifier = Modifier.semantics { contentDescription = "Layer visibility" })
             }
             Spacer(Modifier.height(12.dp))
             PropertyLine("Transform", "›")
