@@ -1,6 +1,6 @@
 # Android implementation status
 
-Last updated: 2026-11-01
+Last updated: 2026-11-02
 
 ## What exists in this bootstrap
 
@@ -60,12 +60,12 @@ The current Kotlin draft store is intentionally isolated. Once the upstream proj
 
 ## Milestones
 
-### M1 — Native Android shell (bootstrap implemented)
+### M1 — Native Android shell (implementation complete; CI verification in progress)
 - [x] Empty repository initialized.
 - [x] Native app module and offline manifest.
 - [x] Adaptive phone/tablet editor shell.
 - [x] Basic layer, opacity, timeline and draft-save interactions.
-- [ ] First successful Android CI build and device smoke test.
+- [x] Hosted Android CI build and unit tests pass on the M0 head.\n- [x] Android instrumentation smoke tests added for launch/offline workspace and New composition action; emulator execution is now part of CI (verification pending on current head).
 
 ### M2 — Shared Rust project and engine integration
 - [x] Pin upstream EffectCraft commit and audit project/engine crate boundaries.
