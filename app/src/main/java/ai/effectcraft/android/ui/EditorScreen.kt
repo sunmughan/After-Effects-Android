@@ -711,6 +711,21 @@ private fun CanonicalProjectEditor(
                     ) { Text("Apply", color = EditorPalette.violet) }
                 }
             }
+            val mediaItems = project.items.filter { it.path != null }
+            Text("PROJECT ASSETS · ${mediaItems.size}", color = EditorPalette.muted, fontSize = 10.sp, letterSpacing = 1.1.sp)
+            Column(Modifier.heightIn(max = 120.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                mediaItems.forEach { asset ->
+                    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                        Text(
+                            "${asset.name} · ${asset.type}${if (asset.missing) " · MISSING" else ""}",
+                            color = if (asset.missing) EditorPalette.amber else EditorPalette.text,
+                            fontSize = 11.sp
+                        )
+                        Text(asset.path.orEmpty(), color = EditorPalette.muted, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (mediaItems.isEmpty()) Text("No linked media assets in this project.", color = EditorPalette.muted, fontSize = 11.sp)
+            }
         }
         if (!canEdit) Text("Native editor bridge unavailable for this ABI; import/export remains read-only.", color = EditorPalette.amber, fontSize = 11.sp)
         Spacer(Modifier.height(8.dp))
