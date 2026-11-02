@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 complete (owner accepted); M1 is NOT complete; M2–M4 paused.** At HEAD `43211772`, CI #185 passed ARM64 native build, Rust tests, APK assembly and JVM unit tests; emulator instrumentation did not start because hosted runner lacked `/dev/kvm` permission (x86_64 emulator requires KVM). Workflow fix `5a4d3d73` grants KVM access and records an explicit missing-device failure; fresh CI pending. Composition-settings instrumentation now asserts exact 30 FPS restoration after Undo (test strengthening commit below). M1 instrumentation scenarios are checked in, but not yet verified on a running emulator. The `.efx-draft` preview remains a placeholder, not a real render engine. Existing canonical `.ecproj` work is preserved but not advancing while M1 is gated. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
+ > **Current status: M0 complete (owner accepted); M1 is NOT complete; M2–M4 paused.** At `0460e741`, CI #189 passed native/Rust/APK/JVM stages but failed Android-test Kotlin compilation because two Compose test imports were unavailable. Fixed in `6b139f12` by using supported `onAllNodesWithText(...).assertCountEquals(0)` and removing invalid imports. Composition-settings instrumentation verifies exact 30 FPS restoration after Undo. Fresh current-head run is pending; M1 is not acceptance-complete. The `.efx-draft` preview remains a placeholder, not a real render engine. Existing canonical `.ecproj` work is preserved but not advancing while M1 is gated. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
 
 ## Product direction
 
