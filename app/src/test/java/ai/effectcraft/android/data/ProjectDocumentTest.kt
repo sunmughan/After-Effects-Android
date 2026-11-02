@@ -91,4 +91,25 @@ class ProjectDocumentTest {
         assertEquals(layers, ProjectEditorActions.setLayerOpacity(layers, target.id, Float.NaN))
         assertEquals(layers, ProjectEditorActions.setLayerOpacity(layers, "unknown", 0.25f))
     }
+    @Test
+    fun projectValidationRejectsBrokenOfflineCompositionInvariants() {
+        val starter = ProjectDocument.starter()
+        assertTrue(starter.validationErrors().isEmpty())
+
+        val invalid = starter.copy(
+            width = 100,
+            frameRate = 240,
+            durationFrames = 0,
+            layers = listOf(starter.layers.first().copy(opacity = Float.NaN))
+        )
+        val errors = invalid.validationErrors()
+        assertTrue(errors.any { it.contains("width") })
+        assertTrue(errors.any { it.contains("Frame rate") })
+        assertTrue(errors.any { it.contains("Duration") })
+        assertTrue(errors.any { it.contains("opacity") })
+
+        assertTrue(starter.copy(layers = emptyList()).validationErrors().any { it.contains("at least one layer") })
+        assertTrue(starter.copy(layers = listOf(starter.layers[0], starter.layers[0])).validationErrors().any { it.contains("unique") })
+    }
+
 }
