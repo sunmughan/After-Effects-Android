@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (automation implementation pass)
-Latest implementation commit: `3a1ce57b6a55a802b3a87e47d0630ff3ad9fdd2d` (UI wiring; CI pending)
+Latest implementation commit: `3048d7a2f3a2fa8202efd9adefd99d7f1758bb00` (undo/redo + layer reorder; CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -24,7 +24,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Add/select/remove layers, opacity slider, timeline scrubbing and transport simulation.
 - [x] Emulator smoke tests for launch, New, add-layer action and draft round-trip.
 - [x] Layer reorder (up/down) wired in the inspector; pure reducer has tests for order, identity, edge clamping and unknown IDs (CI verification pending for this implementation commit).
-- [ ] Real undo/redo history for editor mutations.
+- [x] Bounded (50 snapshots) project undo/redo history wired for new composition, add/remove/reorder and opacity changes; emulator test covers add-layer undo/redo (CI pending).
 - [ ] Robust project/layer naming and composition settings UI.
 - [ ] Strong instrumentation assertions for selection, reorder, delete, opacity and timeline state.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
