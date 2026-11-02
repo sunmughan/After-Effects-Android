@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation/test commit: `3da9fb97f4a4fffa000a9c853752c62d375f6df1` (canonical editing/media relink, upstream CPU frame JNI/UI, persistent MediaPool footage decoding and PNG render test; latest-head CI pending)
+Latest implementation/test commit: `3da9fb97f4a4fffa000a9c853752c62d375f6df1` (canonical editing/media relink, upstream CPU frame JNI/UI, persistent MediaPool footage decoding and PNG render test; CI run #146 pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -67,12 +67,13 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Restore canonical project metadata from app-private cache on app restart; composition/layer list uses scrollable selection.
 - [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
-- [ ] Media asset manifest, URI relinking and offline asset handling.
+- [x] SAF URI relinking copies footage to an offline app-private file and persists the canonical path/missing flag (`e255e27`, `694e8c9`, `a61ad38`).
+- [ ] Durable asset manifest, deduplicated storage, integrity hashes, relink rollback/cleanup and sequence import.
 - **Format boundary:** bootstrap `.efx-draft` is private Android JSON, not `.ecproj`. Adobe `.aep` is proprietary; native import is not promised without a legally available compatible parser/conversion route.
 
 ## M3 — Actual preview/render engine
 **Status: IN PROGRESS (CPU compositor path started; device/media gates remain)**
-- [x] Pin upstream `effectcraft-render` at the same immutable revision; native `render_frame_rgba` parses canonical `.ecproj`, renders through the real CPU `Renderer`/`NoFootage`, and emits bounded RGBA with dimensions. Rust test asserts a 320×180 composition produces a real 160×90 frame payload and rejects bad IDs/negative frames (`b75fe05`, `4f0aa79`).
+- [x] Pin upstream `effectcraft-render` at the same immutable revision; native `render_frame_rgba` parses canonical `.ecproj`, renders through the real CPU `Renderer`/persistent `MediaPool`, and emits bounded RGBA with dimensions. Rust test asserts a 320×180 composition produces a real 160×90 frame payload and rejects bad IDs/negative frames (`b75fe05`, `4f0aa79`).
 - [x] JNI frame request/output bridge and Kotlin wrapper (`4f0aa79`, `5fa1cf2`).
 - [x] Imported canonical editor now renders frames off the UI thread, displays returned pixels as an image, and scrubs frame index (`05e2c4a`, `4c86391`). This is actual upstream CPU compositing—not the decorative draft viewer.
 - [ ] Replace main `.efx-draft` placeholder canvas with project/session-backed rendering; no shared native session yet.
