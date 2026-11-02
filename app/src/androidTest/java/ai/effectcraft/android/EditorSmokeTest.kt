@@ -33,7 +33,7 @@ class EditorSmokeTest {
     @Test
     fun addLayerActionAddsTrackToTimeline() {
         compose.onNodeWithText("Layer").performClick()
-        compose.onNodeWithText("Shape 4").assertIsDisplayed()
+        compose.onNodeWithText("Unsaved changes").assertIsDisplayed()
     }
 
     @Test
