@@ -19,6 +19,8 @@ class DraftProjectStore(context: Context) {
 
     @Throws(IOException::class)
     fun save(project: ProjectDocument): File {
+        val validationErrors = project.validationErrors()
+        require(validationErrors.isEmpty()) { validationErrors.joinToString("; ") }
         if (!projectDirectory.exists() && !projectDirectory.mkdirs()) {
             throw IOException("Unable to create the local projects directory")
         }
@@ -104,16 +106,19 @@ class DraftProjectStore(context: Context) {
             }
         }
 
-        return ProjectDocument(
+        val project = ProjectDocument(
             id = json.getString("id"),
             name = json.optString("name", "Untitled Composition"),
-            width = json.optInt("width", 1080).coerceAtLeast(1),
-            height = json.optInt("height", 1920).coerceAtLeast(1),
-            frameRate = json.optInt("frameRate", 30).coerceIn(1, 240),
-            durationFrames = json.optInt("durationFrames", 150).coerceAtLeast(1),
+            width = json.optInt("width", 1080),
+            height = json.optInt("height", 1920),
+            frameRate = json.optInt("frameRate", 30),
+            durationFrames = json.optInt("durationFrames", 150),
             layers = layers,
             updatedAtEpochMillis = json.optLong("updatedAtEpochMillis", 0L)
         )
+        val validationErrors = project.validationErrors()
+        require(validationErrors.isEmpty()) { validationErrors.joinToString("; ") }
+        return project
     }
 
     private fun safeName(value: String): String {
