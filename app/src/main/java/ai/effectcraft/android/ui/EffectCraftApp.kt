@@ -31,7 +31,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
-    var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null)
+    var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null) }
     var project by remember {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
     }
