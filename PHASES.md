@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (canonical editor scrolling and CI validation pending)
-Latest implementation commit: `2b1a456952b366e85d3f7e38fc1e5650d609e720` (canonical `.ecproj` layer list/rename sheet + native tests; CI queued)
+Updated: 2026-11-02 (canonical Text-layer creation UI)
+Latest implementation commit: `59349a712fbc29847d59441744d3a1afc9a3f323` (canonical `.ecproj` layer rename + Text layer creation UI and cache persistence; CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -44,13 +44,15 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
 - [x] Rust non-empty canonical project fixture exercises layer rename, stable ID preservation and JSON round-trip; Kotlin JNI wrapper exposes rename envelope.
 - [x] Rust non-empty canonical `.ecproj` fixture tests rename, metadata and serialization round-trip.
+- [x] Canonical editor UI can add a native Text layer to selected composition, rename it, refresh model metadata and atomically cache serialized project; upstream `build::layer` allocates stable ID and Transform properties.
 - [ ] Kotlin/JNI ARM64 device round-trip test for SAF-open → rename → export.
 - [x] SAF document picker, persisted URI read permission, app-private canonical document retention, and export.
 - [x] Native metadata lists composition and layer IDs/names/source/visibility; Android canonical-project sheet selects composition/layer and renames via Rust project model, reserializes and atomically caches the edited `.ecproj` (ARM64 runtime only; CI x86_64 bridge cannot execute JNI).
 - [x] Instrumentation test verifies the canonical document cache preserves source bytes.
 - [x] Wire native canonical rename operation into imported-project editor UI and update imported document cache after edits.
 - [x] Add tested Rust canonical Text-layer creation operation (`build::layer` with upstream `LayerSource::Text`), including trimmed-name validation, composition existence checks, generated stable layer ID, canonical serialization and metadata round-trip; expose it via JNI/Kotlin bridge (`3c10203`, `83985cb`).
-- [ ] Add Text-layer creation action to imported-project UI and instrumentation test; verify ARM64 JNI end-to-end.
+- [x] Add Text-layer creation action to imported-project UI; native unit tests cover real model creation, invalid names/missing composition and serialization.
+- [ ] Verify canonical import → add/rename → export through JNI on physical ARM64 device.
 - [x] Restore canonical project metadata from app-private cache on app restart; composition/layer list uses scrollable selection.
 - [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
