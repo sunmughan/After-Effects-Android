@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation/test commit: `ffab2a0be93d678c8e0dd9d33388e149b1eb7d3a` (M1 settings/selection/save instrumentation plus native canonical layer visibility/reorder/delete APIs, Kotlin JNI wrappers, app cache persistence, and Rust round-trip tests; latest-head CI pending)
+Latest implementation/test commit: `11606b2357dda3b916ecdc6f84847d4824ae39f2` (M1 instrumentation plus canonical layer stack JNI actions, media inventory metadata/parser and unit tests; latest-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -56,6 +56,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Wire native canonical rename operation into imported-project editor UI and update imported document cache after edits.
 - [x] Canonical imported-project editor now exposes real upstream-model visibility, reorder and delete actions; JNI envelopes are revalidated, re-inspected, and atomically cached after each mutation (`8d32c9a`, `e168c6d`, `77ef2c9`).
 - [x] Rust tests exercise canonical layer stack order, visibility switch and deletion with ID-preserving serialization round-trip (`8fdf841`, assertion cleanup `ffab2a0`).
+- [x] Native project inspection now exposes all item IDs/names/types/parents plus footage paths, dimensions, audio/video flags, missing status and image-sequence paths; Kotlin parses this asset inventory and canonical metadata parser tests cover valid/invalid envelopes (`e6ee3d8`, `5bd95fa`, `11606b2`).
+- [x] Imported-project sheet lists linked media assets and visibly flags upstream `missing` items (`bc0a4c0`); relinking/remapping and URI-to-project asset packaging remain unfinished.
 - [x] Add Rust canonical Text-layer creation operation (`build::layer` with upstream `LayerSource::Text`), trimmed-name validation, composition existence checks, generated layer ID, serialization/metadata tests; expose JNI/Kotlin bridge (`3c10203`, `83985cb`).
 - [x] CI root-cause fix: `cargo test` had unresolved direct fixture crates `effectcraft_color`/`effectcraft_time` despite transitive upstream dependencies; add exact pinned upstream dependencies (`69507b8`).
 - [x] Add Text-layer creation action to imported-project UI; native unit tests cover real model creation, invalid names/missing composition and serialization.
