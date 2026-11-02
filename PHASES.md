@@ -40,7 +40,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
 - [ ] Add non-empty upstream `.ecproj` fixture and Kotlin/native round-trip tests.
-- [ ] SAF document picker, open/save, persisted URI permissions and error/recovery flows.
+- [x] SAF document picker, persisted URI read permission, app-private raw canonical document retention, and byte-preserving export; validation is read-only, not project editing.
+- [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
 - [ ] Media asset manifest, URI relinking and offline asset handling.
 - **Format boundary:** bootstrap `.efx-draft` is private Android JSON, not `.ecproj`. Adobe `.aep` is proprietary; native import is not promised without a legally available compatible parser/conversion route.

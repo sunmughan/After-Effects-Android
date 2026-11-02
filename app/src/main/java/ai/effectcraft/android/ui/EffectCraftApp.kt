@@ -1,5 +1,9 @@
 package ai.effectcraft.android.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -11,7 +15,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import org.json.JSONObject
 import ai.effectcraft.android.data.DraftProjectStore
+import ai.effectcraft.android.data.EcprojDocumentStore
+import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
@@ -19,6 +27,9 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun EffectCraftApp(projectStore: DraftProjectStore) {
+    val context = LocalContext.current
+    val ecprojStore = remember(context) { EcprojDocumentStore(context) }
+    var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
     var project by remember {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
     }
@@ -36,6 +47,38 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         redoStack = emptyList()
         project = next
         saveMessage = message
+    }
+
+    val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                val source = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                    ?: error("Unable to read selected document")
+                JSONObject(source)
+                val native = NativeProjectBridge.inspectEcproj(source)
+                val status = if (native != null) {
+                    val result = JSONObject(native)
+                    check(result.optBoolean("valid")) { result.optString("error", "Invalid EffectCraft project") }
+                    "Canonical .ecproj validated · ${result.optInt("compositionCount")} compositions (read-only import)"
+                } else {
+                    ".ecproj JSON imported · native schema validation unavailable on this ABI"
+                }
+                ecprojStore.save(source)
+                importedEcproj = source
+                saveMessage = status
+            }.onFailure { error -> saveMessage = "Import failed · ${error.message ?: "invalid project"}" }
+        }
+    }
+    val exportEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val source = importedEcproj ?: error("No canonical .ecproj has been imported")
+                context.contentResolver.openOutputStream(uri)?.use { it.write(source.toByteArray(Charsets.UTF_8)) }
+                    ?: error("Unable to write selected document")
+                saveMessage = "Exported canonical .ecproj"
+            }.onFailure { error -> saveMessage = "Export failed · ${error.message ?: "storage error"}" }
+        }
     }
 
     LaunchedEffect(isPlaying, project.durationFrames) {
@@ -77,6 +120,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     if (project.layers.none { it.id == selectedLayerId }) selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
                     saveMessage = "Redo · unsaved"
                 }
+            },
+            onValidateEcproj = { validateEcprojLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
+            onExportEcproj = {
+                if (importedEcproj == null) saveMessage = "Import a canonical .ecproj first"
+                else exportEcprojLauncher.launch("EffectCraft.ecproj")
             },
             onSave = {
                 runCatching { projectStore.save(project) }

@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -88,6 +90,8 @@ fun EditorScreen(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onSave: () -> Unit,
+    onValidateEcproj: () -> Unit,
+    onExportEcproj: () -> Unit,
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
@@ -113,6 +117,8 @@ fun EditorScreen(
                 projectName = project.name,
                 saveMessage = saveMessage,
                 onSave = onSave,
+                onValidateEcproj = onValidateEcproj,
+                onExportEcproj = onExportEcproj,
                 onNewProject = onNewProject
             )
 
@@ -203,6 +209,8 @@ private fun HeaderBar(
     projectName: String,
     saveMessage: String,
     onSave: () -> Unit,
+    onValidateEcproj: () -> Unit,
+    onExportEcproj: () -> Unit,
     onNewProject: () -> Unit
 ) {
     Row(
@@ -268,6 +276,12 @@ private fun HeaderBar(
             )
         }
 
+        IconButton(onClick = onValidateEcproj) {
+            Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text)
+        }
+        IconButton(onClick = onExportEcproj) {
+            Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
+        }
         IconButton(onClick = onSave) {
             Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
         }
