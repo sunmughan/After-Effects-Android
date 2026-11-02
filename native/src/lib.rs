@@ -12,11 +12,19 @@ fn inspect_project(source: &str) -> Result<String, String> {
     let compositions: Vec<_> = project
         .comps()
         .map(|(id, comp)| {
+            let layers: Vec<_> = comp.layers.iter().map(|layer| json!({
+                "id": layer.id.0,
+                "name": layer.name,
+                "source": layer.source.type_name(),
+                "visible": layer.switches.video
+            })).collect();
             json!({
                 "id": id.0,
+                "name": project.item(*id).map(|item| item.name.as_str()).unwrap_or("Composition"),
                 "width": comp.width,
                 "height": comp.height,
-                "layers": comp.layers.len()
+                "layerCount": layers.len(),
+                "layers": layers
             })
         })
         .collect();
