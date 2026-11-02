@@ -304,7 +304,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))
             }
-            }
         )
     }
 }
