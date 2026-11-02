@@ -303,6 +303,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))
+            },
+            onRenderCanonicalFrame = { compositionId, frame ->
+                importedEcproj?.let { NativeProjectBridge.renderEcprojFrame(it, compositionId, frame, 512) }
             }
         )
     }
