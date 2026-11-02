@@ -18,3 +18,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 
 effectcraft-color = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
 effectcraft-time = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
+
+# EffectCraft's pinned craft-pdf expects Storytold's Hayro API additions (DecodeLimits).
+# Its workspace patches do not propagate through a git dependency, so pin them here too.
+[patch.crates-io]
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", version = "=0.7.2" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", version = "=0.3.0" }
