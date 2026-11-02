@@ -105,6 +105,43 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_re
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
+
+
+fn add_text_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id))
+        .cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = build::layer(&mut project, &comp, normalized, LayerSource::Text,
+        (comp.width, comp.height), None);
+    project.comp_mut(ItemId(composition_id)).unwrap().layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_addTextLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let name: String = match env.get_string(&name) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) }
+        else { add_text_layer(&source, composition_id as u64, &name) };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +193,34 @@ mod tests {
         let source = Project::default().to_file_json().unwrap();
         assert!(rename_layer(&source, 1, 1, "  ").is_err());
         assert!(rename_layer(&source, 99, 1, "Name").is_err());
+    }
+
+    #[test]
+    fn add_text_layer_mutates_real_canonical_composition_and_roundtrips() {
+        use effectcraft_project::{Comp, ItemKind};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let source = project.to_file_json().unwrap();
+        let updated_json = add_text_layer(&source, comp_id.0, "  Headline  ").unwrap();
+        let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layers = &updated.comp(comp_id).unwrap().layers;
+        assert_eq!(layers.len(), 1);
+        assert_eq!(layers[0].name, "Headline");
+        assert_eq!(layers[0].source.type_name(), "Text");
+        assert_eq!(layers[0].size, (640, 360));
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&updated_json).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["layerCount"], 1);
+    }
+
+    #[test]
+    fn add_text_layer_rejects_blank_name_and_missing_composition() {
+        let source = Project::default().to_file_json().unwrap();
+        assert!(add_text_layer(&source, 1, " ").is_err());
+        assert!(add_text_layer(&source, 999, "Text").is_err());
     }
 
     #[test]
