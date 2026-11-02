@@ -216,7 +216,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onSelectLayer = { selectedLayerId = it },
             onDeleteLayer = {
                 if (project.layers.size > 1 && selectedLayer != null) {
-                    applyProjectChange(project.copy(layers = project.layers.filterNot { it.id == selectedLayer.id }), "Layer removed · unsaved")
+                    applyProjectChange(project.copy(layers = ProjectEditorActions.deleteLayer(project.layers, selectedLayer.id)), "Layer removed · unsaved")
                     selectedLayerId = project.layers.first().id
                 } else {
                     saveMessage = "A composition must keep at least one layer"
@@ -227,11 +227,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 if (renamed != project.layers) applyProjectChange(project.copy(layers = renamed), "Layer renamed · unsaved")
             },
             onVisibilityChange = { visible ->
-                applyProjectChange(project.copy(
-                    layers = project.layers.map { layer ->
-                        if (layer.id == selectedLayerId) layer.copy(visible = visible) else layer
-                    }
-                ))
+                applyProjectChange(project.copy(layers = ProjectEditorActions.setLayerVisibility(project.layers, selectedLayerId, visible)))
             },
             onMoveLayer = { offset ->
                 applyProjectChange(project.copy(
@@ -239,11 +235,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 ))
             },
             onOpacityChange = { opacity ->
-                applyProjectChange(project.copy(
-                    layers = project.layers.map { layer ->
-                        if (layer.id == selectedLayerId) layer.copy(opacity = opacity) else layer
-                    }
-                ))
+                applyProjectChange(project.copy(layers = ProjectEditorActions.setLayerOpacity(project.layers, selectedLayerId, opacity)))
             },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
             onTogglePlayback = { isPlaying = !isPlaying },
