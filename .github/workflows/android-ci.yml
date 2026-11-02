@@ -3,6 +3,8 @@ name: Android CI
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [feat/android-app-foundation]
   workflow_dispatch:
 
 permissions:
@@ -10,13 +12,14 @@ permissions:
 
 # Avoid spending runners on stale commits while the PR is actively changing.
 concurrency:
-  group: android-ci-${{ github.event.pull_request.number || github.ref }}
+  group: android-ci-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   android:
     name: Assemble and test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -85,7 +88,12 @@ jobs:
           profile: pixel_6
           emulator-options: -no-window -no-audio -no-boot-anim -camera-back none
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            adb wait-for-device
+            timeout 240 bash -c 'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" == "1" ]]; do sleep 3; done'
+            timeout 60 bash -c 'until adb shell cmd package list packages >/dev/null 2>&1; do sleep 2; done'
+            adb shell settings put global animator_duration_scale 0
+            gradle --no-daemon :app:connectedDebugAndroidTest
 
       - name: Upload Android build and audit reports
         uses: actions/upload-artifact@v4
