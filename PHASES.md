@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (M1 interaction instrumentation and accessibility semantics)
-Latest implementation commit: `e681a83dfe974fa1ee0e03c7fa9df6f1e815f1e6` (accessible opacity/visibility/playhead controls plus instrumentation for opacity, visibility, timeline scrub/transport, layer reorder/delete; CI run #97 queued)
+Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
+Latest implementation commit: `3d33285e6417e41c29c6f3895068ba361da5921d` (composition settings panel, undoable dimension/fps/duration updates, and instrumentation for settings/undo plus layer/timeline/property interactions; latest-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -34,8 +34,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Layer naming UI in inspector with Apply/trim/blank validation; pure rename reducer unit tests preserve stable IDs.
 - [x] Phone inspector layer rename instrumentation assertion.
 - [x] Accessible semantics labels for layer visibility, layer opacity and timeline playhead; instrumentation now asserts visibility toggle, 50% opacity, playhead scrub to frame 60/timecode 00:00:02:00, play/pause, and added-layer reorder/delete.
-- [ ] Verify these new instrumentation assertions on current head (CI #97 queued); fix test/API failures rather than weakening assertions.
-- [ ] Composition settings UI.
+- [ ] Verify the expanded interaction instrumentation on current head (latest CI run pending); fix test/API failures rather than weakening assertions.
+- [x] Composition settings panel edits width/height (320–3840 px), frame rate (1–120), and duration (1–3600 frames); changes enter bounded undo history and clamp the playhead when duration shrinks.
+- [x] Instrumentation for composition frame-rate apply + undo; CI validation pending.
 - [ ] Explicit selection-state instrumentation and tablet/foldable layout smoke coverage.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
 
