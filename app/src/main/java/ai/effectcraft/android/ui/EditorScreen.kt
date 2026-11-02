@@ -113,7 +113,10 @@ fun EditorScreen(
     canonicalProject: CanonicalProjectInfo?,
     canEditCanonicalProject: Boolean,
     onRenameCanonicalLayer: (Long, Long, String) -> Unit,
-    onAddCanonicalTextLayer: (Long, String) -> Unit
+    onAddCanonicalTextLayer: (Long, String) -> Unit,
+    onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
+    onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
+    onDeleteCanonicalLayer: (Long, Long) -> Unit
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
@@ -231,6 +234,9 @@ fun EditorScreen(
                     canEdit = canEditCanonicalProject,
                     onRenameLayer = onRenameCanonicalLayer,
                     onAddTextLayer = onAddCanonicalTextLayer,
+                    onSetLayerVisibility = onSetCanonicalLayerVisibility,
+                    onMoveLayer = onMoveCanonicalLayer,
+                    onDeleteLayer = onDeleteCanonicalLayer,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
@@ -605,6 +611,9 @@ private fun CanonicalProjectEditor(
     canEdit: Boolean,
     onRenameLayer: (Long, Long, String) -> Unit,
     onAddTextLayer: (Long, String) -> Unit,
+    onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
+    onMoveLayer: (Long, Long, Int) -> Unit,
+    onDeleteLayer: (Long, Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var compositionId by remember { mutableStateOf<Long?>(null) }
@@ -668,6 +677,20 @@ private fun CanonicalProjectEditor(
                 }
             }
             if (layer != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Visible", color = EditorPalette.text, fontSize = 12.sp)
+                    Spacer(Modifier.weight(1f))
+                    Switch(
+                        checked = layer.visible,
+                        onCheckedChange = { onSetLayerVisibility(composition.id, layer.id, it) },
+                        modifier = Modifier.semantics { contentDescription = "Canonical layer visibility" }
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, -1) }) { Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp) }
+                    TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, 1) }) { Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp) }
+                    TextButton(enabled = canEdit, onClick = { onDeleteLayer(composition.id, layer.id) }) { Text("Remove", color = Color(0xFFFF858D), fontSize = 11.sp) }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicTextField(
                         value = nameDraft,
