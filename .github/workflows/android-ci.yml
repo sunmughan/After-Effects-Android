@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Avoid spending runners on stale commits while the PR is actively changing.
+concurrency:
+  group: android-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android:
     name: Assemble and test
