@@ -37,6 +37,14 @@ object NativeProjectBridge {
         return runCatching { addTextLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
 
+    /** Renders a canonical composition frame through the pinned upstream CPU compositor. */
+    fun renderEcprojFrame(json: String, compositionId: Long, frame: Long, maxSide: Int = 512): ByteArray? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { renderEcprojFrameNative(json, compositionId, frame, maxSide.toLong()) }
+            .getOrNull()?.takeIf { it.size >= 8 }
+    }
+
     /** Relinks a canonical footage item to an app-private offline media copy. */
     fun relinkFootageEcproj(json: String, itemId: Long, path: String): String? {
         ensureLoaded()
@@ -75,6 +83,9 @@ object NativeProjectBridge {
             loadAttempted = true
         }
     }
+
+    @JvmStatic
+    private external fun renderEcprojFrameNative(json: String, compositionId: Long, frame: Long, maxSide: Long): ByteArray
 
     @JvmStatic
     private external fun relinkFootageEcprojNative(json: String, itemId: Long, path: String): String
