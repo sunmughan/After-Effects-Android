@@ -14,8 +14,13 @@ data class CanonicalCompositionInfo(
     val name: String,
     val width: Int,
     val height: Int,
+    val frameRateNum: Int,
+    val frameRateDen: Int,
+    val durationSeconds: Double,
     val layers: List<CanonicalLayerInfo>
-)
+) {
+    val durationFrames: Int get() = (durationSeconds * frameRateNum / frameRateDen.coerceAtLeast(1)).toInt().coerceAtLeast(1)
+}
 
 data class CanonicalProjectItemInfo(
     val id: Long,
@@ -57,6 +62,9 @@ data class CanonicalProjectInfo(
                     name = comp.optString("name", "Composition"),
                     width = comp.optInt("width"),
                     height = comp.optInt("height"),
+                    frameRateNum = comp.optInt("frameRateNum", 30),
+                    frameRateDen = comp.optInt("frameRateDen", 1),
+                    durationSeconds = comp.optDouble("durationSeconds", 5.0),
                     layers = layers
                 )
             }
