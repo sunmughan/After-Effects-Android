@@ -50,6 +50,18 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_re
     }
 }
 
+fn layer_position(layer: &effectcraft_project::Layer) -> [f64; 2] {
+    let mut position = [0.0, 0.0];
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        transform.walk("", &mut |_, property| {
+            if property.match_id == "position" {
+                if let Value::Vec3(value) = &property.value { position = [value[0], value[1]]; }
+            }
+        });
+    }
+    position
+}
+
 fn layer_opacity_percent(layer: &effectcraft_project::Layer) -> f64 {
     let mut opacity = None;
     if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
@@ -74,7 +86,8 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "name": layer.name,
                 "source": layer.source.type_name(),
                 "visible": layer.switches.video,
-                "opacityPercent": layer_opacity_percent(layer)
+                "opacityPercent": layer_opacity_percent(layer),
+                "position": layer_position(layer)
             })).collect();
             json!({
                 "id": id.0,
@@ -251,6 +264,47 @@ fn move_layer(source: &str, composition_id: u64, layer_id: u64, offset: i64) -> 
     let target = (index as i64 + offset).clamp(0, last) as usize;
     comp.layers.swap(index, target);
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn set_layer_position(source: &str, composition_id: u64, layer_id: u64, x: f64, y: f64) -> Result<String, String> {
+    if !x.is_finite() || !y.is_finite() || x.abs() > 1_000_000.0 || y.abs() > 1_000_000.0 {
+        return Err("Position must be finite and within ±1,000,000 pixels".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    let transform = layer.props.children.iter_mut().find_map(|node| match node {
+        Node::Group(group) if group.match_id == "transform" => Some(group),
+        _ => None,
+    }).ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let mut found = false;
+    transform.walk_mut(&mut |property| {
+        if property.match_id == "position" {
+            if let Value::Vec3(current) = &property.value {
+                property.set_value_at(Tick::ZERO, Value::Vec3([x, y, current[2]]));
+                found = true;
+            }
+        }
+    });
+    if !found { return Err(format!("Layer {layer_id} has no 3D Position property")); }
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerPositionEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_layer_position(&source, composition_id as u64, layer_id as u64, x as f64, y as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
 fn set_layer_opacity(source: &str, composition_id: u64, layer_id: u64, opacity_percent: f64) -> Result<String, String> {
@@ -490,6 +544,36 @@ mod tests {
         let final_project: Project = serde_json::from_str(&deleted).unwrap();
         assert_eq!(final_project.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "B"]);
         assert_eq!(serde_json::from_str::<Project>(&final_project.to_file_json().unwrap()).unwrap(), final_project);
+    }
+
+    #[test]
+    fn canonical_transform_position_updates_real_property_and_preserves_z() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Node, Value};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let layer = build::layer(&mut project, &comp, "Text", LayerSource::Text, (640, 360), None);
+        let layer_id = layer.id.0;
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        let source = project.to_file_json().unwrap();
+
+        let updated_json = set_layer_position(&source, comp_id.0, layer_id, 123.5, 456.25).unwrap();
+        let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0];
+        let transform = layer.props.children.iter().find_map(|node| match node {
+            Node::Group(group) if group.match_id == "transform" => Some(group),
+            _ => None,
+        }).unwrap();
+        let position = transform.children.iter().find_map(|node| match node {
+            Node::Prop(property) if property.match_id == "position" => Some(&property.value),
+            _ => None,
+        }).unwrap();
+        assert_eq!(position, &Value::Vec3([123.5, 456.25, 0.0]));
+        assert!(set_layer_position(&source, comp_id.0, layer_id, f64::NAN, 0.0).is_err());
+        assert!(set_layer_position(&source, comp_id.0, 999, 0.0, 0.0).is_err());
     }
 
     #[test]
