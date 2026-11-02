@@ -18,6 +18,25 @@ class ProjectDocumentTest {
     }
 
     @Test
+    fun movingLayerPreservesIdentityAndChangesOrderWithinBounds() {
+        val layers = ProjectDocument.starter().layers
+        val moved = ProjectEditorActions.moveLayer(layers, layers[2].id, -2)
+
+        assertEquals(layers[2].id, moved.first().id)
+        assertEquals(layers[0].id, moved[1].id)
+        assertEquals(layers[1].id, moved[2].id)
+        assertEquals(layers.map { it.id }.toSet(), moved.map { it.id }.toSet())
+    }
+
+    @Test
+    fun movingLayerClampsAtEdgesAndIgnoresUnknownIds() {
+        val layers = ProjectDocument.starter().layers
+        assertEquals(layers, ProjectEditorActions.moveLayer(layers, layers.first().id, -1))
+        assertEquals(layers, ProjectEditorActions.moveLayer(layers, "missing", 1))
+        assertEquals(layers.last().id, ProjectEditorActions.moveLayer(layers, layers.first().id, 99).last().id)
+    }
+
+    @Test
     fun newShapeHasStableIdentityAndEditableOpacity() {
         val first = LayerDocument.newShape(1)
         val second = LayerDocument.newShape(2)
