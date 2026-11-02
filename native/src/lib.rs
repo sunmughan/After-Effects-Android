@@ -486,6 +486,41 @@ mod tests {
     }
 
     #[test]
+    fn cpu_renderer_decodes_offline_png_footage_from_app_private_path() {
+        use effectcraft_project::{build, Comp, Footage, FootageKind, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        use image::ImageEncoder;
+
+        let path = std::env::temp_dir().join(format!("effectcraft-preview-{}.png", std::process::id()));
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(&[255, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
+            .unwrap();
+        std::fs::write(&path, png).unwrap();
+
+        let mut project = Project::default();
+        let comp = Comp::new(32, 32, FrameRate::FPS_30, Tick::from_seconds_f64(1.0));
+        let comp_id = project.add_item("Media preview", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let footage = Footage {
+            path: path.to_string_lossy().into_owned(),
+            kind: FootageKind::Still,
+            width: 1,
+            height: 1,
+            has_video: true,
+            missing: false,
+            ..Footage::default()
+        };
+        let item_id = project.add_item("Red pixel", Label::Sandstone, None, ItemKind::Footage(footage));
+        let layer = build::layer(&mut project, &comp, "Red pixel", LayerSource::Footage { item: item_id }, (32, 32), None);
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+
+        let bytes = render_frame_rgba(&project.to_file_json().unwrap(), comp_id.0, 0, 32).unwrap();
+        assert!(bytes[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] < 20 && pixel[2] < 20 && pixel[3] > 200));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn rejects_non_project_json() {
         let result = inspect_project("{}");
         assert!(result.is_err());
