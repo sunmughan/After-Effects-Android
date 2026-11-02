@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M0 accepted per owner direction; M1 isolated as priority; no M2–M4 work until M1 exit)
-Latest implementation/test commit: `b967c9023e1b173eda0abcffcaf7715a3f42a0da` (wide-window adaptive inspector smoke coverage; CI run #176 pending; previous #174 failed Kotlin compilation and LaunchedEffect import fixed in `d86fab995f4e33f03919106c76d62b5454c42eca`)
+Latest implementation/test commits: `b151a30128526a85edbe69ed7ee45610535ff665` (JVM JSON test dependency) and `c30385e1a2e01737a3559d77c4c15b9cef7bf52a` (single-layer delete invariant test correction). CI #178 failed three JVM unit tests: two CanonicalProjectInfo tests ran against Android's unmocked `org.json` SDK stubs; the delete reducer test compared the one-layer result against the original three-layer list. Fixes are committed; latest-head verification is pending.
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -34,12 +34,12 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Layer naming UI in inspector with Apply/trim/blank validation; pure rename reducer unit tests preserve stable IDs.
 - [x] Phone inspector layer rename instrumentation assertion.
 - [x] Accessible semantics labels for layer visibility, layer opacity and timeline playhead; instrumentation now asserts visibility toggle, 50% opacity, playhead scrub to frame 60/timecode 00:00:02:00, play/pause, and added-layer reorder/delete.
-- [ ] Verify expanded interaction instrumentation on current head; run #174 failed earlier at Kotlin compilation (before unit/instrumentation), not on an assertion. `LaunchedEffect` import fixed in `d86fab9`; run #176 is pending.
+- [ ] Verify expanded interaction instrumentation on current head. CI #178 reached JVM unit tests and failed: (1) `CanonicalProjectInfoTest.parsesCompositionLayerAndLinkedMediaInventory`, (2) `CanonicalProjectInfoTest.rejectsInvalidNativeMetadataEnvelope` due to Android SDK `org.json` stubs on the local JVM test classpath; added `testImplementation("org.json:json:20250517")` in `b151a301`. (3) `ProjectDocumentTest.deletingLayerPreservesIdentityAndNeverLeavesEmptyComposition` had a faulty assertion comparing the 1-layer guard result to the original 3-layer fixture; corrected in `c30385e1`. No assertions were removed or weakened.
 - [x] Composition settings panel edits width/height (320–3840 px), frame rate (1–120), and duration (1–3600 frames); changes enter bounded undo history and clamp the playhead when duration shrinks.
 - [x] Instrumentation for composition frame-rate apply + undo; CI validation pending.
 - [x] Instrumentation for timeline layer selection (inspector reflects selected layer opacity) and editor Save → app-private draft reload.
 - [x] Fixed native layer-stack test expectation (`C,B,A`) in `0469e00`; run #174's Rust bridge test step passed.
-- [ ] Run all expanded M1 instrumentation on current head; fix actual failures without reducing assertions. CI #174 failed at `EditorScreen.kt:660` (`LaunchedEffect` unresolved); import fixed in `d86fab9`. #176 is queued/pending on `b967c90`.
+- [ ] Run all expanded M1 instrumentation on current head; fix actual failures without reducing assertions. Earlier compile error at `EditorScreen.kt:660` (`LaunchedEffect` unresolved) was fixed in `d86fab9`; #178 skipped instrumentation because unit tests failed. Fresh CI after `b151a301` and `c30385e1` is required.
 - [x] Added wide-window adaptive workspace instrumentation (forces 1080dp test width and asserts persistent PROPERTIES + COMPOSITION VIEWER side-by-side) in `b967c90`; CI verification pending. Foldable physical/posture and compact-width scrolling still need device validation.
 - [ ] Final M1 acceptance audit: offline create/edit/save/reload, layer select/add/delete/reorder/rename/visibility/opacity, composition settings + undo/redo, timeline scrub/play/pause, persistence and adaptive UI all pass.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
