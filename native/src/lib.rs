@@ -3,7 +3,7 @@ use jni::objects::{JClass, JString};
 use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
-use effectcraft_project::{ItemId, ItemKind, LayerId};
+use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
 use effectcraft_media::MediaPool;
 use effectcraft_render::{RenderOpts, Renderer};
 use std::sync::OnceLock;
@@ -240,6 +240,31 @@ fn move_layer(source: &str, composition_id: u64, layer_id: u64, offset: i64) -> 
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+fn set_layer_opacity(source: &str, composition_id: u64, layer_id: u64, opacity_percent: f64) -> Result<String, String> {
+    if !opacity_percent.is_finite() || !(0.0..=100.0).contains(&opacity_percent) {
+        return Err("Opacity must be between 0 and 100".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    let transform = layer.props.children.iter_mut().find_map(|node| match node {
+        Node::Group(group) if group.match_id == "transform" => Some(group),
+        _ => None,
+    }).ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let mut found = false;
+    transform.walk_mut(&mut |property| {
+        if property.match_id == "opacity" {
+            property.set_value_at(Tick::ZERO, Value::Scalar(opacity_percent));
+            found = true;
+        }
+    });
+    if !found { return Err(format!("Layer {layer_id} has no Transform opacity property")); }
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 fn relink_footage(source: &str, item_id: u64, path: &str) -> Result<String, String> {
     let normalized = path.trim();
     if normalized.is_empty() { return Err("Media path cannot be blank".into()); }
@@ -291,6 +316,20 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_mo
     };
     let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
         else { move_layer(&source, composition_id as u64, layer_id as u64, offset as i64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerOpacityEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, opacity: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_layer_opacity(&source, composition_id as u64, layer_id as u64, opacity as f64) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -438,6 +477,36 @@ mod tests {
         let final_project: Project = serde_json::from_str(&deleted).unwrap();
         assert_eq!(final_project.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "B"]);
         assert_eq!(serde_json::from_str::<Project>(&final_project.to_file_json().unwrap()).unwrap(), final_project);
+    }
+
+    #[test]
+    fn canonical_transform_opacity_updates_real_property_and_roundtrips() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Node, Value};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let layer = build::layer(&mut project, &comp, "Text", LayerSource::Text, (640, 360), None);
+        let layer_id = layer.id.0;
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        let source = project.to_file_json().unwrap();
+
+        let updated_json = set_layer_opacity(&source, comp_id.0, layer_id, 35.0).unwrap();
+        let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0];
+        let transform = layer.props.children.iter().find_map(|node| match node {
+            Node::Group(group) if group.match_id == "transform" => Some(group),
+            _ => None,
+        }).unwrap();
+        let opacity = transform.children.iter().find_map(|node| match node {
+            Node::Prop(property) if property.match_id == "opacity" => Some(&property.value),
+            _ => None,
+        }).unwrap();
+        assert_eq!(opacity, &Value::Scalar(35.0));
+        assert!(set_layer_opacity(&source, comp_id.0, layer_id, 101.0).is_err());
+        assert!(set_layer_opacity(&source, comp_id.0, 999, 50.0).is_err());
     }
 
     #[test]
