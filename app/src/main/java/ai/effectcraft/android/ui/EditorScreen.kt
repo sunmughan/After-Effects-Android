@@ -87,6 +87,7 @@ fun EditorScreen(
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
     onDeleteLayer: () -> Unit,
+    onMoveLayer: (Int) -> Unit,
     onOpacityChange: (Float) -> Unit,
     onScrub: (Int) -> Unit,
     onTogglePlayback: () -> Unit
@@ -128,7 +129,8 @@ fun EditorScreen(
                             .fillMaxHeight(),
                         layer = selectedLayer,
                         onOpacityChange = onOpacityChange,
-                        onDeleteLayer = onDeleteLayer
+                        onDeleteLayer = onDeleteLayer,
+                        onMoveLayer = onMoveLayer
                     )
                 }
             } else {
@@ -176,7 +178,8 @@ fun EditorScreen(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     layer = selectedLayer,
                     onOpacityChange = onOpacityChange,
-                    onDeleteLayer = onDeleteLayer
+                    onDeleteLayer = onDeleteLayer,
+                    onMoveLayer = onMoveLayer
                 )
             }
         }
@@ -397,7 +400,8 @@ private fun InspectorPanel(
     modifier: Modifier,
     layer: LayerDocument?,
     onOpacityChange: (Float) -> Unit,
-    onDeleteLayer: () -> Unit
+    onDeleteLayer: () -> Unit,
+    onMoveLayer: (Int) -> Unit
 ) {
     Column(
         modifier = modifier
@@ -452,7 +456,16 @@ private fun InspectorPanel(
                 valueRange = 0f..1f,
                 modifier = Modifier.padding(top = 3.dp)
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { onMoveLayer(-1) }) {
+                    Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp)
+                }
+                TextButton(onClick = { onMoveLayer(1) }) {
+                    Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             TextButton(onClick = onDeleteLayer) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Color(0xFFFF858D))
                 Text("  Remove layer", color = Color(0xFFFF858D), fontSize = 12.sp)
