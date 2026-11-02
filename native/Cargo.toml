@@ -14,6 +14,7 @@ effectcraft-render = { git = "https://github.com/storytold/effectcraft", rev = "
 effectcraft-media = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80"
 jni = "0.21.1"
 serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 effectcraft-color = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
 effectcraft-time = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
