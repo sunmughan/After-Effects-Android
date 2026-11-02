@@ -50,7 +50,7 @@ class EditorSmokeTest {
     fun canonicalEcprojCachePreservesSourceBytes() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = EcprojDocumentStore(context)
-        val source = "{\\\"schema\\\":1,\\\"items\\\":{}}"
+        val source = "{\"schema\":1,\"items\":{}}"
 
         store.save(source)
         assertEquals(source, store.load())
