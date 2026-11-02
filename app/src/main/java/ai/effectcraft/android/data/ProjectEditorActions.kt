@@ -31,4 +31,22 @@ object ProjectEditorActions {
         if (normalized.isEmpty() || layers.none { it.id == layerId }) return layers
         return layers.map { if (it.id == layerId) it.copy(name = normalized) else it }
     }
+    /** Removes a layer only when at least one layer remains in the composition. */
+    fun deleteLayer(layers: List<LayerDocument>, layerId: String): List<LayerDocument> {
+        if (layers.size <= 1 || layers.none { it.id == layerId }) return layers
+        return layers.filterNot { it.id == layerId }
+    }
+
+    /** Updates visibility without changing identity or other layer properties. */
+    fun setLayerVisibility(layers: List<LayerDocument>, layerId: String, visible: Boolean): List<LayerDocument> {
+        if (layers.none { it.id == layerId }) return layers
+        return layers.map { if (it.id == layerId) it.copy(visible = visible) else it }
+    }
+
+    /** Opacity is stored normalized (0..1); NaN/infinity are rejected. */
+    fun setLayerOpacity(layers: List<LayerDocument>, layerId: String, opacity: Float): List<LayerDocument> {
+        if (!opacity.isFinite() || layers.none { it.id == layerId }) return layers
+        val bounded = opacity.coerceIn(0f, 1f)
+        return layers.map { if (it.id == layerId) it.copy(opacity = bounded) else it }
+    }
 }
