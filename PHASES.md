@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (canonical project editor integration)
-Latest implementation commit: `86e0bf648abe5f69ae949367a2edf39bc4f2a085` (canonical `.ecproj` layer list/rename sheet + native tests; CI queued)
+Updated: 2026-11-02 (canonical editor scrolling and CI validation pending)
+Latest implementation commit: `2b1a456952b366e85d3f7e38fc1e5650d609e720` (canonical `.ecproj` layer list/rename sheet + native tests; CI queued)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -32,6 +32,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Layer visibility toggle is stateful, persisted in `.efx-draft` schema v1 with backward-compatible default `true`, and undoable; instrumentation draft round-trip covers hidden layer.
 - [x] CI failure diagnosis: unit test had an incorrect expected ID for moving first layer to end; corrected in `427f54a112a0167d6d3272613d94a7518bac6d78` (the subsequent run's unit tests passed; emulator infrastructure failed before test installation).
 - [x] Layer naming UI in inspector with Apply/trim/blank validation; pure rename reducer unit tests preserve stable IDs.
+- [x] Phone inspector layer rename instrumentation assertion added; latest-head CI pending.
 - [ ] Composition settings UI.
 - [ ] Strong instrumentation assertions for selection, reorder, delete, visibility, opacity and timeline state.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
@@ -48,6 +49,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Native metadata lists composition and layer IDs/names/source/visibility; Android canonical-project sheet selects composition/layer and renames via Rust project model, reserializes and atomically caches the edited `.ecproj` (ARM64 runtime only; CI x86_64 bridge cannot execute JNI).
 - [x] Instrumentation test verifies the canonical document cache preserves source bytes.
 - [x] Wire native canonical rename operation into imported-project editor UI and update imported document cache after edits.
+- [x] Restore canonical project metadata from app-private cache on app restart; composition/layer list uses scrollable selection.
 - [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
 - [ ] Media asset manifest, URI relinking and offline asset handling.
