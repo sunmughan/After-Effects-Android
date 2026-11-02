@@ -109,10 +109,10 @@ jobs:
           cp -R app/build/reports/dependency-license build/audit/android-license-report
 
       - name: Assemble debug APK
-        run: ./gradlew --no-daemon :app:assembleDebug
+        run: $GRADLE_CMD --no-daemon :app:assembleDebug
 
       - name: Run unit tests
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
+        run: $GRADLE_CMD --no-daemon :app:testDebugUnitTest
 
       - name: Enable KVM access for Android emulator
         run: |
@@ -140,7 +140,7 @@ jobs:
             timeout 240 bash -c 'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" == "1" ]]; do sleep 3; done'
             timeout 60 bash -c 'until adb shell cmd package list packages >/dev/null 2>&1; do sleep 2; done'
             adb shell settings put global animator_duration_scale 0
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            $GRADLE_CMD --no-daemon :app:connectedDebugAndroidTest
 
       - name: Upload Android build and audit reports
         uses: actions/upload-artifact@v4
