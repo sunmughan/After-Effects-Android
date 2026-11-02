@@ -19,7 +19,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("EFFECTCRAFT").assertIsDisplayed()
         compose.onNodeWithText("OFFLINE").assertIsDisplayed()
         compose.onNodeWithText("COMPOSITION VIEWER").assertIsDisplayed()
-        compose.onNodeWithText("Timeline").assertIsDisplayed()
+        compose.onNodeWithText("TIMELINE").assertIsDisplayed()
     }
 
     @Test
