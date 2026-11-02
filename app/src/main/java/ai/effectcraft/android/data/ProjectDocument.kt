@@ -11,7 +11,7 @@ data class ProjectDocument(
     val durationFrames: Int,
     val layers: List<LayerDocument>,
     val updatedAtEpochMillis: Long = System.currentTimeMillis()
- ) {
+) {
     /** Returns all editor-model invariant violations; an empty list means saveable. */
     fun validationErrors(): List<String> = buildList {
         if (name.isBlank()) add("Project name must not be blank")
