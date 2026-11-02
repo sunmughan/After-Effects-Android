@@ -4,6 +4,46 @@ use jni::sys::{jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId};
+use effectcraft_render::{NoFootage, RenderOpts, Renderer};
+use effectcraft_time::Tick;
+
+fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u32) -> Result<Vec<u8>, String> {
+    if frame < 0 { return Err("Frame must be non-negative".into()); }
+    let project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let long = comp.width.max(comp.height).max(1) as f64;
+    let scale = if max_side == 0 { 1.0 } else { (max_side as f64 / long).min(1.0) };
+    let time = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
+    let renderer = Renderer::new(&project, &NoFootage, RenderOpts { scale, ..Default::default() });
+    let image = renderer.comp_frame(ItemId(composition_id), time);
+    let rgba = image.to_rgba8_over(comp.background);
+    let mut output = Vec::with_capacity(8 + rgba.len());
+    output.extend_from_slice(&image.width.to_be_bytes());
+    output.extend_from_slice(&image.height.to_be_bytes());
+    output.extend_from_slice(&rgba);
+    Ok(output)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_renderEcprojFrameNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, frame: jlong, max_side: jlong,
+) -> jni::sys::jbyteArray {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(_) => return env.byte_array_from_slice(&[]).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || max_side < 0 {
+        Err("Composition ID and preview size must be non-negative".to_owned())
+    } else {
+        render_frame_rgba(&source, composition_id as u64, frame as i64, max_side as u32)
+    };
+    match result {
+        Ok(bytes) => env.byte_array_from_slice(&bytes).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+        Err(_) => env.byte_array_from_slice(&[]).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    }
+}
 
 fn inspect_project(source: &str) -> Result<String, String> {
     let project: Project = serde_json::from_str(source)
@@ -413,6 +453,28 @@ mod tests {
         }
         assert!(relink_footage(&source, 999, "/tmp/clip.mp4").is_err());
         assert!(relink_footage(&source, item_id.0, " ").is_err());
+    }
+
+    #[test]
+    fn cpu_renderer_returns_bounded_rgba_frame_for_canonical_composition() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(320, 180, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Preview", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let layer = build::layer(&mut project, &comp, "Text", LayerSource::Text, (320, 180), None);
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        let source = project.to_file_json().unwrap();
+
+        let bytes = render_frame_rgba(&source, comp_id.0, 0, 160).unwrap();
+        let width = u32::from_be_bytes(bytes[0..4].try_into().unwrap());
+        let height = u32::from_be_bytes(bytes[4..8].try_into().unwrap());
+        assert_eq!((width, height), (160, 90));
+        assert_eq!(bytes.len(), 8 + (width * height * 4) as usize);
+        assert!(render_frame_rgba(&source, 999, 0, 160).is_err());
+        assert!(render_frame_rgba(&source, comp_id.0, -1, 160).is_err());
     }
 
     #[test]
