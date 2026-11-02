@@ -2,6 +2,7 @@ package ai.effectcraft.android.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
@@ -31,6 +35,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
+    var pendingRelinkItemId by remember { mutableStateOf<Long?>(null) }
     var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null) }
     var project by remember {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
@@ -80,6 +85,48 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     ?: error("Unable to write selected document")
                 saveMessage = "Exported canonical .ecproj"
             }.onFailure { error -> saveMessage = "Export failed · ${error.message ?: "storage error"}" }
+        }
+    }
+
+    val relinkAssetLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val itemId = pendingRelinkItemId
+        pendingRelinkItemId = null
+        if (uri != null && itemId != null) {
+            val source = importedEcproj
+            if (source == null) {
+                saveMessage = "Import a canonical .ecproj first"
+            } else {
+                runCatching {
+                    val displayName = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "asset"
+                    val safeName = displayName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120).ifBlank { "asset" }
+                    val directory = File(context.filesDir, "assets")
+                    if (!directory.mkdirs() && !directory.isDirectory) error("Unable to create offline media directory")
+                    val target = File(directory, "${itemId}_${safeName}")
+                    val temporary = File(directory, "${target.name}.tmp")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        temporary.outputStream().use { output -> input.copyTo(output) }
+                    } ?: error("Unable to read selected media")
+                    try {
+                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                    } catch (_: Exception) {
+                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
+                    val envelope = NativeProjectBridge.relinkFootageEcproj(source, itemId, target.absolutePath)
+                        ?: error("Native EffectCraft bridge unavailable on this ABI")
+                    val response = JSONObject(envelope)
+                    check(response.optBoolean("valid")) { response.optString("error", "Media relink failed") }
+                    val updated = response.getString("project")
+                    val metadata = NativeProjectBridge.inspectEcproj(updated)
+                        ?: error("Unable to inspect updated canonical project")
+                    val parsed = CanonicalProjectInfo.parse(metadata)
+                    ecprojStore.save(updated)
+                    importedEcproj = updated
+                    canonicalProjectInfo = parsed
+                    saveMessage = "Media copied offline · relinked"
+                }.onFailure { error -> saveMessage = "Media relink failed · ${error.message ?: "storage error"}" }
+            }
         }
     }
 
@@ -252,6 +299,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     NativeProjectBridge.deleteLayerEcproj(source, compositionId, layerId),
                     "Canonical layer removed · saved locally"
                 )
+            },
+            onRelinkCanonicalAsset = { itemId ->
+                pendingRelinkItemId = itemId
+                relinkAssetLauncher.launch(arrayOf("*/*"))
+            }
             }
         )
     }
