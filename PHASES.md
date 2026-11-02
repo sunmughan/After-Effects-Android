@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (automation implementation pass)
-Latest implementation commit: `ea06621959c07f8fd63f93fcd36ec9f7e6636dc1` (SAF `.ecproj` import/validation and byte-preserving export; current-head CI pending)
+Updated: 2026-11-02 (CI emulator stabilization pass)
+Latest implementation commit: `8f6b406e6934f9c9fc9177f1d88a2c607e33325c` (CI emulator configuration; verification pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -17,6 +17,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Commit Gradle Wrapper and verify wrapper-based reproducible build.
 - [ ] Validate corrected layer-move edge test and visibility persistence changes on current head; run 41415700009 failed at unit assertion (test expected wrong edge result); assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`, current implementation `462fa27cd7ed0bfcc8d0bc7dfaad4dec47803292` not yet observed in a fresh CI run.
 - [ ] Verify native ABI packaging/loading on an Android ARM64 device (emulator CI currently compiles ARM64 but instrumentation runs x86_64).
+- [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets; verify fresh run.
 - [x] CI root-cause follow-up: an earlier emulator instrumentation attempt failed before tests because Android `activity`/`package` services were unavailable (`cmd: Can't find service`). Workflow now waits for `sys.boot_completed` and package service readiness before connected tests; current-head validation is pending.
 - [ ] Finish repository audit, dependency/license review and release build reproducibility.
 - **Exit gate:** clean checkout builds/tests with pinned wrapper/toolchain; native library loads on ARM64 device; audit evidence checked in.
