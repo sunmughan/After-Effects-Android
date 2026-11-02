@@ -37,6 +37,13 @@ object NativeProjectBridge {
         return runCatching { addTextLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
 
+    /** Relinks a canonical footage item to an app-private offline media copy. */
+    fun relinkFootageEcproj(json: String, itemId: Long, path: String): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { relinkFootageEcprojNative(json, itemId, path) }.getOrNull()
+    }
+
     /** Updates the canonical EffectCraft video/visibility switch. */
     fun setLayerVisibilityEcproj(json: String, compositionId: Long, layerId: Long, visible: Boolean): String? {
         ensureLoaded()
@@ -68,6 +75,9 @@ object NativeProjectBridge {
             loadAttempted = true
         }
     }
+
+    @JvmStatic
+    private external fun relinkFootageEcprojNative(json: String, itemId: Long, path: String): String
 
     @JvmStatic
     private external fun setLayerVisibilityEcprojNative(json: String, compositionId: Long, layerId: Long, visible: Boolean): String
