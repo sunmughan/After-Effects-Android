@@ -126,6 +126,7 @@ fun EditorScreen(
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
     onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
+    onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?
 ) {
@@ -249,6 +250,7 @@ fun EditorScreen(
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
                     onSetLayerOpacity = onSetCanonicalLayerOpacity,
+                    onSetLayerPosition = onSetCanonicalLayerPosition,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
@@ -629,6 +631,7 @@ private fun CanonicalProjectEditor(
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
     onSetLayerOpacity: (Long, Long, Double) -> Unit,
+    onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
     modifier: Modifier = Modifier
@@ -640,6 +643,8 @@ private fun CanonicalProjectEditor(
     val layer = composition?.layers?.firstOrNull { it.id == layerId } ?: composition?.layers?.firstOrNull()
     var nameDraft by remember(composition?.id, layer?.id, layer?.name) { mutableStateOf(layer?.name.orEmpty()) }
     var opacityDraft by remember(composition?.id, layer?.id, layer?.opacityPercent) { mutableFloatStateOf((layer?.opacityPercent ?: 100.0).toFloat()) }
+    var positionXDraft by remember(composition?.id, layer?.id, layer?.positionX) { mutableStateOf((layer?.positionX ?: 0.0).toString()) }
+    var positionYDraft by remember(composition?.id, layer?.id, layer?.positionY) { mutableStateOf((layer?.positionY ?: 0.0).toString()) }
     var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
     var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
     var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
@@ -735,6 +740,29 @@ private fun CanonicalProjectEditor(
                         onCheckedChange = { onSetLayerVisibility(composition.id, layer.id, it) },
                         modifier = Modifier.semantics { contentDescription = "Canonical layer visibility" }
                     )
+                }
+                Text("Position · X / Y", color = EditorPalette.text, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicTextField(
+                        value = positionXDraft,
+                        onValueChange = { positionXDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical position X" },
+                        decorationBox = { inner -> Box { if (positionXDraft.isEmpty()) Text("X", color = EditorPalette.muted); inner() } }
+                    )
+                    BasicTextField(
+                        value = positionYDraft,
+                        onValueChange = { positionYDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical position Y" },
+                        decorationBox = { inner -> Box { if (positionYDraft.isEmpty()) Text("Y", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = canEdit && positionXDraft.toDoubleOrNull()?.isFinite() == true && positionYDraft.toDoubleOrNull()?.isFinite() == true,
+                        onClick = { onSetLayerPosition(composition.id, layer.id, positionXDraft.toDouble(), positionYDraft.toDouble()) }
+                    ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
                 Text("Opacity · ${opacityDraft.roundToInt()}%", color = EditorPalette.text, fontSize = 12.sp)
                 Slider(
