@@ -355,7 +355,7 @@ fn set_layer_rotation(source: &str, composition_id: u64, layer_id: u64, degrees:
         .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
     let property = transform.prop_mut("rotation")
         .ok_or_else(|| format!("Layer {layer_id} has no Rotation property"))?;
-    if !matches!(property.value, Value::Scalar(_)) {
+    if !matches!(&property.value, Value::Scalar(_)) {
         return Err(format!("Layer {layer_id} Rotation is not scalar"));
     }
     property.set_value_at(Tick::ZERO, Value::Scalar(degrees));
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn canonical_transform_position_updates_real_property_and_preserves_z() {
-        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Node, Value};
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Value};
         use effectcraft_color::Label;
         use effectcraft_time::{FrameRate, Tick};
 
