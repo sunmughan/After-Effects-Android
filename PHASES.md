@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (canonical Text-layer creation UI)
-Latest implementation commit: `59349a712fbc29847d59441744d3a1afc9a3f323` (canonical `.ecproj` layer rename + Text layer creation UI and cache persistence; CI pending)
+Updated: 2026-11-02 (M1 interaction instrumentation and accessibility semantics)
+Latest implementation commit: `e681a83dfe974fa1ee0e03c7fa9df6f1e815f1e6` (accessible opacity/visibility/playhead controls plus instrumentation for opacity, visibility, timeline scrub/transport, layer reorder/delete; CI run #97 queued)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -15,7 +15,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] CI concurrency group cancels stale PR commits so only the newest revision consumes a runner.
 - [x] Current-head CI run [41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104) completed **success** (2026-11-02).
 - [ ] Commit Gradle Wrapper and verify wrapper-based reproducible build.
-- [ ] Validate corrected layer-move edge test and visibility persistence changes on current head; run 41415700009 failed at unit assertion (test expected wrong edge result); assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`, current implementation `462fa27cd7ed0bfcc8d0bc7dfaad4dec47803292` not yet observed in a fresh CI run.
+- [x] Validate corrected layer-move edge test and visibility persistence changes: assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`; subsequent unit tests passed on run #92 (emulator infrastructure failed before instrumentation). Latest interaction instrumentation is awaiting run #97.
 - [ ] Verify native ABI packaging/loading on an Android ARM64 device (emulator CI currently compiles ARM64 but instrumentation runs x86_64).
 - [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets in `8f6b406e6934f9c9fc9177f1d88a2c607e33325c`; the run remains slow/in progress and a fresh latest-head CI must verify this configuration.
 - [x] CI root-cause follow-up: an earlier emulator instrumentation attempt failed before tests because Android `activity`/`package` services were unavailable (`cmd: Can't find service`). Workflow now waits for `sys.boot_completed` and package service readiness before connected tests; current-head validation is pending.
@@ -32,9 +32,11 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Layer visibility toggle is stateful, persisted in `.efx-draft` schema v1 with backward-compatible default `true`, and undoable; instrumentation draft round-trip covers hidden layer.
 - [x] CI failure diagnosis: unit test had an incorrect expected ID for moving first layer to end; corrected in `427f54a112a0167d6d3272613d94a7518bac6d78` (the subsequent run's unit tests passed; emulator infrastructure failed before test installation).
 - [x] Layer naming UI in inspector with Apply/trim/blank validation; pure rename reducer unit tests preserve stable IDs.
-- [x] Phone inspector layer rename instrumentation assertion added; latest-head CI pending.
+- [x] Phone inspector layer rename instrumentation assertion.
+- [x] Accessible semantics labels for layer visibility, layer opacity and timeline playhead; instrumentation now asserts visibility toggle, 50% opacity, playhead scrub to frame 60/timecode 00:00:02:00, play/pause, and added-layer reorder/delete.
+- [ ] Verify these new instrumentation assertions on current head (CI #97 queued); fix test/API failures rather than weakening assertions.
 - [ ] Composition settings UI.
-- [ ] Strong instrumentation assertions for selection, reorder, delete, visibility, opacity and timeline state.
+- [ ] Explicit selection-state instrumentation and tablet/foldable layout smoke coverage.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
 
 ## M2 — Project formats, import/save and media
