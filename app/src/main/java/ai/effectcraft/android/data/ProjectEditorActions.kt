@@ -1,5 +1,7 @@
 package ai.effectcraft.android.data
 
+import kotlin.math.roundToLong
+
 /**
  * Pure editor operations kept outside Compose so layer-order semantics can be
  * unit tested independently of UI layout and Android lifecycle.
