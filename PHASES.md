@@ -133,3 +133,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Implemented ProjectEditorActions.frameIntervalMillis(frameRate) (rounded, FPS bounded 1–120) and wired LaunchedEffect to project.frameRate; effect restarts when FPS changes. Commit aad16bf2e8eb19720fc10599ed72c28095174236.
 - Added JVM tests for 1/30/60/120 FPS and invalid lower/upper inputs. Current-head CI has been triggered; no pass claimed yet.
 - Compile fix fb336098 is included in this code ancestry; CI #213 was running at last inspection, but the latest branch includes additional playback change and docs. Verify current-head run rather than extrapolating older status.
+
+
+### Run 9 — latest compile diagnostics and fixes (2026-11-03)
+- Inspected open PR #1 and branch HEAD `96f43d58257956616bab6b08a7646643bc22757a`; CI #216 failed in `:app:compileDebugKotlin`. Exact errors: `ProjectEditorActions.kt:9` missing `kotlin.math.roundToLong` import; `EditorScreen.kt:326,387` incorrectly qualified `androidx.foundation.BorderStroke` (correct package is `androidx.compose.foundation`).
+- Fixed UI imports/references in `262b4abab4b510657fe26fa72ad9dca8a4a53b8d`; fixed FPS rounding import in `f3444c9728d2dc0ac7c17369f94f43bd23e31265`. Source re-read confirms correct import and no stale qualification.
+- CI #217 (`262b4aba`) is running/queued behind SDK setup; #218 (`f3444c97`, current code head) is pending. Neither is a success yet. Current-head full CI remains required.
+- M1 playback frame-rate unit cases already exist and cover 1/30/60/120 FPS and bounds; instrumentation suite remains 14 tests and needs a green current-head run. No M1 acceptance or M2 advancement.
