@@ -28,15 +28,16 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Layer reorder (up/down) wired in the inspector; pure reducer has tests for order, identity, edge clamping and unknown IDs (CI verification pending for this implementation commit).
 - [x] Bounded (50 snapshots) project undo/redo history wired for new composition, add/remove/reorder and opacity changes; emulator test covers add-layer undo/redo (CI pending).
 - [x] Layer visibility toggle is stateful, persisted in `.efx-draft` schema v1 with backward-compatible default `true`, and undoable; instrumentation draft round-trip covers hidden layer.
+- [x] CI failure diagnosis: unit test had an incorrect expected ID for moving first layer to end; corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`.
 - [ ] Robust project/layer naming and composition settings UI.
 - [ ] Strong instrumentation assertions for selection, reorder, delete, visibility, opacity and timeline state.
 - **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature.
 
 ## M2 — Project formats, import/save and media
-**Status: NOT STARTED / bridge inspection only**
+**Status: IN PROGRESS / canonical model inspection**
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
-- [ ] Add upstream-valid `.ecproj` fixtures and Kotlin/native round-trip tests.
+- [ ] Add non-empty upstream `.ecproj` fixture and Kotlin/native round-trip tests.
 - [ ] SAF document picker, open/save, persisted URI permissions and error/recovery flows.
 - [ ] Canonical project repository adapter; version/schema validation and migration.
 - [ ] Media asset manifest, URI relinking and offline asset handling.

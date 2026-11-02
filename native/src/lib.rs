@@ -56,6 +56,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn canonical_upstream_project_file_roundtrips_and_inspects() {
+        let original = Project::default();
+        let source = original.to_file_json().unwrap();
+        let decoded: Project = serde_json::from_str(&source).unwrap();
+        assert_eq!(decoded, original);
+
+        let metadata = inspect_project(&source).unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(&metadata).unwrap();
+        assert_eq!(metadata["valid"], true);
+        assert_eq!(metadata["schema"], original.schema);
+        assert_eq!(metadata["itemCount"], original.items.len());
+        assert_eq!(metadata["compositionCount"], 0);
+        assert!(metadata["compositions"].as_array().is_some());
+    }
+
+    #[test]
     fn rejects_non_project_json() {
         let result = inspect_project("{}");
         assert!(result.is_err());

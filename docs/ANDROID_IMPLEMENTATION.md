@@ -60,12 +60,12 @@ The current Kotlin draft store is intentionally isolated. Once the upstream proj
 
 ## Milestones
 
-### M1 — Native Android shell (implementation complete; CI verification in progress)
+### M1 — Native Android editor foundation (in progress)
 - [x] Empty repository initialized.
 - [x] Native app module and offline manifest.
 - [x] Adaptive phone/tablet editor shell.
 - [x] Basic layer, opacity, timeline and draft-save interactions.
-- [x] Hosted Android CI builds the ARM64 JNI bridge, runs Rust and Kotlin unit tests, and generates dependency/license inventories.\n- [x] Android emulator instrumentation covers launch/offline workspace, New composition, layer addition, and draft persistence round-trip.\n- [x] Emulator smoke-test execution is wired into the pull-request CI workflow; current-head green run is the M1 verification gate.
+- [x] Hosted Android CI builds the ARM64 JNI bridge, runs Rust and Kotlin unit tests, and generates dependency/license inventories (latest M1 change awaits CI).\n- [x] Android emulator instrumentation covers launch/offline workspace, New composition, layer addition, and draft persistence round-trip.\n- [x] Emulator smoke-test execution is wired into the pull-request CI workflow; latest current-head verification remains pending.
 
 ### M2 — Shared Rust project and engine integration
 - [x] Pin upstream EffectCraft commit and audit project/engine crate boundaries.
