@@ -151,6 +151,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "A composition must keep at least one layer"
                 }
             },
+            onRenameLayer = { name ->
+                val renamed = ProjectEditorActions.renameLayer(project.layers, selectedLayerId, name)
+                if (renamed != project.layers) applyProjectChange(project.copy(layers = renamed), "Layer renamed · unsaved")
+            },
             onVisibilityChange = { visible ->
                 applyProjectChange(project.copy(
                     layers = project.layers.map { layer ->
