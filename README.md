@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 complete (owner accepted); M1 is NOT complete; M2–M4 paused.** At `0460e741`, CI #189 passed native/Rust/APK/JVM stages but failed Android-test Kotlin compilation because two Compose test imports were unavailable. Fixed in `6b139f12` by using supported `onAllNodesWithText(...).assertCountEquals(0)` and removing invalid imports. Composition-settings instrumentation verifies exact 30 FPS restoration after Undo. Fresh current-head run is pending; M1 is not acceptance-complete. The `.efx-draft` preview remains a placeholder, not a real render engine. Existing canonical `.ecproj` work is preserved but not advancing while M1 is gated. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
+ > **Current status: M0 complete (owner accepted); M1 is NOT complete; M2–M4 paused.** Latest run #192 (`73341011`) booted Pixel 2/API 30 and compiled app/JVM tests, then Android instrumentation Kotlin compilation failed because Compose test API `assertCountEquals` was unavailable. Fixed in `77efd7df` using `fetchSemanticsNodes().isEmpty()` with an explicit JUnit assertion; this preserves the deletion test. Current-head CI is pending. The `.efx-draft` preview remains a placeholder, not a real render engine. Existing canonical `.ecproj` work is preserved but not advancing while M1 is gated. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
 
 ## Product direction
 
