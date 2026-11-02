@@ -43,12 +43,14 @@ class EditorSmokeTest {
 
     @Test
     fun addLayerActionAddsTrackToTimeline() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Unsaved changes").assertIsDisplayed()
     }
 
     @Test
     fun layerMutationCanBeUndoneAndRedone() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Undo").performClick()
         compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
@@ -59,6 +61,7 @@ class EditorSmokeTest {
 
     @Test
     fun inspectorRenamesSelectedLayer() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNode(hasSetTextAction()).performTextClearance()
         compose.onNode(hasSetTextAction()).performTextInput("Mobile title")
@@ -68,6 +71,7 @@ class EditorSmokeTest {
 
     @Test
     fun inspectorOpacityAndVisibilityControlsUpdateSelectedLayer() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Layer visibility").assertIsOn()
         compose.onNodeWithContentDescription("Layer visibility").performClick()
@@ -80,6 +84,7 @@ class EditorSmokeTest {
 
     @Test
     fun timelinePlayheadScrubsAndTransportToggles() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithContentDescription("Timeline playhead")
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
         compose.onNodeWithText("00:00:02:00").assertIsDisplayed()
@@ -92,6 +97,7 @@ class EditorSmokeTest {
 
     @Test
     fun inspectorCanReorderAndDeleteAddedLayer() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithText("Move ↑", substring = true).performClick()
@@ -102,6 +108,7 @@ class EditorSmokeTest {
 
     @Test
     fun compositionSettingsApplyAndParticipateInUndo() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Comp").performClick()
         compose.onNodeWithContentDescription("Composition frame rate")
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
@@ -115,6 +122,7 @@ class EditorSmokeTest {
 
     @Test
     fun timelineSelectionUpdatesInspectorProperties() {
+        compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Accent Shapes").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithText("82%").assertIsDisplayed()
