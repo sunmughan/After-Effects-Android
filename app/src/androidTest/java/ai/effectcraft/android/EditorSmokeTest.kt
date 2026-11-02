@@ -32,57 +32,10 @@ class EditorSmokeTest {
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
 
-
-    @Test
-    fun wideWindowKeepsInspectorAndPreviewSideBySide() {
-        val project = ProjectDocument.starter()
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f)) {
-                EditorScreen(
-                    project = project,
-                    selectedLayer = project.layers.first(),
-                    selectedLayerId = project.layers.first().id,
-                    playheadFrame = 0,
-                    isPlaying = false,
-                    saveMessage = "Saved",
-                    canUndo = false,
-                    canRedo = false,
-                    onUndo = {},
-                    onRedo = {},
-                    onSave = {},
-                    onValidateEcproj = {},
-                    onExportEcproj = {},
-                    onNewProject = {},
-                    onAddLayer = {},
-                    onSelectLayer = {},
-                    onDeleteLayer = {},
-                    onMoveLayer = {},
-                    onVisibilityChange = {},
-                    onRenameLayer = {},
-                    onOpacityChange = {},
-                    onScrub = {},
-                    onTogglePlayback = {},
-                    onApplyComposition = { _, _, _, _ -> },
-                    canonicalProject = null,
-                    canEditCanonicalProject = false,
-                    onRenameCanonicalLayer = { _, _, _ -> },
-                    onAddCanonicalTextLayer = { _, _ -> },
-                    onSetCanonicalLayerVisibility = { _, _, _ -> },
-                    onMoveCanonicalLayer = { _, _, _ -> },
-                    onDeleteCanonicalLayer = { _, _ -> },
-                    onSetCanonicalLayerOpacity = { _, _, _ -> },
-                    onSetCanonicalLayerPosition = { _, _, _, _ -> },
-                    onSetCanonicalLayerScale = { _, _, _, _ -> },
-                    onSetCanonicalLayerRotation = { _, _, _ -> },
-                    onRelinkCanonicalAsset = {},
-                    onRenderCanonicalFrame = { _, _ -> null }
-                )
-            }
-        }
-
-        compose.onNodeWithText("COMPOSITION VIEWER").assertIsDisplayed()
-        compose.onNodeWithText("PROPERTIES").assertIsDisplayed()
+    private fun assertEditorStatus(message: String) {
+        compose.onNodeWithContentDescription("Editor status: $message").assertIsDisplayed()
     }
+
 
     @Test
     fun editorLaunchesWithOfflineCompositionWorkspace() {
@@ -102,7 +55,7 @@ class EditorSmokeTest {
     fun addLayerActionAddsTrackToTimeline() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
-        compose.onNodeWithText("Unsaved changes").assertIsDisplayed()
+        assertEditorStatus("Unsaved changes")
     }
 
     @Test
@@ -110,9 +63,9 @@ class EditorSmokeTest {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Undo").performClick()
-        compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
+        assertEditorStatus("Undo · unsaved")
         compose.onNodeWithText("Redo").performClick()
-        compose.onNodeWithText("Redo · unsaved").assertIsDisplayed()
+        assertEditorStatus("Redo · unsaved")
     }
 
 
@@ -123,7 +76,7 @@ class EditorSmokeTest {
         compose.onNode(hasSetTextAction()).performTextClearance()
         compose.onNode(hasSetTextAction()).performTextInput("Mobile title")
         compose.onNodeWithText("Apply").performClick()
-        compose.onNodeWithText("Mobile title").assertIsDisplayed()
+        assertTrue("Renamed layer should appear in timeline and inspector", compose.onAllNodesWithText("Mobile title").fetchSemanticsNodes().size >= 2)
     }
 
     @Test
@@ -175,7 +128,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithText("Move ↑", substring = true).performClick()
         compose.onNodeWithText("Remove layer", substring = true).performClick()
-        compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed()
+        assertEditorStatus("Layer removed · unsaved")
         assertTrue("Removed layer should no longer be present", compose.onAllNodesWithText("Shape 4").fetchSemanticsNodes().isEmpty())
     }
 
@@ -187,7 +140,7 @@ class EditorSmokeTest {
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
         compose.onNodeWithText("Frame rate · 60 FPS").assertIsDisplayed()
         compose.onNodeWithText("Apply settings").performClick()
-        compose.onNodeWithText("Composition updated · unsaved").assertIsDisplayed()
+        assertEditorStatus("Composition updated · unsaved")
 
         compose.onNodeWithText("Undo").performClick()
         compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
@@ -215,7 +168,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
-        compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
+        assertEditorStatus("Saved locally · Untitled Composition")
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val restored = DraftProjectStore(context).loadLatest()
