@@ -51,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -124,6 +125,7 @@ fun EditorScreen(
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
+    onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?
 ) {
@@ -246,6 +248,7 @@ fun EditorScreen(
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
+                    onSetLayerOpacity = onSetCanonicalLayerOpacity,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
@@ -625,6 +628,7 @@ private fun CanonicalProjectEditor(
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
+    onSetLayerOpacity: (Long, Long, Double) -> Unit,
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
     modifier: Modifier = Modifier
@@ -635,6 +639,7 @@ private fun CanonicalProjectEditor(
     val composition = project.compositions.firstOrNull { it.id == compositionId } ?: project.compositions.firstOrNull()
     val layer = composition?.layers?.firstOrNull { it.id == layerId } ?: composition?.layers?.firstOrNull()
     var nameDraft by remember(composition?.id, layer?.id, layer?.name) { mutableStateOf(layer?.name.orEmpty()) }
+    var opacityDraft by remember(composition?.id, layer?.id, layer?.opacityPercent) { mutableFloatStateOf((layer?.opacityPercent ?: 100.0).toFloat()) }
     var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
     var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
     var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
@@ -731,6 +736,14 @@ private fun CanonicalProjectEditor(
                         modifier = Modifier.semantics { contentDescription = "Canonical layer visibility" }
                     )
                 }
+                Text("Opacity · ${opacityDraft.roundToInt()}%", color = EditorPalette.text, fontSize = 12.sp)
+                Slider(
+                    value = opacityDraft,
+                    onValueChange = { opacityDraft = it },
+                    onValueChangeFinished = { if (canEdit) onSetLayerOpacity(composition.id, layer.id, opacityDraft.toDouble()) },
+                    valueRange = 0f..100f,
+                    modifier = Modifier.semantics { contentDescription = "Canonical layer opacity" }
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, -1) }) { Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp) }
                     TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, 1) }) { Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp) }
