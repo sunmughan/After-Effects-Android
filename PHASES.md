@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (Hayro API mismatch diagnosed; native dependency patch added; CI #167 pending)
-Latest implementation/test commit: `bf623f04d4a07f2cdacc3f4a788f591c947da596` (pins EffectCraft-required Hayro `DecodeLimits`/`new_with_password_and_limits` API via craft-libs revision `92d392cf`; CI run #167 pending)
+Updated: 2026-11-02 (canonical Transform Scale/Rotation implementation staged; CI validation pending)
+Latest implementation/test commit: `6b1b45f4cc779f3eaa914a8956837044bfeb68cb` (canonical Transform Scale X/Y and Z Rotation native mutation, JNI, inspector controls and Rust/Kotlin metadata tests; CI #168 pending (scale/rotation test))
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -88,7 +88,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 **Status: IN PROGRESS (first canonical property edit)**
 - [x] Canonical Transform/Opacity is now a real upstream `Property` mutation (0–100, key-aware at frame zero), exposed by JNI, reflected in metadata and edited with a commit-on-release slider; each change reserializes the `.ecproj` and refreshes CPU preview (`9a0af7d`, `340e601`, `7997036`, `1166a2c`, `71509df`). Rust tests cover property mutation/range/ID; Kotlin parser test covers opacity metadata (`e049130`). CI/device validation pending.
 - [x] Canonical Transform/Position X/Y edits preserve Z and key-aware set at frame zero; native model test verifies exact vector and rejects non-finite coordinates/unknown IDs (`b2422dc`); JNI/Kotlin bridge and inspector numeric controls Apply into project cache (`a8a94c2`, `764c311`, `21f4a80`). Parser tests cover X/Y metadata (`0a96985`). CI/device validation pending.
-- [ ] Anchor/scale/rotation editing and text/shape/effect parameter UI; canonical layer lock and selection parity.
+- [x] Canonical Transform Scale X/Y and Z Rotation editing: Rust mutations preserve Scale Z and set key-aware frame-zero values, bounded finite input validation, JNI/Kotlin APIs, metadata parsing, inspector Apply controls and CPU preview refresh; Rust round-trip/error tests and Kotlin metadata test added (`6b1b45f`). Current-head CI validation pending.
+- [ ] Anchor/3D rotation editing and text/shape/effect parameter UI; canonical layer lock and selection parity.
 - [ ] Keyframe authoring, interpolation and timeline tracks.
 - [ ] Undo/redo, gestures, multi-selection and selection persistence.
 - [ ] Verify every edit updates engine preview and canonical project data.
