@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
 Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation commit: `84d50661143591a0c1c78d4409ce8db29cf332c1` (composition settings, undoable edits, timeline selection, offline Save persistence, and isolated smoke tests; latest-head CI pending)
+Latest implementation/test commit: `ffab2a0be93d678c8e0dd9d33388e149b1eb7d3a` (M1 settings/selection/save instrumentation plus native canonical layer visibility/reorder/delete APIs, Kotlin JNI wrappers, app cache persistence, and Rust round-trip tests; latest-head CI pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
@@ -54,10 +54,12 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Native metadata lists composition and layer IDs/names/source/visibility; Android canonical-project sheet selects composition/layer and renames via Rust project model, reserializes and atomically caches the edited `.ecproj` (ARM64 runtime only; CI x86_64 bridge cannot execute JNI).
 - [x] Instrumentation test verifies the canonical document cache preserves source bytes.
 - [x] Wire native canonical rename operation into imported-project editor UI and update imported document cache after edits.
+- [x] Canonical imported-project editor now exposes real upstream-model visibility, reorder and delete actions; JNI envelopes are revalidated, re-inspected, and atomically cached after each mutation (`8d32c9a`, `e168c6d`, `77ef2c9`).
+- [x] Rust tests exercise canonical layer stack order, visibility switch and deletion with ID-preserving serialization round-trip (`8fdf841`, assertion cleanup `ffab2a0`).
 - [x] Add Rust canonical Text-layer creation operation (`build::layer` with upstream `LayerSource::Text`), trimmed-name validation, composition existence checks, generated layer ID, serialization/metadata tests; expose JNI/Kotlin bridge (`3c10203`, `83985cb`).
 - [x] CI root-cause fix: `cargo test` had unresolved direct fixture crates `effectcraft_color`/`effectcraft_time` despite transitive upstream dependencies; add exact pinned upstream dependencies (`69507b8`).
 - [x] Add Text-layer creation action to imported-project UI; native unit tests cover real model creation, invalid names/missing composition and serialization.
-- [ ] Verify canonical import → add/rename → export through JNI on physical ARM64 device.
+- [ ] Verify canonical import → add/rename/visibility/reorder/delete → export through JNI on physical ARM64 device; CI host tests validate the upstream model but emulator ABI does not load ARM64 JNI.
 - [x] Restore canonical project metadata from app-private cache on app restart; composition/layer list uses scrollable selection.
 - [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
