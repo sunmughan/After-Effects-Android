@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 complete (owner accepted); M1 ~80% implementation and priority; M2–M4 paused until M1 acceptance.** CI #178 (commit `11409871`) failed three JVM unit tests: two canonical metadata tests used Android's unmocked `org.json` SDK stubs, and one delete-layer test asserted against the wrong list. Fixes committed in `b151a301` (real JVM JSON dependency) and `c30385e1` (correct one-layer invariant); latest-head CI verification is pending. Expanded M1 interaction and 1080dp adaptive workspace smoke tests are present; the `.efx-draft` preview remains a placeholder. Existing canonical `.ecproj` work is preserved but not advancing while M1 is gated. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
+ > **Current status: M0 complete (owner accepted); M1 ~80% implementation and priority; M2–M4 paused until M1 acceptance.** CI #178 (commit `11409871`) failed three JVM unit tests: two canonical metadata tests used Android's unmocked `org.json` SDK stubs, and one delete-layer test asserted against the wrong list. Fixes committed in `b151a301` (real JVM JSON dependency) and `c30385e1` (correct one-layer invariant). Added exact opacity/visibility Undo+Redo instrumentation in `cceea410`; latest-head CI verification is pending. Expanded M1 interaction and 1080dp adaptive workspace smoke tests are present; the `.efx-draft` preview remains a placeholder. Existing canonical `.ecproj` work is preserved but not advancing while M1 is gated. Adobe `.aep` is not supported. Acceptance/evidence is tracked in [PHASES.md](PHASES.md).
 
 ## Product direction
 
