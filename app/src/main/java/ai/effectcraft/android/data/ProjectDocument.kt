@@ -11,7 +11,22 @@ data class ProjectDocument(
     val durationFrames: Int,
     val layers: List<LayerDocument>,
     val updatedAtEpochMillis: Long = System.currentTimeMillis()
-) {
+ ) {
+    /** Returns all editor-model invariant violations; an empty list means saveable. */
+    fun validationErrors(): List<String> = buildList {
+        if (name.isBlank()) add("Project name must not be blank")
+        if (width !in 320..3840) add("Composition width must be between 320 and 3840")
+        if (height !in 320..3840) add("Composition height must be between 320 and 3840")
+        if (frameRate !in 1..120) add("Frame rate must be between 1 and 120")
+        if (durationFrames !in 1..3600) add("Duration must be between 1 and 3600 frames")
+        if (layers.isEmpty()) add("A composition must contain at least one layer")
+        if (layers.map { it.id }.toSet().size != layers.size) add("Layer IDs must be unique")
+        layers.forEachIndexed { index, layer ->
+            if (layer.name.isBlank()) add("Layer ${index + 1} name must not be blank")
+            if (!layer.opacity.isFinite() || layer.opacity !in 0f..1f) add("Layer ${index + 1} opacity must be finite and normalized")
+        }
+    }
+
     companion object {
         fun starter(): ProjectDocument = ProjectDocument(
             id = UUID.randomUUID().toString(),
