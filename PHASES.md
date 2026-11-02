@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-02 (M1 composition settings and editor instrumentation)
-Latest implementation/test commit: `3da9fb97f4a4fffa000a9c853752c62d375f6df1` (canonical editing/media relink, upstream CPU frame JNI/UI, persistent MediaPool footage decoding and PNG render test; CI run #146 pending)
+Updated: 2026-11-02 (Hayro API mismatch diagnosed; native dependency patch added; CI #167 pending)
+Latest implementation/test commit: `bf623f04d4a07f2cdacc3f4a788f591c947da596` (pins EffectCraft-required Hayro `DecodeLimits`/`new_with_password_and_limits` API via craft-libs revision `92d392cf`; CI run #167 pending)
 Branch: `feat/android-app-foundation`
 PR: [#1](https://github.com/sunmughan/After-Effects-Android/pull/1)
 
