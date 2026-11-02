@@ -298,83 +298,105 @@ private fun HeaderBar(
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(68.dp)
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(11.dp))
-                .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 21.sp)
-        }
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 11.dp)
-        ) {
-            Text(
-                "EFFECTCRAFT",
-                color = EditorPalette.text,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.1.sp
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    projectName,
-                    color = EditorPalette.muted,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text("  ·  ", color = EditorPalette.border, fontSize = 12.sp)
-                Text(
-                    saveMessage,
-                    color = EditorPalette.mint,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+        if (maxWidth < 620.dp) {
+            // Two compact rows prevent the project status from being squeezed to zero
+            // width by the desktop-style action bar on phones.
+            Column(Modifier.fillMaxWidth().height(88.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
+                            .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    }
+                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                        Text("EFFECTCRAFT", color = EditorPalette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                        Text(projectName, color = EditorPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Surface(
+                        color = Color(0xFF13231F),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.foundation.BorderStroke(1.dp, Color(0xFF24453E))
+                    ) {
+                        Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                            color = EditorPalette.mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
+                    }
+                    IconButton(onClick = onSave, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
+                    }
+                    TextButton(onClick = onNewProject) {
+                        Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        saveMessage,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Editor status: $saveMessage" },
+                        color = EditorPalette.mint,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    IconButton(onClick = onValidateEcproj, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text)
+                    }
+                    IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
+                    }
+                    IconButton(onClick = onExportEcproj, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
+                    }
+                }
             }
-        }
-
-        Surface(
-            color = Color(0xFF13231F),
-            shape = RoundedCornerShape(20.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF24453E))
-        ) {
-            Text(
-                "OFFLINE",
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                color = EditorPalette.mint,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-        }
-
-        IconButton(onClick = onValidateEcproj) {
-            Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text)
-        }
-        IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
-            Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
-        }
-        IconButton(onClick = onExportEcproj) {
-            Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
-        }
-        IconButton(onClick = onSave) {
-            Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
-        }
-        TextButton(onClick = onNewProject) {
-            Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold)
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(68.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(11.dp))
+                        .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 21.sp)
+                }
+                Column(Modifier.weight(1f).padding(start = 11.dp)) {
+                    Text("EFFECTCRAFT", color = EditorPalette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.1.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(projectName, color = EditorPalette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("  ·  ", color = EditorPalette.border, fontSize = 12.sp)
+                        Text(
+                            saveMessage,
+                            modifier = Modifier.semantics { contentDescription = "Editor status: $saveMessage" },
+                            color = EditorPalette.mint, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Surface(
+                    color = Color(0xFF13231F), shape = RoundedCornerShape(20.dp),
+                    border = androidx.foundation.BorderStroke(1.dp, Color(0xFF24453E))
+                ) {
+                    Text("OFFLINE", modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                        color = EditorPalette.mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                }
+                IconButton(onClick = onValidateEcproj) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text) }
+                IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
+                }
+                IconButton(onClick = onExportEcproj) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text) }
+                IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
+                TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
+            }
         }
     }
 }
