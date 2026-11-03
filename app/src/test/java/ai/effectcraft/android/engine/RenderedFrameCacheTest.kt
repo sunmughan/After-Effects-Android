@@ -3,6 +3,7 @@ package ai.effectcraft.android.engine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertArrayEquals
 import org.junit.Before
 import org.junit.Test
