@@ -43,6 +43,16 @@ class EditorSmokeTest {
 
 
     @Test
+    fun offlineMediaLibraryOpensAndExplainsEmptyState() {
+        compose.onNodeWithContentDescription("Offline media library").performClick()
+        compose.onNodeWithText("Offline media library").assertIsDisplayed()
+        compose.onNodeWithText(
+            "No media imported yet. Relink footage from a canonical project to copy it here for offline use."
+        ).assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
+    }
+
+    @Test
     fun savedOfflineProjectsCanBeOpenedWithoutNetwork() {
         // Isolate this catalog test from drafts left by other instrumentation cases.
         InstrumentationRegistry.getInstrumentation().targetContext.filesDir
