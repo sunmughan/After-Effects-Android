@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** Gradle Wrapper 9.5.0 is committed (`eb2c6498`) with distribution checksum. CI #236's instrumentation defects were corrected in `9743f952`; CI #237 was superseded during x86_64 compilation to add Cargo caching and a 90-minute cold-build budget. Latest editor fix `fb2c9bc5` keeps layer selection valid after deleting the selected layer and adds a reducer regression test. CI #240 is pending on this head; no current-head pass is claimed. See [PHASES.md](PHASES.md).
+ > **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** Latest implementation `099cd972` makes Undo/Redo restore project, selected layer and playhead snapshots; timeline selection has accessible selected/unselected semantics and delete→Undo→Redo instrumentation. Run #242 was superseded during cold ARM64 compilation; fresh current-head CI is pending. No pass is claimed. See [PHASES.md](PHASES.md).
 
 ## Product direction
 

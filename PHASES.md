@@ -1,9 +1,18 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-03 (M0 CI hardening in progress; M1 acceptance pending; M2–M4 remain sequenced after M1)
-Latest implementation commit: `fb2c9bc504e0ab0dd20a964e899f78d78864b180` fixes selected-layer deletion behavior: deleting a selected layer now selects the surviving layer at the removed stack index (or the previous last layer), rather than potentially leaving selection pointing at a deleted ID. Added a pure reducer regression test for first/middle/only-layer deletion. CI #240 is pending on this exact implementation head; no new test pass is claimed.
+Updated: 2026-11-03 (M0 CI rerun pending; M1 history/selection regression committed; M2–M4 remain sequenced after M1)
+Latest implementation commit: `099cd972be1be909a0f54646ab90dd044b1a9e43` now snapshots project + selected layer ID + playhead in the 50-entry Undo/Redo history. Undoing deletion restores the removed layer as selected; Redo restores the adjacent selection. Timeline layer rows expose explicit selected/unselected accessibility descriptions, and an instrumentation regression asserts delete → Undo → Redo selection continuity. Current-head CI #243 is pending; no pass is claimed.
 
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
+
+### Run 12 — selection-aware editor history and accessibility (2026-11-03)
+- Implementation commit `099cd972be1be909a0f54646ab90dd044b1a9e43` (`fix(editor): restore selection and playhead with undo history`).
+- Undo/Redo snapshots now include the project model, selected layer ID and playhead frame (bounded to 50). Undo of layer deletion restores the deleted layer as selected; Redo restores the post-delete adjacent selection. Playhead is clamped to restored duration.
+- Timeline layer rows expose accessibility descriptions that distinguish selected and unselected layers.
+- Added instrumentation `deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection`: move added Shape 4, delete it, assert Accent Shapes selected, Undo asserts Shape 4 selected, Redo asserts Accent Shapes selected. Existing assertions are preserved.
+- This is concrete M1 functionality, not a CI-only change. Local Android/Gradle execution is unavailable in this automation container; GitHub Actions is the build/test environment.
+- Run #242 was in ARM64 cold compilation when this commit advanced the branch; concurrency cancelled the stale run. Fresh current-head run #243 is expected. No build/test pass is claimed.
+- Next: inspect #243 job/step logs and emulator result; fix failures, then verify the full M1 suite at exact HEAD. M0 remains INCOMPLETE pending green current-head dual-ABI/JNI/emulator CI; M1 acceptance stays pending.
 
 ## M0 — Foundation, toolchain and CI
 **Status: INCOMPLETE — baseline CI green, closure gates remain** · Baseline evidence commit: `1f32b1a11a468f9433d4781f831c56d6abd2702a`
