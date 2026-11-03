@@ -21,13 +21,50 @@ class ProjectKeyframeStore(private val root: File) {
     @Synchronized
     fun load(projectId: String): List<StoredTrack> {
         val id = validateProjectId(projectId)
+        recoverInterruptedWrite(id)
         val file = fileFor(id)
         if (!file.isFile) return emptyList()
+        return readDocument(file, id)
+    }
+
+    /**
+     * A process can die after the complete JSON temp is fsynced/written but
+     * before the atomic rename. Promote only a fully validated temp belonging
+     * to this project. Invalid temps are discarded; the committed file stays
+     * untouched. If promotion itself fails, keep the valid temp for retry.
+     */
+    private fun recoverInterruptedWrite(projectId: String) {
+        val target = fileFor(projectId)
+        val temporary = File(root, "${target.name}.tmp")
+        if (!temporary.isFile) return
+        val validTemp = runCatching { readDocument(temporary, projectId) }.isSuccess
+        if (!validTemp) {
+            // Best effort: never let a malformed temp block future loads.
+            temporary.delete()
+            return
+        }
+        try {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (_: Exception) {
+            try {
+                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: Exception) {
+                // Preserve the validated temp so a later load can retry.
+            }
+        }
+    }
+
+    private fun readDocument(file: File, projectId: String): List<StoredTrack> {
         try {
             val document = JSONObject(file.readText(Charsets.UTF_8))
             require(document.optString("format") == FORMAT) { "Unsupported keyframe document format" }
             require(document.optInt("version", -1) == VERSION) { "Unsupported keyframe document version" }
-            require(document.getString("projectId") == id) { "Keyframe document belongs to another project" }
+            require(document.getString("projectId") == projectId) { "Keyframe document belongs to another project" }
             val tracksJson = document.getJSONArray("tracks")
             val tracks = buildList {
                 for (index in 0 until tracksJson.length()) {

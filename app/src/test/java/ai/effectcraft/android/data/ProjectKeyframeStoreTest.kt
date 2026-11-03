@@ -76,4 +76,49 @@ class ProjectKeyframeStoreTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun completeNewerTempIsPromotedOnLoadAfterInterruptedRename() {
+        val root = Files.createTempDirectory("effectcraft-keyframes-recovery").toFile()
+        try {
+            val store = ProjectKeyframeStore(root)
+            store.upsert("project", "layer", "opacity", 0, 1f)
+            val target = root.listFiles()!!.single()
+            val committed = target.readBytes()
+
+            store.upsert("project", "layer", "opacity", 30, 0.25f)
+            val newer = target.readBytes()
+            target.writeBytes(committed)
+            val temporary = java.io.File(root, "${target.name}.tmp")
+            temporary.writeBytes(newer)
+
+            val recovered = ProjectKeyframeStore(root).load("project")
+            assertEquals(listOf(0, 30), recovered.single().track.keyframes.map { it.frame })
+            assertFalse(temporary.exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun malformedOrWrongProjectTempIsDiscardedWithoutDamagingCommittedTrack() {
+        val root = Files.createTempDirectory("effectcraft-keyframes-recovery-invalid").toFile()
+        try {
+            val store = ProjectKeyframeStore(root)
+            store.upsert("project", "layer", "opacity", 7, 0.7f)
+            val target = root.listFiles()!!.single()
+            val temporary = java.io.File(root, "${target.name}.tmp")
+
+            temporary.writeText("{broken")
+            assertEquals(listOf(7), ProjectKeyframeStore(root).load("project").single().track.keyframes.map { it.frame })
+            assertFalse(temporary.exists())
+
+            temporary.writeText(target.readText().replace("\"projectId\":\"project\"", "\"projectId\":\"other\""))
+            assertEquals(listOf(7), ProjectKeyframeStore(root).load("project").single().track.keyframes.map { it.frame })
+            assertFalse(temporary.exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
 }

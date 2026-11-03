@@ -599,3 +599,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Corrected only the default no-op lambda to four ignored parameters; callback contract and gesture behavior are unchanged. This is a compile fix, not a test relaxation.
 - Implementation is committed with this tracker update; exact-head CI must now run through Kotlin compilation, JVM tests, API 30 instrumentation and cold reproducibility before accepting the rotation/gesture repairs.
 - M4 remains IN PROGRESS. No physical device or release gate is implied by this compile correction.
+
+
+### Run 59 — project keyframe temp-file crash recovery (2026-11-04)
+- M6: `ProjectKeyframeStore.load` now validates and promotes a complete project-matched atomic-write temp left after process death; malformed, schema-invalid or cross-project temps are discarded while the committed document remains untouched. If rename fails transiently, a valid temp is retained for retry.
+- Added 2 JVM tests covering recovery of a newer frame track and rejection/cleanup of malformed or wrong-project temps without losing the committed key.
+- Exact-head CI is pending; tests are not yet counted as passed. This is editor-draft keyframe recovery, not canonical EffectCraft animation serialization.
