@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 INCOMPLETE; M1 acceptance pending.** CI #254 passed dual-ABI native builds, Rust tests, license inventory, APK assembly and JVM tests, then exposed missing adaptive-test project-picker arguments; fixed in `2aafaa47`. Offline save-upsert now tests catalog deduplication and latest revision. M2 adds EffectCraft `.ecprojx` XML normalization/import and SAF XML export alongside `.ecproj` JSON; Effekseer `.efkproj` and Adobe `.aep` are explicitly unsupported. Current-head 18-case instrumentation is pending. See [PHASES.md](PHASES.md).
+> **Current status: M0 INCOMPLETE; M1 acceptance pending.** Latest work adds pure scalar keyframe editing/interpolation primitives with JVM coverage (not yet wired to canonical project persistence or timeline UI), and removes an accidentally retained deliberately-failing diagnostic instrumentation test. Run #270 had ARM64 pass while x86_64 was in progress on an older HEAD; the newest commits require fresh CI. EffectCraft `.ecproj` JSON and `.ecprojx` XML paths are implemented; Effekseer `.efkproj` and Adobe `.aep` remain unsupported. See [PHASES.md](PHASES.md).
 
 ## Product direction
 
