@@ -18,6 +18,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.Density
+import java.util.concurrent.CopyOnWriteArrayList
 import ai.effectcraft.android.data.CanonicalCompositionInfo
 import ai.effectcraft.android.data.CanonicalLayerInfo
 import ai.effectcraft.android.data.CanonicalProjectInfo
@@ -61,7 +62,7 @@ class CanonicalSelectionEditorTest {
         val canonicalState = mutableStateOf(CanonicalProjectInfo(compositions = listOf(composition)))
         val selectionState = mutableStateOf(setOf(2L))
         val workspaceFrame = mutableIntStateOf(0)
-        val renderedFrames = mutableListOf<Long>()
+        val renderedFrames = CopyOnWriteArrayList<Long>()
         val selectionChanges = mutableListOf<Set<Long>>()
         var undoClicks = 0
         var redoClicks = 0
