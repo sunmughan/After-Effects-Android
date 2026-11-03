@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 and M1 accepted on CI #286 (18/18 emulator instrumentation passed); M2 is in progress.** Exact tested commit: `bd274c7879cdd596d767303ace8791012543f199`. M2 import-format guard is commit `53b6bc6e844423703216f99eb8e3d0318f05d106`; the follow-up M2 code and tracker commits are awaiting exact-head CI. EffectCraft `.ecproj` JSON and `.ecprojx` XML are supported; Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
+> **Current status: M0 and scoped M1 accepted** (CI #289: 18/18 API 30 emulator instrumentation passed; CI #286 also records full dual-ABI/Rust/JVM/Wrapper evidence). M2 is in progress: canonical JSON/XML import, format guardrails, SHA-256 content-addressed offline media storage and native footage relinking are implemented; the new asset-store JVM tests await latest-head CI. Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
 
 ## Product direction
 
@@ -33,8 +33,7 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 - **M0 foundation: COMPLETE** at tested commit `bd274c7879cdd596d767303ace8791012543f199`; CI #286 passed Wrapper/dual ABI/JNI, 13 Rust tests, JVM tests, 18/18 emulator instrumentation and dependency/license inventory.
 - **M1 editor foundation: COMPLETE** at the same tested commit; all 18 emulator cases passed (offline project save/open/upsert, layers, properties, Undo/Redo, timeline, adaptive workspace and native parser invocation).
-- **M2: IN PROGRESS.** Commit `53b6bc6e844423703216f99eb8e3d0318f05d106` adds explicit format classification/import guardrails and three JVM tests. Exact-head CI after these code and documentation commits is pending.
-- Supported canonical interchange: EffectCraft `.ecproj` JSON and `.ecprojx` XML. Effekseer `.efkproj` has no integrated parser/converter; Adobe `.aep` is proprietary and no licensed compatible parser is integrated. Android `.efx-draft` files use Open offline project, not canonical import.
-- M3 actual CPU renderer/JNI integration is partial; M4 editing/keyframe integration is partial; M5 export, M6 reliability/device matrix and M7 release are not complete.
+- **M2: IN PROGRESS.** EffectCraft `.ecproj` JSON and `.ecprojx` XML import/export, native schema validation and format guardrails are present. `OfflineAssetStore` (`020413c8`, `cd9a69f0`) adds bounded SHA-256 content-addressed app-private media with dedupe and atomic metadata; `7157542e` integrates SAF footage relinking to the immutable offline payload. Four asset-store JVM tests are committed but awaiting latest-tip CI. Project/asset manifest, media library UI, and broader migration/relink acceptance remain.- Supported canonical interchange: EffectCraft `.ecproj` JSON and `.ecprojx` XML. Effekseer `.efkproj` has no integrated parser/converter; Adobe `.aep` is proprietary and no licensed compatible parser is integrated. Android `.efx-draft` files use Open offline project, not canonical import.
+- M3 actual upstream CPU composition preview through JNI is partial (shared session lifecycle, GPU fallback and device validation remain); M4 canonical transform editing plus scalar keyframe primitives are partial (keyframes not yet persisted/wired); M5 render/export queue, M6 reliability/device matrix and M7 release are not complete.
 
 M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232). See [PHASES.md](PHASES.md) for per-phase acceptance, test evidence, commits, blockers and release gates; [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones; and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for JNI/render integration details.
