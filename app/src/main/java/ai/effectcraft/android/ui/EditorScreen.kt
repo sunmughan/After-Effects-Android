@@ -164,7 +164,7 @@ fun EditorScreen(
     onRedoCanonical: () -> Unit = {},
     onSetCanonicalLayerOpacityForSelection: (Long, Set<Long>, Double) -> Unit = { _, _, _ -> },
     onSetCanonicalLayerVisibilityForSelection: (Long, Set<Long>, Boolean) -> Unit = { _, _, _ -> },
-    onGestureEditCanonicalSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>, Map<Long, Double>) -> Unit = { _, _, _ -> },
+    onGestureEditCanonicalSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>, Map<Long, Double>) -> Unit = { _, _, _, _ -> },
     onRenameCanonicalLayer: (Long, Long, String) -> Unit,
     onAddCanonicalTextLayer: (Long, String) -> Unit,
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,

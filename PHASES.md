@@ -592,3 +592,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Root cause 2: the gesture test began its swipe at the preview area's exact left edge (centerLeft), a zero-inset boundary. The synthetic pointer down was not reliably inside the hit target. The swipe now starts/ends 80 px inside the center, preserving a real horizontal pan and the callback assertion (same commit). No test was removed or weakened.
 - Run #446 on M4 rotation source 79ff009 was cancelled by the follow-up test push; #447 docs run was in progress on 7ce4e63; #448 is pending on exact source+test head c45eadf. Wait for #448's JVM/emulator/repro results before accepting rotation or the fixture repairs.
 - M4 rotation implementation: [79ff0094](https://github.com/sunmughan/After-Effects-Android/commit/79ff0094153ef9a000ea46dd7dda34997c3dc1f2); test fixture repair: [c45eadf5](https://github.com/sunmughan/After-Effects-Android/commit/c45eadf55d941d16a432c0b701c4e96203fefee2). M4 remains IN PROGRESS; M0 owner/license and physical-device gates remain open.
+
+
+### Run 58 — repair gesture callback default arity compile failure (2026-11-04)
+- Exact-head CI [#449](https://github.com/sunmughan/After-Effects-Android/actions/runs/41716233493) on `6783fae0` failed at `:app:compileDebugKotlin` (EditorScreen.kt:167): `onGestureEditCanonicalSelection` declared a four-argument callback (frame, position deltas, scale deltas, rotation deltas) but its no-op default lambda supplied only three parameters. Native ARM64+x86_64, JNI ABI, Rust tests, dependency/license inventory succeeded; APK assembly failed before JVM/emulator tests, so no test artifacts were produced.
+- Corrected only the default no-op lambda to four ignored parameters; callback contract and gesture behavior are unchanged. This is a compile fix, not a test relaxation.
+- Implementation is committed with this tracker update; exact-head CI must now run through Kotlin compilation, JVM tests, API 30 instrumentation and cold reproducibility before accepting the rotation/gesture repairs.
+- M4 remains IN PROGRESS. No physical device or release gate is implied by this compile correction.
