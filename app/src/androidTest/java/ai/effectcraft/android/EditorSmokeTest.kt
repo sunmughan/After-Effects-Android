@@ -42,6 +42,9 @@ class EditorSmokeTest {
 
     @Test
     fun savedOfflineProjectsCanBeOpenedWithoutNetwork() {
+        // Isolate this catalog test from drafts left by other instrumentation cases.
+        InstrumentationRegistry.getInstrumentation().targetContext.filesDir
+            .resolve("projects").listFiles()?.forEach { it.delete() }
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
