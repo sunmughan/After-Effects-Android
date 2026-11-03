@@ -118,7 +118,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Next: inspect #243 job/step logs and emulator result; fix failures, then verify the full M1 suite at exact HEAD. M0 remains INCOMPLETE pending green current-head dual-ABI/JNI/emulator CI; M1 acceptance stays pending.
 
 ## M0 — Foundation, toolchain and CI
-**Status: NOT COMPLETE — technical CI green; legal/owner gates remain open** · latest exact-head evidence: commit `7478f235f57c4f6b5df73b371157b60895a6d283`, [run #337](https://github.com/sunmughan/After-Effects-Android/actions/runs/41609309110) (success; Rust 13/13, JVM 32/32, emulator 19/19; JUnit artifact inspected).
+**Status: NOT COMPLETE — technical CI green; legal/owner gates remain open** · latest exact-head evidence: commit `6d34c056d59d84c3245c13c1fc9f3b9665952b35`, [run #346](https://github.com/sunmughan/After-Effects-Android/actions/runs/41615158115) (success; Rust 13/13, JVM 36/36, emulator 19/19; JUnit artifact inspected: 8 JVM suites/36 cases, connected 19 cases, 0 failures/errors/skips).
 - **Open user gates blocking M0 completion:** (a) licensing — gate #12: no root LICENSE file and the GitHub license API returns 404; no license is chosen by this correction. (b) owner acceptance — gate #13: PR #1 is still draft and conflicting with zero reviews; no owner acceptance is recorded by this correction.
 - **Superseded claim:** the prior header claimed COMPLETE on stale CI #286 (commit `bd274c7879cdd596d767303ace8791012543f199`, 18/18 instrumentation). That claim is withdrawn: under the tracker rule that a phase is complete only when its code, tests, and evidence meet every required gate, M0 cannot be marked complete while these gates remain open.
 - [x] Native Android/Compose project and offline manifest; no INTERNET permission.
@@ -134,7 +134,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Exit gate: NOT SATISFIED — licensing (gate #12) and owner acceptance (gate #13) remain open user gates.**
 
 ## M1 — Professional native editor foundation
-**Status: COMPLETE — scoped editor acceptance passed and re-verified at branch tip** · evidence: [CI #337](https://github.com/sunmughan/After-Effects-Android/actions/runs/41609309110), commit `7478f235f57c4f6b5df73b371157b60895a6d283`, Android instrumentation **19/19 passed** with named JUnit XML evidence (0 skipped/failed).
+**Status: COMPLETE — scoped editor acceptance passed and re-verified on the newest green exact-head run** · evidence: [CI #346](https://github.com/sunmughan/After-Effects-Android/actions/runs/41615158115), commit `6d34c056d59d84c3245c13c1fc9f3b9665952b35`, Android instrumentation **19/19 passed** (18 EditorSmokeTest + 1 adaptive workspace) with named JUnit XML evidence (0 skipped/failed); JVM 36/36, Rust 13/13.
 - [x] Adaptive Jetpack Compose phone/tablet workspace; 1080dp wide-window instrumentation verifies side-by-side properties and composition viewer.
 - [x] Offline starter project, app-private draft persistence, saved-project catalog, stable-ID save/upsert/deduplication and open/reload of latest revision.
 - [x] Layer select/add/delete/reorder/rename, visibility and opacity; selection continuity and last-layer invariant.
@@ -142,12 +142,12 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Composition width/height/FPS/duration editing with validation, history and playhead clamping.
 - [x] Timeline selection, frame scrubbing/timecode, FPS-aware playback, play/pause and accessible semantics.
 - [x] Offline draft schema v1 round-trip/backward-compatible visibility default; invalid models rejected.
-- [x] All 18 current emulator cases passed, including `savedOfflineProjectsCanBeOpenedWithoutNetwork`, `effectCraftEcprojxXmlRoundTripsTypedProjectValues`, `deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection`, `editorSaveButtonPersistsTheCurrentOfflineLayerStack`, `nativeBridgeLoadsAndInvokesCanonicalParserOnEmulator`, and adaptive workspace.
+- [x] All 19 current emulator cases passed (18 EditorSmokeTest + 1 adaptive workspace), including `savedOfflineProjectsCanBeOpenedWithoutNetwork`, `effectCraftEcprojxXmlRoundTripsTypedProjectValues`, `deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection`, `editorSaveButtonPersistsTheCurrentOfflineLayerStack`, `nativeBridgeLoadsAndInvokesCanonicalParserOnEmulator`, and adaptive workspace.
 - **Scope boundary:** bootstrap `.efx-draft` is an Android editing model, not upstream `.ecproj`; canonical engine-backed editing/preview remains M2/M3/M4. No mock render is represented as actual output.
 - **Exit gate: SATISFIED for M1 foundation.** M2 onward continues independently.
 
 ## M2 — Project formats, import/save and media
-**Status: IN PROGRESS — canonical import/edit and offline asset relinking implemented; exact latest-head CI pending**
+**Status: IN PROGRESS — canonical import/edit and offline asset relinking implemented; CI green at #346 for pre-cluster code, exact-head CI for the M2 cluster (#15/#28/#29/#31) pending (its run #347 was cancelled by concurrency), physical-device leg still pending**
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
@@ -177,7 +177,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Restore canonical project metadata from app-private cache on app restart; composition/layer list uses scrollable selection.
 - [ ] SAF write permission/recovery UX and editable canonical project repository adapter
 - [ ] Canonical project repository adapter; version/schema validation and migration.
-- [x] SAF URI relinking copies footage to an offline app-private file and persists the canonical path/missing flag (`e255e27`, `694e8c9`, `a61ad38`).
+- Duplicate of #21 above, counted once (not a second item): SAF URI relinking — same `e255e27`, `694e8c9`, `a61ad38` work already covered by the #21 bullet.
 - [ ] Durable asset manifest, deduplicated storage, integrity hashes, relink rollback/cleanup and sequence import.
 - **Format boundary:** bootstrap `.efx-draft` is private Android JSON, not `.ecproj`. EffectCraft `.ecproj` JSON + `.ecprojx` XML are supported interchange formats. Effekseer `.efkproj` is not implemented. Adobe `.aep` is proprietary; native import is not promised without a legally available compatible parser/conversion route.
 
