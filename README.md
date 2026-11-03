@@ -89,3 +89,8 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 ### Run 45 — composition-bounded render frame range
 - PNG-sequence range is now validated against canonical composition duration before SAF output creation and rechecked before rendering; invalid end-frame selections no longer create empty ZIP documents.
 - Added composition-duration boundary regression. Latest exact-head CI is pending.
+
+ 
+### Run 46 — media index write rollback regression
+- Corrected OfflineAssetStore import rollback to remove newly staged content when index publication fails; added fault-injection coverage for index temp-path failure. Aggregate media quota/dedupe changes from Run 44 are preserved.
+- Reconstructed commit tree retains Run 44 media quota and Run 45 composition-bounded PNG sequence frame validation.

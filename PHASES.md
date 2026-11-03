@@ -457,3 +457,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - M5 correctness: frame-range validation now checks the inclusive end frame against the selected canonical composition's actual duration before launching SAF CreateDocument, and rechecks immediately before rendering. Previously a user-entered out-of-duration frame could create an empty output document before the native renderer rejected it.
 - Added a composition-aware RenderQueuePlan overload and regression for zero-frame compositions, endFrame == durationFrames, and the last valid frame. Generic planner remains format-independent.
 - Exact-head CI #393/#394 required for Kotlin/JUnit/emulator acceptance.
+
+ 
+### Run 46 — exercise offline asset index-publication rollback
+- Follow-up code review found the M6 rollback predicate inspected the mutated in-memory Properties object (already containing the new hash) rather than whether the asset existed before import. Corrected rollback to delete the payload whenever this import created it and the SHA-256 record was absent before import.
+- Added fault-injection JVM regression by making assets.properties.tmp a directory, forcing index publication to fail after payload staging; asserts no indexed asset or orphan payload remains. No tests removed.
+- Tree repair note: Run 45's Git tree was accidentally based on the pre-Run-44 tree despite its parent commit. This commit reconstructs from Run 44's actual tree, preserving aggregate media quota/tests together with Run 45 composition-bounded render ranges. 
+- Exact-head CI #395 pending.

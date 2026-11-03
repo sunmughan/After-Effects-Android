@@ -21,7 +21,8 @@ import java.nio.file.StandardCopyOption
  */
 class OfflineAssetStore(
     private val root: File,
-    private val maxAssetBytes: Long = DEFAULT_MAX_ASSET_BYTES
+    private val maxAssetBytes: Long = DEFAULT_MAX_ASSET_BYTES,
+    private val maxLibraryBytes: Long = DEFAULT_MAX_LIBRARY_BYTES
 ) {
     data class Asset(
         val sha256: String,
@@ -33,6 +34,7 @@ class OfflineAssetStore(
 
     init {
         require(maxAssetBytes > 0) { "Asset size limit must be positive" }
+        require(maxLibraryBytes > 0) { "Media library size limit must be positive" }
     }
 
     private val indexFile get() = File(root, "assets.properties")
@@ -63,23 +65,38 @@ class OfflineAssetStore(
                 }
             }
             val hash = digest.digest().toHex()
-            val extension = extensionFor(name)
-            val payload = payloadFile(hash, extension)
-            if (payload.exists()) {
-                if (payload.length() != size) throw IOException("Existing content-addressed asset has an inconsistent size")
-                temporary.delete()
-            } else {
-                moveReplacing(temporary, payload)
-            }
-
             val properties = readIndex()
             val existing = properties.getProperty(hash)?.decodeRecord(hash)
-            val asset = existing ?: Asset(hash, name, normalizedMime, extension, size)
             if (existing == null) {
-                properties.setProperty(hash, asset.encodeRecord())
-                writeIndex(properties)
+                val indexedBytes = properties.entries.fold(0L) { total, entry ->
+                    Math.addExact(total, (entry.value as String).decodeRecord((entry.key as String).decodeHash()).sizeBytes)
+                }
+                if (size > maxLibraryBytes - indexedBytes) {
+                    throw IOException("Offline media library exceeds ${maxLibraryBytes} byte total import limit")
+                }
             }
-            return asset
+            // A duplicate keeps the first asset's extension and metadata.
+            val extension = existing?.extension ?: extensionFor(name)
+            val payload = payloadFile(hash, extension)
+            var createdPayload = false
+            try {
+                if (payload.exists()) {
+                    if (payload.length() != size) throw IOException("Existing content-addressed asset has an inconsistent size")
+                    temporary.delete()
+                } else {
+                    moveReplacing(temporary, payload)
+                    createdPayload = true
+                }
+                val asset = existing ?: Asset(hash, name, normalizedMime, extension, size)
+                if (existing == null) {
+                    properties.setProperty(hash, asset.encodeRecord())
+                    writeIndex(properties)
+                }
+                return asset
+            } catch (failure: Throwable) {
+                if (createdPayload && existing == null) payload.delete()
+                throw failure
+            }
         } catch (failure: Throwable) {
             temporary.delete()
             if (failure is IOException || failure is IllegalArgumentException) throw failure
@@ -252,5 +269,6 @@ class OfflineAssetStore(
 
     companion object {
         const val DEFAULT_MAX_ASSET_BYTES: Long = 512L * 1024L * 1024L
+        const val DEFAULT_MAX_LIBRARY_BYTES: Long = 2L * 1024L * 1024L * 1024L
     }
 }

@@ -87,6 +87,63 @@ class OfflineAssetStoreTest {
     }
 
     @Test
+    fun enforcesAggregateLibraryQuotaWithoutPublishingRejectedPayload() {
+        val root = Files.createTempDirectory("effectcraft-assets-library-limit").toFile()
+        try {
+            val store = OfflineAssetStore(root, maxAssetBytes = 8, maxLibraryBytes = 5)
+            val first = store.import(ByteArrayInputStream(byteArrayOf(1, 2, 3)), "first.bin")
+            val failure = runCatching {
+                store.import(ByteArrayInputStream(byteArrayOf(4, 5, 6)), "second.bin")
+            }.exceptionOrNull()
+
+            assertNotNull(failure)
+            assertTrue(failure!!.message.orEmpty().contains("total import limit"))
+            assertEquals(listOf(first), store.list())
+            assertEquals(3L, store.list().sumOf { it.sizeBytes })
+            assertEquals(1, root.listFiles { file -> file.isFile && file.name.matches(Regex("[a-f0-9]{64}\\.bin")) }!!.size)
+            assertFalse(root.listFiles()!!.any { it.name.endsWith(".tmp") })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun duplicatePayloadDoesNotConsumeAggregateQuotaTwice() {
+        val root = Files.createTempDirectory("effectcraft-assets-library-dedupe-limit").toFile()
+        try {
+            val store = OfflineAssetStore(root, maxAssetBytes = 8, maxLibraryBytes = 3)
+            val bytes = byteArrayOf(7, 8, 9)
+            val first = store.import(ByteArrayInputStream(bytes), "clip.bin")
+            val duplicate = store.import(ByteArrayInputStream(bytes), "renamed.mov")
+
+            assertEquals(first, duplicate)
+            assertEquals(3L, store.list().sumOf { it.sizeBytes })
+            assertEquals(1, store.list().size)
+            assertTrue(File(root, "${first.sha256}.bin").isFile)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun rollsBackNewPayloadWhenIndexPublicationFails() {
+        val root = Files.createTempDirectory("effectcraft-assets-index-failure").toFile()
+        try {
+            assertTrue(File(root, "assets.properties.tmp").mkdir())
+            val store = OfflineAssetStore(root)
+            val failure = runCatching {
+                store.import(ByteArrayInputStream(byteArrayOf(9, 8, 7)), "rollback.bin")
+            }.exceptionOrNull()
+
+            assertNotNull(failure)
+            assertTrue(store.list().isEmpty())
+            assertFalse(root.listFiles()!!.any { it.name.matches(Regex("[a-f0-9]{64}\\.bin")) })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun rejectsMalformedAssetIdsAndRemovesIndexAndPayload() {
         val root = Files.createTempDirectory("effectcraft-assets-delete").toFile()
         try {
