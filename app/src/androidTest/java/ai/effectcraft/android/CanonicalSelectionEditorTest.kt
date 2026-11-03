@@ -181,11 +181,14 @@ class CanonicalSelectionEditorTest {
         compose.onNodeWithContentDescription("Canonical layer row Background")
             .performSemanticsAction(SemanticsActions.OnLongClick)
         assertEquals(setOf(3L, 2L), selectionState.value)
-        compose.onNodeWithText("2 layers selected", substring = true).assertIsDisplayed()
+        // The keyframe step above scrolled the sheet down to the inspector,
+        // so scroll the top-of-sheet indicator back into view before
+        // asserting it renders for the two-layer selection.
+        compose.onNodeWithText("2 layers selected", substring = true).performScrollTo().assertIsDisplayed()
 
         // A horizontal drag on the preview moves both selected layers right
         // in composition pixels and leaves their heights unchanged.
-        compose.onNodeWithContentDescription("Canonical preview gesture area").performTouchInput {
+        compose.onNodeWithContentDescription("Canonical preview gesture area").performScrollTo().performTouchInput {
             swipe(start = center - Offset(80f, 0f), end = center + Offset(80f, 0f), durationMillis = 300)
         }
         // The gesture callback arrives through input dispatch, which an idle
