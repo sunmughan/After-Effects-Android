@@ -1132,6 +1132,13 @@ private fun LayerTrack(
             .clip(RoundedCornerShape(7.dp))
             .background(if (selected) Color(0xFF20283A) else Color.Transparent)
             .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = if (selected) {
+                    "Selected timeline layer: ${layer.name}"
+                } else {
+                    "Timeline layer: ${layer.name}"
+                }
+            }
             .padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

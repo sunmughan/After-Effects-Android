@@ -30,6 +30,12 @@ import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
 import kotlinx.coroutines.delay
 
+private data class EditorHistorySnapshot(
+    val project: ProjectDocument,
+    val selectedLayerId: String,
+    val playheadFrame: Int
+)
+
 @Composable
 fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
@@ -46,11 +52,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var playheadFrame by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
     var saveMessage by remember { mutableStateOf("Stored on this device") }
-    var undoStack by remember { mutableStateOf(emptyList<ProjectDocument>()) }
-    var redoStack by remember { mutableStateOf(emptyList<ProjectDocument>()) }
+    var undoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
+    var redoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
 
     fun applyProjectChange(next: ProjectDocument, message: String = "Unsaved changes") {
-        undoStack = (undoStack + project).takeLast(50)
+        // Keep selection and playhead with the project snapshot. Undoing a layer
+        // deletion must restore the deleted layer as selected; redo must restore
+        // the adjacent selection that was chosen after deletion.
+        undoStack = (undoStack + EditorHistorySnapshot(project, selectedLayerId, playheadFrame)).takeLast(50)
         redoStack = emptyList()
         project = next
         saveMessage = message
@@ -176,19 +185,27 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             canRedo = redoStack.isNotEmpty(),
             onUndo = {
                 if (undoStack.isNotEmpty()) {
-                    redoStack = redoStack + project
-                    project = undoStack.last()
+                    redoStack = (redoStack + EditorHistorySnapshot(project, selectedLayerId, playheadFrame)).takeLast(50)
+                    val previous = undoStack.last()
+                    project = previous.project
+                    selectedLayerId = previous.selectedLayerId
+                        .takeIf { id -> project.layers.any { it.id == id } }
+                        ?: project.layers.firstOrNull()?.id.orEmpty()
+                    playheadFrame = previous.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     undoStack = undoStack.dropLast(1)
-                    if (project.layers.none { it.id == selectedLayerId }) selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
                     saveMessage = "Undo · unsaved"
                 }
             },
             onRedo = {
                 if (redoStack.isNotEmpty()) {
-                    undoStack = (undoStack + project).takeLast(50)
-                    project = redoStack.last()
+                    undoStack = (undoStack + EditorHistorySnapshot(project, selectedLayerId, playheadFrame)).takeLast(50)
+                    val next = redoStack.last()
+                    project = next.project
+                    selectedLayerId = next.selectedLayerId
+                        .takeIf { id -> project.layers.any { it.id == id } }
+                        ?: project.layers.firstOrNull()?.id.orEmpty()
+                    playheadFrame = next.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     redoStack = redoStack.dropLast(1)
-                    if (project.layers.none { it.id == selectedLayerId }) selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
                     saveMessage = "Redo · unsaved"
                 }
             },

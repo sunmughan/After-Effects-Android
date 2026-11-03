@@ -143,6 +143,27 @@ class EditorSmokeTest {
     }
 
     @Test
+    fun deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection() {
+        compose.onNodeWithText("New").performClick()
+        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Props").performClick()
+        compose.onNodeWithText("Move ↑", substring = true).performClick()
+        compose.onNodeWithText("Remove layer", substring = true).performClick()
+        compose.waitUntil(timeoutMillis = 5_000) {
+            runCatching { compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed() }.isSuccess
+        }
+
+        // Shape 4 was moved into slot 3. Deletion selects the surviving layer
+        // now occupying that slot (Accent Shapes), not a stale deleted ID.
+        compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
+
+        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
+        compose.onNodeWithText("Redo").performClick()
+        compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
+    }
+
+    @Test
     fun compositionSettingsApplyAndParticipateInUndo() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Comp").performClick()
