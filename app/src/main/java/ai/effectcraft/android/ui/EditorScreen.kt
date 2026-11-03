@@ -45,6 +45,9 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +82,8 @@ import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.data.PropertyKeyframe
+import ai.effectcraft.android.data.RenderQueuePlan
+import ai.effectcraft.android.data.RenderQueueSettings
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -125,7 +130,7 @@ fun EditorScreen(
     onCancelFrameExport: () -> Unit,
     isExportingSequence: Boolean,
     isSequenceExportWritingOutput: Boolean,
-    onExportPngSequence: () -> Unit,
+    onExportPngSequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int) -> Unit,
     onCancelSequenceExport: () -> Unit,
     sequenceExportProgress: Int,
     onNewProject: () -> Unit,
@@ -176,6 +181,27 @@ fun EditorScreen(
     var assetPendingDelete by remember { mutableStateOf<OfflineAssetStore.Asset?>(null) }
     var showCompositionSettings by remember { mutableStateOf(false) }
     var showCanonicalEditor by remember { mutableStateOf(false) }
+    var showSequenceSettings by remember { mutableStateOf(false) }
+    var sequenceWidthText by remember { mutableStateOf("1920") }
+    var sequenceHeightText by remember { mutableStateOf("1080") }
+    var sequenceFpsText by remember { mutableStateOf("30") }
+    var sequenceStartText by remember { mutableStateOf("0") }
+    var sequenceEndText by remember { mutableStateOf("0") }
+    var sequenceSettingsError by remember { mutableStateOf<String?>(null) }
+    val openSequenceSettings = {
+        val composition = canonicalProject?.compositions?.firstOrNull()
+        if (composition == null) {
+            sequenceSettingsError = "Import a canonical composition first"
+        } else {
+            sequenceWidthText = composition.width.toString()
+            sequenceHeightText = composition.height.toString()
+            sequenceFpsText = (composition.frameRateNum.toDouble() / composition.frameRateDen.coerceAtLeast(1)).roundToInt().toString()
+            sequenceStartText = "0"
+            sequenceEndText = (composition.durationFrames - 1).toString()
+            sequenceSettingsError = null
+            showSequenceSettings = true
+        }
+    }
 
     // The workspace viewer renders through the shared native session for the
     // imported canonical project (onRenderCanonicalFrame is session-backed).
@@ -213,7 +239,7 @@ fun EditorScreen(
                 onCancelFrameExport = onCancelFrameExport,
                 isExportingSequence = isExportingSequence,
                 isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                onExportPngSequence = onExportPngSequence,
+                onExportPngSequence = openSequenceSettings,
                 onCancelSequenceExport = onCancelSequenceExport,
                 sequenceExportProgress = sequenceExportProgress,
                 onNewProject = onNewProject,
@@ -407,6 +433,79 @@ fun EditorScreen(
                     }, enabled = asset.sha256 !in referencedOfflineAssetIds) { Text("Delete", color = Color(0xFFFF8B91)) }
                 },
                 dismissButton = { TextButton(onClick = { assetPendingDelete = null }) { Text("Cancel") } }
+            )
+        }
+
+        if (showSequenceSettings) {
+            val composition = canonicalProject?.compositions?.firstOrNull()
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showSequenceSettings = false },
+                title = { Text("PNG sequence settings") },
+                text = {
+                    Column(
+                        Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            composition?.let { "${it.name} · ${it.durationFrames} frames" } ?: "Canonical composition",
+                            color = EditorPalette.muted,
+                            fontSize = 12.sp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = sequenceWidthText, onValueChange = { sequenceWidthText = it.filter(Char::isDigit) },
+                                label = { Text("Width") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true, modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = sequenceHeightText, onValueChange = { sequenceHeightText = it.filter(Char::isDigit) },
+                                label = { Text("Height") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true, modifier = Modifier.weight(1f)
+                            )
+                        }
+                        OutlinedTextField(
+                            value = sequenceFpsText, onValueChange = { sequenceFpsText = it.filter(Char::isDigit) },
+                            label = { Text("FPS") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true, modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = sequenceStartText, onValueChange = { sequenceStartText = it.filter(Char::isDigit) },
+                                label = { Text("Start frame") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true, modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = sequenceEndText, onValueChange = { sequenceEndText = it.filter(Char::isDigit) },
+                                label = { Text("End frame") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true, modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Text("PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track.", color = EditorPalette.muted, fontSize = 11.sp)
+                        sequenceSettingsError?.let { Text(it, color = EditorPalette.amber, fontSize = 12.sp) }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val width = sequenceWidthText.toIntOrNull()
+                        val height = sequenceHeightText.toIntOrNull()
+                        val fps = sequenceFpsText.toIntOrNull()
+                        val start = sequenceStartText.toIntOrNull()
+                        val end = sequenceEndText.toIntOrNull()
+                        if (width == null || height == null || fps == null || start == null || end == null) {
+                            sequenceSettingsError = "Enter valid numeric settings"
+                        } else {
+                            runCatching { RenderQueuePlan.create(RenderQueueSettings(width, height, fps, start, end)) }
+                                .onSuccess {
+                                    showSequenceSettings = false
+                                    onExportPngSequence(width, height, fps, start, end)
+                                }
+                                .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
+                        }
+                    }) { Text("Render ZIP") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSequenceSettings = false }) { Text("Cancel") }
+                }
             )
         }
 

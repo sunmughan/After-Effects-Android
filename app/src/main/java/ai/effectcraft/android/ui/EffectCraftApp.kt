@@ -647,7 +647,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onCancelFrameExport = { frameExportJob?.cancel() },
             isExportingSequence = sequenceExportInProgress,
             isSequenceExportWritingOutput = sequenceExportWritingOutput,
-            onExportPngSequence = {
+            onExportPngSequence = { width, height, fps, startFrame, endFrame ->
                 val composition = canonicalProjectInfo?.compositions?.firstOrNull()
                 if (importedEcproj == null || composition == null) {
                     saveMessage = "Import a canonical composition before exporting a sequence"
@@ -657,15 +657,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "Cancel the frame export before starting a sequence"
                 } else {
                     runCatching {
-                        val fps = (composition.frameRateNum.toDouble() /
-                            composition.frameRateDen.coerceAtLeast(1)).roundToInt()
-                        pendingSequenceSettings = RenderQueueSettings(
-                            width = composition.width,
-                            height = composition.height,
-                            frameRate = fps,
-                            startFrame = 0,
-                            endFrame = composition.durationFrames - 1,
-                        )
+                        pendingSequenceSettings = RenderQueueSettings(width, height, fps, startFrame, endFrame)
                         pendingSequenceCompositionId = composition.id
                         exportPngSequenceLauncher.launch("EffectCraft-sequence.zip")
                     }.onFailure { failure ->

@@ -61,7 +61,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onCancelFrameExport = {},
                     isExportingSequence = false,
                     isSequenceExportWritingOutput = false,
-                    onExportPngSequence = { added = listOf("zip") },
+                    onExportPngSequence = { width, height, fps, start, end -> added = listOf(width, height, fps, start, end) },
                     onCancelSequenceExport = {},
                     sequenceExportProgress = 0,
                     isExportingSequence = false,
@@ -189,7 +189,9 @@ class AdaptiveWorkspaceSmokeTest {
             }
         }
         compose.onNodeWithContentDescription("Export PNG sequence ZIP").assertIsDisplayed().performClick()
-        assertEquals(listOf("zip"), added)
+        compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
+        compose.onNodeWithText("Render ZIP").performClick()
+        assertEquals(listOf(640, 360, 30, 0, 89), added)
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("Opacity keys · 1", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Add canonical opacity keyframe").performScrollTo().performClick()
