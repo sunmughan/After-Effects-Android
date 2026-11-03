@@ -111,6 +111,7 @@ fun EditorScreen(
     onOpenProject: (String) -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
+    onExportEcprojx: () -> Unit,
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
@@ -177,6 +178,7 @@ fun EditorScreen(
                 onOpenProject = { showProjectPicker = true },
                 onValidateEcproj = onValidateEcproj,
                 onExportEcproj = onExportEcproj,
+                onExportEcprojx = onExportEcprojx,
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
                 onOpenCanonicalEditor = { showCanonicalEditor = true }
@@ -422,6 +424,9 @@ private fun HeaderBar(
                     IconButton(onClick = onExportEcproj, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
                     }
+                    IconButton(onClick = onExportEcprojx, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint)
+                    }
                 }
             }
         } else {
@@ -460,6 +465,7 @@ private fun HeaderBar(
                     Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
                 }
                 IconButton(onClick = onExportEcproj) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text) }
+                IconButton(onClick = onExportEcprojx) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint) }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
                 TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
