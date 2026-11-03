@@ -184,6 +184,67 @@ class NativeSessionInstrumentedTest {
     }
 
     @Test
+    fun sessionReportsBackendAndRecoversAfterSimulatedLoss() {
+        assertTrue(NativeProjectBridge.isAvailable())
+        val session = NativeSession.open(FIXTURE_JSON, 160)
+        assertNotNull("Session must open for the canonical fixture", session)
+        session!!
+        try {
+            val status = session.backendStatus()
+            assertNotNull("Backend status must be reported", status)
+            assertTrue(status!!.backend == "gpu" || status.backend == "cpu")
+            if (status.backend == "gpu") {
+                assertTrue("GPU status must name its adapter", !status.adapter.isNullOrEmpty())
+            } else {
+                assertTrue("CPU status must explain the fallback", !status.reason.isNullOrEmpty())
+            }
+            // Each leg below renders a fresh frame number: the shared frame
+            // cache is keyed on project + composition + frame + size, so
+            // reusing a frame would serve a cached frame and never exercise
+            // the native fallback/recovery path being tested.
+            val frame = session.render(FIXTURE_COMPOSITION_ID, 0)
+            assertNotNull(frame)
+            assertEquals(160 to 90, frameDimensions(frame!!))
+            session.simulateGpuLoss()
+            val lost = session.backendStatus()
+            assertNotNull(lost)
+            assertEquals("cpu", lost!!.backend)
+            assertTrue(lost.lost)
+            assertTrue(!lost.reason.isNullOrEmpty())
+            // Loss must not stop rendering: the CPU fallback serves the frame.
+            val fallback = session.render(FIXTURE_COMPOSITION_ID, 1)
+            assertNotNull("CPU fallback must render after device loss", fallback)
+            assertEquals(160 to 90, frameDimensions(fallback!!))
+            // Recovery is best-effort: with no device on this host the
+            // session honestly stays CPU-backed. Either way it must keep
+            // rendering afterwards.
+            session.recoverGpu()
+            val recovered = session.backendStatus()
+            assertNotNull(recovered)
+            assertTrue(recovered!!.backend == "gpu" || recovered.backend == "cpu")
+            val after = session.render(FIXTURE_COMPOSITION_ID, 2)
+            assertNotNull(after)
+            assertEquals(160 to 90, frameDimensions(after!!))
+            // Teardown + recreation after a loss must also keep working.
+            session.close()
+            assertTrue(!session.isOpen())
+            val reopened = NativeSession.open(FIXTURE_JSON, 160)
+            assertNotNull("Session must reopen after loss + close", reopened)
+            reopened!!
+            try {
+                val again = reopened.render(FIXTURE_COMPOSITION_ID, 3)
+                assertNotNull(again)
+                assertEquals(160 to 90, frameDimensions(again!!))
+            } finally {
+                reopened.close()
+            }
+        } finally {
+            session.close()
+            session.close()
+        }
+    }
+
+    @Test
     fun sessionRendersResizesCancelsAndCloses() {
         assertTrue(NativeProjectBridge.isAvailable())
         val session = NativeSession.open(FIXTURE_JSON, 160)

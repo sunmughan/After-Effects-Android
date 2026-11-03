@@ -1,5 +1,7 @@
 package ai.effectcraft.android.engine
 
+import org.json.JSONObject
+
 /**
  * One owner for a native render session: a parsed canonical project, its own
  * native MediaPool, and a preview size, living behind a JNI handle.
@@ -15,6 +17,16 @@ package ai.effectcraft.android.engine
  * — it discards in-flight results at the next check but cannot interrupt a
  * CPU frame already executing. [close] is idempotent and safe to call from
  * any thread; a closed session renders nothing.
+ *
+ * Render backend: the native side renders through the upstream wgpu GPU
+ * compositor (Vulkan on Android) when a usable device exists, and falls
+ * back to the upstream CPU compositor otherwise — never a fake frame.
+ * [backendStatus] reports which backend is live and why CPU was chosen;
+ * a real driver device loss retires the GPU handle and later frames keep
+ * rendering on the CPU, and [recoverGpu] (or close + reopen) restores GPU
+ * rendering when a device is available again. No GPU presence is ever
+ * claimed on hosts without one: on a GPU-less device the status honestly
+ * reports CPU plus the probe failure.
  *
  * The bootstrap .efx-draft is not a canonical project and is never opened
  * as a session: draft-only state keeps its explicit "Draft preview not
@@ -56,6 +68,31 @@ class NativeSession private constructor(
 
         @JvmStatic
         private external fun closeSessionNative(handle: Long): Boolean
+
+        @JvmStatic
+        private external fun backendStatusSessionNative(handle: Long): String
+
+        @JvmStatic
+        private external fun recoverGpuSessionNative(handle: Long): Boolean
+
+        @JvmStatic
+        private external fun simulateGpuLossSessionNative(handle: Long)
+    }
+
+    /**
+     * Which compositor renders this session's frames. `backend` is "gpu"
+     * when a live wgpu device is attached and "cpu" otherwise; `adapter`
+     * names the device when GPU-backed; `reason` explains CPU fallback
+     * (probe failure or device loss); `lost` is true after a device loss
+     * until [recoverGpu] re-attaches.
+     */
+    data class BackendStatus(
+        val backend: String,
+        val adapter: String?,
+        val reason: String?,
+        val lost: Boolean,
+    ) {
+        val isGpu: Boolean get() = backend == "gpu"
     }
 
     @Volatile
@@ -102,6 +139,57 @@ class NativeSession private constructor(
         val accepted = runCatching { resizeSessionNative(sessionHandle, newMaxSide.toLong()) }.getOrDefault(false)
         if (accepted) maxSide = newMaxSide
         return accepted
+    }
+
+    /**
+     * Reports this session's live render backend, or null when closed,
+     * cancelled, or the native side cannot answer. The first call may
+     * probe for a GPU device and can block briefly: call from a background
+     * dispatcher, never from composition.
+     */
+    @Synchronized
+    fun backendStatus(): BackendStatus? {
+        val sessionHandle = handle
+        if (sessionHandle == 0L || cancelled) return null
+        val json = runCatching { backendStatusSessionNative(sessionHandle) }.getOrNull()
+            ?.takeIf { it.isNotEmpty() } ?: return null
+        return runCatching {
+            val obj = JSONObject(json)
+            BackendStatus(
+                backend = obj.getString("backend"),
+                adapter = if (obj.isNull("adapter")) null else obj.optString("adapter"),
+                reason = if (obj.isNull("reason")) null else obj.optString("reason"),
+                lost = obj.optBoolean("lost", false),
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Re-probes for a GPU device and re-attaches this session when one is
+     * found. Returns true when the session ends up GPU-backed; false (the
+     * session stays CPU-backed and keeps rendering) when no device is
+     * available. A no-op success when already GPU-backed, false when
+     * closed or cancelled. May block briefly on device probing: call from
+     * a background dispatcher.
+     */
+    @Synchronized
+    fun recoverGpu(): Boolean {
+        val sessionHandle = handle
+        if (sessionHandle == 0L || cancelled) return false
+        return runCatching { recoverGpuSessionNative(sessionHandle) }.getOrDefault(false)
+    }
+
+    /**
+     * Diagnostic/test hook only, not wired to any UI: drops this session's
+     * GPU device and marks it lost, modelling a driver device loss.
+     * Rendering continues on the CPU; [recoverGpu] (or close + reopen)
+     * restores GPU rendering when a device is available again.
+     */
+    @Synchronized
+    fun simulateGpuLoss() {
+        val sessionHandle = handle
+        if (sessionHandle == 0L || cancelled) return
+        runCatching { simulateGpuLossSessionNative(sessionHandle) }
     }
 
     /** Abandons the render stream; the session still needs [close]. */

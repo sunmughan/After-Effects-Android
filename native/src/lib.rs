@@ -4,8 +4,9 @@ use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
+use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
-use effectcraft_render::{RenderOpts, Renderer};
+use effectcraft_render::{Accelerator, Backend, RenderOpts, Renderer};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
@@ -35,6 +36,9 @@ struct NativeSession {
     render_lock: Mutex<()>,
     cancelled: AtomicBool,
     max_side: RwLock<u32>,
+    /// This session's GPU attachment (see the backend section below): a
+    /// cheap clone of the shared wgpu device, or Lost after a device loss.
+    gpu_state: Mutex<SessionGpu>,
 }
 
 struct SessionRegistry {
@@ -59,6 +63,7 @@ fn create_session(source: &str, max_side: u32) -> Result<u64, String> {
         render_lock: Mutex::new(()),
         cancelled: AtomicBool::new(false),
         max_side: RwLock::new(max_side),
+        gpu_state: Mutex::new(SessionGpu::Unattached),
     });
     let id = SESSIONS.next_id.fetch_add(1, Ordering::SeqCst);
     SESSIONS
@@ -97,6 +102,229 @@ fn close_session(id: u64) -> bool {
 
 fn cancel_session(session: &NativeSession) {
     session.cancelled.store(true, Ordering::SeqCst);
+}
+
+/// Render backend: the upstream wgpu GPU compositor when a usable device
+/// exists, the upstream CPU compositor otherwise — never a fake frame.
+///
+/// One decision lives in one place: [`choose_backend`] is the only mapping
+/// from an accelerator to a (Backend, accel) pair, and every render path
+/// (session and stateless) goes through [`render_parsed_frame`], which
+/// takes that pair. Upstream `Renderer::comp_frame` already falls back to
+/// the CPU for any frame the GPU declines, so a GPU that declines a frame
+/// still yields real CPU pixels; a GPU that reports unavailable before a
+/// render is never asked at all.
+///
+/// Device model:
+/// - The process holds at most one shared wgpu device ([`SHARED_GPU`]).
+///   Sessions cache a cheap clone of it; clones share the upstream
+///   context, so a real driver device loss retires every clone at once.
+/// - Probing is lazy: it happens on first render/status/recover, never at
+///   session open, so opening a session stays cheap and a missing Vulkan
+///   loader costs nothing until a frame is actually wanted. A failed probe
+///   is cached with its reason, so renders never pay for a fresh device
+///   init on every frame.
+/// - Loss: a cached device that reports unavailable is dropped, the
+///   session is marked Lost, and renders continue on the CPU. Recovery is
+///   explicit ([`recover_session_gpu`]): it re-probes the shared device
+///   and clears the session's Lost flag, so the next render re-attaches.
+///   A brand-new session also recovers on its own, because its first
+///   render re-probes a shared slot whose device died.
+/// - Lock order is render_lock, then session gpu_state, then the shared
+///   slot; status/recover never take render_lock, so no cycle exists.
+///   A poisoned lock fails closed to the CPU path, never to a crash.
+enum SessionGpu {
+    /// Never resolved for this session; the first render resolves it.
+    Unattached,
+    /// A live clone of the shared device.
+    Attached(Gpu),
+    /// A device loss was observed (or simulated); CPU-only until recovery.
+    Lost(String),
+}
+
+enum SharedGpu {
+    /// No probe has run yet.
+    Unprobed,
+    /// A live shared device.
+    Live(Gpu),
+    /// The last probe failed, with why (for status reporting).
+    Dead(String),
+}
+
+static SHARED_GPU: std::sync::LazyLock<Mutex<SharedGpu>> =
+    std::sync::LazyLock::new(|| Mutex::new(SharedGpu::Unprobed));
+
+/// The only accelerator-to-backend mapping. A live accelerator renders on
+/// the GPU; anything else (none, or retired) renders on the CPU.
+fn choose_backend(accel: Option<&dyn Accelerator>) -> (Backend, Option<&dyn Accelerator>) {
+    match accel {
+        Some(accel) if accel.available() => (Backend::Gpu, Some(accel)),
+        _ => (Backend::Cpu, None),
+    }
+}
+
+/// Resolve the shared device: a live one is cloned, a dead one is reported
+/// without re-probing (a failed probe stays cached), and an unprobed or
+/// died-live slot is probed once under the slot lock.
+fn resolve_shared_gpu() -> Option<Gpu> {
+    let mut slot = match SHARED_GPU.lock() {
+        Ok(slot) => slot,
+        Err(_) => return None,
+    };
+    match &*slot {
+        SharedGpu::Live(device) if device.available() => Some(device.clone()),
+        SharedGpu::Dead(_) => None,
+        _ => match Gpu::try_headless() {
+            Ok(device) => {
+                let clone = device.clone();
+                *slot = SharedGpu::Live(device);
+                Some(clone)
+            }
+            Err(reason) => {
+                *slot = SharedGpu::Dead(reason);
+                None
+            }
+        },
+    }
+}
+
+/// The shared slot's last probe failure, if any, for status reporting.
+fn shared_gpu_failure() -> Option<String> {
+    match SHARED_GPU.lock() {
+        Ok(slot) => match &*slot {
+            SharedGpu::Dead(reason) => Some(reason.clone()),
+            _ => None,
+        },
+        Err(_) => None,
+    }
+}
+
+/// Force a fresh device probe regardless of the cached slot state.
+fn recover_shared_gpu() -> bool {
+    let mut slot = match SHARED_GPU.lock() {
+        Ok(slot) => slot,
+        Err(_) => return false,
+    };
+    match Gpu::try_headless() {
+        Ok(device) => {
+            *slot = SharedGpu::Live(device);
+            true
+        }
+        Err(reason) => {
+            *slot = SharedGpu::Dead(reason);
+            false
+        }
+    }
+}
+
+/// Resolve this session's GPU handle: an attached live device is reused, an
+/// attached dead one is dropped and the session is marked Lost, a Lost
+/// session stays CPU-only, and an Unattached session attaches from the
+/// shared slot (probing it if it was never probed).
+fn session_gpu(session: &NativeSession) -> Option<Gpu> {
+    let mut state = match session.gpu_state.lock() {
+        Ok(state) => state,
+        Err(_) => return None,
+    };
+    match &*state {
+        SessionGpu::Attached(device) if device.available() => Some(device.clone()),
+        SessionGpu::Attached(_) => {
+            *state = SessionGpu::Lost(
+                "GPU device lost (wgpu reports the device unavailable)".to_owned(),
+            );
+            None
+        }
+        SessionGpu::Lost(_) => None,
+        SessionGpu::Unattached => match resolve_shared_gpu() {
+            Some(device) => {
+                let clone = device.clone();
+                *state = SessionGpu::Attached(device);
+                Some(clone)
+            }
+            None => None,
+        },
+    }
+}
+
+/// Clear a Lost flag without forcing a shared re-probe, then resolve from
+/// the shared slot. True when the session ends up GPU-backed.
+fn reattach_session_gpu(session: &NativeSession) -> bool {
+    if let Ok(mut state) = session.gpu_state.lock() {
+        if matches!(*state, SessionGpu::Lost(_)) {
+            *state = SessionGpu::Unattached;
+        }
+    }
+    session_gpu(session).is_some()
+}
+
+/// Full recovery: re-probe the shared device, then re-attach this session.
+/// A healthy attached device short-circuits without a wasted re-probe.
+fn recover_session_gpu(session: &NativeSession) -> bool {
+    if let Ok(state) = session.gpu_state.lock() {
+        if let SessionGpu::Attached(device) = &*state {
+            if device.available() {
+                return true;
+            }
+        }
+    }
+    recover_shared_gpu();
+    reattach_session_gpu(session)
+}
+
+/// Drop this session's GPU handle and mark it Lost. This is the diagnostic
+/// hook behind the JNI simulate-loss call: it models a driver device loss
+/// for the session without touching the shared device, so recovery can
+/// re-attach from the still-live shared slot.
+fn simulate_session_gpu_loss(session: &NativeSession) {
+    if let Ok(mut state) = session.gpu_state.lock() {
+        *state = SessionGpu::Lost("Simulated device loss (diagnostic hook)".to_owned());
+    }
+}
+
+/// Mark an Attached session Lost when its device died mid-render. The
+/// pixels for that render already fell back to the CPU upstream; this only
+/// stops the next render from retrying a dead device.
+fn mark_session_gpu_lost(session: &NativeSession, reason: &str) {
+    if let Ok(mut state) = session.gpu_state.lock() {
+        if matches!(*state, SessionGpu::Attached(_)) {
+            *state = SessionGpu::Lost(reason.to_owned());
+        }
+    }
+}
+
+/// JSON status for one session: `backend` is "gpu" with the adapter name
+/// when a live device is attached, otherwise "cpu" with the fallback reason
+/// and whether the session is in the Lost state.
+fn session_backend_status(session: &NativeSession) -> String {
+    match session_gpu(session) {
+        Some(device) => json!({
+            "backend": "gpu",
+            "adapter": device.name(),
+            "reason": null,
+            "lost": false,
+        })
+        .to_string(),
+        None => {
+            let (lost, reason) = match session.gpu_state.lock() {
+                Ok(state) => match &*state {
+                    SessionGpu::Lost(reason) => (true, reason.clone()),
+                    _ => (
+                        false,
+                        shared_gpu_failure()
+                            .unwrap_or_else(|| "No GPU device available".to_owned()),
+                    ),
+                },
+                Err(_) => (false, "Session GPU state lock poisoned".to_owned()),
+            };
+            json!({
+                "backend": "cpu",
+                "adapter": null,
+                "reason": reason,
+                "lost": lost,
+            })
+            .to_string()
+        }
+    }
 }
 
 fn resize_session(session: &NativeSession, max_side: u32) -> Result<(), String> {
@@ -162,21 +390,39 @@ fn render_session_frame(
         .project
         .read()
         .map_err(|_| "Session project lock poisoned".to_string())?;
-    let bytes = render_parsed_frame(&project, &session.footage, composition_id, frame, max_side)?;
+    let gpu = session_gpu(session);
+    let bytes = render_parsed_frame(
+        &project,
+        &session.footage,
+        composition_id,
+        frame,
+        max_side,
+        gpu.as_ref().map(|device| device as &dyn Accelerator),
+    )?;
+    // A device that died during this render already fell back to the CPU
+    // upstream for these pixels; retire the handle so the next render does
+    // not retry a dead device.
+    if let Some(device) = &gpu {
+        if !device.available() {
+            mark_session_gpu_lost(session, "GPU device lost during render");
+        }
+    }
     if session.cancelled.load(Ordering::SeqCst) {
         return Err("Session render discarded after cancellation".into());
     }
     Ok(bytes)
 }
 
-fn render_parsed_frame(project: &Project, footage: &MediaPool, composition_id: u64, frame: i64, max_side: u32) -> Result<Vec<u8>, String> {
+fn render_parsed_frame(project: &Project, footage: &MediaPool, composition_id: u64, frame: i64, max_side: u32, accel: Option<&dyn Accelerator>) -> Result<Vec<u8>, String> {
     if frame < 0 { return Err("Frame must be non-negative".into()); }
     let comp = project.comp(ItemId(composition_id))
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let long = comp.width.max(comp.height).max(1) as f64;
     let scale = if max_side == 0 { 1.0 } else { (max_side as f64 / long).min(1.0) };
     let time = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
-    let renderer = Renderer::new(project, footage, RenderOpts { scale, ..Default::default() });
+    let (backend, accel) = choose_backend(accel);
+    let renderer = Renderer::new(project, footage, RenderOpts { scale, backend, ..Default::default() })
+        .with_accel(accel);
     let image = renderer.comp_frame(ItemId(composition_id), time);
     let rgba = image.to_rgba8_over(comp.background);
     let mut output = Vec::with_capacity(8 + rgba.len());
@@ -190,7 +436,8 @@ fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u3
     let project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
     let footage = MEDIA_POOL.get_or_init(MediaPool::new);
-    render_parsed_frame(&project, footage, composition_id, frame, max_side)
+    let gpu = resolve_shared_gpu();
+    render_parsed_frame(&project, footage, composition_id, frame, max_side, gpu.as_ref().map(|device| device as &dyn Accelerator))
 }
 
 #[no_mangle]
@@ -303,6 +550,38 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_closeSes
     match session_handle(handle) {
         Ok(id) => close_session(id) as jboolean,
         Err(_) => 0,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_backendStatusSessionNative(
+    env: JNIEnv, _class: JClass, handle: jlong,
+) -> jstring {
+    let result = session_handle(handle)
+        .and_then(lookup_session)
+        .map(|session| session_backend_status(&session));
+    match result {
+        Ok(status) => env.new_string(status).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_recoverGpuSessionNative(
+    _env: JNIEnv, _class: JClass, handle: jlong,
+) -> jboolean {
+    session_handle(handle)
+        .and_then(lookup_session)
+        .map(|session| recover_session_gpu(&session))
+        .unwrap_or(false) as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_simulateGpuLossSessionNative(
+    _env: JNIEnv, _class: JClass, handle: jlong,
+) {
+    if let Ok(session) = session_handle(handle).and_then(lookup_session) {
+        simulate_session_gpu_loss(&session);
     }
 }
 
@@ -1250,5 +1529,138 @@ mod tests {
         assert!(bytes[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] < 20 && pixel[2] < 20 && pixel[3] > 200));
         assert!(close_session(handle));
         std::fs::remove_file(path).unwrap();
+    }
+
+    /// Test-only accelerator: counts how often the renderer asks it for a
+    /// frame and always declines (returns None), so the CPU must render.
+    /// `available` models a live device (true) or a lost/retired one (false).
+    struct CountingAccel {
+        asked: std::sync::atomic::AtomicUsize,
+        available: bool,
+    }
+
+    impl effectcraft_render::Accelerator for CountingAccel {
+        fn name(&self) -> String {
+            "test-accelerator".to_owned()
+        }
+
+        fn comp_frame(
+            &self,
+            _renderer: &effectcraft_render::Renderer,
+            _comp: ItemId,
+            _time: Tick,
+        ) -> Option<effectcraft_render::Image> {
+            self.asked
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            None
+        }
+
+        fn supports_effect(&self, _id: &str) -> bool {
+            false
+        }
+
+        fn effects(
+            &self,
+            _chain: &[effectcraft_render::FxStep],
+            _buf: &effectcraft_effects::Buf,
+            _levels: Option<f32>,
+        ) -> Option<effectcraft_effects::Buf> {
+            None
+        }
+
+        fn available(&self) -> bool {
+            self.available
+        }
+    }
+
+    #[test]
+    fn gpu_backend_choice_prefers_live_accelerator_and_cpu_on_loss() {
+        use effectcraft_render::Backend;
+
+        let live = CountingAccel {
+            asked: std::sync::atomic::AtomicUsize::new(0),
+            available: true,
+        };
+        let (backend, accel) = choose_backend(Some(&live));
+        assert_eq!(backend, Backend::Gpu);
+        assert!(accel.is_some());
+
+        let retired = CountingAccel {
+            asked: std::sync::atomic::AtomicUsize::new(0),
+            available: false,
+        };
+        let (backend, accel) = choose_backend(Some(&retired));
+        assert_eq!(backend, Backend::Cpu);
+        assert!(accel.is_none());
+
+        let (backend, accel) = choose_backend(None);
+        assert_eq!(backend, Backend::Cpu);
+        assert!(accel.is_none());
+    }
+
+    #[test]
+    fn declining_accelerator_falls_back_to_identical_cpu_pixels_and_retired_one_is_never_asked() {
+        let (source, comp_id) = text_comp_project(320, 180);
+        let project: Project = serde_json::from_str(&source).unwrap();
+        let footage = MediaPool::new();
+        let cpu = render_parsed_frame(&project, &footage, comp_id, 0, 160, None).unwrap();
+
+        let live = CountingAccel {
+            asked: std::sync::atomic::AtomicUsize::new(0),
+            available: true,
+        };
+        let via_live =
+            render_parsed_frame(&project, &footage, comp_id, 0, 160, Some(&live)).unwrap();
+        assert_eq!(live.asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(via_live, cpu);
+
+        let retired = CountingAccel {
+            asked: std::sync::atomic::AtomicUsize::new(0),
+            available: false,
+        };
+        let via_retired =
+            render_parsed_frame(&project, &footage, comp_id, 0, 160, Some(&retired)).unwrap();
+        assert_eq!(retired.asked.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(via_retired, cpu);
+    }
+
+    #[test]
+    fn session_gpu_loss_falls_back_to_cpu_and_reattach_keeps_rendering() {
+        let (source, comp_id) = text_comp_project(320, 180);
+        let handle = create_session(&source, 160).unwrap();
+        let session = lookup_session(handle).unwrap();
+
+        let before = render_session_frame(&session, comp_id, 0).unwrap();
+        assert_eq!(frame_dimensions(&before), (160, 90));
+        let status: serde_json::Value =
+            serde_json::from_str(&session_backend_status(&session)).unwrap();
+        assert!(status["backend"] == "gpu" || status["backend"] == "cpu");
+        if status["backend"] == "gpu" {
+            assert!(!status["adapter"].as_str().unwrap_or("").is_empty());
+        } else {
+            assert!(!status["reason"].as_str().unwrap_or("").is_empty());
+        }
+
+        simulate_session_gpu_loss(&session);
+        let lost: serde_json::Value =
+            serde_json::from_str(&session_backend_status(&session)).unwrap();
+        assert_eq!(lost["backend"], "cpu");
+        assert_eq!(lost["lost"], true);
+        assert!(!lost["reason"].as_str().unwrap_or("").is_empty());
+
+        // Loss must not crash, leak the session, or fake a frame: the same
+        // composition still renders at the same size from the CPU path.
+        let after_loss = render_session_frame(&session, comp_id, 0).unwrap();
+        assert_eq!(frame_dimensions(&after_loss), (160, 90));
+
+        // Re-attach re-resolves from the shared slot without forcing a
+        // fresh device probe; rendering must keep working either way.
+        reattach_session_gpu(&session);
+        let after_reattach = render_session_frame(&session, comp_id, 0).unwrap();
+        assert_eq!(frame_dimensions(&after_reattach), (160, 90));
+        let final_status: serde_json::Value =
+            serde_json::from_str(&session_backend_status(&session)).unwrap();
+        assert!(final_status["backend"] == "gpu" || final_status["backend"] == "cpu");
+        assert!(close_session(handle));
     }
 }

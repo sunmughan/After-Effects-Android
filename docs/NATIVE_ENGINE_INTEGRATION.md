@@ -16,7 +16,7 @@ Last updated: 2026-11-03
 
 `renderEcprojFrameNative` invokes the upstream `effectcraft_render::Renderer` CPU compositor for a requested composition/frame and returns width/height-prefixed RGBA bytes. Android decodes those bytes into the canonical composition viewer on `Dispatchers.Default`; the `.efx-draft` bootstrap canvas remains explicitly unrendered. Kotlin now retains a bounded process-local LRU of immutable rendered RGBA frames (12 MiB / 12 entries, SHA-256 project-content key) to avoid repeat CPU rendering at the same composition/frame/preview size. A synchronized get-or-render gate coalesces identical concurrent requests and serializes calls into JNI because the native `MediaPool` is shared and its concurrent access has not been proven safe; eight-way concurrency is covered by a JVM regression test.
 
-**This is actual CPU frame rendering, not a GPU renderer or production export pipeline.** The JNI call currently constructs a renderer per frame while sharing a native `MediaPool`; cancellation cannot interrupt a render already executing in JNI. GPU/Vulkan, explicit renderer/session lifecycle, media decoder validation, audio and export remain open. The Android app's `.efx-draft` is a distinct bootstrap format and must never be mislabeled as `.ecproj`.
+**This is actual upstream frame rendering, GPU-accelerated when a device exists and CPU otherwise — never a fake frame, and not a production export pipeline.** Each session resolves one shared wgpu device lazily on first render (Vulkan on Android); a live device renders through the upstream GPU compositor, a frame the GPU declines falls back to the CPU inside `Renderer::comp_frame`, and a missing or retired device renders on the CPU with the reason reported by the session backend status (`NativeSession.backendStatus()`). A device loss retires the session's GPU handle without crashing or leaking it: later frames keep rendering on the CPU, and explicit recovery (`recoverGpu()`) or close + reopen re-attaches a device when one is available again. The stateless frame path uses the same shared device and fallback. Cancellation still cannot interrupt a render already executing in JNI. Media decoder validation, audio and export remain open. The Android app's `.efx-draft` is a distinct bootstrap format and must never be mislabeled as `.ecproj`.
 
 ## CI build
 
@@ -39,7 +39,7 @@ The integration sequence is:
 - [ ] Add JNI create/destroy session, open/save project, mutation and error APIs with explicit ownership/threading.
 - [ ] Add valid upstream project fixtures and Kotlin/Rust serialization/round-trip tests.
 - [ ] Add SAF open/save with persisted URI grants and failure-safe writes.
-- [ ] Build renderer with Android feature gates and verified Vulkan/device fallback.
+- [x] Build renderer with Android feature gates and verified Vulkan/device fallback: the session and stateless paths render through the upstream wgpu GPU compositor when a device exists, with a tested CPU fallback and device-loss recovery (JNI backend status / recover / simulate-loss; Rust stub-accelerator routing tests plus an emulator loss + recovery + reopen test). Evidence is emulator/host only; physical ARM64 GPU proof remains open.
 - [ ] Deliver actual frame pixels to a Surface/Texture path; test lifecycle, resize, GPU loss and memory.
 - [ ] Validate media decoding and export separately; no assumption that desktop codec dependencies work on Android.
 - [ ] Install and run on physical ARM64 phone/tablet, record device/OS/ABI/GPU/build SHA and frame evidence.
