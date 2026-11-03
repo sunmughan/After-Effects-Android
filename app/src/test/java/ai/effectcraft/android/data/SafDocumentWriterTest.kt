@@ -93,6 +93,23 @@ class SafDocumentWriterTest {
         assertInvalidBuffer(1024 * 1024 + 1)
     }
 
+    @Test
+    fun sourceOpenFailureStillRollsBackCreatedDestination() {
+        var rollbackCalled = false
+        try {
+            SafDocumentWriter.copyTo(
+                openInput = { throw IOException("staging read failed") },
+                openOutput = { ByteArrayOutputStream() },
+                rollbackDestination = { rollbackCalled = true },
+                bufferSize = 8
+            )
+            throw AssertionError("Expected staging read failure")
+        } catch (failure: IOException) {
+            assertEquals("staging read failed", failure.message)
+        }
+        assertTrue(rollbackCalled)
+    }
+
     private fun assertInvalidBuffer(size: Int) {
         try {
             SafDocumentWriter.copyTo(
