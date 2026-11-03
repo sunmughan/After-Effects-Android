@@ -18,6 +18,19 @@ internal object RenderedFrameCache {
     @Synchronized
     fun get(key: String): ByteArray? = entries[key]?.copyOf()
 
+    /**
+     * Serializes renderer calls and coalesces identical in-flight requests. The
+     * monitor intentionally spans render(): upstream MediaPool is shared and the
+     * per-frame Renderer API has no cancellation primitive.
+     */
+    @Synchronized
+    fun getOrRender(key: String, render: () -> ByteArray?): ByteArray? {
+        entries[key]?.let { return it.copyOf() }
+        val frame = render()?.takeIf { it.size >= 8 } ?: return null
+        put(key, frame)
+        return frame.copyOf()
+    }
+
     @Synchronized
     fun put(key: String, frame: ByteArray) {
         if (frame.isEmpty() || frame.size > MAX_BYTES) return
