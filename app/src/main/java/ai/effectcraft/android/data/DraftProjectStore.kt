@@ -80,30 +80,34 @@ class DraftProjectStore(context: Context) {
     private fun recoverInterruptedWrites() {
         val files = projectDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".efx-draft.tmp") }.orEmpty()
         files.forEach { temporary ->
-            runCatching {
-                val targetName = temporary.name.removeSuffix(".tmp")
-                if (!targetName.endsWith(".efx-draft")) {
-                    temporary.delete()
-                    return@runCatching
-                }
-                val recovered = decode(JSONObject(temporary.readText(Charsets.UTF_8)))
-                require(targetName.endsWith("-${recovered.id.take(8)}.efx-draft")) {
-                    "Interrupted draft filename does not match its project ID"
-                }
-                val target = File(projectDirectory, targetName)
-                val current = if (target.isFile) runCatching { decode(JSONObject(target.readText(Charsets.UTF_8))) }.getOrNull() else null
-                if (current == null || recovered.id == current.id && recovered.updatedAtEpochMillis >= current.updatedAtEpochMillis) {
-                    try {
-                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-                    } catch (_: Exception) {
-                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            val targetName = temporary.name.removeSuffix(".tmp")
+            val recovered = runCatching {
+                require(targetName.endsWith(".efx-draft")) { "Unexpected interrupted draft filename" }
+                decode(JSONObject(temporary.readText(Charsets.UTF_8))).also { project ->
+                    require(targetName.endsWith("-${project.id.take(8)}.efx-draft")) {
+                        "Interrupted draft filename does not match its project ID"
                     }
-                } else {
-                    temporary.delete()
                 }
-            }.onFailure {
-                // An incomplete temp is not a project. Keep the last committed target intact.
+            }.getOrElse {
+                // Incomplete or mismatched temp: leave the committed target untouched.
                 runCatching { temporary.delete() }
+                return@forEach
+            }
+            val target = File(projectDirectory, targetName)
+            val current = if (target.isFile) runCatching { decode(JSONObject(target.readText(Charsets.UTF_8))) }.getOrNull() else null
+            val shouldPromote = current == null || current.id != recovered.id ||
+                recovered.updatedAtEpochMillis >= current.updatedAtEpochMillis
+            if (!shouldPromote) {
+                runCatching { temporary.delete() }
+                return@forEach
+            }
+            // A transient rename failure must leave the complete temp for the next startup.
+            try {
+                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: Exception) {
+                runCatching {
+                    Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
             }
         }
     }
