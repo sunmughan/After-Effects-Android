@@ -1,6 +1,7 @@
 package ai.effectcraft.android
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
@@ -59,6 +60,8 @@ class CanonicalSelectionEditorTest {
         )
         val canonicalState = mutableStateOf(CanonicalProjectInfo(compositions = listOf(composition)))
         val selectionState = mutableStateOf(setOf(2L))
+        val workspaceFrame = mutableIntStateOf(0)
+        val renderedFrames = mutableListOf<Long>()
         val selectionChanges = mutableListOf<Set<Long>>()
         var undoClicks = 0
         var redoClicks = 0
@@ -72,7 +75,7 @@ class CanonicalSelectionEditorTest {
                     project = project,
                     selectedLayer = project.layers.first(),
                     selectedLayerId = project.layers.first().id,
-                    playheadFrame = 0,
+                    playheadFrame = workspaceFrame.intValue,
                     selectedOpacityKeyframes = emptyList(),
                     isPlaying = false,
                     saveMessage = "Saved",
@@ -105,7 +108,7 @@ class CanonicalSelectionEditorTest {
                     onVisibilityChange = {},
                     onRenameLayer = {},
                     onOpacityChange = {},
-                    onScrub = {},
+                    onScrub = { workspaceFrame.intValue = it },
                     onAddOpacityKeyframe = {},
                     onRemoveOpacityKeyframe = {},
                     onTogglePlayback = {},
@@ -143,7 +146,7 @@ class CanonicalSelectionEditorTest {
                     onSetCanonicalLayerScalarProperty = { _, _, _, _ -> },
                     onSetCanonicalLayerVecProperty = { _, _, _, _, _, _ -> },
                     onRelinkCanonicalAsset = {},
-                    onRenderCanonicalFrame = { _, _ -> null },
+                    onRenderCanonicalFrame = { _, frame -> renderedFrames.add(frame); null },
                     safGrants = emptyList(),
                     missingManifestEntries = 0,
                     onReleaseSafGrant = { _, _ -> },
@@ -156,6 +159,12 @@ class CanonicalSelectionEditorTest {
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("CANONICAL .ECPROJ").assertIsDisplayed()
         compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
+
+        // The canonical preview follows the workspace timeline in both
+        // directions; scrubbing the main playhead requests that real frame.
+        workspaceFrame.intValue = 15
+        compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(15L) }
+        compose.onNodeWithText("Frame 15 / 89").assertIsDisplayed()
 
         // Tap selects one layer; long-press adds a second layer to the set.
         compose.onNodeWithContentDescription("Canonical layer row Title").performClick()

@@ -597,6 +597,8 @@ fun EditorScreen(
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
+                    playheadFrame = playheadFrame,
+                    onPreviewFrameChange = onScrub,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
@@ -994,6 +996,8 @@ private fun InspectorPanel(
 private fun CanonicalProjectEditor(
     project: CanonicalProjectInfo,
     canEdit: Boolean,
+    playheadFrame: Int,
+    onPreviewFrameChange: (Int) -> Unit,
     selectedLayerIds: Set<Long>,
     onSelectionChange: (Set<Long>) -> Unit,
     canUndoCanonical: Boolean,
@@ -1070,6 +1074,9 @@ private fun CanonicalProjectEditor(
     var textTrackingDraft by remember(composition?.id, layer?.id, layer?.textParams?.tracking) { mutableStateOf((layer?.textParams?.tracking ?: 0.0).toString()) }
     var paramDrafts by remember(composition?.id, layer?.id) { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
+    LaunchedEffect(playheadFrame, composition?.durationFrames) {
+        previewFrame = playheadFrame.coerceIn(0, (composition?.durationFrames ?: 1) - 1)
+    }
     var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
     var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
     var previewWidthPx by remember { mutableIntStateOf(0) }
@@ -1178,7 +1185,11 @@ private fun CanonicalProjectEditor(
             Text("Frame ${previewFrame} / ${composition.durationFrames - 1}", color = EditorPalette.muted, fontSize = 10.sp)
             Slider(
                 value = previewFrame.toFloat(),
-                onValueChange = { previewFrame = it.roundToInt().coerceIn(0, composition.durationFrames - 1) },
+                onValueChange = {
+                    val frame = it.roundToInt().coerceIn(0, composition.durationFrames - 1)
+                    previewFrame = frame
+                    onPreviewFrameChange(frame)
+                },
                 valueRange = 0f..(composition.durationFrames - 1).coerceAtLeast(1).toFloat(),
                 modifier = Modifier.semantics { contentDescription = "Canonical preview frame" }
             )

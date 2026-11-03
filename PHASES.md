@@ -1,3 +1,9 @@
+### Run 60 — canonical preview follows workspace timeline (2026-11-04)
+- Connected the imported-project editor preview frame to the workspace playhead. Opening the canonical sheet starts at the current timeline frame; workspace scrubbing updates its frame label and invokes the native render callback for that exact frame. Scrubbing the canonical preview slider also updates the workspace timeline through the same callback, so the two playheads no longer diverge.
+- Added a Compose regression to CanonicalSelectionEditorTest: advance the parent playhead to frame 15, await the renderer request for frame 15, and assert the canonical preview reads frame 15/89. Existing gesture, selection, and history assertions remain.
+- Commit: pending in this entry; exact-head CI #454 was in progress before this change and must not be used as evidence for it. No test pass claimed yet.
+- Scope: this is preview/playhead synchronization, not a claim that position/scale/rotation keyframes are authored. M4 transform-keyframe parity remains open.
+
 ### Run 43 — allow valid sub-320 output dimensions
 - Review found the render-queue planner's previous 320px minimum rejected common 16:9 compositions such as 320×180, including the canonical NativeSession emulator fixture. Changed the minimum output dimension to 1 (maximum 4096 and per-frame/aggregate pixel budgets remain enforced); zero dimensions are still rejected.
 - Added `acceptsCommonSmallCompositionDimensions` for a 320×180 frame and updated invalid-dimension test to use width 0. This enables default composition-sized sequence export for small/low-resolution projects without silently upscaling or changing their dimensions.
