@@ -14,8 +14,8 @@ Latest implementation commit: `3b09f989b6ac9dc8573abeba60e7aa46b95db6e0` connect
 - M1 adds a saved-draft catalog: enumerate valid .efx-draft documents newest-first, de-duplicate by stable project ID, and load a selected project by ID. Save updates the existing file for that ID even if its display name changes, rather than creating stale duplicates.
 - Compose header exposes Open offline project (compact icon on phone; Open action on wider layout); a scrollable picker shows saved project name, dimensions, FPS and layer count. Selecting a draft restores project, layer selection, playhead=0, stops playback and clears history from the previous project.
 - Saved-project list refreshes after successful Save; no network permission or network service added.
-- Instrumentation savedOfflineProjectsCanBeOpenedWithoutNetwork saves a 4-layer draft, saves a separate 3-layer draft, opens the 4-layer entry and asserts Shape 4 and local-open status.
-- Code/test changes are included in this commit; GitHub Actions exact-head verification is pending. M1 remains IN PROGRESS; no phase completion is claimed.
+- Instrumentation `savedOfflineProjectsCanBeOpenedWithoutNetwork` (test commit `6fa242dd32ab1385b1007f5db8870259010b1a75`) clears its draft fixture, saves a 4-layer draft, saves a separate 3-layer draft, opens the 4-layer entry and asserts Shape 4 and local-open status. The editor suite now contains 16 instrumentation tests.
+- Implementation commit `4e92ab53c42a5f4bc09bfd0f95f1716039e852bb` (`feat(editor): open saved offline projects`); test-isolation commit `6fa242dd32ab1385b1007f5db8870259010b1a75`; README progress commit `85f6efd6805e954b59e919230a5454d333402b89`. Exact-head CI verification is pending. M1 remains IN PROGRESS; no phase completion is claimed.
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
 ### Run 12 — selection-aware editor history and accessibility (2026-11-03)
