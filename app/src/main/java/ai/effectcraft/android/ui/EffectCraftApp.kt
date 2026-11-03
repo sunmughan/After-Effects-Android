@@ -431,7 +431,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         // A process kill can bypass the export coroutine's finally block. Remove
         // only staging ZIPs older than the recovery window; never touch active exports.
         runCatching {
-            val cleanup = StaleSequenceExportCleanup.cleanup(context.cacheDir)
+            val cleanup = withContext(Dispatchers.IO) { StaleSequenceExportCleanup.cleanup(context.cacheDir) }
             if (cleanup.removed > 0) saveMessage = "Recovered ${cleanup.removed} abandoned PNG sequence archive(s)"
         }
         runCatching {
