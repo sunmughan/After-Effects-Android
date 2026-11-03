@@ -42,6 +42,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onOpenProject = {},
                     onValidateEcproj = {},
                     onExportEcproj = {},
+                    onExportEcprojx = {},
                     onNewProject = {},
                     onAddLayer = {},
                     onSelectLayer = {},
