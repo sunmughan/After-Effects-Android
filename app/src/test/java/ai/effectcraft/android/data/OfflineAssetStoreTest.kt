@@ -21,6 +21,8 @@ class OfflineAssetStoreTest {
 
             assertEquals("clip.mov", asset.displayName)
             assertEquals("video/quicktime", asset.mimeType)
+            assertEquals("mov", asset.extension)
+            assertTrue(store.fileFor(asset.sha256)?.name?.endsWith(".mov") == true)
             assertEquals(bytes.size.toLong(), asset.sizeBytes)
             assertEquals(64, asset.sha256.length)
             assertEquals(asset, store.get(asset.sha256))
@@ -76,7 +78,7 @@ class OfflineAssetStoreTest {
             assertTrue(runCatching { store.get("not-a-hash") }.isFailure)
             assertTrue(store.delete(asset.sha256))
             assertNull(store.get(asset.sha256))
-            assertFalse(File(root, asset.sha256).exists())
+            assertFalse(File(root, "${asset.sha256}.${asset.extension}").exists())
             assertFalse(store.delete(asset.sha256))
         } finally {
             root.deleteRecursively()
