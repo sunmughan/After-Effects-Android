@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 and scoped M1 accepted** (CI #289: 18/18 API 30 emulator instrumentation passed; CI #286 also records full dual-ABI/Rust/JVM/Wrapper evidence). M2 is in progress: canonical JSON/XML import, format guardrails, SHA-256 content-addressed offline media storage and native footage relinking are implemented. Media payload paths preserve the source extension for decoder dispatch; four asset-store JVM tests await exact-head CI. Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
+> **Current status: M0 and scoped M1 accepted** (CI #289: 18/18 API 30 emulator instrumentation passed; CI #286 also records full dual-ABI/Rust/JVM/Wrapper evidence). M2 is in progress: canonical JSON/XML import, format guardrails, SHA-256 content-addressed offline media storage and native footage relinking are implemented. Media payload paths preserve the source extension for decoder dispatch; four asset-store JVM tests await exact-head CI. Tracker now distinguishes accepted M0/M1 from incomplete M2–M7. Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
 
 ## Product direction
 
