@@ -41,6 +41,22 @@ class EditorSmokeTest {
 
 
     @Test
+    fun savedOfflineProjectsCanBeOpenedWithoutNetwork() {
+        compose.onNodeWithText("New").performClick()
+        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithContentDescription("Save draft").performClick()
+        assertEditorStatus("Saved locally · Untitled Composition")
+
+        compose.onNodeWithText("New").performClick()
+        compose.onNodeWithContentDescription("Save draft").performClick()
+        compose.onNodeWithContentDescription("Open offline project").performClick()
+        compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
+
+        assertEditorStatus("Opened locally · Untitled Composition")
+        compose.onNodeWithText("Shape 4").assertIsDisplayed()
+    }
+
+    @Test
     fun editorLaunchesWithOfflineCompositionWorkspace() {
         compose.onNodeWithText("EFFECTCRAFT").assertIsDisplayed()
         compose.onNodeWithText("OFFLINE").assertIsDisplayed()

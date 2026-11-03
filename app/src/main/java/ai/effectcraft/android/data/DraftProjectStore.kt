@@ -28,11 +28,14 @@ class DraftProjectStore(context: Context) {
         // File timestamps are too coarse to order saves reliably (two saves in
         // quick succession can share a file timestamp), so keep the stored
         // timestamp strictly increasing: the newest save always wins.
-        val latestUpdated = loadLatest()?.updatedAtEpochMillis ?: 0L
+        val latestUpdated = listSavedProjects().maxOfOrNull { it.updatedAtEpochMillis } ?: 0L
         val updatedTime = maxOf(System.currentTimeMillis(), latestUpdated + 1L)
         val updated = project.copy(updatedAtEpochMillis = updatedTime)
-        val fileName = "${safeName(updated.name)}-${updated.id.take(8)}.efx-draft"
-        val target = File(projectDirectory, fileName)
+        val existing = draftFiles().firstOrNull { file ->
+            runCatching { JSONObject(file.readText(Charsets.UTF_8)).optString("id") == updated.id }.getOrDefault(false)
+        }
+        val target = existing ?: File(projectDirectory, "${safeName(updated.name)}-${updated.id.take(8)}.efx-draft")
+        val fileName = target.name
         val temporary = File(projectDirectory, "$fileName.tmp")
         temporary.writeText(encode(updated).toString(2), Charsets.UTF_8)
 
@@ -53,29 +56,25 @@ class DraftProjectStore(context: Context) {
         return target
     }
 
-    fun loadLatest(): ProjectDocument? {
-        val candidates = projectDirectory.listFiles()
-            ?.filter { it.isFile && it.name.endsWith(".efx-draft") }
-            .orEmpty()
+    /** Returns all valid offline drafts, newest first, de-duplicated by stable project ID. */
+    fun listSavedProjects(): List<ProjectDocument> = draftFiles()
+        .mapNotNull { file -> runCatching { decode(JSONObject(file.readText(Charsets.UTF_8))) to file }.getOrNull() }
+        .sortedWith(
+            compareByDescending<Pair<ProjectDocument, File>> { it.first.updatedAtEpochMillis }
+                .thenByDescending { it.second.lastModified() }
+                .thenByDescending { it.second.name }
+        )
+        .map { it.first }
+        .distinctBy { it.id }
 
-        // Order by the stored save timestamp, not the file timestamp: the
-        // stored timestamp is strictly increasing per save, while file
-        // timestamps can tie. File timestamp and name break ties for drafts
-        // written before this ordering existed.
-        return candidates
-            .mapNotNull { file ->
-                runCatching {
-                    decode(JSONObject(file.readText(Charsets.UTF_8))) to file
-                }.getOrNull()
-            }
-            .sortedWith(
-                compareByDescending<Pair<ProjectDocument, File>> { it.first.updatedAtEpochMillis }
-                    .thenByDescending { it.second.lastModified() }
-                    .thenByDescending { it.second.name }
-            )
-            .firstOrNull()
-            ?.first
-    }
+    /** Opens a previously saved draft by its stable project ID. */
+    fun load(projectId: String): ProjectDocument? = listSavedProjects().firstOrNull { it.id == projectId }
+
+    fun loadLatest(): ProjectDocument? = listSavedProjects().firstOrNull()
+
+    private fun draftFiles(): List<File> = projectDirectory.listFiles()
+        ?.filter { it.isFile && it.name.endsWith(".efx-draft") }
+        .orEmpty()
 
     private fun encode(project: ProjectDocument): JSONObject = JSONObject().apply {
         put("format", "effectcraft-android-draft")

@@ -1,6 +1,6 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-03 (run 13: CI #247 Kotlin compile failure fixed; exact-head verification pending)
+Updated: 2026-11-03 (M1 saved-project open/list implemented; CI verification pending)
 Latest implementation commit: `3b09f989b6ac9dc8573abeba60e7aa46b95db6e0` connects the main workspace viewer to real upstream CPU-rendered canonical `.ecproj` frames at the current playhead; bootstrap drafts are explicitly labelled unrendered instead of displaying a decorative fake. SAF imports now enforce a 64 MiB read limit and require native schema validation plus at least one valid composition before caching. Current-head CI #246 was queued; no pass is claimed.
 
 ### Run 13 — CI compile failure diagnosed and corrected (2026-11-03)
@@ -10,6 +10,12 @@ Latest implementation commit: `3b09f989b6ac9dc8573abeba60e7aa46b95db6e0` connect
 - This is a concrete M2 import-boundary correctness fix and restores the intended 64 MiB streaming limit. Fresh current-head CI must verify Kotlin compile, APK, JVM tests and emulator instrumentation; no pass is claimed.
 - Local Gradle/Android SDK is unavailable in this automation runtime; exact failure logs came from GitHub Actions. Next run must inspect the new run and continue with any compile/test failures.
 
+### Run 14 — multi-project offline save/open workflow (2026-11-03)
+- M1 adds a saved-draft catalog: enumerate valid .efx-draft documents newest-first, de-duplicate by stable project ID, and load a selected project by ID. Save updates the existing file for that ID even if its display name changes, rather than creating stale duplicates.
+- Compose header exposes Open offline project (compact icon on phone; Open action on wider layout); a scrollable picker shows saved project name, dimensions, FPS and layer count. Selecting a draft restores project, layer selection, playhead=0, stops playback and clears history from the previous project.
+- Saved-project list refreshes after successful Save; no network permission or network service added.
+- Instrumentation savedOfflineProjectsCanBeOpenedWithoutNetwork saves a 4-layer draft, saves a separate 3-layer draft, opens the 4-layer entry and asserts Shape 4 and local-open status.
+- Code/test changes are included in this commit; GitHub Actions exact-head verification is pending. M1 remains IN PROGRESS; no phase completion is claimed.
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
 ### Run 12 — selection-aware editor history and accessibility (2026-11-03)
@@ -41,7 +47,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Exit gate:** pinned clean-checkout build, Rust + Kotlin tests, dual ABI package, Android emulator JNI test, audit inventory generated/reviewed; CI green on exact HEAD. Run #247 is the latest completed failure; fresh CI after `57011355` is required; no pass claimed yet.
 
 ## M1 — Professional native editor foundation
-**Status: HELD — M0 closure must pass first (existing implementation/test suite retained)**
+**Status: IN PROGRESS — M0 current-head CI closure pending; offline multi-project workflow now implemented**
 - [x] Adaptive Compose phone/tablet workspace, offline starter composition and local draft persistence.
 - [x] Add/select/remove layers, opacity slider, timeline scrubbing and transport simulation.
 - [x] Emulator smoke tests for launch, New, add-layer action and draft round-trip.

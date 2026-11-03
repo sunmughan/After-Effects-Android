@@ -102,11 +102,13 @@ fun EditorScreen(
     playheadFrame: Int,
     isPlaying: Boolean,
     saveMessage: String,
+    savedProjects: List<ProjectDocument>,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onSave: () -> Unit,
+    onOpenProject: (String) -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
     onNewProject: () -> Unit,
@@ -143,6 +145,7 @@ fun EditorScreen(
         onDeleteLayer()
         showPhoneInspector = false
     }
+    var showProjectPicker by remember { mutableStateOf(false) }
     var showCompositionSettings by remember { mutableStateOf(false) }
     var showCanonicalEditor by remember { mutableStateOf(false) }
 
@@ -171,6 +174,7 @@ fun EditorScreen(
                 projectName = project.name,
                 saveMessage = saveMessage,
                 onSave = onSave,
+                onOpenProject = { showProjectPicker = true },
                 onValidateEcproj = onValidateEcproj,
                 onExportEcproj = onExportEcproj,
                 onNewProject = onNewProject,
@@ -240,6 +244,39 @@ fun EditorScreen(
                     .fillMaxWidth()
                     .height(if (isTabletLayout) 222.dp else 204.dp)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+            )
+        }
+
+        if (showProjectPicker) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showProjectPicker = false },
+                title = { Text("Open offline project") },
+                text = {
+                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                        if (savedProjects.isEmpty()) {
+                            Text("No saved drafts yet. Save a composition to open it later.", color = EditorPalette.muted)
+                        } else {
+                            savedProjects.forEach { saved ->
+                                TextButton(
+                                    onClick = {
+                                        showProjectPicker = false
+                                        onOpenProject(saved.id)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Text(saved.name, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text("${saved.width}×${saved.height} · ${saved.frameRate} FPS · ${saved.layers.size} layers",
+                                            color = EditorPalette.muted, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showProjectPicker = false }) { Text("Close") }
+                }
             )
         }
 
@@ -317,6 +354,7 @@ private fun HeaderBar(
     projectName: String,
     saveMessage: String,
     onSave: () -> Unit,
+    onOpenProject: () -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
     onNewProject: () -> Unit,
@@ -372,6 +410,9 @@ private fun HeaderBar(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    IconButton(onClick = onOpenProject, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Open offline project", tint = EditorPalette.mint)
+                    }
                     IconButton(onClick = onValidateEcproj, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text)
                     }
@@ -420,6 +461,7 @@ private fun HeaderBar(
                 }
                 IconButton(onClick = onExportEcproj) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text) }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
+                TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
             }
         }

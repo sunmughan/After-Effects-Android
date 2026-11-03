@@ -47,6 +47,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var project by remember {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
     }
+    var savedProjects by remember { mutableStateOf(projectStore.listSavedProjects()) }
     var selectedLayerId by remember {
         mutableStateOf(project.layers.firstOrNull()?.id.orEmpty())
     }
@@ -178,6 +179,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             playheadFrame = playheadFrame,
             isPlaying = isPlaying,
             saveMessage = saveMessage,
+            savedProjects = savedProjects,
             canUndo = undoStack.isNotEmpty(),
             canRedo = redoStack.isNotEmpty(),
             onUndo = {
@@ -206,6 +208,20 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "Redo · unsaved"
                 }
             },
+            onOpenProject = { projectId ->
+                val opened = projectStore.load(projectId)
+                if (opened == null) {
+                    saveMessage = "Saved project is unavailable"
+                } else {
+                    project = opened
+                    selectedLayerId = opened.layers.firstOrNull()?.id.orEmpty()
+                    playheadFrame = 0
+                    isPlaying = false
+                    undoStack = emptyList()
+                    redoStack = emptyList()
+                    saveMessage = "Opened locally · ${opened.name}"
+                }
+            },
             onValidateEcproj = { validateEcprojLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
             onExportEcproj = {
                 if (importedEcproj == null) saveMessage = "Import a canonical .ecproj first"
@@ -213,7 +229,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onSave = {
                 runCatching { projectStore.save(project) }
-                    .onSuccess { saveMessage = "Saved locally · ${project.name}" }
+                    .onSuccess {
+                        savedProjects = projectStore.listSavedProjects()
+                        saveMessage = "Saved locally · ${project.name}"
+                    }
                     .onFailure { saveMessage = "Save failed · ${it.message ?: "storage error"}" }
             },
             onNewProject = {
