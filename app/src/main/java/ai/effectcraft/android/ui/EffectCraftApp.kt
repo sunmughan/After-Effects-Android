@@ -19,12 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.CanonicalProjectDocument
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
+import ai.effectcraft.android.data.OfflineAssetStore
 import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
@@ -42,6 +41,7 @@ private data class EditorHistorySnapshot(
 fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
+    val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
     var pendingRelinkItemId by remember { mutableStateOf<Long?>(null) }
     var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null) }
@@ -126,19 +126,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val displayName = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) cursor.getString(0) else null
                     } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "asset"
-                    val safeName = displayName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120).ifBlank { "asset" }
-                    val directory = File(context.filesDir, "assets")
-                    if (!directory.mkdirs() && !directory.isDirectory) error("Unable to create offline media directory")
-                    val target = File(directory, "${itemId}_${safeName}")
-                    val temporary = File(directory, "${target.name}.tmp")
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        temporary.outputStream().use { output -> input.copyTo(output) }
+                    val mimeType = context.contentResolver.getType(uri)
+                    val offlineAsset = context.contentResolver.openInputStream(uri)?.use { input ->
+                        offlineAssetStore.import(input, displayName, mimeType)
                     } ?: error("Unable to read selected media")
-                    try {
-                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-                    } catch (_: Exception) {
-                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                    }
+                    val target = offlineAssetStore.fileFor(offlineAsset.sha256)
+                        ?: error("Imported offline media payload is unavailable")
                     val envelope = NativeProjectBridge.relinkFootageEcproj(source, itemId, target.absolutePath)
                         ?: error("Native EffectCraft bridge unavailable on this ABI")
                     val response = JSONObject(envelope)
