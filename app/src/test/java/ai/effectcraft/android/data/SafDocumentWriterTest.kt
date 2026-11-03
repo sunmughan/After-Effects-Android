@@ -44,7 +44,7 @@ class SafDocumentWriterTest {
 
         try {
             SafDocumentWriter.copyTo(
-                source = ByteArrayInputStream(source),
+                openInput = { ByteArrayInputStream(source) },
                 openOutput = { destination },
                 rollbackDestination = { rollbackCalled = true },
                 bufferSize = 8_192,
