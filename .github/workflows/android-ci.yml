@@ -279,7 +279,6 @@ jobs:
           python3 scripts/compare-reproducibility.py \
             "$first_apk" \
             app/build/outputs/apk/debug/app-debug.apk \
-            app/src/main/jniLibs \
             reproducibility-report.txt
 
       - name: Upload reproducibility report and second APK

@@ -2,7 +2,7 @@
 """Compare two debug APK builds for reproducibility (M0 criterion #1).
 
 Usage:
-    compare-reproducibility.py <first-apk> <second-apk> <second-jnilibs-dir> <report-path>
+    compare-reproducibility.py <first-apk> <second-apk> <report-path>
 
 Compares three levels, in decreasing strictness:
 
@@ -10,19 +10,33 @@ Compares three levels, in decreasing strictness:
    strictest level, but it is expected to differ across fresh runners
    even for an identical build, because a debug APK is signed with the
    runner's ephemeral debug keystore (~/.android/debug.keystore), which
-   is generated per runner with fresh key material. A raw mismatch
-   alone therefore does NOT fail this check; it is reported verbatim.
+   is generated per runner with fresh key material; the signature
+   lives in the APK Signature Scheme v2 block, not in zip entries. A
+   raw mismatch alone therefore does NOT fail this check; it is
+   reported verbatim.
 2. CONTENT_MATCH: per-entry SHA-256 of the decompressed contents of
-   every APK entry except the signature files (META-INF/MANIFEST.MF
+   every APK entry except v1 signature files (META-INF/MANIFEST.MF
    and META-INF/*.SF, *.RSA, *.DSA, *.EC). Entry names, entry sets and
    contents must all match. Zip container metadata (entry order,
    timestamps, compression level, alignment padding) is intentionally
    ignored here because it is not build output content. A content
    mismatch fails the check.
-3. NATIVE_SO_MATCH: the freshly built native .so files (from the
-   second build's app/src/main/jniLibs) against the .so entries
-   packaged inside the first APK (lib/<abi>/libeffectcraft_android.so).
-   A mismatch fails the check.
+3. NATIVE_SO_MATCH: the native .so entries PACKAGED INSIDE each APK
+   (lib/<abi>/libeffectcraft_android.so, first APK versus second APK).
+   This must be packaged-versus-packaged, never raw jniLibs files
+   versus packaged entries: AGP strips native libraries while
+   packaging (the packaged .so carries no .symtab), so a raw
+   app/src/main/jniLibs .so is a different artifact from the .so that
+   ships in the APK, and comparing them is an apples-to-oranges
+   error (it falsely failed run #345 even though every packaged
+   entry, including both packaged .so files, was byte-identical).
+   A packaged-versus-packaged mismatch fails the check.
+
+Limitation, stated not hidden: equality of the UNSTRIPPED
+intermediate jniLibs .so files across builds is NOT proven here,
+because the first build's jniLibs files are not uploaded as an
+artifact. What is proven is equality of everything that ships in
+the APK, which is what criterion #1 governs.
 
 Exit code is 0 only when CONTENT_MATCH and NATIVE_SO_MATCH are both
 yes. The report is written even on failure so a failing run still
@@ -67,13 +81,12 @@ def entry_hashes(apk_path):
 
 
 def main(argv):
-    if len(argv) != 5:
+    if len(argv) != 4:
         print(__doc__, file=sys.stderr)
         return 2
     first_apk = Path(argv[1])
     second_apk = Path(argv[2])
-    second_jnilibs = Path(argv[3])
-    report_path = Path(argv[4])
+    report_path = Path(argv[3])
 
     first_raw = sha256_file(first_apk)
     second_raw = sha256_file(second_apk)
@@ -99,22 +112,21 @@ def main(argv):
     so_lines = []
     so_match = True
     for abi in ABIS:
-        second_so = second_jnilibs / abi / SO_NAME
         packaged = f"lib/{abi}/{SO_NAME}"
-        if not second_so.is_file():
-            so_lines.append(f"{abi}: MISSING second-build file {second_so}")
-            so_match = False
-            continue
         if packaged not in first_entries:
             so_lines.append(f"{abi}: MISSING packaged entry {packaged} in first APK")
             so_match = False
             continue
-        built_hash = sha256_file(second_so)
-        packaged_hash = first_entries[packaged]
-        match = built_hash == packaged_hash
+        if packaged not in second_entries:
+            so_lines.append(f"{abi}: MISSING packaged entry {packaged} in second APK")
+            so_match = False
+            continue
+        first_hash = first_entries[packaged]
+        second_hash = second_entries[packaged]
+        match = first_hash == second_hash
         so_match = so_match and match
         so_lines.append(
-            f"{abi}: built={built_hash} packaged-in-first-apk={packaged_hash} match={str(match).lower()}"
+            f"{abi}: packaged-in-first-apk={first_hash} packaged-in-second-apk={second_hash} match={str(match).lower()}"
         )
 
     lines = []
