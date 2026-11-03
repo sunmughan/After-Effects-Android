@@ -477,3 +477,11 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - M5 PARTIAL: single-frame PNG and configurable, validated PNG-sequence ZIP; no video/audio codec export.
 - M6 IN PROGRESS: bounded offline media storage/quota and import rollback guardrails; memory/performance, crash recovery, device/API matrix and accessibility remain.
 - M7 NOT STARTED: signed configurable release artifacts, physical install/run, notices and release gate review remain.
+
+
+### Run 47 — crash-safe cleanup for abandoned render staging (2026-11-03)
+- M6: added `StaleSequenceExportCleanup`, a startup recovery utility that deletes only regular cache files matching the EffectCraft sequence staging prefix/suffix and older than 24 hours. Unknown/future timestamps and recent files are retained; unrelated files and directories are never touched. Failed deletions are reported for later retry.
+- Integrated cleanup into the app's one-time startup reconciliation. This addresses process death bypassing the export coroutine's `finally` cleanup without risking an active export (the age window is intentionally conservative).
+- Added 3 JVM tests: stale-only deletion, retention of recent/unrelated/unknown/future items and directories, and invalid retention/missing-cache behavior. Commits: cleanup `c202d8e8`, tests `fdeecc98`, startup integration `19c263a8`.
+- Exact-head CI #398 is still running on the preceding app callback fix while its dependency/license inventory step executes; the recovery changes trigger a new workflow. Android Gradle/JUnit acceptance is pending; no local SDK/emulator available in this runtime.
+- M6 remains IN PROGRESS: abandoned sequence staging recovery is implemented; durable project autosave/recovery journal, crash simulation, memory/performance/device/API/accessibility gates remain. M5 remains PNG/ZIP only; video/audio absent. M0 license/owner gates remain open; M1 scoped accepted; M2/M3/M4 partial/in progress; M7 not started.
