@@ -3,7 +3,7 @@ package ai.effectcraft.android
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import ai.effectcraft.android.data.ProjectDocument
@@ -12,8 +12,13 @@ import org.junit.Rule
 import org.junit.Test
 
 class AdaptiveWorkspaceSmokeTest {
+    // EditorScreen is a pure composable and needs no activity host. The
+    // previous activity rule failed in both directions: without a process
+    // override the instrumentation could not launch the test activity, and
+    // with it the cross-process setContent hung the run. A plain compose
+    // rule hosts the content in the test process directly.
     @get:Rule
-    val compose = createAndroidComposeRule<EditorTestActivity>()
+    val compose = createComposeRule()
 
     @Test
     fun wideWindowKeepsInspectorAndPreviewSideBySide() {

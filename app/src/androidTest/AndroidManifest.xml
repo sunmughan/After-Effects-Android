@@ -3,6 +3,7 @@
     <application>
         <activity
             android:name="ai.effectcraft.android.EditorTestActivity"
-            android:exported="true" />
+            android:exported="true"
+            android:process="ai.effectcraft.android" />
     </application>
 </manifest>

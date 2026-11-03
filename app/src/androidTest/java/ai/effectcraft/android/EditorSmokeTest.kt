@@ -131,6 +131,13 @@ class EditorSmokeTest {
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithText("Move ↑", substring = true).performClick()
         compose.onNodeWithText("Remove layer", substring = true).performClick()
+        // The phone inspector is a ModalBottomSheet dialog window; its removal
+        // is platform-async and outside Compose idle tracking, so wait for the
+        // status to surface instead of asserting in the same frame. The
+        // assertion itself is unchanged.
+        compose.waitUntil(timeoutMillis = 5_000) {
+            runCatching { compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed() }.isSuccess
+        }
         assertEditorStatus("Layer removed · unsaved")
         assertTrue("Removed layer should no longer be present", compose.onAllNodesWithText("Shape 4").fetchSemanticsNodes().isEmpty())
     }
