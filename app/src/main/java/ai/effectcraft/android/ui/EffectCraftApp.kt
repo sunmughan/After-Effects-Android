@@ -49,6 +49,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
     }
     var savedProjects by remember { mutableStateOf(projectStore.listSavedProjects()) }
+    var offlineAssets by remember(offlineAssetStore) { mutableStateOf(offlineAssetStore.list()) }
     var selectedLayerId by remember {
         mutableStateOf(project.layers.firstOrNull()?.id.orEmpty())
     }
@@ -143,6 +144,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     ecprojStore.save(updated)
                     importedEcproj = updated
                     canonicalProjectInfo = parsed
+                    offlineAssets = offlineAssetStore.list()
                     saveMessage = "Media copied offline · relinked"
                 }.onFailure { error -> saveMessage = "Media relink failed · ${error.message ?: "storage error"}" }
             }
@@ -192,6 +194,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             isPlaying = isPlaying,
             saveMessage = saveMessage,
             savedProjects = savedProjects,
+            offlineAssets = offlineAssets,
             canUndo = undoStack.isNotEmpty(),
             canRedo = redoStack.isNotEmpty(),
             onUndo = {
@@ -233,6 +236,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     redoStack = emptyList()
                     saveMessage = "Opened locally · ${opened.name}"
                 }
+            },
+            onDeleteOfflineAsset = { sha256 ->
+                runCatching { offlineAssetStore.delete(sha256) }
+                    .onSuccess {
+                        offlineAssets = offlineAssetStore.list()
+                        saveMessage = "Offline media removed"
+                    }
+                    .onFailure { saveMessage = "Media removal failed · ${it.message ?: "storage error"}" }
             },
             onValidateEcproj = { validateEcprojLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
             onExportEcproj = {
