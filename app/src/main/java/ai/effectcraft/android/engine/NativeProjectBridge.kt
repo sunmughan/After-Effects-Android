@@ -55,6 +55,13 @@ object NativeProjectBridge {
         return runCatching { setLayerPositionEcprojNative(json, compositionId, layerId, x, y) }.getOrNull()
     }
 
+    /** Authors a native Position, Scale or Rotation keyframe at a composition frame. */
+    fun setLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, x: Double, y: Double, z: Double): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation")) return null
+        return runCatching { setLayerTransformKeyframeEcprojNative(json, compositionId, layerId, property, frame, x, y, z) }.getOrNull()
+    }
+
     /** Sets canonical Transform/Scale X and Y percent while preserving Z. */
     fun setLayerScaleEcproj(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String? {
         ensureLoaded()
@@ -215,6 +222,9 @@ object NativeProjectBridge {
             loadAttempted = true
         }
     }
+
+    @JvmStatic
+    private external fun setLayerTransformKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, x: Double, y: Double, z: Double): String
 
     @JvmStatic
     private external fun setLayerPositionEcprojNative(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String
