@@ -1508,6 +1508,7 @@ mod tests {
         use effectcraft_project::{build, Comp, Footage, FootageKind, ItemKind, LayerSource};
         use effectcraft_color::Label;
         use effectcraft_time::{FrameRate, Tick};
+        use image::ImageEncoder;
 
         let mut png = Vec::new();
         image::codecs::png::PngEncoder::new(&mut png)
