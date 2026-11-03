@@ -359,7 +359,7 @@ class EditorSmokeTest {
         val interrupted = target.resolveSibling(target.name + ".tmp")
         val pending = JSONObject(target.readText(Charsets.UTF_8))
             .put("name", "Recovered revision")
-            .put("updatedAtEpochMillis", project.updatedAtEpochMillis + 60_000L)
+            .put("updatedAtEpochMillis", JSONObject(target.readText(Charsets.UTF_8)).getLong("updatedAtEpochMillis") + 60_000L)
         interrupted.writeText(pending.toString(2), Charsets.UTF_8)
 
         val recovered = store.load(project.id)
