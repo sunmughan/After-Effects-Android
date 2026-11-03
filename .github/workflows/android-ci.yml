@@ -190,3 +190,105 @@ jobs:
             app/build/reports/androidTests/connected/
           if-no-files-found: error
           retention-days: 30
+
+  # M0 criterion #1 (repository builds reproducibly): a second, independent
+  # build of the SAME workflow run's commit on a fresh runner, compared
+  # against the android job's APK. This job intentionally restores NO
+  # cache (no actions/cache, no setup-gradle cache) so the rebuild is
+  # not warmed by the first build's outputs, and it pins the checkout
+  # to github.sha, the same commit the android job built. It rebuilds
+  # only what determines the artifact (both native ABIs + assembleDebug);
+  # unit/emulator tests do not change the APK, so they are not re-run
+  # here. It changes no existing step or threshold in the android job.
+  # The comparison reports three levels (see
+  # scripts/compare-reproducibility.py): raw APK bytes, APK content
+  # entries excluding debug-signature files, and native .so bytes. The
+  # job fails on a content or native mismatch; a raw-bytes mismatch
+  # alone is reported, not failed, because a debug APK is signed with
+  # the fresh runner's ephemeral debug keystore.
+  reproducibility:
+    name: Rebuild and compare debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: android
+    steps:
+      - name: Check out source at the same commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Record rebuilt commit
+        run: |
+          git rev-parse HEAD
+          git status --porcelain
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12266719
+          packages: "ndk;28.2.13676358"
+          accept-android-sdk-licenses: true
+
+      - name: Configure Android NDK
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked --force
+
+      - name: Build shared Rust project bridge (ARM64)
+        working-directory: native
+        run: cargo ndk -t arm64-v8a -o ../app/src/main/jniLibs build --release
+
+      - name: Build shared Rust project bridge (x86_64 emulator)
+        working-directory: native
+        run: cargo ndk -t x86_64 -o ../app/src/main/jniLibs build --release
+
+      - name: Verify packaged JNI ABIs
+        run: |
+          test -s app/src/main/jniLibs/arm64-v8a/libeffectcraft_android.so
+          test -s app/src/main/jniLibs/x86_64/libeffectcraft_android.so
+
+      - name: Assemble debug APK (second build)
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Download first-build APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: effectcraft-android-build-and-audit
+          path: first-build
+
+      - name: Compare first and second builds
+        run: |
+          first_apk="$(find first-build -name 'app-debug.apk' | head -n 1)"
+          test -n "$first_apk"
+          test -s "$first_apk"
+          python3 scripts/compare-reproducibility.py \
+            "$first_apk" \
+            app/build/outputs/apk/debug/app-debug.apk \
+            app/src/main/jniLibs \
+            reproducibility-report.txt
+
+      - name: Upload reproducibility report and second APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: effectcraft-android-reproducibility
+          path: |
+            reproducibility-report.txt
+            app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
