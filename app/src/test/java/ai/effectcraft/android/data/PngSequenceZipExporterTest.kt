@@ -73,6 +73,8 @@ class PngSequenceZipExporterTest {
         assertEquals(listOf(0), rendered)
         // The first completed entry remains readable; callers must discard the partial document.
         ZipInputStream(ByteArrayInputStream(output.toByteArray())).use { zip ->
+            assertEquals("sequence.json", zip.nextEntry?.name)
+            zip.closeEntry()
             assertEquals("frame-000000.png", zip.nextEntry?.name)
         }
     }

@@ -67,6 +67,20 @@ class PngSequenceZipValidatorTest {
     }
 
     @Test
+    fun rejectsManifestSettingsThatDoNotMatchThePlan() {
+        val expected = plan()
+        val other = plan(start = 1, end = 2)
+        val file = archive(listOf(
+            "sequence.json" to manifest(other),
+            expected.zipEntryName(0) to png(),
+            expected.zipEntryName(1) to png()
+        ))
+        assertThrows(IllegalArgumentException::class.java) {
+            PngSequenceZipValidator.validate(file, expected)
+        }
+    }
+
+    @Test
     fun rejectsWrongPngDimensionsAndEmptyArchive() {
         assertThrows(IllegalArgumentException::class.java) {
             PngSequenceZipValidator.validate(
