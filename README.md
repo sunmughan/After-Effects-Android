@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 and M1 accepted on CI #286 (18/18 emulator instrumentation passed); M2 is in progress.** Exact tested commit: `bd274c7879cdd596d767303ace8791012543f199`. M2 import-format guard is commit `53b6bc6e844423703216f99eb8e3d0318f05d106`; latest HEAD `1982e17b3e4fddcd4a7a293d50e20aa849a9d27a` has CI #290 pending. EffectCraft `.ecproj` JSON and `.ecprojx` XML are supported; Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
+> **Current status: M0 and M1 accepted on CI #286 (18/18 emulator instrumentation passed); M2 is in progress.** Exact tested commit: `bd274c7879cdd596d767303ace8791012543f199`. M2 import-format guard is commit `53b6bc6e844423703216f99eb8e3d0318f05d106`; the follow-up M2 code and tracker commits are awaiting exact-head CI. EffectCraft `.ecproj` JSON and `.ecprojx` XML are supported; Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
 
 ## Product direction
 
@@ -31,6 +31,10 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 ## Development status
 
-M0 foundation and M1 editor acceptance are complete at the tested CI #286 commit. M2 canonical import guard work is in progress; its exact-head CI and new JVM tests remain pending.
+- **M0 foundation: COMPLETE** at tested commit `bd274c7879cdd596d767303ace8791012543f199`; CI #286 passed Wrapper/dual ABI/JNI, 13 Rust tests, JVM tests, 18/18 emulator instrumentation and dependency/license inventory.
+- **M1 editor foundation: COMPLETE** at the same tested commit; all 18 emulator cases passed (offline project save/open/upsert, layers, properties, Undo/Redo, timeline, adaptive workspace and native parser invocation).
+- **M2: IN PROGRESS.** Commit `53b6bc6e844423703216f99eb8e3d0318f05d106` adds explicit format classification/import guardrails and three JVM tests. Exact-head CI after these code and documentation commits is pending.
+- Supported canonical interchange: EffectCraft `.ecproj` JSON and `.ecprojx` XML. Effekseer `.efkproj` has no integrated parser/converter; Adobe `.aep` is proprietary and no licensed compatible parser is integrated. Android `.efx-draft` files use Open offline project, not canonical import.
+- M3 actual CPU renderer/JNI integration is partial; M4 editing/keyframe integration is partial; M5 export, M6 reliability/device matrix and M7 release are not complete.
 
-M0/M1 evidence: [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232) (dual ABI, 13 Rust tests, JVM suite, 18/18 emulator tests and audit artifact). M2 import-format guard commit `53b6bc6e` is awaiting CI #287. M0/M1 evidence: [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232) (dual ABI, 13 Rust tests, JVM suite, 18/18 emulator tests and audit artifact). M2 import-format guard commit `53b6bc6e` awaits current-head CI #289. See [PHASES.md](PHASES.md) for per-phase acceptance, test evidence, commits and blockers; [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones; and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge and engine integration gates.
+M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232). See [PHASES.md](PHASES.md) for per-phase acceptance, test evidence, commits, blockers and release gates; [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones; and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for JNI/render integration details.
