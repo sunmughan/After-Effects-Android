@@ -49,3 +49,5 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - Reference-aware media deletion is guarded in both UI and app callback; catalog test covers restart/sort, and reference tests cover persistence/replacement/removal. Latest implementation commit `2fcff068`; exact-head CI pending.
 
 - API 30 instrumentation now checks the offline media library header action and empty-state dialog (`fe195564`); current-head CI pending.
+
+- Canonical import/relink persistence is now transactional with rollback of asset-reference mappings on project-cache save failure (`79fb8566`).
