@@ -112,7 +112,6 @@ fun EditorScreen(
     onRedo: () -> Unit,
     onSave: () -> Unit,
     onOpenProject: (String) -> Unit,
-    onOpenMediaLibrary: () -> Unit,
     onDeleteOfflineAsset: (String) -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
