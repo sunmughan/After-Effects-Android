@@ -1,5 +1,12 @@
 # EffectCraft Android phase tracker
 
+### Run 20 — M0/M1 acceptance and import-format guardrails (2026-11-03)
+- Exact-head CI [#286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232) on commit `bd274c7879cdd596d767303ace8791012543f199` completed **success**. All 25 job steps succeeded: pinned Gradle Wrapper 9.5.0 clean-checkout invocation, ARM64 + x86_64 native bridge compilation/package verification, Rust tests (13 passed), dependency/license inventory, debug APK, JVM tests, Android API 30 x86_64 emulator instrumentation (18/18 passed, 0 skipped/failed), and build/audit artifact upload (artifact ID `13209746628`). Instrumentation explicitly includes `nativeBridgeLoadsAndInvokesCanonicalParserOnEmulator`, the EffectCraft XML typed-value round trip, offline multi-project save/open/upsert, layer actions/selection/Undo/Redo, opacity/visibility, timeline scrub/play/pause, and 1080dp adaptive workspace.
+- This closes technical M0 and the scoped M1 editor-foundation exit gates at the tested commit. Physical ARM64 phone/tablet validation, production rendering/export and broader lifecycle/performance remain later-phase requirements.
+- M2 implementation commit `53b6bc6e844423703216f99eb8e3d0318f05d106` adds `ProjectFileFormats`: SAF canonical import now rejects known `.efkproj` (Effekseer parser/converter absent), `.aep` (proprietary/licensed parser absent), and Android `.efx-draft` (must use offline Open) with explicit actionable messages before reading/caching. `.ecproj` JSON/`.ecprojx` XML and extensionless content-based parsing remain allowed. Added 3 JVM tests for supported extensions, case-insensitivity, unsupported boundaries and draft routing; current-head CI #287 is running and those new tests are pending verification.
+- Latest branch head at this update: `53b6bc6e844423703216f99eb8e3d0318f05d106`; no #287 pass is claimed yet.
+
+
 ### Run 19 — inspector reachability and instrumentation corrections (2026-11-03)
 - CI [#282](https://github.com/sunmughan/After-Effects-Android/actions/runs/41582544878) completed ARM64/x86_64 native builds, JNI packaging checks, Rust tests, dependency/license inventory, debug APK assembly and JVM tests; Android instrumentation failed 5 cases.
 - Exact diagnostic evidence from #282: the delete probe reported `BOUNDS left=0.0 top=0.0 right=0.0 bottom=0.0 | AFTER_REMOVE removed=0 unsavedChanges=1 keepOne=0 props=0 bg=1 title=1 accent=1 shape4=1 selShape4=1 selAccent=0`. The sheet dismissed while the model stayed unchanged; the text-only click was not reaching the delete action. The phone inspector content could overflow its sheet/short viewport.
@@ -66,47 +73,31 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Next: inspect #243 job/step logs and emulator result; fix failures, then verify the full M1 suite at exact HEAD. M0 remains INCOMPLETE pending green current-head dual-ABI/JNI/emulator CI; M1 acceptance stays pending.
 
 ## M0 — Foundation, toolchain and CI
-**Status: INCOMPLETE — baseline CI green, closure gates remain** · Baseline evidence commit: `1f32b1a11a468f9433d4781f831c56d6abd2702a`
-- [x] Native Android/Compose project and offline manifest.
-- [x] Pinned upstream EffectCraft revision, Rust bridge crate, ARM64 cross-build and Rust host tests.
-- [x] CI: Rust tests, ARM64 bridge build, APK assembly, Kotlin unit tests, emulator instrumentation, dependency/license inventory.
-- [x] CI concurrency group cancels stale PR commits so only the newest revision consumes a runner.
-- [x] Current-head CI run [41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104) completed **success** (2026-11-02).
-- [x] Run #247 built ARM64 + x86_64 JNI libraries, verified both packaged ABIs, passed Rust tests and generated dependency/license inventory; it then exposed the Kotlin import compile error recorded in Run 13.
-- [ ] Fresh current-head CI after `57011355` must pass Kotlin compilation/APK, JVM tests and emulator JNI load/parser instrumentation.
-- [x] Official Gradle Wrapper (9.5.0) committed in `eb2c6498e75079550c0c3fb0a5441b36102a2207`; distribution SHA-256 pinned in `gradle/wrapper/gradle-wrapper.properties`; CI selects `./gradlew` when present. Exact-head clean-checkout build is still pending.
-- [x] Validate corrected layer-move edge test and visibility persistence changes: assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`; subsequent unit tests passed on run #92 (emulator infrastructure failed before instrumentation). Latest interaction instrumentation is awaiting run #97.
-- [x] M0 runtime gate is emulator x86_64 JNI invocation; physical ARM64 device validation is explicitly moved to M6 compatibility (not a foundation blocker).
-- [x] Diagnosed latest emulator job failure: unit tests and APK succeeded; x86_64 Pixel 6 API 35 cold boot on runner took ~816 seconds and adb remained offline/broke pipes, never reached instrumentation. CI changed to smaller Pixel 2/API 30, explicitly permit Linux acceleration, and increase boot/job budgets in `8f6b406e6934f9c9fc9177f1d88a2c607e33325c`; the run remains slow/in progress and a fresh latest-head CI must verify this configuration.
-- [x] CI root-cause follow-up: an earlier emulator instrumentation attempt failed before tests because Android `activity`/`package` services were unavailable (`cmd: Can't find service`). Workflow now waits for `sys.boot_completed` and package service readiness before connected tests; current-head validation is pending.
-- [x] Repository structure, direct/transitive dependency and license inventory are audited in `docs/M0_REPOSITORY_AUDIT.md`; owner-selected Android license and full release NOTICE/legal review are release governance gates (M7), not a reason to block technical M0. Wrapper reproducibility is in CI; exact-head clean-checkout proof pending.
-- [x] Wrapper JAR/scripts/properties and distribution checksum are committed (`eb2c6498e75079550c0c3fb0a5441b36102a2207`); current CI invokes `./gradlew`. Exact-head validation pending.
-- [ ] Confirm native ABI load and an actual JNI parser call on emulator; ARM64 device smoke test is M6.
-- **Exit gate:** pinned clean-checkout build, Rust + Kotlin tests, dual ABI package, Android emulator JNI test, audit inventory generated/reviewed; CI green on exact HEAD. Run #247 is the latest completed failure; fresh CI after `57011355` is required; no pass claimed yet.
+**Status: COMPLETE — exact-head CI #286 passed** · acceptance evidence: commit `bd274c7879cdd596d767303ace8791012543f199`, [run #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232).
+- [x] Native Android/Compose project and offline manifest; no INTERNET permission.
+- [x] Pinned upstream EffectCraft revision, Rust/JNI bridge, Android toolchain and ABI targets.
+- [x] Official Gradle Wrapper 9.5.0 with pinned distribution SHA-256; clean CI checkout invoked `./gradlew`.
+- [x] ARM64 + x86_64 JNI libraries compiled and packaged; both shared objects verified non-empty.
+- [x] Rust bridge suite: **13 passed, 0 failed**; includes canonical project edits/round-trips, offline PNG decode and bounded CPU-render frame.
+- [x] Debug APK assembled; JVM unit tests passed.
+- [x] Android API 30 x86_64 emulator: **18/18 instrumentation passed, 0 skipped/failed**; native bridge loaded and canonical parser invoked via JNI.
+- [x] Resolved Android/Rust dependency trees and license inventory generated; audit artifact uploaded (run #286 artifact ID `13209746628`).
+- [x] CI job completed success on exact tested HEAD; no test was removed/weakened to obtain green.
+- **Evidence limitation:** emulator proves x86_64 runtime. Physical ARM64 installation/smoke and performance matrix are M6, not M0.
+- **Exit gate: SATISFIED.**
 
 ## M1 — Professional native editor foundation
-**Status: IN PROGRESS — M0 current-head CI closure pending; offline multi-project workflow now implemented**
-- [x] Adaptive Compose phone/tablet workspace, offline starter composition and local draft persistence.
-- [x] Add/select/remove layers, opacity slider, timeline scrubbing and transport simulation.
-- [x] Emulator smoke tests for launch, New, add-layer action and draft round-trip.
-- [x] Layer reorder (up/down) wired in the inspector; pure reducer has tests for order, identity, edge clamping and unknown IDs (CI verification pending for this implementation commit).
-- [x] Delete-selection continuity: reducer chooses the adjacent surviving layer after deleting the selected first/middle layer and preserves selection when the last-layer invariant blocks deletion; regression test `deletingSelectedLayerSelectsAdjacentLayerAndPreservesSelectionWhenDeletionIsRejected` added in `fb2c9bc5` (CI #240 pending).
-- [x] Bounded (50 snapshots) project undo/redo history wired for new composition, add/remove/reorder and opacity changes; emulator test covers add-layer undo/redo (CI pending).
-- [x] Layer visibility toggle is stateful, persisted in `.efx-draft` schema v1 with backward-compatible default `true`, and undoable; instrumentation draft round-trip covers hidden layer.
-- [x] CI failure diagnosis: unit test had an incorrect expected ID for moving first layer to end; corrected in `427f54a112a0167d6d3272613d94a7518bac6d78` (the subsequent run's unit tests passed; emulator infrastructure failed before test installation).
-- [x] Layer naming UI in inspector with Apply/trim/blank validation; pure rename reducer unit tests preserve stable IDs.
-- [x] Phone inspector layer rename instrumentation assertion.
-- [x] Accessible semantics labels for layer visibility, layer opacity and timeline playhead; instrumentation asserts visibility toggle, exact 50% opacity, playhead scrub to frame 60/timecode 00:00:02:00, playback advances beyond frame 60, pause/play, and added-layer reorder/delete. `cceea410` extends the property test to verify exact values across Undo/Redo; playback progression assertion is `61aae48e`.
-- [x] Pure project validation enforces composition dimensions (320–3840), frame rate (1–120), duration (1–3600), at least one layer, unique IDs, nonblank project/layer names, and finite normalized opacity. Draft save/load reject invalid models; unit coverage in `77001484`.
-- [ ] Verify expanded interaction instrumentation on current head. Run #204 at `9ddc9fe9` booted the emulator and executed all 14 tests; 7 failed due to actual header/status visibility and test-harness query/layout issues. Root causes and corrective commits are recorded at the top of this tracker. Fresh latest-head run after `25e1521a` must pass all 14 tests; do not mark acceptance until then. Run #192 (HEAD `73341011`) booted Pixel 2/API 30 successfully and reached `compileDebugAndroidTestKotlin`; it failed only because `SemanticsNodeInteractionCollection.assertCountEquals` is unavailable in the configured Compose test dependency. Fixed without weakening the deletion assertion in `77efd7df`. Latest M1 implementation commit `77001484` is followed by documentation commits `7d114cca` and `76c7bde0`; run #202 for the README head is queued, and a fresh latest-head CI after tracker update is required. Successful instrumentation and all-green current-head CI are still required. Run #185 at `43211772` passed JVM unit tests after the fixes: (1) `CanonicalProjectInfoTest.parsesCompositionLayerAndLinkedMediaInventory`, (2) `CanonicalProjectInfoTest.rejectsInvalidNativeMetadataEnvelope` now use JVM `org.json` dependency from `b151a301`; (3) deletion invariant test fixed in `c30385e1`. No assertions were removed or weakened. Instrumentation was blocked before test execution by runner lacking `/dev/kvm` permissions; workflow fix `5a4d3d73` now attempts to grant access; run #189 reached emulator startup but failed earlier at Android-test Kotlin compilation; corrected test imports committed in `6b139f12`; fresh run #190 is in progress.
-- [x] Composition settings panel edits width/height (320–3840 px), frame rate (1–120), and duration (1–3600 frames); changes enter bounded undo history and clamp the playhead when duration shrinks.
-- [x] Instrumentation for composition frame-rate apply + undo, now verifies exact 30 FPS model restoration after Undo; CI validation pending.
-- [x] Instrumentation for timeline layer selection (inspector reflects selected layer opacity) and editor Save → app-private draft reload.
-- [x] Fixed native layer-stack test expectation (`C,B,A`) in `0469e00`; run #174's Rust bridge test step passed.
-- [ ] Run all expanded M1 instrumentation on current head; fix actual failures without reducing assertions. Earlier compile error at `EditorScreen.kt:660` (`LaunchedEffect` unresolved) was fixed in `d86fab9`. Run #185 skipped tests due to emulator startup failure (KVM access denied); workflow fix `5a4d3d73` awaits fresh run. JVM unit tests and APK assembly are green at `43211772`.
-- [x] Added wide-window adaptive workspace instrumentation in `1acb7756`: isolated test Activity allows test-supplied Compose content at forced 1080dp width and asserts PROPERTIES + COMPOSITION VIEWER side-by-side. CI verification pending. Foldable physical/posture and compact-width scrolling still need device validation.
-- [ ] Final M1 acceptance audit: offline create/edit/save/reload, layer select/add/delete/reorder/rename/visibility/opacity, composition settings + undo/redo, timeline scrub/play/pause, persistence and adaptive UI all pass.
-- **Exit gate:** all listed editor interactions are stateful and tested; no placeholder interaction is represented as a real engine feature. Latest actual emulator failure is #204 (7/14 tests); responsive-header and test harness fixes are committed in `9ec1a3f5`, `3cfcfbd`, `14e6d9b`, `4e91c149`, `1acb7756`, and `25e1521a`. Current-head full CI/emulator evidence still required.
+**Status: COMPLETE — scoped editor acceptance passed** · evidence: commit `bd274c7879cdd596d767303ace8791012543f199`, [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232), Android instrumentation **18/18 passed**.
+- [x] Adaptive Jetpack Compose phone/tablet workspace; 1080dp wide-window instrumentation verifies side-by-side properties and composition viewer.
+- [x] Offline starter project, app-private draft persistence, saved-project catalog, stable-ID save/upsert/deduplication and open/reload of latest revision.
+- [x] Layer select/add/delete/reorder/rename, visibility and opacity; selection continuity and last-layer invariant.
+- [x] Bounded 50-snapshot Undo/Redo for scoped project/layer/composition changes; deletion Undo/Redo restores project, selection and playhead.
+- [x] Composition width/height/FPS/duration editing with validation, history and playhead clamping.
+- [x] Timeline selection, frame scrubbing/timecode, FPS-aware playback, play/pause and accessible semantics.
+- [x] Offline draft schema v1 round-trip/backward-compatible visibility default; invalid models rejected.
+- [x] All 18 current emulator cases passed, including `savedOfflineProjectsCanBeOpenedWithoutNetwork`, `effectCraftEcprojxXmlRoundTripsTypedProjectValues`, `deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection`, `editorSaveButtonPersistsTheCurrentOfflineLayerStack`, `nativeBridgeLoadsAndInvokesCanonicalParserOnEmulator`, and adaptive workspace.
+- **Scope boundary:** bootstrap `.efx-draft` is an Android editing model, not upstream `.ecproj`; canonical engine-backed editing/preview remains M2/M3/M4. No mock render is represented as actual output.
+- **Exit gate: SATISFIED for M1 foundation.** M2 onward continues independently.
 
 ## M2 — Project formats, import/save and media
 **Status: PARTIAL / M1 CI acceptance pending — EffectCraft `.ecproj` JSON and `.ecprojx` XML interchange now implemented; Effekseer `.efkproj` remains unsupported**
