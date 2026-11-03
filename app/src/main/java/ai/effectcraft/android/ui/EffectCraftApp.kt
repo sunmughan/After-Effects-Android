@@ -42,6 +42,7 @@ import ai.effectcraft.android.data.PngSequenceZipExporter
 import ai.effectcraft.android.data.PngSequenceZipValidator
 import ai.effectcraft.android.data.RenderQueuePlan
 import ai.effectcraft.android.data.RenderQueueSettings
+import ai.effectcraft.android.data.StaleSequenceExportCleanup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -427,6 +428,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // against what Android still reports, so a lost grant shows as LOST
     // instead of silently disappearing.
     LaunchedEffect(Unit) {
+        // A process kill can bypass the export coroutine's finally block. Remove
+        // only staging ZIPs older than the recovery window; never touch active exports.
+        runCatching {
+            val cleanup = StaleSequenceExportCleanup.cleanup(context.cacheDir)
+            if (cleanup.removed > 0) saveMessage = "Recovered ${cleanup.removed} abandoned PNG sequence archive(s)"
+        }
         runCatching {
             val cached = ecprojStore.load()
             repositoryProjectId = if (cached != null) {
