@@ -1039,6 +1039,10 @@ private fun CanonicalProjectEditor(
     // survivors and falls back to the first remaining layer when none
     // survive, instead of pointing at stale data.
     val selectedLayers = composition?.let { ai.effectcraft.android.data.CanonicalLayerSelection.resolveAll(it.layers, selectedLayerIds) } ?: emptyList()
+    // The ids actually shown as selected: when the parent selection is
+    // empty, resolveAll falls back to the first layer, so the marker must
+    // follow the resolved selection, not the raw empty set.
+    val effectiveSelectedIds = selectedLayers.map { it.id }.toSet()
     val layer = selectedLayers.firstOrNull()
     LaunchedEffect(composition?.id, composition?.layers?.map { it.id }) {
         val current = composition?.layers ?: emptyList()
@@ -1210,7 +1214,7 @@ private fun CanonicalProjectEditor(
                                 onLongClick = {
                                     onSelectionChange(
                                         ai.effectcraft.android.data.CanonicalLayerSelection.toggleSelection(
-                                            selectedLayerIds, item.id, composition.layers
+                                            effectiveSelectedIds, item.id, composition.layers
                                         )
                                     )
                                 }
@@ -1218,8 +1222,8 @@ private fun CanonicalProjectEditor(
                             .semantics { contentDescription = "Canonical layer row ${item.name}" }
                     ) {
                         Text(
-                            "${if (item.id in selectedLayerIds) "● " else "○ "}${item.name}  ·  ${item.source}",
-                            color = if (item.id in selectedLayerIds) EditorPalette.mint else EditorPalette.text,
+                            "${if (item.id in effectiveSelectedIds) "● " else "○ "}${item.name}  ·  ${item.source}",
+                            color = if (item.id in effectiveSelectedIds) EditorPalette.mint else EditorPalette.text,
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1530,7 +1534,7 @@ private fun CanonicalProjectEditor(
                             // layer.
                             onSelectionChange(
                                 ai.effectcraft.android.data.CanonicalLayerSelection.selectionAfterDelete(
-                                    selectedLayerIds, composition.layers, setOf(layer.id)
+                                    effectiveSelectedIds, composition.layers, setOf(layer.id)
                                 )
                             )
                             onDeleteLayer(composition.id, layer.id)

@@ -288,6 +288,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onApplyComposition = { _, _, _, _ -> },
                     canonicalProject = canonical,
                     canEditCanonicalProject = true,
+                    canonicalSelectedLayerIds = setOf(2L),
                     onRenameCanonicalLayer = { _, _, _ -> },
                     onAddCanonicalTextLayer = { _, _ -> },
                     onSetCanonicalLayerVisibility = { _, _, _ -> },
