@@ -39,6 +39,7 @@ import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.data.ProjectFileFormats
 import ai.effectcraft.android.data.ProjectKeyframeStore
 import ai.effectcraft.android.data.PngSequenceZipExporter
+import ai.effectcraft.android.data.PngSequenceZipValidator
 import ai.effectcraft.android.data.RenderQueuePlan
 import ai.effectcraft.android.data.RenderQueueSettings
 import kotlinx.coroutines.delay
@@ -295,6 +296,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                                 }
                             )
                         }
+                        PngSequenceZipValidator.validate(tempArchive, plan)
                     }
                     currentCoroutineContext().ensureActive()
                     sequenceExportWritingOutput = true
