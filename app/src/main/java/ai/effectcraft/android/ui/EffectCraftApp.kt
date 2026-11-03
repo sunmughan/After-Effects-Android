@@ -42,6 +42,7 @@ import ai.effectcraft.android.data.PngSequenceZipExporter
 import ai.effectcraft.android.data.PngSequenceZipValidator
 import ai.effectcraft.android.data.RenderQueuePlan
 import ai.effectcraft.android.data.RenderQueueSettings
+import ai.effectcraft.android.data.SafDocumentWriter
 import ai.effectcraft.android.data.StaleSequenceExportCleanup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -217,6 +218,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             } else {
                 frameExportInProgress = true
                 frameExportJob = exportScope.launch {
+                    val exportJob = currentCoroutineContext()[Job]
+                    val stagedPng = File(context.cacheDir, "effectcraft-frame-${System.nanoTime()}.png")
                     try {
                         saveMessage = "Rendering frame $frame at full resolution…"
                         val rendered = withContext(Dispatchers.IO) {
@@ -230,11 +233,19 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             }
                         }
                         currentCoroutineContext().ensureActive()
-                        saveMessage = "Writing PNG…"
+                        saveMessage = "Encoding PNG in app-private staging…"
                         val dimensions = withContext(Dispatchers.IO) {
-                            context.contentResolver.openOutputStream(uri)?.use { output ->
-                                RenderedFramePng.write(rendered, output)
-                            } ?: error("Unable to open selected output document")
+                            FileOutputStream(stagedPng).use { output -> RenderedFramePng.write(rendered, output) }
+                        }
+                        currentCoroutineContext().ensureActive()
+                        saveMessage = "Copying PNG to selected destination…"
+                        withContext(Dispatchers.IO) {
+                            SafDocumentWriter.copyFileToDocument(
+                                context = context,
+                                sourceFile = stagedPng,
+                                destination = uri,
+                                ensureActive = { exportJob?.ensureActive() }
+                            )
                         }
                         saveMessage = "Exported frame $frame · ${dimensions.width}×${dimensions.height} PNG"
                     } catch (cancelled: CancellationException) {
@@ -243,6 +254,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     } catch (failure: Throwable) {
                         saveMessage = "Frame export failed · ${failure.message ?: "render or write error"}"
                     } finally {
+                        stagedPng.delete()
                         frameExportInProgress = false
                         frameExportJob = null
                     }
@@ -310,9 +322,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     sequenceExportWritingOutput = true
                     saveMessage = "Copying completed ZIP to selected destination…"
                     withContext(Dispatchers.IO) {
-                        context.contentResolver.openOutputStream(uri)?.use { output ->
-                            tempArchive.inputStream().use { input -> input.copyTo(output, 64 * 1024) }
-                        } ?: error("Unable to open ZIP destination")
+                        SafDocumentWriter.copyFileToDocument(
+                            context = context,
+                            sourceFile = tempArchive,
+                            destination = uri,
+                            ensureActive = { exportJob?.ensureActive() }
+                        )
                     }
                     sequenceExportProgress = 100
                     saveMessage = "Exported ${plan.frameCount} PNG frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS"
