@@ -1,5 +1,9 @@
 # EffectCraft Android phase tracker
 
+### Run 18 — delete diagnostic in flight, DO NOT REMOVE (2026-11-03)
+- The user-approved delete-test fix task re-adds the temporary DeleteDiagTest. Two earlier diagnostic runs were cancelled by concurrent pushes or had the diagnostic removed by other agents before its CI failure message was read, so the delete status root cause is still unproven from CI evidence. This diagnostic deliberately fails with a semantics count dump in its failure message. It must stay in place until that message is read and the real delete cause is fixed, then it will be removed by the same task. No product test or assertion is removed by this commit.
+- Tip breaks already fixed by this task and still present at this HEAD: the adaptive test picker parameters (commit 2aafaa4) and the missing HeaderBar onExportEcprojx parameter (commit 3f02c32). No license chosen, no visibility change, PR #1 not merged, M0 not marked complete.
+
 ### Run 17 — scalar keyframe engine groundwork and diagnostic cleanup (2026-11-03)
 - Added immutable `PropertyTrack` / `PropertyKeyframe` data types and `PropertyTrackEditor` operations: sorted upsert (same-frame replacement), key removal, finite/non-negative validation, linear interpolation, and constant endpoint hold. This is pure Kotlin groundwork; it is **not yet wired to persisted canonical project tracks or timeline UI**, so M4 keyframe authoring remains incomplete.
 - Added JVM tests for key ordering/replacement, interpolation at/between/outside keys, removal/empty tracks and invalid values: `PropertyTrackEditorTest` (4 test methods). A separate `kotlinc` smoke harness compiled the primitive and passed upsert/order/interpolation/endpoints/removal/validation checks; this is not a substitute for Gradle/JUnit CI. Commits: implementation `547db7ca44ef964b702c3bad1e99f0f83f11172b`, tests `f4a7f9dcc4a7493642cc69f79ecf5d01d2ff7561`.
