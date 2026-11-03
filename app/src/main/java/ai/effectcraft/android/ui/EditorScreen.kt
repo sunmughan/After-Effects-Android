@@ -172,7 +172,7 @@ fun EditorScreen(
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
     onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
     onAddCanonicalLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
-    onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit,
+    onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
