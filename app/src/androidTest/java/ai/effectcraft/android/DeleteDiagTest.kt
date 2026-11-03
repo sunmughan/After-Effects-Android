@@ -42,8 +42,7 @@ class DeleteDiagTest {
         compose.onNodeWithText("Props").performClick()
         val removeNode = compose.onNodeWithText("Remove layer", substring = true).fetchSemanticsNode()
         val bounds = removeNode.boundsInWindow
-        val displayed = runCatching { compose.onNodeWithText("Remove layer", substring = true).assertIsDisplayed() }.isSuccess
-        val boundsInfo = "BOUNDS left=" + bounds.left + " top=" + bounds.top + " right=" + bounds.right + " bottom=" + bounds.bottom + " displayed=" + displayed
+        val boundsInfo = "BOUNDS left=" + bounds.left + " top=" + bounds.top + " right=" + bounds.right + " bottom=" + bounds.bottom
         compose.onNodeWithText("Remove layer", substring = true).performClick()
         compose.waitForIdle()
         fail(boundsInfo + " | " + dump("AFTER_REMOVE"))
