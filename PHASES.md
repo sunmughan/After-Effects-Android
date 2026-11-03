@@ -382,3 +382,13 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Four JVM test methods cover inclusive frame mapping/names, progress boundaries, invalid inputs, UHD budget and queue-budget rejection. Files: `app/src/main/java/ai/effectcraft/android/data/RenderQueuePlan.kt`, `app/src/test/java/ai/effectcraft/android/data/RenderQueuePlanTest.kt`.
 - This is M5 planning/validation groundwork, not an executor or UI feature; single-frame PNG remains the only shipped export action. Exact-head CI will validate the new Kotlin/JUnit files.
 - Concurrent CI #374 (head `2829b8a`) is running on the compile-fix commit. Its predecessor #373 failed at APK assembly solely on the already-diagnosed `importedEcprojx` typo; correction is now committed. The new queue-plan commit will supersede #374 and require a fresh exact-head run.
+
+
+### Run 36 — M5 streaming PNG-sequence ZIP executor (2026-11-03)
+- Implemented `PngSequenceZipExporter` over `RenderQueuePlan`: lazily renders one frame at a time, validates each PNG signature/IHDR and exact plan dimensions, writes deterministic ZIP entries with stable timestamps, reports completed-frame/percentage progress, and checks cancellation before render and before entry write. No decoded bitmap sequence is retained.
+- Added 3 JVM test methods: ZIP order and byte-preservation/progress; cancellation prevents rendering the next frame and leaves the first entry readable (caller must discard partial SAF document); invalid PNG and dimension mismatch rejection.
+- Implementation commit `1910de567aa3ae55727602a5ebf4c588e63969b6`; tests commit `432f85cad79be4aa895a9298f5481baf0494eed0`.
+- Local Kotlin compile + executable smoke harness PASS: two ZIP entries with exact payload bytes, 50/100% progress, cancellation after frame 0, dimension mismatch rejected. This is standalone `kotlinc` verification; Android Gradle/JUnit CI remains authoritative.
+- Exporter is a reusable streaming core, not yet connected to a SAF ZIP launcher/render queue UI. It writes directly to the supplied stream; cancellation leaves a partial ZIP, so the caller must abandon/delete the document or stage in app-private storage first. No video codec/audio capability is claimed.
+- At start of run, CI #375 on the previous planner head was in progress after ARM64/x86_64 native builds, JNI, Rust tests and license inventory; APK/JVM/emulator pending. New commits supersede it; exact-head run for this executor must be inspected next.
+- Next: wire executor to a CreateDocument(application/zip) UI using an app-private temporary ZIP (to make cancellation atomic), pass NativeSession render/PNG encoding per planned frame, expose width/height/FPS/range settings, then add end-to-end ZIP artifact validation and cancellation tests.
