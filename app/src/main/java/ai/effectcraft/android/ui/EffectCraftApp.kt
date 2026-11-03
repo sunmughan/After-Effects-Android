@@ -22,6 +22,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import ai.effectcraft.android.data.CanonicalProjectInfo
+import ai.effectcraft.android.data.CanonicalProjectDocument
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.engine.NativeProjectBridge
@@ -69,8 +70,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         if (uri != null) {
             runCatching {
                 runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                val source = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                    ?: error("Unable to read selected document")
                 val source = context.contentResolver.openInputStream(uri)?.use { CanonicalProjectDocument.readUtf8(it) }
                     ?: error("Unable to read selected document")
                 val native = NativeProjectBridge.inspectEcproj(source)
