@@ -24,6 +24,7 @@ import ai.effectcraft.android.data.CanonicalProjectDocument
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.data.OfflineAssetStore
+import ai.effectcraft.android.data.OfflineAssetReferences
 import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
@@ -42,6 +43,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
+    val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
     var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
     var pendingRelinkItemId by remember { mutableStateOf<Long?>(null) }
     var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null) }
@@ -50,6 +52,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
     var savedProjects by remember { mutableStateOf(projectStore.listSavedProjects()) }
     var offlineAssets by remember(offlineAssetStore) { mutableStateOf(offlineAssetStore.list()) }
+    var referencedOfflineAssetIds by remember(offlineAssetReferences) { mutableStateOf(offlineAssetReferences.referencedAssetIds()) }
     var selectedLayerId by remember {
         mutableStateOf(project.layers.firstOrNull()?.id.orEmpty())
     }
@@ -84,6 +87,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 val native = NativeProjectBridge.inspectEcproj(source)
                     ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
                 val parsedInfo = CanonicalProjectDocument.validateNativeEnvelope(native)
+                offlineAssetReferences.clear()
+                referencedOfflineAssetIds = emptySet()
                 val status = "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
                 ecprojStore.save(source)
                 importedEcproj = source
@@ -141,6 +146,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val metadata = NativeProjectBridge.inspectEcproj(updated)
                         ?: error("Unable to inspect updated canonical project")
                     val parsed = CanonicalProjectInfo.parse(metadata)
+                    offlineAssetReferences.setReference(itemId, offlineAsset.sha256)
+                    referencedOfflineAssetIds = offlineAssetReferences.referencedAssetIds()
                     ecprojStore.save(updated)
                     importedEcproj = updated
                     canonicalProjectInfo = parsed
@@ -195,6 +202,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             saveMessage = saveMessage,
             savedProjects = savedProjects,
             offlineAssets = offlineAssets,
+            referencedOfflineAssetIds = referencedOfflineAssetIds,
             canUndo = undoStack.isNotEmpty(),
             canRedo = redoStack.isNotEmpty(),
             onUndo = {
@@ -238,7 +246,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }
             },
             onDeleteOfflineAsset = { sha256 ->
-                runCatching { offlineAssetStore.delete(sha256) }
+                if (offlineAssetReferences.isReferenced(sha256)) {
+                    saveMessage = "Cannot remove media · linked by current project"
+                } else runCatching { offlineAssetStore.delete(sha256) }
                     .onSuccess {
                         offlineAssets = offlineAssetStore.list()
                         saveMessage = "Offline media removed"
