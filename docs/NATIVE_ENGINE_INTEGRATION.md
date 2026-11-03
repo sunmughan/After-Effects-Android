@@ -1,6 +1,6 @@
 # Native EffectCraft engine integration
 
-Last updated: 2026-11-02
+Last updated: 2026-11-03
 
 ## Pinned source
 
@@ -12,9 +12,11 @@ Last updated: 2026-11-02
 
 ## What the bridge does today
 
-`NativeProjectBridge.inspectEcprojNative(sourceJson)` passes JSON into upstream `effectcraft_project::Project` deserialization. On success it returns schema, item count, and composition IDs/dimensions/layer counts; invalid JSON/schema returns a structured error. Rust host tests currently verify rejection of an empty/non-project document.
+`NativeProjectBridge.inspectEcprojNative(sourceJson)` validates/deserializes the pinned upstream `effectcraft_project::Project` and returns composition/layer/footage metadata. JNI also performs canonical layer mutations (rename/add Text, reorder/delete, visibility, opacity and transforms) and footage relinking.
 
-**This is project validation/metadata inspection only.** It is not an engine session, frame renderer, media decoder, or exporter. The Compose composition viewer remains a decorative placeholder. The Android app's `.efx-draft` is a distinct bootstrap format and must never be mislabeled as `.ecproj`.
+`renderEcprojFrameNative` invokes the upstream `effectcraft_render::Renderer` CPU compositor for a requested composition/frame and returns width/height-prefixed RGBA bytes. Android decodes those bytes into the canonical composition viewer on `Dispatchers.Default`; the `.efx-draft` bootstrap canvas remains explicitly unrendered. Kotlin now retains a bounded process-local LRU of immutable rendered RGBA frames (12 MiB / 12 entries, SHA-256 project-content key) to avoid repeat CPU rendering at the same composition/frame/preview size.
+
+**This is actual CPU frame rendering, not a GPU renderer or production export pipeline.** The JNI call currently constructs a renderer per frame while sharing a native `MediaPool`; cancellation cannot interrupt a render already executing in JNI. GPU/Vulkan, explicit renderer/session lifecycle, media decoder validation, audio and export remain open. The Android app's `.efx-draft` is a distinct bootstrap format and must never be mislabeled as `.ecproj`.
 
 ## CI build
 
