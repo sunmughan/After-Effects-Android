@@ -4,7 +4,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.OutputStream
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.Properties
@@ -90,8 +89,13 @@ class OfflineAssetStore(
 
     @Synchronized
     fun list(): List<Asset> = readIndex().entries
-        .mapNotNull { (key, value) -> runCatching { (key as String).decodeHash().let { (value as String).decodeRecord(it) } }.getOrNull() }
-        .sortedWith(compareBy<Asset> { it.displayName.lowercase() }.thenBy { it.sha256 }
+        .mapNotNull { entry ->
+            runCatching {
+                val hash = (entry.key as String).decodeHash()
+                (entry.value as String).decodeRecord(hash)
+            }.getOrNull()
+        }
+        .sortedWith(compareBy<Asset> { it.displayName.lowercase() }.thenBy { it.sha256 })
 
     @Synchronized
     fun get(sha256: String): Asset? {
