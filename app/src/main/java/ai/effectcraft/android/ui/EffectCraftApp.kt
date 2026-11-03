@@ -21,6 +21,9 @@ import org.json.JSONObject
 import java.io.File
 import java.io.ByteArrayOutputStream
 import java.io.FileOutputStream
+import ai.effectcraft.android.data.CanonicalEditHistory
+import ai.effectcraft.android.data.CanonicalEditSnapshot
+import ai.effectcraft.android.data.CanonicalLayerSelection
 import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.CanonicalProjectDocument
 import ai.effectcraft.android.data.CanonicalProjectRepository
@@ -88,6 +91,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var pendingRelinkItemId by remember { mutableStateOf<Long?>(null) }
     var pendingReplaceAssetHash by remember { mutableStateOf<String?>(null) }
     var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null) }
+    var canonicalSelectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var canonicalUndoStack by remember { mutableStateOf(emptyList<CanonicalEditSnapshot>()) }
+    var canonicalRedoStack by remember { mutableStateOf(emptyList<CanonicalEditSnapshot>()) }
     // The main workspace viewer renders through one shared native session
     // for the current canonical project — not a per-frame re-parse, and not
     // the draft placeholder. The holder (not the session itself) is what
@@ -186,6 +192,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }
                 importedEcproj = source
                 canonicalProjectInfo = parsedInfo
+                canonicalSelectedIds = parsedInfo.compositions.firstOrNull()?.layers?.firstOrNull()?.let { setOf(it.id) } ?: emptySet()
+                canonicalUndoStack = emptyList()
+                canonicalRedoStack = emptyList()
                 refreshReferences()
                 saveMessage = status
             }.onFailure { error -> saveMessage = "Import failed · ${error.message ?: "invalid project"}" }
@@ -554,30 +563,86 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val selectedOpacityKeyframes = projectKeyframeTracks
         .firstOrNull { it.layerId == selectedLayerId && it.track.property == "opacity" }
         ?.track?.keyframes.orEmpty()
+    /**
+     * Commits an already validated canonical project source: inspect, parse,
+     * save to the local cache and repository, refresh the render session,
+     * and keep the selection on layers that still exist (falling back to
+     * the first layer). Throws on failure, so callers only record history
+     * after a commit has actually landed.
+     */
+    fun commitCanonicalSource(updated: String, successMessage: String, selectionOverride: Set<Long>? = null) {
+        val metadata = NativeProjectBridge.inspectEcproj(updated)
+            ?: error("Unable to inspect updated canonical project")
+        val parsed = CanonicalProjectInfo.parse(metadata)
+        val previousSource = importedEcproj
+        ecprojStore.save(updated)
+        try {
+            repositoryProjectId?.let { projectRepository.update(it, updated) }
+        } catch (failure: Throwable) {
+            if (previousSource != null) runCatching { ecprojStore.save(previousSource) }
+            throw failure
+        }
+        // Synchronous, before either state write: the workspace viewer's
+        // effect keys on canonicalProjectInfo, so it may render before a
+        // LaunchedEffect(importedEcproj) sync runs. The edit itself is
+        // already saved; a session failure only blanks the viewer.
+        syncRenderSession(updated)
+        importedEcproj = updated
+        canonicalProjectInfo = parsed
+        val allLayers = parsed.compositions.flatMap { it.layers }
+        val pruned = CanonicalLayerSelection.pruneSelection(selectionOverride ?: canonicalSelectedIds, allLayers)
+        canonicalSelectedIds = if (pruned.isNotEmpty()) pruned
+            else allLayers.firstOrNull()?.let { setOf(it.id) } ?: emptySet()
+        saveMessage = successMessage
+    }
+
     fun applyCanonicalEdit(envelope: String?, successMessage: String) {
         runCatching {
             val response = JSONObject(envelope ?: error("Native EffectCraft bridge unavailable on this ABI"))
             check(response.optBoolean("valid")) { response.optString("error", "Canonical edit failed") }
             val updated = response.getString("project")
-            val metadata = NativeProjectBridge.inspectEcproj(updated)
-                ?: error("Unable to inspect updated canonical project")
-            val parsed = CanonicalProjectInfo.parse(metadata)
-            val previousSource = importedEcproj
-            ecprojStore.save(updated)
-            try {
-                repositoryProjectId?.let { projectRepository.update(it, updated) }
-            } catch (failure: Throwable) {
-                if (previousSource != null) runCatching { ecprojStore.save(previousSource) }
-                throw failure
+            val before = importedEcproj
+            val beforeSelection = canonicalSelectedIds
+            commitCanonicalSource(updated, successMessage)
+            if (before != null && updated != before) {
+                canonicalUndoStack = CanonicalEditHistory.record(
+                    canonicalUndoStack, CanonicalEditSnapshot(before, beforeSelection)
+                )
+                canonicalRedoStack = emptyList()
             }
-            // Synchronous, before either state write: the workspace viewer's
-            // effect keys on canonicalProjectInfo, so it may render before a
-            // LaunchedEffect(importedEcproj) sync runs. The edit itself is
-            // already saved; a session failure only blanks the viewer.
-            syncRenderSession(updated)
-            importedEcproj = updated
-            canonicalProjectInfo = parsed
-            saveMessage = successMessage
+        }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
+    }
+
+    /**
+     * Applies several native canonical edits as one history step: each step
+     * transforms the previous step's project, and only the final project is
+     * committed. A failed step leaves the saved project untouched, and a
+     * batch that changes nothing records no history.
+     */
+    fun applyCanonicalEditBatch(steps: List<(String) -> String?>, successMessage: String) {
+        val before = importedEcproj
+        if (before == null) {
+            saveMessage = "Import a canonical .ecproj first"
+            return
+        }
+        val beforeSelection = canonicalSelectedIds
+        runCatching {
+            var current = before
+            steps.forEach { step ->
+                val envelope = step(current) ?: error("Native EffectCraft bridge unavailable on this ABI")
+                val response = JSONObject(envelope)
+                check(response.optBoolean("valid")) { response.optString("error", "Canonical edit failed") }
+                current = response.getString("project")
+            }
+            if (current == before) {
+                saveMessage = "Canonical edit made no change"
+            } else {
+                commitCanonicalSource(current, successMessage)
+                canonicalUndoStack = CanonicalEditHistory.record(
+                    canonicalUndoStack, CanonicalEditSnapshot(before, beforeSelection)
+                )
+                canonicalRedoStack = emptyList()
+            }
         }.onFailure { error -> saveMessage = "Canonical edit failed · ${error.message ?: "invalid project"}" }
     }
 
@@ -958,6 +1023,85 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))
+            },
+            canonicalSelectedLayerIds = canonicalSelectedIds,
+            onCanonicalSelectionChange = { canonicalSelectedIds = it },
+            canUndoCanonical = canonicalUndoStack.isNotEmpty(),
+            canRedoCanonical = canonicalRedoStack.isNotEmpty(),
+            onUndoCanonical = {
+                val current = importedEcproj
+                if (current != null) {
+                    val step = CanonicalEditHistory.undo(
+                        canonicalUndoStack, canonicalRedoStack,
+                        CanonicalEditSnapshot(current, canonicalSelectedIds)
+                    )
+                    if (step != null) {
+                        runCatching {
+                            commitCanonicalSource(step.snapshot.projectJson, "Canonical undo · saved locally", step.snapshot.selectedLayerIds)
+                        }.onSuccess {
+                            canonicalUndoStack = step.undoStack
+                            canonicalRedoStack = step.redoStack
+                        }.onFailure { error -> saveMessage = "Canonical undo failed · ${error.message ?: "invalid project"}" }
+                    }
+                }
+            },
+            onRedoCanonical = {
+                val current = importedEcproj
+                if (current != null) {
+                    val step = CanonicalEditHistory.redo(
+                        canonicalUndoStack, canonicalRedoStack,
+                        CanonicalEditSnapshot(current, canonicalSelectedIds)
+                    )
+                    if (step != null) {
+                        runCatching {
+                            commitCanonicalSource(step.snapshot.projectJson, "Canonical redo · saved locally", step.snapshot.selectedLayerIds)
+                        }.onSuccess {
+                            canonicalUndoStack = step.undoStack
+                            canonicalRedoStack = step.redoStack
+                        }.onFailure { error -> saveMessage = "Canonical redo failed · ${error.message ?: "invalid project"}" }
+                    }
+                }
+            },
+            onSetCanonicalLayerOpacityForSelection = { compositionId, layerIds, opacityPercent ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val layers = canonicalProjectInfo?.compositions?.firstOrNull { it.id == compositionId }?.layers ?: emptyList()
+                    val steps = layers.filter { it.id in layerIds && !it.locked }
+                        .map { layer ->
+                            { current: String -> NativeProjectBridge.setLayerOpacityEcproj(current, compositionId, layer.id, opacityPercent) }
+                        }
+                    if (steps.isEmpty()) saveMessage = "No editable selected layers"
+                    else applyCanonicalEditBatch(steps, "Canonical opacity updated for ${steps.size} layer(s) · saved locally")
+                }
+            },
+            onSetCanonicalLayerVisibilityForSelection = { compositionId, layerIds, visible ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val layers = canonicalProjectInfo?.compositions?.firstOrNull { it.id == compositionId }?.layers ?: emptyList()
+                    val steps = layers.filter { it.id in layerIds && !it.locked }
+                        .map { layer ->
+                            { current: String -> NativeProjectBridge.setLayerVisibilityEcproj(current, compositionId, layer.id, visible) }
+                        }
+                    if (steps.isEmpty()) saveMessage = "No editable selected layers"
+                    else applyCanonicalEditBatch(steps, "Canonical visibility updated for ${steps.size} layer(s) · saved locally")
+                }
+            },
+            onGestureEditCanonicalSelection = { compositionId, positions, scales ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val steps = mutableListOf<(String) -> String?>()
+                    positions.forEach { (layerId, position) ->
+                        steps.add { current: String -> NativeProjectBridge.setLayerPositionEcproj(current, compositionId, layerId, position.first, position.second) }
+                    }
+                    scales.forEach { (layerId, scale) ->
+                        steps.add { current: String -> NativeProjectBridge.setLayerScaleEcproj(current, compositionId, layerId, scale.first, scale.second) }
+                    }
+                    if (steps.isEmpty()) saveMessage = "No editable selected layers"
+                    else applyCanonicalEditBatch(steps, "Canonical gesture edit applied · saved locally")
+                }
             },
             onRenderCanonicalFrame = { compositionId, frame ->
                 // Session-backed: the parsed project, MediaPool and preview

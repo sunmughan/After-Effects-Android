@@ -1,0 +1,201 @@
+package ai.effectcraft.android
+
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.unit.Density
+import ai.effectcraft.android.data.CanonicalCompositionInfo
+import ai.effectcraft.android.data.CanonicalLayerInfo
+import ai.effectcraft.android.data.CanonicalProjectInfo
+import ai.effectcraft.android.data.ProjectDocument
+import ai.effectcraft.android.ui.EditorScreen
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+
+class CanonicalSelectionEditorTest {
+    @get:Rule
+    val compose = createComposeRule()
+
+    private fun layer(id: Long, name: String, x: Double, y: Double, locked: Boolean = false): CanonicalLayerInfo {
+        return CanonicalLayerInfo(
+            id = id, name = name, source = "Text", visible = true,
+            opacityPercent = 100.0, positionX = x, positionY = y,
+            scaleX = 100.0, scaleY = 100.0, rotationDegrees = 0.0, locked = locked
+        )
+    }
+
+    @Test
+    fun tapLongPressGestureUndoRedoAndReparseKeepCanonicalSelection() {
+        val composition = CanonicalCompositionInfo(
+            id = 10, name = "Main", width = 1920, height = 1080,
+            frameRateNum = 30, frameRateDen = 1, durationSeconds = 3.0,
+            layers = listOf(
+                layer(2, "Background", 10.0, 20.0),
+                layer(3, "Title", 30.0, 40.0),
+                layer(4, "Locked", 50.0, 60.0, locked = true)
+            )
+        )
+        val canonicalState = mutableStateOf(CanonicalProjectInfo(compositions = listOf(composition)))
+        val selectionState = mutableStateOf(setOf(2L))
+        val selectionChanges = mutableListOf<Set<Long>>()
+        var undoClicks = 0
+        var redoClicks = 0
+        var visibilityForSelection: List<Any>? = null
+        var gestureEdit: Triple<Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>>? = null
+        var deleteCalls = 0
+        val project = ProjectDocument.starter()
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                EditorScreen(
+                    project = project,
+                    selectedLayer = project.layers.first(),
+                    selectedLayerId = project.layers.first().id,
+                    playheadFrame = 0,
+                    selectedOpacityKeyframes = emptyList(),
+                    isPlaying = false,
+                    saveMessage = "Saved",
+                    savedProjects = emptyList(),
+                    offlineAssets = emptyList(),
+                    referencedOfflineAssetIds = emptySet(),
+                    canUndo = false,
+                    canRedo = false,
+                    onUndo = {},
+                    onRedo = {},
+                    onSave = {},
+                    onOpenProject = {},
+                    onDeleteOfflineAsset = {},
+                    onValidateEcproj = {},
+                    onExportEcproj = {},
+                    onExportEcprojx = {},
+                    isExportingFrame = false,
+                    onExportRenderedFrame = {},
+                    onCancelFrameExport = {},
+                    isExportingSequence = false,
+                    isSequenceExportWritingOutput = false,
+                    onExportPngSequence = { _, _, _, _, _ -> },
+                    onCancelSequenceExport = {},
+                    sequenceExportProgress = 0,
+                    onNewProject = {},
+                    onAddLayer = {},
+                    onSelectLayer = {},
+                    onDeleteLayer = {},
+                    onMoveLayer = {},
+                    onVisibilityChange = {},
+                    onRenameLayer = {},
+                    onOpacityChange = {},
+                    onScrub = {},
+                    onAddOpacityKeyframe = {},
+                    onRemoveOpacityKeyframe = {},
+                    onTogglePlayback = {},
+                    onApplyComposition = { _, _, _, _ -> },
+                    canonicalProject = canonicalState.value,
+                    canEditCanonicalProject = true,
+                    canonicalSelectedLayerIds = selectionState.value,
+                    onCanonicalSelectionChange = { selectionState.value = it; selectionChanges.add(it) },
+                    canUndoCanonical = true,
+                    canRedoCanonical = true,
+                    onUndoCanonical = { undoClicks += 1 },
+                    onRedoCanonical = { redoClicks += 1 },
+                    onSetCanonicalLayerOpacityForSelection = { _, _, _ -> },
+                    onSetCanonicalLayerVisibilityForSelection = { c, ids, visible -> visibilityForSelection = listOf(c, ids, visible) },
+                    onGestureEditCanonicalSelection = { c, positions, scales -> gestureEdit = Triple(c, positions, scales) },
+                    onRenameCanonicalLayer = { _, _, _ -> },
+                    onAddCanonicalTextLayer = { _, _ -> },
+                    onSetCanonicalLayerVisibility = { _, _, _ -> },
+                    onMoveCanonicalLayer = { _, _, _ -> },
+                    onDeleteCanonicalLayer = { _, _ -> deleteCalls += 1 },
+                    onSetCanonicalLayerOpacity = { _, _, _ -> },
+                    onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
+                    onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
+                    onSetCanonicalLayerPosition = { _, _, _, _ -> },
+                    onSetCanonicalLayerScale = { _, _, _, _ -> },
+                    onSetCanonicalLayerRotation = { _, _, _ -> },
+                    onSetCanonicalLayerAnchor = { _, _, _, _ -> },
+                    onSetCanonicalLayerOrientation = { _, _, _, _, _ -> },
+                    onSetCanonicalLayerRotationX = { _, _, _ -> },
+                    onSetCanonicalLayerRotationY = { _, _, _ -> },
+                    onSetCanonicalLayerLocked = { _, _, _ -> },
+                    onSetCanonicalTextLayerText = { _, _, _ -> },
+                    onSetCanonicalTextLayerSize = { _, _, _ -> },
+                    onSetCanonicalTextLayerTracking = { _, _, _ -> },
+                    onSetCanonicalLayerScalarProperty = { _, _, _, _ -> },
+                    onSetCanonicalLayerVecProperty = { _, _, _, _, _, _ -> },
+                    onRelinkCanonicalAsset = {},
+                    onRenderCanonicalFrame = { _, _ -> null },
+                    safGrants = emptyList(),
+                    missingManifestEntries = 0,
+                    onReleaseSafGrant = { _, _ -> },
+                    onReplaceOfflineAsset = {},
+                    onCollectUnusedOfflineAssets = {}
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithText("CANONICAL .ECPROJ").assertIsDisplayed()
+        compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
+
+        // Tap selects one layer; long-press adds a second layer to the set.
+        compose.onNodeWithContentDescription("Canonical layer row Title").performClick()
+        assertEquals(setOf(3L), selectionState.value)
+        compose.onNodeWithText("● Title", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Canonical layer row Background")
+            .performSemanticsAction(SemanticsActions.OnLongClick)
+        assertEquals(setOf(3L, 2L), selectionState.value)
+        compose.onNodeWithText("2 layers selected", substring = true).assertIsDisplayed()
+
+        // A horizontal drag on the preview moves both selected layers right
+        // in composition pixels and leaves their heights unchanged.
+        compose.onNodeWithContentDescription("Canonical preview gesture area").performTouchInput {
+            swipe(start = centerLeft, end = centerRight, durationMillis = 300)
+        }
+        compose.waitForIdle()
+        val edit = gestureEdit ?: error("Preview drag must invoke the gesture edit callback")
+        assertEquals(10L, edit.first)
+        assertEquals(2, edit.second.size)
+        assertTrue(edit.second.getValue(2).first > 10.0)
+        assertTrue(edit.second.getValue(3).first > 30.0)
+        assertEquals(20.0, edit.second.getValue(2).second, 0.001)
+        assertEquals(40.0, edit.second.getValue(3).second, 0.001)
+        assertEquals(emptyMap<Long, Pair<Double, Double>>(), edit.third)
+
+        // With two layers selected, the visibility switch applies to the set.
+        compose.onNodeWithContentDescription("Canonical layer visibility").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, setOf(2L, 3L), false), visibilityForSelection)
+
+        // Canonical undo and redo buttons invoke their callbacks.
+        compose.onNodeWithText("Canonical Undo").performScrollTo().performClick()
+        compose.onNodeWithText("Canonical Redo").performScrollTo().performClick()
+        assertEquals(1, undoClicks)
+        assertEquals(1, redoClicks)
+
+        // A re-parse that drops the Title layer prunes the selection to the
+        // surviving Background layer instead of pointing at stale data.
+        canonicalState.value = CanonicalProjectInfo(
+            compositions = listOf(composition.copy(layers = listOf(layer(2, "Background", 10.0, 20.0), layer(4, "Locked", 50.0, 60.0, locked = true))))
+        )
+        compose.waitForIdle()
+        assertEquals(setOf(2L), selectionState.value)
+        compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("2 layers selected", substring = true).assertDoesNotExist()
+
+        // Deleting the selected layer moves selection to its neighbor.
+        compose.onNodeWithContentDescription("Remove canonical layer").performScrollTo().performClick()
+        assertEquals(1, deleteCalls)
+        assertEquals(setOf(4L), selectionState.value)
+        assertEquals(setOf(4L), selectionChanges.last())
+    }
+}

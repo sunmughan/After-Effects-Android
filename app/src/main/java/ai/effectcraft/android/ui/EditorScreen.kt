@@ -9,7 +9,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -63,8 +66,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
@@ -72,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -149,6 +156,15 @@ fun EditorScreen(
     onApplyComposition: (Int, Int, Int, Int) -> Unit,
     canonicalProject: CanonicalProjectInfo?,
     canEditCanonicalProject: Boolean,
+    canonicalSelectedLayerIds: Set<Long> = emptySet(),
+    onCanonicalSelectionChange: (Set<Long>) -> Unit = {},
+    canUndoCanonical: Boolean = false,
+    canRedoCanonical: Boolean = false,
+    onUndoCanonical: () -> Unit = {},
+    onRedoCanonical: () -> Unit = {},
+    onSetCanonicalLayerOpacityForSelection: (Long, Set<Long>, Double) -> Unit = { _, _, _ -> },
+    onSetCanonicalLayerVisibilityForSelection: (Long, Set<Long>, Boolean) -> Unit = { _, _, _ -> },
+    onGestureEditCanonicalSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>) -> Unit = { _, _, _ -> },
     onRenameCanonicalLayer: (Long, Long, String) -> Unit,
     onAddCanonicalTextLayer: (Long, String) -> Unit,
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
@@ -549,6 +565,15 @@ fun EditorScreen(
                 CanonicalProjectEditor(
                     project = canonicalProject,
                     canEdit = canEditCanonicalProject,
+                    selectedLayerIds = canonicalSelectedLayerIds,
+                    onSelectionChange = onCanonicalSelectionChange,
+                    canUndoCanonical = canUndoCanonical,
+                    canRedoCanonical = canRedoCanonical,
+                    onUndoCanonical = onUndoCanonical,
+                    onRedoCanonical = onRedoCanonical,
+                    onSetLayerOpacityForSelection = onSetCanonicalLayerOpacityForSelection,
+                    onSetLayerVisibilityForSelection = onSetCanonicalLayerVisibilityForSelection,
+                    onGestureEditSelection = onGestureEditCanonicalSelection,
                     onRenameLayer = onRenameCanonicalLayer,
                     onAddTextLayer = onAddCanonicalTextLayer,
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
@@ -964,10 +989,20 @@ private fun InspectorPanel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CanonicalProjectEditor(
     project: CanonicalProjectInfo,
     canEdit: Boolean,
+    selectedLayerIds: Set<Long>,
+    onSelectionChange: (Set<Long>) -> Unit,
+    canUndoCanonical: Boolean,
+    canRedoCanonical: Boolean,
+    onUndoCanonical: () -> Unit,
+    onRedoCanonical: () -> Unit,
+    onSetLayerOpacityForSelection: (Long, Set<Long>, Double) -> Unit,
+    onSetLayerVisibilityForSelection: (Long, Set<Long>, Boolean) -> Unit,
+    onGestureEditSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>) -> Unit,
     onRenameLayer: (Long, Long, String) -> Unit,
     onAddTextLayer: (Long, String) -> Unit,
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
@@ -994,19 +1029,23 @@ private fun CanonicalProjectEditor(
     modifier: Modifier = Modifier
 ) {
     var compositionId by remember { mutableStateOf<Long?>(null) }
-    var layerId by remember { mutableStateOf<Long?>(null) }
     var newTextName by remember { mutableStateOf("Text") }
     val composition = project.compositions.firstOrNull { it.id == compositionId } ?: project.compositions.firstOrNull()
-    // Selection parity: the highlighted list row, the inspector fields and
-    // the layer every edit targets are all this one resolved layer. When a
-    // re-parse drops the selected id (for example after a delete), selection
-    // moves to the first remaining layer instead of pointing at stale data.
-    val layer = composition?.let { ai.effectcraft.android.data.CanonicalLayerSelection.resolve(it.layers, layerId) }
+    // Selection parity: the highlighted list rows, the inspector fields and
+    // the layers an edit targets are all this one resolved selection. The
+    // inspector shows the first selected layer; opacity, visibility and
+    // gesture edits apply to the whole selected set. When a re-parse drops
+    // a selected id (for example after a delete), selection keeps the
+    // survivors and falls back to the first remaining layer when none
+    // survive, instead of pointing at stale data.
+    val selectedLayers = composition?.let { ai.effectcraft.android.data.CanonicalLayerSelection.resolveAll(it.layers, selectedLayerIds) } ?: emptyList()
+    val layer = selectedLayers.firstOrNull()
     LaunchedEffect(composition?.id, composition?.layers?.map { it.id }) {
-        val current = composition?.layers
-        if (current != null && current.none { it.id == layerId }) {
-            layerId = current.firstOrNull()?.id
-        }
+        val current = composition?.layers ?: emptyList()
+        val pruned = ai.effectcraft.android.data.CanonicalLayerSelection.pruneSelection(selectedLayerIds, current)
+        val next = if (pruned.isNotEmpty()) pruned
+            else current.firstOrNull()?.let { setOf(it.id) } ?: emptySet()
+        if (next != selectedLayerIds) onSelectionChange(next)
     }
     var nameDraft by remember(composition?.id, layer?.id, layer?.name) { mutableStateOf(layer?.name.orEmpty()) }
     var opacityDraft by remember(composition?.id, layer?.id, layer?.opacityPercent) { mutableFloatStateOf((layer?.opacityPercent ?: 100.0).toFloat()) }
@@ -1029,6 +1068,11 @@ private fun CanonicalProjectEditor(
     var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
     var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
     var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
+    var previewWidthPx by remember { mutableIntStateOf(0) }
+    // Read at gesture end, not at detector setup, so a position Apply or a
+    // re-parse between gestures never drags from stale layer positions.
+    val gestureLayers by rememberUpdatedState(selectedLayers)
+    val gestureEditCallback by rememberUpdatedState(onGestureEditSelection)
     LaunchedEffect(project, composition?.id, previewFrame, canEdit) {
         if (composition != null && canEdit) {
             previewMessage = "Rendering frame ${previewFrame}…"
@@ -1044,6 +1088,24 @@ private fun CanonicalProjectEditor(
     Column(modifier = modifier.heightIn(max = 620.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("CANONICAL .ECPROJ", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Text("Native project model · ${project.compositions.size} compositions", color = EditorPalette.muted, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(
+                enabled = canUndoCanonical,
+                onClick = onUndoCanonical,
+                modifier = Modifier.semantics { contentDescription = "Canonical undo" }
+            ) { Text("Canonical Undo", color = if (canUndoCanonical) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp) }
+            TextButton(
+                enabled = canRedoCanonical,
+                onClick = onRedoCanonical,
+                modifier = Modifier.semantics { contentDescription = "Canonical redo" }
+            ) { Text("Canonical Redo", color = if (canRedoCanonical) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp) }
+        }
+        if (selectedLayers.size > 1) {
+            Text(
+                "${selectedLayers.size} layers selected · opacity, visibility and preview gestures apply to all selected layers",
+                color = EditorPalette.mint, fontSize = 11.sp
+            )
+        }
         if (composition == null) {
             Text("No compositions found in this project.", color = EditorPalette.muted)
         } else {
@@ -1052,23 +1114,58 @@ private fun CanonicalProjectEditor(
                 project.compositions.forEach { item ->
                     FilterChip(
                         selected = item.id == composition.id,
-                        onClick = { compositionId = item.id; layerId = item.layers.firstOrNull()?.id },
+                        onClick = { compositionId = item.id; onSelectionChange(item.layers.firstOrNull()?.let { setOf(it.id) } ?: emptySet()) },
                         label = { Text(item.name, fontSize = 11.sp) }
                     )
                 }
             }
             Text("${composition.width} × ${composition.height} · ${composition.layers.size} layers", color = EditorPalette.muted, fontSize = 11.sp)
             Text("CPU PREVIEW · ${composition.frameRateNum}/${composition.frameRateDen} FPS", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
-            if (previewBitmap != null) {
-                Image(
-                    bitmap = previewBitmap.asImageBitmap(),
-                    contentDescription = "EffectCraft rendered composition frame",
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
-                Text(previewMessage, color = EditorPalette.muted, fontSize = 11.sp)
+            // Drag moves every selected layer by the drag distance mapped
+            // to composition pixels; pinch scales every selected layer.
+            // Both land as one canonical history step through the batch
+            // callback, so one undo reverses the whole gesture.
+            Box(
+                modifier = Modifier.fillMaxWidth()
+                    .onSizeChanged { previewWidthPx = it.width }
+                    .pointerInput(composition.id) {
+                        while (true) {
+                            var pan = Offset.Zero
+                            var zoom = 1f
+                            detectTransformGestures { _, panChange, zoomChange, _ ->
+                                pan += panChange
+                                zoom *= zoomChange
+                            }
+                            if (canEdit && (pan != Offset.Zero || zoom != 1f)) {
+                                val delta = ai.effectcraft.android.data.CanonicalGestureEdit.dragPositionDelta(
+                                    pan.x, pan.y, previewWidthPx.toFloat(), composition.width.toFloat()
+                                )
+                                val positions = ai.effectcraft.android.data.CanonicalGestureEdit.draggedPositions(
+                                    gestureLayers, gestureLayers.map { it.id }.toSet(), delta
+                                )
+                                val scales = ai.effectcraft.android.data.CanonicalGestureEdit.pinchedScales(
+                                    gestureLayers, gestureLayers.map { it.id }.toSet(), zoom
+                                )
+                                if (positions.isNotEmpty() || scales.isNotEmpty()) {
+                                    gestureEditCallback(composition.id, positions, scales)
+                                }
+                            }
+                        }
+                    }
+                    .semantics { contentDescription = "Canonical preview gesture area" }
+            ) {
+                if (previewBitmap != null) {
+                    Image(
+                        bitmap = previewBitmap.asImageBitmap(),
+                        contentDescription = "EffectCraft rendered composition frame",
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text(previewMessage, color = EditorPalette.muted, fontSize = 11.sp)
+                }
             }
+            Text("Drag the preview to move selected layers · pinch to scale them", color = EditorPalette.muted, fontSize = 10.sp)
             Text("Frame ${previewFrame} / ${composition.durationFrames - 1}", color = EditorPalette.muted, fontSize = 10.sp)
             Slider(
                 value = previewFrame.toFloat(),
@@ -1098,13 +1195,26 @@ private fun CanonicalProjectEditor(
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
             Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
                 composition.layers.forEach { item ->
-                    TextButton(
-                        onClick = { layerId = item.id; nameDraft = item.name },
+                    // Tap selects one layer; long-press toggles it in or out
+                    // of the multi-selection. The inspector always shows the
+                    // first selected layer.
+                    Box(
                         modifier = Modifier.fillMaxWidth()
+                            .combinedClickable(
+                                onClick = { onSelectionChange(setOf(item.id)); nameDraft = item.name },
+                                onLongClick = {
+                                    onSelectionChange(
+                                        ai.effectcraft.android.data.CanonicalLayerSelection.toggleSelection(
+                                            selectedLayerIds, item.id, composition.layers
+                                        )
+                                    )
+                                }
+                            )
+                            .semantics { contentDescription = "Canonical layer row ${item.name}" }
                     ) {
                         Text(
-                            "${if (item.id == layer?.id) "● " else "○ "}${item.name}  ·  ${item.source}",
-                            color = if (item.id == layer?.id) EditorPalette.mint else EditorPalette.text,
+                            "${if (item.id in selectedLayerIds) "● " else "○ "}${item.name}  ·  ${item.source}",
+                            color = if (item.id in selectedLayerIds) EditorPalette.mint else EditorPalette.text,
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1124,7 +1234,10 @@ private fun CanonicalProjectEditor(
                     Spacer(Modifier.weight(1f))
                     Switch(
                         checked = layer.visible,
-                        onCheckedChange = { onSetLayerVisibility(composition.id, layer.id, it) },
+                        onCheckedChange = {
+                            if (selectedLayers.size > 1) onSetLayerVisibilityForSelection(composition.id, selectedLayers.map { it.id }.toSet(), it)
+                            else onSetLayerVisibility(composition.id, layer.id, it)
+                        },
                         enabled = editable,
                         modifier = Modifier.semantics { contentDescription = "Canonical layer visibility" }
                     )
@@ -1342,7 +1455,12 @@ private fun CanonicalProjectEditor(
                 Slider(
                     value = opacityDraft,
                     onValueChange = { opacityDraft = it },
-                    onValueChangeFinished = { if (editable) onSetLayerOpacity(composition.id, layer.id, opacityDraft.toDouble()) },
+                    onValueChangeFinished = {
+                        if (editable) {
+                            if (selectedLayers.size > 1) onSetLayerOpacityForSelection(composition.id, selectedLayers.map { it.id }.toSet(), opacityDraft.toDouble())
+                            else onSetLayerOpacity(composition.id, layer.id, opacityDraft.toDouble())
+                        }
+                    },
                     valueRange = 0f..100f,
                     enabled = editable,
                     modifier = Modifier.semantics { contentDescription = "Canonical layer opacity" }
@@ -1400,12 +1518,19 @@ private fun CanonicalProjectEditor(
                     TextButton(
                         enabled = editable,
                         onClick = {
-                            // Selection parity on delete: move selection to
-                            // the neighbor before the layer disappears, so
-                            // the inspector never shows a removed layer.
-                            layerId = ai.effectcraft.android.data.CanonicalLayerSelection.nextAfterDelete(composition.layers, layer.id)
+                            // Selection parity on delete: survivors of the
+                            // selection stay selected, and when the whole
+                            // selection was deleted the neighbor takes its
+                            // place, so the inspector never shows a removed
+                            // layer.
+                            onSelectionChange(
+                                ai.effectcraft.android.data.CanonicalLayerSelection.selectionAfterDelete(
+                                    selectedLayerIds, composition.layers, setOf(layer.id)
+                                )
+                            )
                             onDeleteLayer(composition.id, layer.id)
-                        }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Remove canonical layer" }
                     ) { Text("Remove", color = Color(0xFFFF858D), fontSize = 11.sp) }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
