@@ -81,7 +81,7 @@ class EditorSmokeTest {
 
         val xml = CanonicalProjectDocument.toXml(source)
         assertTrue(xml.startsWith("<?xml"))
-        assertTrue(xml.contains("<EffectCraftProject encoding=\\"json\\" version=\\"1\\">"))
+        assertTrue(xml.contains("""<EffectCraftProject encoding="json" version="1">"""))
         val restored = JSONObject(CanonicalProjectDocument.toCanonicalJson(xml))
 
         assertEquals(3, restored.getInt("schema"))
