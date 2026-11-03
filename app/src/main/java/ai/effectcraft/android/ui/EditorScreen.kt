@@ -12,7 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -1084,6 +1084,7 @@ private fun CanonicalProjectEditor(
     // re-parse between gestures never drags from stale layer positions.
     val gestureLayers by rememberUpdatedState(selectedLayers)
     val gestureEditCallback by rememberUpdatedState(onGestureEditSelection)
+    val gestureCanEdit by rememberUpdatedState(canEdit)
     LaunchedEffect(project, composition?.id, previewFrame, canEdit) {
         if (composition != null && canEdit) {
             previewMessage = "Rendering frame ${previewFrame}…"
@@ -1133,38 +1134,36 @@ private fun CanonicalProjectEditor(
             Text("${composition.width} × ${composition.height} · ${composition.layers.size} layers", color = EditorPalette.muted, fontSize = 11.sp)
             Text("CPU PREVIEW · ${composition.frameRateNum}/${composition.frameRateDen} FPS", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
             // Drag moves every selected layer by the drag distance mapped
-            // to composition pixels; pinch scales every selected layer.
-            // Both land as one canonical history step through the batch
-            // callback, so one undo reverses the whole gesture.
+            // to composition pixels. The drag lands as one canonical
+            // history step through the batch callback, so one undo
+            // reverses the whole gesture. Pinch and twist mapping stays
+            // available through the batch callback's scale and rotation
+            // maps, but no multi-touch detector is wired in this change:
+            // the transform detector never fired under test swipe
+            // injection, while the drag detector is the proven path for
+            // single-pointer drags.
             Box(
                 modifier = Modifier.fillMaxWidth()
                     .onSizeChanged { previewWidthPx = it.width }
                     .pointerInput(composition.id) {
                         while (true) {
-                            var pan = Offset.Zero
-                            var zoom = 1f
-                            var rotationDegrees = 0f
-                            detectTransformGestures { _, panChange, zoomChange, rotationChange ->
-                                pan += panChange
-                                zoom *= zoomChange
-                                rotationDegrees += rotationChange
-                            }
-                            if (canEdit && (pan != Offset.Zero || zoom != 1f || rotationDegrees != 0f)) {
-                                val delta = ai.effectcraft.android.data.CanonicalGestureEdit.dragPositionDelta(
-                                    pan.x, pan.y, previewWidthPx.toFloat(), composition.width.toFloat()
-                                )
-                                val positions = ai.effectcraft.android.data.CanonicalGestureEdit.draggedPositions(
-                                    gestureLayers, gestureLayers.map { it.id }.toSet(), delta
-                                )
-                                val scales = ai.effectcraft.android.data.CanonicalGestureEdit.pinchedScales(
-                                    gestureLayers, gestureLayers.map { it.id }.toSet(), zoom.toDouble()
-                                )
-                                val rotations = ai.effectcraft.android.data.CanonicalGestureEdit.rotatedLayers(
-                                    gestureLayers, gestureLayers.map { it.id }.toSet(), rotationDegrees.toDouble()
-                                )
-                                if (positions.isNotEmpty() || scales.isNotEmpty() || rotations.isNotEmpty()) {
-                                    gestureEditCallback(composition.id, positions, scales, rotations)
+                            var dragTotal = Offset.Zero
+                            detectDragGestures(
+                                onDragEnd = {
+                                    if (gestureCanEdit && dragTotal != Offset.Zero) {
+                                        val delta = ai.effectcraft.android.data.CanonicalGestureEdit.dragPositionDelta(
+                                            dragTotal.x, dragTotal.y, previewWidthPx.toFloat(), composition.width.toFloat()
+                                        )
+                                        val positions = ai.effectcraft.android.data.CanonicalGestureEdit.draggedPositions(
+                                            gestureLayers, gestureLayers.map { it.id }.toSet(), delta
+                                        )
+                                        if (positions.isNotEmpty()) {
+                                            gestureEditCallback(composition.id, positions, emptyMap(), emptyMap())
+                                        }
+                                    }
                                 }
+                            ) { _, dragAmount ->
+                                dragTotal += dragAmount
                             }
                         }
                     }
@@ -1181,7 +1180,7 @@ private fun CanonicalProjectEditor(
                     Text(previewMessage, color = EditorPalette.muted, fontSize = 11.sp)
                 }
             }
-            Text("Drag to move · pinch to scale · twist to rotate selected layers", color = EditorPalette.muted, fontSize = 10.sp)
+            Text("Drag the preview to move selected layers", color = EditorPalette.muted, fontSize = 10.sp)
             Text("Frame ${previewFrame} / ${composition.durationFrames - 1}", color = EditorPalette.muted, fontSize = 10.sp)
             Slider(
                 value = previewFrame.toFloat(),
