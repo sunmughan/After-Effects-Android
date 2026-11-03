@@ -628,6 +628,125 @@ fn layer_rotation(layer: &effectcraft_project::Layer) -> f64 {
     rotation
 }
 
+fn layer_anchor(layer: &effectcraft_project::Layer) -> [f64; 2] {
+    let mut anchor = [0.0, 0.0];
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        transform.walk("", &mut |_, property| {
+            if property.match_id == "anchor" {
+                if let Value::Vec3(value) = &property.value { anchor = [value[0], value[1]]; }
+            }
+        });
+    }
+    anchor
+}
+
+fn layer_orientation(layer: &effectcraft_project::Layer) -> [f64; 3] {
+    let mut orientation = [0.0, 0.0, 0.0];
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        transform.walk("", &mut |_, property| {
+            if property.match_id == "orientation" {
+                if let Value::Vec3(value) = &property.value { orientation = *value; }
+            }
+        });
+    }
+    orientation
+}
+
+fn layer_rotation_axis(layer: &effectcraft_project::Layer, match_id: &str) -> f64 {
+    let mut rotation = 0.0;
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        transform.walk("", &mut |_, property| {
+            if property.match_id == match_id {
+                if let Value::Scalar(value) = &property.value { rotation = *value; }
+            }
+        });
+    }
+    rotation
+}
+
+/// Direct scalar and vector parameters of one parameter group, in
+/// depth-first order. Color, path, gradient, popup and layer-reference
+/// parameters are not editable through the generic uid setter and are
+/// omitted here, so metadata never promises an edit the UI cannot make.
+fn collect_param_items(
+    group: &effectcraft_project::PropGroup,
+    prefix: &str,
+    out: &mut Vec<serde_json::Value>,
+) {
+    for child in &group.children {
+        let Node::Group(child_group) = child else { continue };
+        let name = if prefix.is_empty() {
+            child_group.name.clone()
+        } else {
+            format!("{prefix} / {}", child_group.name)
+        };
+        let mut scalars = Vec::new();
+        let mut vecs = Vec::new();
+        for prop_child in &child_group.children {
+            let Node::Prop(property) = prop_child else { continue };
+            match &property.value {
+                Value::Scalar(value) => scalars.push(json!({
+                    "uid": property.uid,
+                    "name": property.name,
+                    "value": value
+                })),
+                Value::Vec2(value) => vecs.push(json!({
+                    "uid": property.uid,
+                    "name": property.name,
+                    "components": value
+                })),
+                Value::Vec3(value) => vecs.push(json!({
+                    "uid": property.uid,
+                    "name": property.name,
+                    "components": value
+                })),
+                _ => {}
+            }
+        }
+        if !scalars.is_empty() || !vecs.is_empty() {
+            out.push(json!({
+                "name": name,
+                "kind": child_group.match_id,
+                "scalars": scalars,
+                "vecs": vecs
+            }));
+        }
+        collect_param_items(child_group, &name, out);
+    }
+}
+
+fn layer_param_items(layer: &effectcraft_project::Layer, group_match_id: &str) -> Vec<serde_json::Value> {
+    let mut items = Vec::new();
+    if let Some(group) = layer.props.sub(group_match_id) {
+        collect_param_items(group, "", &mut items);
+    }
+    items
+}
+
+fn layer_text_params(layer: &effectcraft_project::Layer) -> Option<serde_json::Value> {
+    let text_group = layer.props.sub("text")?;
+    let property = text_group.prop("sourceText")?;
+    if let Value::Text(doc) = &property.value {
+        Some(json!({
+            "text": doc.text,
+            "font": doc.font,
+            "size": doc.size,
+            "tracking": doc.tracking
+        }))
+    } else {
+        None
+    }
+}
+
+/// A locked layer rejects every layer edit except unlocking itself.
+fn require_layer_unlocked(layer: &effectcraft_project::Layer) -> Result<(), String> {
+    if layer.switches.locked {
+        Err(format!("Layer {} is locked", layer.id.0))
+    } else {
+        Ok(())
+    }
+}
+
 fn layer_opacity_percent(layer: &effectcraft_project::Layer) -> f64 {
     let mut opacity = None;
     if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
@@ -680,7 +799,16 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "opacityKeys": layer_opacity_keys(layer, comp.frame_rate),
                 "position": layer_position(layer),
                 "scale": layer_scale(layer),
-                "rotationDegrees": layer_rotation(layer)
+                "rotationDegrees": layer_rotation(layer),
+                "anchor": layer_anchor(layer),
+                "orientation": layer_orientation(layer),
+                "rotationXDegrees": layer_rotation_axis(layer, "rotationX"),
+                "rotationYDegrees": layer_rotation_axis(layer, "rotationY"),
+                "locked": layer.switches.locked,
+                "threeD": layer.switches.three_d,
+                "text": layer_text_params(layer),
+                "shapeItems": layer_param_items(layer, "contents"),
+                "effects": layer_param_items(layer, "effects")
             })).collect();
             json!({
                 "id": id.0,
@@ -763,6 +891,7 @@ fn rename_layer(source: &str, composition_id: u64, layer_id: u64, name: &str) ->
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     layer.name = normalized.to_owned();
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
@@ -842,6 +971,7 @@ fn set_layer_visibility(source: &str, composition_id: u64, layer_id: u64, visibl
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     layer.switches.video = visible;
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
@@ -853,6 +983,7 @@ fn move_layer(source: &str, composition_id: u64, layer_id: u64, offset: i64) -> 
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let index = comp.layers.iter().position(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(&comp.layers[index])?;
     let last = comp.layers.len().saturating_sub(1) as i64;
     let target = (index as i64 + offset).clamp(0, last) as usize;
     comp.layers.swap(index, target);
@@ -869,6 +1000,7 @@ fn set_layer_position(source: &str, composition_id: u64, layer_id: u64, x: f64, 
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     let transform = layer.props.children.iter_mut().find_map(|node| match node {
         Node::Group(group) if group.match_id == "transform" => Some(group),
         _ => None,
@@ -896,6 +1028,7 @@ fn set_layer_scale(source: &str, composition_id: u64, layer_id: u64, x: f64, y: 
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     let transform = layer.props.sub_mut("transform")
         .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
     let property = transform.prop_mut("scale")
@@ -918,6 +1051,7 @@ fn set_layer_rotation(source: &str, composition_id: u64, layer_id: u64, degrees:
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     let transform = layer.props.sub_mut("transform")
         .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
     let property = transform.prop_mut("rotation")
@@ -926,6 +1060,214 @@ fn set_layer_rotation(source: &str, composition_id: u64, layer_id: u64, degrees:
         return Err(format!("Layer {layer_id} Rotation is not scalar"));
     }
     property.set_value_at(Tick::ZERO, Value::Scalar(degrees));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn set_layer_anchor(source: &str, composition_id: u64, layer_id: u64, x: f64, y: f64) -> Result<String, String> {
+    if !x.is_finite() || !y.is_finite() || x.abs() > 1_000_000.0 || y.abs() > 1_000_000.0 {
+        return Err("Anchor Point must be finite and within ±1,000,000 pixels".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let transform = layer.props.children.iter_mut().find_map(|node| match node {
+        Node::Group(group) if group.match_id == "transform" => Some(group),
+        _ => None,
+    }).ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let mut found = false;
+    transform.walk_mut(&mut |property| {
+        if property.match_id == "anchor" {
+            if let Value::Vec3(current) = &property.value {
+                property.set_value_at(Tick::ZERO, Value::Vec3([x, y, current[2]]));
+                found = true;
+            }
+        }
+    });
+    if !found { return Err(format!("Layer {layer_id} has no 3D Anchor Point property")); }
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn set_layer_orientation(source: &str, composition_id: u64, layer_id: u64, x: f64, y: f64, z: f64) -> Result<String, String> {
+    if !x.is_finite() || !y.is_finite() || !z.is_finite() || x.abs() > 360_000.0 || y.abs() > 360_000.0 || z.abs() > 360_000.0 {
+        return Err("Orientation must be finite and within ±360,000 degrees".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let transform = layer.props.sub_mut("transform")
+        .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let property = transform.prop_mut("orientation")
+        .ok_or_else(|| format!("Layer {layer_id} has no Orientation property"))?;
+    if !matches!(&property.value, Value::Vec3(_)) {
+        return Err(format!("Layer {layer_id} Orientation is not a 3D vector"));
+    }
+    property.set_value_at(Tick::ZERO, Value::Vec3([x, y, z]));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn set_layer_transform_scalar(
+    source: &str,
+    composition_id: u64,
+    layer_id: u64,
+    match_id: &str,
+    name: &str,
+    degrees: f64,
+) -> Result<String, String> {
+    if !degrees.is_finite() || degrees.abs() > 360_000.0 {
+        return Err(format!("{name} must be finite and within ±360,000 degrees"));
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let transform = layer.props.sub_mut("transform")
+        .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let property = transform.prop_mut(match_id)
+        .ok_or_else(|| format!("Layer {layer_id} has no {name} property"))?;
+    if !matches!(&property.value, Value::Scalar(_)) {
+        return Err(format!("Layer {layer_id} {name} is not scalar"));
+    }
+    property.set_value_at(Tick::ZERO, Value::Scalar(degrees));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn set_layer_rotation_x(
+    source: &str,
+    composition_id: u64,
+    layer_id: u64,
+    degrees: f64,
+) -> Result<String, String> {
+    set_layer_transform_scalar(source, composition_id, layer_id, "rotationX", "X Rotation", degrees)
+}
+
+fn set_layer_rotation_y(
+    source: &str,
+    composition_id: u64,
+    layer_id: u64,
+    degrees: f64,
+) -> Result<String, String> {
+    set_layer_transform_scalar(source, composition_id, layer_id, "rotationY", "Y Rotation", degrees)
+}
+
+fn set_layer_locked(source: &str, composition_id: u64, layer_id: u64, locked: bool) -> Result<String, String> {
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    layer.switches.locked = locked;
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Applies `edit` to the cloned Source Text document and writes it back with
+/// hold semantics at frame zero, mirroring the other canonical setters.
+fn edit_text_doc(
+    source: &str,
+    composition_id: u64,
+    layer_id: u64,
+    edit: impl FnOnce(&mut effectcraft_project::keyframe::TextDoc) -> Result<(), String>,
+) -> Result<String, String> {
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let text_group = layer.props.sub_mut("text")
+        .ok_or_else(|| format!("Layer {layer_id} has no Text group"))?;
+    let property = text_group.prop_mut("sourceText")
+        .ok_or_else(|| format!("Layer {layer_id} has no Source Text property"))?;
+    let mut doc = match &property.value {
+        Value::Text(doc) => (**doc).clone(),
+        _ => return Err(format!("Layer {layer_id} Source Text is not a text document")),
+    };
+    edit(&mut doc)?;
+    property.set_value_at(Tick::ZERO, Value::Text(Box::new(doc)));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn set_text_layer_text(source: &str, composition_id: u64, layer_id: u64, text: &str) -> Result<String, String> {
+    if text.chars().count() > 20_000 {
+        return Err("Source Text must be at most 20,000 characters".into());
+    }
+    let owned = text.to_owned();
+    edit_text_doc(source, composition_id, layer_id, |doc| {
+        doc.text = owned;
+        Ok(())
+    })
+}
+
+fn set_text_layer_size(source: &str, composition_id: u64, layer_id: u64, size: f64) -> Result<String, String> {
+    if !size.is_finite() || size <= 0.0 || size > 10_000.0 {
+        return Err("Text size must be finite and between 0 and 10,000".into());
+    }
+    edit_text_doc(source, composition_id, layer_id, |doc| {
+        doc.size = size;
+        Ok(())
+    })
+}
+
+fn set_text_layer_tracking(source: &str, composition_id: u64, layer_id: u64, tracking: f64) -> Result<String, String> {
+    if !tracking.is_finite() || tracking.abs() > 10_000.0 {
+        return Err("Text tracking must be finite and within ±10,000".into());
+    }
+    edit_text_doc(source, composition_id, layer_id, |doc| {
+        doc.tracking = tracking;
+        Ok(())
+    })
+}
+
+fn set_layer_scalar_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, value: f64) -> Result<String, String> {
+    if !value.is_finite() || value.abs() > 1_000_000.0 {
+        return Err("Parameter value must be finite and within ±1,000,000".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = layer.props.prop_mut(&format!("@{uid}"))
+        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))?;
+    if !matches!(&property.value, Value::Scalar(_)) {
+        return Err(format!("Parameter {uid} is not scalar"));
+    }
+    property.set_value_at(Tick::ZERO, Value::Scalar(value));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn set_layer_vec_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, x: f64, y: f64, z: f64) -> Result<String, String> {
+    if !x.is_finite() || !y.is_finite() || !z.is_finite() || x.abs() > 1_000_000.0 || y.abs() > 1_000_000.0 || z.abs() > 1_000_000.0 {
+        return Err("Parameter value must be finite and within ±1,000,000".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = layer.props.prop_mut(&format!("@{uid}"))
+        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))?;
+    match &property.value {
+        Value::Vec2(_) => property.set_value_at(Tick::ZERO, Value::Vec2([x, y])),
+        Value::Vec3(_) => property.set_value_at(Tick::ZERO, Value::Vec3([x, y, z])),
+        _ => return Err(format!("Parameter {uid} is not a vector")),
+    }
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
@@ -958,6 +1300,150 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerAnchorEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_layer_anchor(&source, composition_id as u64, layer_id as u64, x as f64, y as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerOrientationEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble, z: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_layer_orientation(&source, composition_id as u64, layer_id as u64, x as f64, y as f64, z as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerRotationXEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, degrees: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_layer_rotation_x(&source, composition_id as u64, layer_id as u64, degrees as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerRotationYEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, degrees: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_layer_rotation_y(&source, composition_id as u64, layer_id as u64, degrees as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerLockedEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, locked: jni::sys::jboolean,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_layer_locked(&source, composition_id as u64, layer_id as u64, locked != 0) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setTextLayerTextEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, text: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let text: String = match env.get_string(&text) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_text_layer_text(&source, composition_id as u64, layer_id as u64, &text) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setTextLayerSizeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, size: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_text_layer_size(&source, composition_id as u64, layer_id as u64, size as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setTextLayerTrackingEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, tracking: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_text_layer_tracking(&source, composition_id as u64, layer_id as u64, tracking as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerScalarPropertyEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, value: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 { Err("Composition, layer and parameter IDs must be non-negative".to_owned()) }
+        else { set_layer_scalar_property(&source, composition_id as u64, layer_id as u64, uid as u64, value as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerVecPropertyEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble, z: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 { Err("Composition, layer and parameter IDs must be non-negative".to_owned()) }
+        else { set_layer_vec_property(&source, composition_id as u64, layer_id as u64, uid as u64, x as f64, y as f64, z as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
 pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerPositionEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
 ) -> jstring {
@@ -981,6 +1467,7 @@ fn set_layer_opacity(source: &str, composition_id: u64, layer_id: u64, opacity_p
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     let transform = layer.props.children.iter_mut().find_map(|node| match node {
         Node::Group(group) if group.match_id == "transform" => Some(group),
         _ => None,
@@ -1016,6 +1503,7 @@ fn set_layer_opacity_keyframe(source: &str, composition_id: u64, layer_id: u64, 
     let frame_rate = comp.frame_rate;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     let transform = layer.props.children.iter_mut().find_map(|node| match node {
         Node::Group(group) if group.match_id == "transform" => Some(group),
         _ => None,
@@ -1052,6 +1540,7 @@ fn remove_layer_opacity_keyframe(source: &str, composition_id: u64, layer_id: u6
     let frame_rate = comp.frame_rate;
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
     let transform = layer.props.children.iter_mut().find_map(|node| match node {
         Node::Group(group) if group.match_id == "transform" => Some(group),
         _ => None,
@@ -1101,6 +1590,7 @@ fn delete_layer(source: &str, composition_id: u64, layer_id: u64) -> Result<Stri
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let index = comp.layers.iter().position(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(&comp.layers[index])?;
     comp.layers.remove(index);
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
@@ -1970,5 +2460,148 @@ mod tests {
             serde_json::from_str(&session_backend_status(&session)).unwrap();
         assert!(final_status["backend"] == "gpu" || final_status["backend"] == "cpu");
         assert!(close_session(handle));
+    }
+
+    #[test]
+    fn canonical_anchor_and_3d_rotation_update_real_properties_and_metadata() {
+        use effectcraft_project::Value;
+
+        let (source, comp_id, layer_id) = text_layer_project();
+        let anchored = set_layer_anchor(&source, comp_id, layer_id, 120.5, 80.25).unwrap();
+        let oriented = set_layer_orientation(&anchored, comp_id, layer_id, 10.0, 20.0, 30.0).unwrap();
+        let rotated_x = set_layer_rotation_x(&oriented, comp_id, layer_id, 45.0).unwrap();
+        let rotated = set_layer_rotation_y(&rotated_x, comp_id, layer_id, -30.0).unwrap();
+        let updated: Project = serde_json::from_str(&rotated).unwrap();
+        let transform = updated.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap();
+        assert_eq!(transform.prop("anchor").unwrap().value, Value::Vec3([120.5, 80.25, 0.0]));
+        assert_eq!(transform.prop("orientation").unwrap().value, Value::Vec3([10.0, 20.0, 30.0]));
+        assert_eq!(transform.prop("rotationX").unwrap().value, Value::Scalar(45.0));
+        assert_eq!(transform.prop("rotationY").unwrap().value, Value::Scalar(-30.0));
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&rotated).unwrap()).unwrap();
+        let layer_meta = &metadata["compositions"][0]["layers"][0];
+        assert_eq!(layer_meta["anchor"], json!([120.5, 80.25]));
+        assert_eq!(layer_meta["orientation"], json!([10.0, 20.0, 30.0]));
+        assert_eq!(layer_meta["rotationXDegrees"], 45.0);
+        assert_eq!(layer_meta["rotationYDegrees"], -30.0);
+        assert_eq!(layer_meta["locked"], false);
+        assert!(set_layer_anchor(&source, comp_id, layer_id, f64::NAN, 0.0).is_err());
+        assert!(set_layer_orientation(&source, comp_id, layer_id, 0.0, f64::INFINITY, 0.0).is_err());
+        assert!(set_layer_rotation_x(&source, comp_id, 999, 10.0).is_err());
+        assert!(set_layer_rotation_y(&source, comp_id, layer_id, 360_001.0).is_err());
+    }
+
+    #[test]
+    fn canonical_text_params_update_source_text_size_and_tracking() {
+        use effectcraft_project::Value;
+
+        let (source, comp_id, layer_id) = text_layer_project();
+        let texted = set_text_layer_text(&source, comp_id, layer_id, "Hello mobile").unwrap();
+        let sized = set_text_layer_size(&texted, comp_id, layer_id, 48.0).unwrap();
+        let tracked = set_text_layer_tracking(&sized, comp_id, layer_id, 12.5).unwrap();
+        let updated: Project = serde_json::from_str(&tracked).unwrap();
+        let text_group = updated.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("text").unwrap();
+        let doc = match &text_group.prop("sourceText").unwrap().value {
+            Value::Text(doc) => doc,
+            other => panic!("sourceText must be a Text value, got {other:?}"),
+        };
+        assert_eq!(doc.text, "Hello mobile");
+        assert_eq!(doc.size, 48.0);
+        assert_eq!(doc.tracking, 12.5);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&tracked).unwrap()).unwrap();
+        let text_meta = &metadata["compositions"][0]["layers"][0]["text"];
+        assert_eq!(text_meta["text"], "Hello mobile");
+        assert_eq!(text_meta["size"], 48.0);
+        assert_eq!(text_meta["tracking"], 12.5);
+        assert_eq!(text_meta["font"], "Inter");
+        assert!(set_text_layer_size(&source, comp_id, layer_id, 0.0).is_err());
+        assert!(set_text_layer_tracking(&source, comp_id, layer_id, f64::NAN).is_err());
+        assert!(set_text_layer_text(&source, comp_id, 999, "Nope").is_err());
+    }
+
+    #[test]
+    fn canonical_shape_and_effect_params_update_by_property_uid() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Value};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let mut shape_layer = build::layer(&mut project, &comp, "Shape", LayerSource::Shape, (640, 360), None);
+        let shape_id = shape_layer.id.0;
+        let mut next_id = 10_000u64;
+        let mut ids = build::Ids(&mut next_id);
+        let rect = build::shape_rect(&mut ids, [200.0, 100.0], [0.0, 0.0], 0.0);
+        shape_layer.props.sub_mut("contents").unwrap().children.push(rect.into());
+        project.comp_mut(comp_id).unwrap().layers.push(shape_layer);
+        let mut null_layer = build::layer(&mut project, &comp, "Null", LayerSource::Null, (640, 360), None);
+        let null_id = null_layer.id.0;
+        let mut effect = ids.group("gaussianBlur", "Gaussian Blur");
+        effect = effect.with(ids.prop("blurriness", "Blurriness", Value::Scalar(0.0)));
+        null_layer.props.sub_mut("effects").unwrap().children.push(effect.into());
+        project.comp_mut(comp_id).unwrap().layers.push(null_layer);
+        let source = project.to_file_json().unwrap();
+
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&source).unwrap()).unwrap();
+        let shape_meta = &metadata["compositions"][0]["layers"][0];
+        assert_eq!(shape_meta["source"], "Shape");
+        let rect_item = shape_meta["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "rect").expect("rect shape item must be exposed");
+        let size_uid = rect_item["vecs"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Size").expect("rect Size param must be exposed")["uid"].as_u64().unwrap();
+        let roundness_uid = rect_item["scalars"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Roundness").expect("rect Roundness param must be exposed")["uid"].as_u64().unwrap();
+        let resized = set_layer_vec_property(&source, comp_id.0, shape_id, size_uid, 320.0, 160.0, 0.0).unwrap();
+        let rounded = set_layer_scalar_property(&resized, comp_id.0, shape_id, roundness_uid, 24.0).unwrap();
+        let updated_meta: serde_json::Value = serde_json::from_str(&inspect_project(&rounded).unwrap()).unwrap();
+        let updated_rect = updated_meta["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "rect").unwrap();
+        assert_eq!(updated_rect["vecs"].as_array().unwrap().iter().find(|p| p["name"] == "Size").unwrap()["components"], json!([320.0, 160.0]));
+        assert_eq!(updated_rect["scalars"].as_array().unwrap().iter().find(|p| p["name"] == "Roundness").unwrap()["value"], 24.0);
+
+        let effect_meta = &metadata["compositions"][0]["layers"][1];
+        let blur_item = effect_meta["effects"].as_array().unwrap().iter()
+            .find(|item| item["name"] == "Gaussian Blur").expect("effect group must be exposed");
+        let blur_uid = blur_item["scalars"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Blurriness").expect("Blurriness param must be exposed")["uid"].as_u64().unwrap();
+        let blurred = set_layer_scalar_property(&rounded, comp_id.0, null_id, blur_uid, 15.0).unwrap();
+        let blurred_meta: serde_json::Value = serde_json::from_str(&inspect_project(&blurred).unwrap()).unwrap();
+        let blurred_item = blurred_meta["compositions"][0]["layers"][1]["effects"].as_array().unwrap().iter()
+            .find(|item| item["name"] == "Gaussian Blur").unwrap();
+        assert_eq!(blurred_item["scalars"].as_array().unwrap().iter().find(|p| p["name"] == "Blurriness").unwrap()["value"], 15.0);
+        assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, size_uid, 10.0).is_err());
+        assert!(set_layer_vec_property(&source, comp_id.0, shape_id, roundness_uid, 1.0, 2.0, 0.0).is_err());
+        assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, 999_999, 10.0).is_err());
+    }
+
+    #[test]
+    fn canonical_layer_lock_blocks_edits_and_unlock_restores_them() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let locked_json = set_layer_locked(&source, comp_id, layer_id, true).unwrap();
+        let locked_project: Project = serde_json::from_str(&locked_json).unwrap();
+        assert!(locked_project.comp(ItemId(comp_id)).unwrap().layers[0].switches.locked);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&locked_json).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["layers"][0]["locked"], true);
+
+        assert!(rename_layer(&locked_json, comp_id, layer_id, "Renamed").is_err());
+        assert!(set_layer_visibility(&locked_json, comp_id, layer_id, false).is_err());
+        assert!(move_layer(&locked_json, comp_id, layer_id, 1).is_err());
+        assert!(delete_layer(&locked_json, comp_id, layer_id).is_err());
+        assert!(set_layer_position(&locked_json, comp_id, layer_id, 10.0, 10.0).is_err());
+        assert!(set_layer_scale(&locked_json, comp_id, layer_id, 50.0, 50.0).is_err());
+        assert!(set_layer_rotation(&locked_json, comp_id, layer_id, 10.0).is_err());
+        assert!(set_layer_opacity(&locked_json, comp_id, layer_id, 50.0).is_err());
+        assert!(set_layer_anchor(&locked_json, comp_id, layer_id, 1.0, 1.0).is_err());
+        assert!(set_layer_orientation(&locked_json, comp_id, layer_id, 1.0, 0.0, 0.0).is_err());
+        assert!(set_layer_rotation_x(&locked_json, comp_id, layer_id, 10.0).is_err());
+        assert!(set_layer_rotation_y(&locked_json, comp_id, layer_id, 10.0).is_err());
+        assert!(set_text_layer_text(&locked_json, comp_id, layer_id, "Blocked").is_err());
+        assert!(set_layer_opacity_keyframe(&locked_json, comp_id, layer_id, 10, 50.0).is_err());
+
+        let unlocked_json = set_layer_locked(&locked_json, comp_id, layer_id, false).unwrap();
+        let moved = set_layer_position(&unlocked_json, comp_id, layer_id, 10.0, 20.0).unwrap();
+        let moved_project: Project = serde_json::from_str(&moved).unwrap();
+        assert!(!moved_project.comp(ItemId(comp_id)).unwrap().layers[0].switches.locked);
+        assert!(set_layer_locked(&source, comp_id, 999, true).is_err());
     }
 }
