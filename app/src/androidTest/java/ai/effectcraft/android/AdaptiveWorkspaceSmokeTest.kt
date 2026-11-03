@@ -61,7 +61,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onCancelFrameExport = {},
                     isExportingSequence = false,
                     isSequenceExportWritingOutput = false,
-                    onExportPngSequence = {},
+                    onExportPngSequence = { _, _, _, _, _ -> },
                     onCancelSequenceExport = {},
                     sequenceExportProgress = 0,
                     onNewProject = {},
