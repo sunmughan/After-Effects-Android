@@ -96,6 +96,18 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    val exportEcprojxLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/xml")) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val source = importedEcproj ?: error("No canonical EffectCraft project has been imported")
+                val xml = CanonicalProjectDocument.toXml(source)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(xml.toByteArray(Charsets.UTF_8)) }
+                    ?: error("Unable to write selected document")
+                saveMessage = "Exported canonical .ecprojx"
+            }.onFailure { error -> saveMessage = "XML export failed · ${error.message ?: "storage error"}" }
+        }
+    }
+
     val relinkAssetLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         val itemId = pendingRelinkItemId
         pendingRelinkItemId = null
@@ -227,6 +239,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onExportEcproj = {
                 if (importedEcproj == null) saveMessage = "Import a canonical .ecproj first"
                 else exportEcprojLauncher.launch("EffectCraft.ecproj")
+            },
+            onExportEcprojx = {
+                if (importedEcproj == null) saveMessage = "Import a canonical EffectCraft project first"
+                else exportEcprojxLauncher.launch("EffectCraft.ecprojx")
             },
             onSave = {
                 runCatching { projectStore.save(project) }
