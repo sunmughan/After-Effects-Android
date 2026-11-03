@@ -106,6 +106,7 @@ fun EditorScreen(
     saveMessage: String,
     savedProjects: List<ProjectDocument>,
     offlineAssets: List<OfflineAssetStore.Asset>,
+    referencedOfflineAssetIds: Set<String>,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
@@ -308,8 +309,12 @@ fun EditorScreen(
                                         Text("${asset.extension.uppercase()} · ${asset.sizeBytes / 1024} KB · ${asset.sha256.take(12)}…",
                                             color = EditorPalette.muted, fontSize = 10.sp)
                                     }
-                                    TextButton(onClick = { assetPendingDelete = asset }) {
-                                        Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
+                                    if (asset.sha256 in referencedOfflineAssetIds) {
+                                        Text("Linked", color = EditorPalette.mint, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp))
+                                    } else {
+                                        TextButton(onClick = { assetPendingDelete = asset }) {
+                                            Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
+                                        }
                                     }
                                 }
                             }
@@ -325,12 +330,12 @@ fun EditorScreen(
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { assetPendingDelete = null },
                 title = { Text("Remove offline media?") },
-                text = { Text("Delete ${asset.displayName} from this device? Any project footage path referencing it may become unavailable.") },
+                text = { Text(if (asset.sha256 in referencedOfflineAssetIds) "This media is linked by the current canonical project and cannot be removed yet." else "Delete ${asset.displayName} from this device?") },
                 confirmButton = {
                     TextButton(onClick = {
-                        onDeleteOfflineAsset(asset.sha256)
+                        if (asset.sha256 !in referencedOfflineAssetIds) onDeleteOfflineAsset(asset.sha256)
                         assetPendingDelete = null
-                    }) { Text("Delete", color = Color(0xFFFF8B91)) }
+                    }, enabled = asset.sha256 !in referencedOfflineAssetIds) { Text("Delete", color = Color(0xFFFF8B91)) }
                 },
                 dismissButton = { TextButton(onClick = { assetPendingDelete = null }) { Text("Cancel") } }
             )
