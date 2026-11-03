@@ -34,8 +34,16 @@ class RenderQueuePlanTest {
     }
 
     @Test
+    fun acceptsCommonSmallCompositionDimensions() {
+        val smallWide = RenderQueuePlan.create(settings(start = 0, end = 0, width = 320, height = 180))
+        assertEquals(320, smallWide.settings.width)
+        assertEquals(180, smallWide.settings.height)
+        assertEquals(230_400L, smallWide.estimatedUncompressedRgbaBytes)
+    }
+
+    @Test
     fun rejectsInvalidDimensionsFrameRateAndRanges() {
-        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(width = 319)) }
+        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(width = 0)) }
         assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(height = 4097)) }
         assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(fps = 0)) }
         assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(fps = 121)) }

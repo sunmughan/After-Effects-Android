@@ -1,3 +1,8 @@
+### Run 43 — allow valid sub-320 output dimensions
+- Review found the render-queue planner's previous 320px minimum rejected common 16:9 compositions such as 320×180, including the canonical NativeSession emulator fixture. Changed the minimum output dimension to 1 (maximum 4096 and per-frame/aggregate pixel budgets remain enforced); zero dimensions are still rejected.
+- Added `acceptsCommonSmallCompositionDimensions` for a 320×180 frame and updated invalid-dimension test to use width 0. This enables default composition-sized sequence export for small/low-resolution projects without silently upscaling or changing their dimensions.
+- CI #390 on the prior manifest-test head was in progress at Gradle setup; this fix triggers a new exact-head run. No test pass is claimed yet.
+
 ### Run 42 — PNG-sequence timing/dimension manifest
 - `PngSequenceZipExporter` now writes `sequence.json` as the first deterministic ZIP entry with schema, format, output width/height, FPS, inclusive start/end frames and frame count. This makes the selected FPS/range recoverable by consumers rather than leaving timing only in the UI.
 - `PngSequenceZipValidator` verifies manifest size/CRC/schema/settings against the plan before checking ordered frame entries; it still streams PNG CRC and dimension checks with bounded buffers. Exporter/validator JVM tests assert metadata and complete archive contents.
@@ -424,7 +429,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 
 ### Run 35 — bounded M5 frame-sequence planning (2026-11-03)
 - Added pure Kotlin `RenderQueuePlan`/`RenderQueueSettings` for a future native-rendered PNG sequence ZIP executor. It preserves width/height/FPS and inclusive start/end frames, iterates lazily, produces deterministic six-digit PNG entry names, and computes bounded progress without retaining a frame list.
-- Validation rejects invalid dimensions (320–4096), FPS outside 1–120, negative/reversed/out-of-range frames, queues over 10,000 frames, more than 8,388,608 pixels/frame, or >8 GiB estimated uncompressed RGBA. Output format is explicitly PNG sequence ZIP only; no video codec/audio capability is claimed.
+- Validation rejects invalid dimensions (1–4096), FPS outside 1–120, negative/reversed/out-of-range frames, queues over 10,000 frames, more than 8,388,608 pixels/frame, or >8 GiB estimated uncompressed RGBA. Output format is explicitly PNG sequence ZIP only; no video codec/audio capability is claimed.
 - Four JVM test methods cover inclusive frame mapping/names, progress boundaries, invalid inputs, UHD budget and queue-budget rejection. Files: `app/src/main/java/ai/effectcraft/android/data/RenderQueuePlan.kt`, `app/src/test/java/ai/effectcraft/android/data/RenderQueuePlanTest.kt`.
 - This is M5 planning/validation groundwork, not an executor or UI feature; single-frame PNG remains the only shipped export action. Exact-head CI will validate the new Kotlin/JUnit files.
 - Concurrent CI #374 (head `2829b8a`) is running on the compile-fix commit. Its predecessor #373 failed at APK assembly solely on the already-diagnosed `importedEcprojx` typo; correction is now committed. The new queue-plan commit will supersede #374 and require a fresh exact-head run.

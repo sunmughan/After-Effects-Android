@@ -45,7 +45,7 @@ data class RenderQueuePlan private constructor(
     }
 
     companion object {
-        const val MIN_DIMENSION = 320
+        const val MIN_DIMENSION = 1
         const val MAX_DIMENSION = 4096
         const val MAX_PIXELS_PER_FRAME = 8_388_608L
         const val MAX_FRAME_INDEX = 1_000_000
