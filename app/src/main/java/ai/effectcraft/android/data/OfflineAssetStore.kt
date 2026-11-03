@@ -28,6 +28,7 @@ class OfflineAssetStore(
         val sha256: String,
         val displayName: String,
         val mimeType: String?,
+        val extension: String,
         val sizeBytes: Long
     )
 
@@ -63,7 +64,8 @@ class OfflineAssetStore(
                 }
             }
             val hash = digest.digest().toHex()
-            val payload = payloadFile(hash)
+            val extension = extensionFor(name)
+            val payload = payloadFile(hash, extension)
             if (payload.exists()) {
                 if (payload.length() != size) throw IOException("Existing content-addressed asset has an inconsistent size")
                 temporary.delete()
@@ -73,7 +75,7 @@ class OfflineAssetStore(
 
             val properties = readIndex()
             val existing = properties.getProperty(hash)?.decodeRecord(hash)
-            val asset = existing ?: Asset(hash, name, normalizedMime, size)
+            val asset = existing ?: Asset(hash, name, normalizedMime, extension, size)
             if (existing == null) {
                 properties.setProperty(hash, asset.encodeRecord())
                 writeIndex(properties)
@@ -102,7 +104,8 @@ class OfflineAssetStore(
     fun fileFor(sha256: String): File? {
         val hash = sha256.decodeHash()
         if (readIndex().getProperty(hash) == null) return null
-        return payloadFile(hash).takeIf(File::isFile)
+        val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: return null
+        return payloadFile(hash, asset.extension).takeIf(File::isFile)
     }
 
     @Synchronized
@@ -110,7 +113,8 @@ class OfflineAssetStore(
     fun open(sha256: String): InputStream {
         val hash = sha256.decodeHash()
         if (readIndex().getProperty(hash) == null) throw IOException("Asset $hash is not in the offline library")
-        val payload = payloadFile(hash)
+        val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: throw IOException("Asset $hash is not in the offline library")
+        val payload = payloadFile(hash, asset.extension)
         if (!payload.isFile()) throw IOException("Offline asset payload is missing: $hash")
         return FileInputStream(payload)
     }
@@ -122,7 +126,7 @@ class OfflineAssetStore(
         val properties = readIndex()
         if (properties.remove(hash) == null) return false
         writeIndex(properties)
-        val payload = payloadFile(hash)
+        val payload = payloadFile(hash, (properties.getProperty(hash)?.decodeRecord(hash) ?: return true).extension)
         if (payload.exists() && !payload.delete()) throw IOException("Asset index removed but payload could not be deleted: $hash")
         return true
     }
@@ -132,7 +136,10 @@ class OfflineAssetStore(
         if (!root.isDirectory) throw IOException("Offline asset path is not a directory")
     }
 
-    private fun payloadFile(hash: String) = File(root, hash)
+    private fun payloadFile(hash: String, extension: String) = File(root, "$hash.$extension")
+
+    private fun extensionFor(name: String): String = name.substringAfterLast('.', "asset")
+        .lowercase().takeIf { it.matches(Regex("[a-z0-9]{1,10}")) } ?: "asset"
 
     private fun readIndex(): Properties = Properties().apply {
         if (indexFile.isFile) indexFile.inputStream().buffered().use(::load)
@@ -155,17 +162,19 @@ class OfflineAssetStore(
     private fun Asset.encodeRecord(): String = listOf(
         displayName.toBase64(),
         (mimeType ?: "").toBase64(),
+        extension.toBase64(),
         sizeBytes.toString()
     ).joinToString(".")
 
     private fun String.decodeRecord(hash: String): Asset {
         val fields = split('.')
-        require(fields.size == 3) { "Invalid offline asset index record" }
+        require(fields.size == 4) { "Invalid offline asset index record" }
         val name = fields[0].fromBase64()
         val mime = fields[1].fromBase64().ifEmpty { null }
-        val size = fields[2].toLong()
-        require(name.isNotBlank() && size >= 0) { "Invalid offline asset metadata" }
-        return Asset(hash, name, mime, size)
+        val extension = fields[2].fromBase64()
+        val size = fields[3].toLong()
+        require(name.isNotBlank() && extension.matches(Regex("[a-z0-9]{1,10}")) && size >= 0) { "Invalid offline asset metadata" }
+        return Asset(hash, name, mime, extension, size)
     }
 
     private fun String.decodeHash(): String {
