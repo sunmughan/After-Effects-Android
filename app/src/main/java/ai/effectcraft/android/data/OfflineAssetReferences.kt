@@ -19,9 +19,12 @@ class OfflineAssetReferences(private val file: File) {
     }
 
     @Synchronized
-    fun referencedAssetIds(): Set<String> = read().stringPropertyNames()
-        .mapNotNull { key -> read().getProperty(key)?.takeIf { hash -> runCatching { validateHash(hash) }.isSuccess } }
-        .toSet()
+    fun referencedAssetIds(): Set<String> {
+        val properties = read()
+        return properties.stringPropertyNames().mapNotNull { key ->
+            properties.getProperty(key)?.let { hash -> runCatching { validateHash(hash); hash }.getOrNull() }
+        }.toSet()
+    }
 
     @Synchronized
     fun isReferenced(sha256: String): Boolean {
