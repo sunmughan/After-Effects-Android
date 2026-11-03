@@ -3,6 +3,7 @@ package ai.effectcraft.android.data
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -158,7 +159,14 @@ class ProjectKeyframeStore(private val root: File) {
         }
         val target = fileFor(projectId)
         val temporary = File(root, "${target.name}.tmp")
-        temporary.writeText(document.toString(), Charsets.UTF_8)
+        // Flush the complete recovery candidate to stable storage before the
+        // rename. Without fd.sync(), a power loss can leave a syntactically
+        // complete temp whose contents were never durably written.
+        FileOutputStream(temporary).use { output ->
+            output.write(document.toString().toByteArray(Charsets.UTF_8))
+            output.flush()
+            output.fd.sync()
+        }
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } catch (_: Exception) {
