@@ -875,6 +875,86 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical rotation updated · saved locally"
                 )
             },
+            onSetCanonicalLayerAnchor = { compositionId, layerId, x, y ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerAnchorEcproj(source, compositionId, layerId, x, y),
+                    "Canonical anchor point updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerOrientation = { compositionId, layerId, x, y, z ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerOrientationEcproj(source, compositionId, layerId, x, y, z),
+                    "Canonical orientation updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerRotationX = { compositionId, layerId, degrees ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerRotationXEcproj(source, compositionId, layerId, degrees),
+                    "Canonical X rotation updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerRotationY = { compositionId, layerId, degrees ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerRotationYEcproj(source, compositionId, layerId, degrees),
+                    "Canonical Y rotation updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerLocked = { compositionId, layerId, locked ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerLockedEcproj(source, compositionId, layerId, locked),
+                    if (locked) "Canonical layer locked · saved locally" else "Canonical layer unlocked · saved locally"
+                )
+            },
+            onSetCanonicalTextLayerText = { compositionId, layerId, text ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerTextEcproj(source, compositionId, layerId, text),
+                    "Canonical text updated · saved locally"
+                )
+            },
+            onSetCanonicalTextLayerSize = { compositionId, layerId, size ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerSizeEcproj(source, compositionId, layerId, size),
+                    "Canonical text size updated · saved locally"
+                )
+            },
+            onSetCanonicalTextLayerTracking = { compositionId, layerId, tracking ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerTrackingEcproj(source, compositionId, layerId, tracking),
+                    "Canonical text tracking updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerScalarProperty = { compositionId, layerId, uid, value ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerScalarPropertyEcproj(source, compositionId, layerId, uid, value),
+                    "Canonical parameter updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerVecProperty = { compositionId, layerId, uid, x, y, z ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerVecPropertyEcproj(source, compositionId, layerId, uid, x, y, z),
+                    "Canonical parameter updated · saved locally"
+                )
+            },
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))

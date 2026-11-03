@@ -12,7 +12,11 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import ai.effectcraft.android.data.CanonicalCompositionInfo
 import ai.effectcraft.android.data.CanonicalLayerInfo
+import ai.effectcraft.android.data.CanonicalParamGroup
 import ai.effectcraft.android.data.CanonicalProjectInfo
+import ai.effectcraft.android.data.CanonicalScalarParam
+import ai.effectcraft.android.data.CanonicalTextParams
+import ai.effectcraft.android.data.CanonicalVecParam
 import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.data.PropertyKeyframe
 import ai.effectcraft.android.ui.EditorScreen
@@ -90,6 +94,16 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
+                    onSetCanonicalLayerAnchor = { _, _, _, _ -> },
+                    onSetCanonicalLayerOrientation = { _, _, _, _, _ -> },
+                    onSetCanonicalLayerRotationX = { _, _, _ -> },
+                    onSetCanonicalLayerRotationY = { _, _, _ -> },
+                    onSetCanonicalLayerLocked = { _, _, _ -> },
+                    onSetCanonicalTextLayerText = { _, _, _ -> },
+                    onSetCanonicalTextLayerSize = { _, _, _ -> },
+                    onSetCanonicalTextLayerTracking = { _, _, _ -> },
+                    onSetCanonicalLayerScalarProperty = { _, _, _, _ -> },
+                    onSetCanonicalLayerVecProperty = { _, _, _, _, _, _ -> },
                     onRelinkCanonicalAsset = {},
                     onRenderCanonicalFrame = { _, _ -> null },
                     safGrants = emptyList(),
@@ -178,6 +192,16 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
+                    onSetCanonicalLayerAnchor = { _, _, _, _ -> },
+                    onSetCanonicalLayerOrientation = { _, _, _, _, _ -> },
+                    onSetCanonicalLayerRotationX = { _, _, _ -> },
+                    onSetCanonicalLayerRotationY = { _, _, _ -> },
+                    onSetCanonicalLayerLocked = { _, _, _ -> },
+                    onSetCanonicalTextLayerText = { _, _, _ -> },
+                    onSetCanonicalTextLayerSize = { _, _, _ -> },
+                    onSetCanonicalTextLayerTracking = { _, _, _ -> },
+                    onSetCanonicalLayerScalarProperty = { _, _, _, _ -> },
+                    onSetCanonicalLayerVecProperty = { _, _, _, _, _, _ -> },
                     onRelinkCanonicalAsset = {},
                     onRenderCanonicalFrame = { _, _ -> null },
                     safGrants = emptyList(),
@@ -200,5 +224,186 @@ class AdaptiveWorkspaceSmokeTest {
         // Frame is Int in the callback, so listOf<Any> keeps the literal 0
         // as Int instead of inferring List<Long> and coercing it to 0L.
         assertEquals(listOf<Any>(10L, 2L, 0), removed)
+    }
+
+    private class CanonicalCaptures {
+        var anchor: List<Any>? = null
+        var orientation: List<Any>? = null
+        var rotationX: List<Any>? = null
+        var rotationY: List<Any>? = null
+        var locked: List<Any>? = null
+        var text: List<Any>? = null
+        var textSize: List<Any>? = null
+        var textTracking: List<Any>? = null
+        var scalarProperty: List<Any>? = null
+        var vecProperty: List<Any>? = null
+    }
+
+    private fun setCanonicalEditorContent(canonical: CanonicalProjectInfo, captures: CanonicalCaptures) {
+        val project = ProjectDocument.starter()
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                EditorScreen(
+                    project = project,
+                    selectedLayer = project.layers.first(),
+                    selectedLayerId = project.layers.first().id,
+                    playheadFrame = 0,
+                    selectedOpacityKeyframes = emptyList(),
+                    isPlaying = false,
+                    saveMessage = "Saved",
+                    savedProjects = emptyList(),
+                    offlineAssets = emptyList(),
+                    referencedOfflineAssetIds = emptySet(),
+                    canUndo = false,
+                    canRedo = false,
+                    onUndo = {},
+                    onRedo = {},
+                    onSave = {},
+                    onOpenProject = {},
+                    onDeleteOfflineAsset = {},
+                    onValidateEcproj = {},
+                    onExportEcproj = {},
+                    onExportEcprojx = {},
+                    isExportingFrame = false,
+                    onExportRenderedFrame = {},
+                    onCancelFrameExport = {},
+                    isExportingSequence = false,
+                    isSequenceExportWritingOutput = false,
+                    onExportPngSequence = { _, _, _, _, _ -> },
+                    onCancelSequenceExport = {},
+                    sequenceExportProgress = 0,
+                    onNewProject = {},
+                    onAddLayer = {},
+                    onSelectLayer = {},
+                    onDeleteLayer = {},
+                    onMoveLayer = {},
+                    onVisibilityChange = {},
+                    onRenameLayer = {},
+                    onOpacityChange = {},
+                    onScrub = {},
+                    onAddOpacityKeyframe = {},
+                    onRemoveOpacityKeyframe = {},
+                    onTogglePlayback = {},
+                    onApplyComposition = { _, _, _, _ -> },
+                    canonicalProject = canonical,
+                    canEditCanonicalProject = true,
+                    onRenameCanonicalLayer = { _, _, _ -> },
+                    onAddCanonicalTextLayer = { _, _ -> },
+                    onSetCanonicalLayerVisibility = { _, _, _ -> },
+                    onMoveCanonicalLayer = { _, _, _ -> },
+                    onDeleteCanonicalLayer = { _, _ -> },
+                    onSetCanonicalLayerOpacity = { _, _, _ -> },
+                    onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
+                    onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
+                    onSetCanonicalLayerPosition = { _, _, _, _ -> },
+                    onSetCanonicalLayerScale = { _, _, _, _ -> },
+                    onSetCanonicalLayerRotation = { _, _, _ -> },
+                    onSetCanonicalLayerAnchor = { c, l, x, y -> captures.anchor = listOf(c, l, x, y) },
+                    onSetCanonicalLayerOrientation = { c, l, x, y, z -> captures.orientation = listOf(c, l, x, y, z) },
+                    onSetCanonicalLayerRotationX = { c, l, v -> captures.rotationX = listOf(c, l, v) },
+                    onSetCanonicalLayerRotationY = { c, l, v -> captures.rotationY = listOf(c, l, v) },
+                    onSetCanonicalLayerLocked = { c, l, v -> captures.locked = listOf(c, l, v) },
+                    onSetCanonicalTextLayerText = { c, l, v -> captures.text = listOf(c, l, v) },
+                    onSetCanonicalTextLayerSize = { c, l, v -> captures.textSize = listOf(c, l, v) },
+                    onSetCanonicalTextLayerTracking = { c, l, v -> captures.textTracking = listOf(c, l, v) },
+                    onSetCanonicalLayerScalarProperty = { c, l, uid, v -> captures.scalarProperty = listOf(c, l, uid, v) },
+                    onSetCanonicalLayerVecProperty = { c, l, uid, x, y, z -> captures.vecProperty = listOf(c, l, uid, x, y, z) },
+                    onRelinkCanonicalAsset = {},
+                    onRenderCanonicalFrame = { _, _ -> null },
+                    safGrants = emptyList(),
+                    missingManifestEntries = 0,
+                    onReleaseSafGrant = { _, _ -> },
+                    onReplaceOfflineAsset = {},
+                    onCollectUnusedOfflineAssets = {}
+                )
+            }
+        }
+    }
+
+    private fun canonicalM4Layer(locked: Boolean): CanonicalProjectInfo {
+        val layer = CanonicalLayerInfo(
+            id = 2, name = "Headline", source = "Text", visible = true,
+            opacityPercent = 100.0, positionX = 320.0, positionY = 180.0,
+            scaleX = 100.0, scaleY = 100.0, rotationDegrees = 15.0,
+            anchorX = 120.5, anchorY = 80.25,
+            orientationX = 10.0, orientationY = 20.0, orientationZ = 30.0,
+            rotationXDegrees = 45.0, rotationYDegrees = -30.0,
+            locked = locked, threeD = false,
+            textParams = CanonicalTextParams("Hello mobile", "Inter", 48.0, 12.5),
+            shapeItems = listOf(
+                CanonicalParamGroup(
+                    name = "Rectangle Path 1", kind = "rect",
+                    scalars = listOf(CanonicalScalarParam(101, "Roundness", 24.0)),
+                    vecs = listOf(CanonicalVecParam(102, "Size", listOf(320.0, 160.0)))
+                )
+            ),
+            effects = listOf(
+                CanonicalParamGroup(
+                    name = "Gaussian Blur", kind = "gaussianBlur",
+                    scalars = listOf(CanonicalScalarParam(201, "Blurriness", 15.0))
+                )
+            )
+        )
+        val other = CanonicalLayerInfo(
+            id = 3, name = "Clip", source = "Footage", visible = true,
+            opacityPercent = 100.0, positionX = 0.0, positionY = 0.0,
+            scaleX = 100.0, scaleY = 100.0, rotationDegrees = 0.0
+        )
+        val composition = CanonicalCompositionInfo(
+            id = 10, name = "Main", width = 640, height = 360,
+            frameRateNum = 30, frameRateDen = 1, durationSeconds = 3.0,
+            layers = listOf(layer, other)
+        )
+        return CanonicalProjectInfo(compositions = listOf(composition))
+    }
+
+    @Test
+    fun canonicalAnchor3dRotationTextShapeEffectAndLockControlsTargetSelectedLayer() {
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(canonicalM4Layer(locked = false), captures)
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithText("● Headline", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Anchor Point · X / Y").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("3D Rotation · Orientation X / Y / Z (°)").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Text · Source Text").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Rectangle Path 1").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Gaussian Blur").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply canonical anchor").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 120.5, 80.25), captures.anchor)
+        compose.onNodeWithContentDescription("Apply canonical orientation").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 10.0, 20.0, 30.0), captures.orientation)
+        compose.onNodeWithContentDescription("Apply canonical rotation X").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 45.0), captures.rotationX)
+        compose.onNodeWithContentDescription("Apply canonical rotation Y").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, -30.0), captures.rotationY)
+        compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "Hello mobile"), captures.text)
+        compose.onNodeWithContentDescription("Apply canonical text size").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 48.0), captures.textSize)
+        compose.onNodeWithContentDescription("Apply canonical text tracking").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 12.5), captures.textTracking)
+        compose.onNodeWithContentDescription("Apply canonical shape parameter Rectangle Path 1 Roundness").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 101L, 24.0), captures.scalarProperty)
+        compose.onNodeWithContentDescription("Apply canonical shape parameter Rectangle Path 1 Size").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 102L, 320.0, 160.0, 0.0), captures.vecProperty)
+        compose.onNodeWithContentDescription("Apply canonical effect parameter Gaussian Blur Blurriness").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 201L, 15.0), captures.scalarProperty)
+        compose.onNodeWithContentDescription("Canonical layer locked").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, true), captures.locked)
+    }
+
+    @Test
+    fun lockedCanonicalLayerDisablesItsEditControls() {
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(canonicalM4Layer(locked = true), captures)
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Canonical layer locked").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply canonical anchor").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Apply canonical shape parameter Rectangle Path 1 Roundness").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Apply canonical effect parameter Gaussian Blur Blurriness").performScrollTo().assertIsNotEnabled()
+        assertEquals(null, captures.anchor)
+        assertEquals(null, captures.text)
+        assertEquals(null, captures.scalarProperty)
     }
 }

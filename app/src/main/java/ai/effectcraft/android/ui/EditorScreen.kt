@@ -78,6 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.effectcraft.android.data.CanonicalParamGroup
 import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectDocument
@@ -159,6 +160,16 @@ fun EditorScreen(
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerRotation: (Long, Long, Double) -> Unit,
+    onSetCanonicalLayerAnchor: (Long, Long, Double, Double) -> Unit,
+    onSetCanonicalLayerOrientation: (Long, Long, Double, Double, Double) -> Unit,
+    onSetCanonicalLayerRotationX: (Long, Long, Double) -> Unit,
+    onSetCanonicalLayerRotationY: (Long, Long, Double) -> Unit,
+    onSetCanonicalLayerLocked: (Long, Long, Boolean) -> Unit,
+    onSetCanonicalTextLayerText: (Long, Long, String) -> Unit,
+    onSetCanonicalTextLayerSize: (Long, Long, Double) -> Unit,
+    onSetCanonicalTextLayerTracking: (Long, Long, Double) -> Unit,
+    onSetCanonicalLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
+    onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?,
     safGrants: List<SafPermissionRegistry.Grant>,
@@ -549,6 +560,16 @@ fun EditorScreen(
                     onSetLayerPosition = onSetCanonicalLayerPosition,
                     onSetLayerScale = onSetCanonicalLayerScale,
                     onSetLayerRotation = onSetCanonicalLayerRotation,
+                    onSetLayerAnchor = onSetCanonicalLayerAnchor,
+                    onSetLayerOrientation = onSetCanonicalLayerOrientation,
+                    onSetLayerRotationX = onSetCanonicalLayerRotationX,
+                    onSetLayerRotationY = onSetCanonicalLayerRotationY,
+                    onSetLayerLocked = onSetCanonicalLayerLocked,
+                    onSetTextLayerText = onSetCanonicalTextLayerText,
+                    onSetTextLayerSize = onSetCanonicalTextLayerSize,
+                    onSetTextLayerTracking = onSetCanonicalTextLayerTracking,
+                    onSetLayerScalarProperty = onSetCanonicalLayerScalarProperty,
+                    onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
@@ -958,6 +979,16 @@ private fun CanonicalProjectEditor(
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetLayerScale: (Long, Long, Double, Double) -> Unit,
     onSetLayerRotation: (Long, Long, Double) -> Unit,
+    onSetLayerAnchor: (Long, Long, Double, Double) -> Unit,
+    onSetLayerOrientation: (Long, Long, Double, Double, Double) -> Unit,
+    onSetLayerRotationX: (Long, Long, Double) -> Unit,
+    onSetLayerRotationY: (Long, Long, Double) -> Unit,
+    onSetLayerLocked: (Long, Long, Boolean) -> Unit,
+    onSetTextLayerText: (Long, Long, String) -> Unit,
+    onSetTextLayerSize: (Long, Long, Double) -> Unit,
+    onSetTextLayerTracking: (Long, Long, Double) -> Unit,
+    onSetLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
+    onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
     modifier: Modifier = Modifier
@@ -966,7 +997,17 @@ private fun CanonicalProjectEditor(
     var layerId by remember { mutableStateOf<Long?>(null) }
     var newTextName by remember { mutableStateOf("Text") }
     val composition = project.compositions.firstOrNull { it.id == compositionId } ?: project.compositions.firstOrNull()
-    val layer = composition?.layers?.firstOrNull { it.id == layerId } ?: composition?.layers?.firstOrNull()
+    // Selection parity: the highlighted list row, the inspector fields and
+    // the layer every edit targets are all this one resolved layer. When a
+    // re-parse drops the selected id (for example after a delete), selection
+    // moves to the first remaining layer instead of pointing at stale data.
+    val layer = composition?.let { ai.effectcraft.android.data.CanonicalLayerSelection.resolve(it.layers, layerId) }
+    LaunchedEffect(composition?.id, composition?.layers?.map { it.id }) {
+        val current = composition?.layers
+        if (current != null && current.none { it.id == layerId }) {
+            layerId = current.firstOrNull()?.id
+        }
+    }
     var nameDraft by remember(composition?.id, layer?.id, layer?.name) { mutableStateOf(layer?.name.orEmpty()) }
     var opacityDraft by remember(composition?.id, layer?.id, layer?.opacityPercent) { mutableFloatStateOf((layer?.opacityPercent ?: 100.0).toFloat()) }
     var positionXDraft by remember(composition?.id, layer?.id, layer?.positionX) { mutableStateOf((layer?.positionX ?: 0.0).toString()) }
@@ -974,6 +1015,17 @@ private fun CanonicalProjectEditor(
     var scaleXDraft by remember(composition?.id, layer?.id, layer?.scaleX) { mutableStateOf((layer?.scaleX ?: 100.0).toString()) }
     var scaleYDraft by remember(composition?.id, layer?.id, layer?.scaleY) { mutableStateOf((layer?.scaleY ?: 100.0).toString()) }
     var rotationDraft by remember(composition?.id, layer?.id, layer?.rotationDegrees) { mutableStateOf((layer?.rotationDegrees ?: 0.0).toString()) }
+    var anchorXDraft by remember(composition?.id, layer?.id, layer?.anchorX) { mutableStateOf((layer?.anchorX ?: 0.0).toString()) }
+    var anchorYDraft by remember(composition?.id, layer?.id, layer?.anchorY) { mutableStateOf((layer?.anchorY ?: 0.0).toString()) }
+    var orientationXDraft by remember(composition?.id, layer?.id, layer?.orientationX) { mutableStateOf((layer?.orientationX ?: 0.0).toString()) }
+    var orientationYDraft by remember(composition?.id, layer?.id, layer?.orientationY) { mutableStateOf((layer?.orientationY ?: 0.0).toString()) }
+    var orientationZDraft by remember(composition?.id, layer?.id, layer?.orientationZ) { mutableStateOf((layer?.orientationZ ?: 0.0).toString()) }
+    var rotationXDraft by remember(composition?.id, layer?.id, layer?.rotationXDegrees) { mutableStateOf((layer?.rotationXDegrees ?: 0.0).toString()) }
+    var rotationYDraft by remember(composition?.id, layer?.id, layer?.rotationYDegrees) { mutableStateOf((layer?.rotationYDegrees ?: 0.0).toString()) }
+    var textDraft by remember(composition?.id, layer?.id, layer?.textParams?.text) { mutableStateOf(layer?.textParams?.text.orEmpty()) }
+    var textSizeDraft by remember(composition?.id, layer?.id, layer?.textParams?.size) { mutableStateOf((layer?.textParams?.size ?: 0.0).toString()) }
+    var textTrackingDraft by remember(composition?.id, layer?.id, layer?.textParams?.tracking) { mutableStateOf((layer?.textParams?.tracking ?: 0.0).toString()) }
+    var paramDrafts by remember(composition?.id, layer?.id) { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
     var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
     var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
@@ -1061,14 +1113,34 @@ private fun CanonicalProjectEditor(
                 }
             }
             if (layer != null) {
+                // A locked layer shows its fields but accepts no edit: every
+                // control below is disabled while locked, and the native
+                // layer rejects the edit as well, so the UI can never drift
+                // from the canonical data. Only the lock switch itself stays
+                // enabled, so a locked layer can always be unlocked.
+                val editable = canEdit && !layer.locked
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Visible", color = EditorPalette.text, fontSize = 12.sp)
                     Spacer(Modifier.weight(1f))
                     Switch(
                         checked = layer.visible,
                         onCheckedChange = { onSetLayerVisibility(composition.id, layer.id, it) },
+                        enabled = editable,
                         modifier = Modifier.semantics { contentDescription = "Canonical layer visibility" }
                     )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Locked", color = EditorPalette.text, fontSize = 12.sp)
+                    Spacer(Modifier.weight(1f))
+                    Switch(
+                        checked = layer.locked,
+                        onCheckedChange = { onSetLayerLocked(composition.id, layer.id, it) },
+                        enabled = canEdit,
+                        modifier = Modifier.semantics { contentDescription = "Canonical layer locked" }
+                    )
+                }
+                if (layer.locked) {
+                    Text("Locked layers cannot be edited until unlocked.", color = EditorPalette.amber, fontSize = 11.sp)
                 }
                 Text("Position · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1089,7 +1161,7 @@ private fun CanonicalProjectEditor(
                         decorationBox = { inner -> Box { if (positionYDraft.isEmpty()) Text("Y", color = EditorPalette.muted); inner() } }
                     )
                     TextButton(
-                        enabled = canEdit && positionXDraft.toDoubleOrNull()?.isFinite() == true && positionYDraft.toDoubleOrNull()?.isFinite() == true,
+                        enabled = editable && positionXDraft.toDoubleOrNull()?.isFinite() == true && positionYDraft.toDoubleOrNull()?.isFinite() == true,
                         onClick = { onSetLayerPosition(composition.id, layer.id, positionXDraft.toDouble(), positionYDraft.toDouble()) }
                     ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
@@ -1112,7 +1184,7 @@ private fun CanonicalProjectEditor(
                         decorationBox = { inner -> Box { if (scaleYDraft.isEmpty()) Text("Y %", color = EditorPalette.muted); inner() } }
                     )
                     TextButton(
-                        enabled = canEdit && scaleXDraft.toDoubleOrNull()?.isFinite() == true && scaleYDraft.toDoubleOrNull()?.isFinite() == true,
+                        enabled = editable && scaleXDraft.toDoubleOrNull()?.isFinite() == true && scaleYDraft.toDoubleOrNull()?.isFinite() == true,
                         onClick = { onSetLayerScale(composition.id, layer.id, scaleXDraft.toDouble(), scaleYDraft.toDouble()) }
                     ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
@@ -1127,16 +1199,152 @@ private fun CanonicalProjectEditor(
                         decorationBox = { inner -> Box { if (rotationDraft.isEmpty()) Text("Degrees", color = EditorPalette.muted); inner() } }
                     )
                     TextButton(
-                        enabled = canEdit && rotationDraft.toDoubleOrNull()?.isFinite() == true,
+                        enabled = editable && rotationDraft.toDoubleOrNull()?.isFinite() == true,
                         onClick = { onSetLayerRotation(composition.id, layer.id, rotationDraft.toDouble()) }
                     ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicTextField(
+                        value = anchorXDraft,
+                        onValueChange = { anchorXDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical anchor X" },
+                        decorationBox = { inner -> Box { if (anchorXDraft.isEmpty()) Text("X", color = EditorPalette.muted); inner() } }
+                    )
+                    BasicTextField(
+                        value = anchorYDraft,
+                        onValueChange = { anchorYDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical anchor Y" },
+                        decorationBox = { inner -> Box { if (anchorYDraft.isEmpty()) Text("Y", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = editable && anchorXDraft.toDoubleOrNull()?.isFinite() == true && anchorYDraft.toDoubleOrNull()?.isFinite() == true,
+                        onClick = { onSetLayerAnchor(composition.id, layer.id, anchorXDraft.toDouble(), anchorYDraft.toDouble()) },
+                        modifier = Modifier.semantics { contentDescription = "Apply canonical anchor" }
+                    ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Text("3D Rotation · Orientation X / Y / Z (°)", color = EditorPalette.text, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicTextField(
+                        value = orientationXDraft,
+                        onValueChange = { orientationXDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical orientation X" },
+                        decorationBox = { inner -> Box { if (orientationXDraft.isEmpty()) Text("X", color = EditorPalette.muted); inner() } }
+                    )
+                    BasicTextField(
+                        value = orientationYDraft,
+                        onValueChange = { orientationYDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical orientation Y" },
+                        decorationBox = { inner -> Box { if (orientationYDraft.isEmpty()) Text("Y", color = EditorPalette.muted); inner() } }
+                    )
+                    BasicTextField(
+                        value = orientationZDraft,
+                        onValueChange = { orientationZDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical orientation Z" },
+                        decorationBox = { inner -> Box { if (orientationZDraft.isEmpty()) Text("Z", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = editable && orientationXDraft.toDoubleOrNull()?.isFinite() == true && orientationYDraft.toDoubleOrNull()?.isFinite() == true && orientationZDraft.toDoubleOrNull()?.isFinite() == true,
+                        onClick = { onSetLayerOrientation(composition.id, layer.id, orientationXDraft.toDouble(), orientationYDraft.toDouble(), orientationZDraft.toDouble()) },
+                        modifier = Modifier.semantics { contentDescription = "Apply canonical orientation" }
+                    ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Text("3D Rotation · X / Y (°)", color = EditorPalette.text, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BasicTextField(
+                        value = rotationXDraft,
+                        onValueChange = { rotationXDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical rotation X" },
+                        decorationBox = { inner -> Box { if (rotationXDraft.isEmpty()) Text("X °", color = EditorPalette.muted); inner() } }
+                    )
+                    BasicTextField(
+                        value = rotationYDraft,
+                        onValueChange = { rotationYDraft = it.take(32) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical rotation Y" },
+                        decorationBox = { inner -> Box { if (rotationYDraft.isEmpty()) Text("Y °", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = editable && rotationXDraft.toDoubleOrNull()?.isFinite() == true,
+                        onClick = { onSetLayerRotationX(composition.id, layer.id, rotationXDraft.toDouble()) },
+                        modifier = Modifier.semantics { contentDescription = "Apply canonical rotation X" }
+                    ) { Text("Apply X", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable && rotationYDraft.toDoubleOrNull()?.isFinite() == true,
+                        onClick = { onSetLayerRotationY(composition.id, layer.id, rotationYDraft.toDouble()) },
+                        modifier = Modifier.semantics { contentDescription = "Apply canonical rotation Y" }
+                    ) { Text("Apply Y", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                if (layer.threeD) {
+                    Text("3D layer · orientation and X/Y rotation apply in the 3D renderer.", color = EditorPalette.muted, fontSize = 11.sp)
+                }
+                layer.textParams?.let { textParams ->
+                    Text("Text · Source Text", color = EditorPalette.text, fontSize = 12.sp)
+                    Text("Font · ${textParams.font}", color = EditorPalette.muted, fontSize = 11.sp)
+                    BasicTextField(
+                        value = textDraft,
+                        onValueChange = { textDraft = it.take(20000) },
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Canonical text layer text" },
+                        decorationBox = { inner -> Box { if (textDraft.isEmpty()) Text("Source text", color = EditorPalette.muted); inner() } }
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            enabled = editable,
+                            onClick = { onSetTextLayerText(composition.id, layer.id, textDraft) },
+                            modifier = Modifier.semantics { contentDescription = "Apply canonical text" }
+                        ) { Text("Apply text", color = EditorPalette.violet, fontSize = 11.sp) }
+                    }
+                    Text("Text · Size / Tracking", color = EditorPalette.text, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        BasicTextField(
+                            value = textSizeDraft,
+                            onValueChange = { textSizeDraft = it.take(32) },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                            modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical text layer size" },
+                            decorationBox = { inner -> Box { if (textSizeDraft.isEmpty()) Text("Size", color = EditorPalette.muted); inner() } }
+                        )
+                        BasicTextField(
+                            value = textTrackingDraft,
+                            onValueChange = { textTrackingDraft = it.take(32) },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                            modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical text layer tracking" },
+                            decorationBox = { inner -> Box { if (textTrackingDraft.isEmpty()) Text("Tracking", color = EditorPalette.muted); inner() } }
+                        )
+                        TextButton(
+                            enabled = editable && textSizeDraft.toDoubleOrNull()?.isFinite() == true,
+                            onClick = { onSetTextLayerSize(composition.id, layer.id, textSizeDraft.toDouble()) },
+                            modifier = Modifier.semantics { contentDescription = "Apply canonical text size" }
+                        ) { Text("Apply size", color = EditorPalette.violet, fontSize = 10.sp) }
+                        TextButton(
+                            enabled = editable && textTrackingDraft.toDoubleOrNull()?.isFinite() == true,
+                            onClick = { onSetTextLayerTracking(composition.id, layer.id, textTrackingDraft.toDouble()) },
+                            modifier = Modifier.semantics { contentDescription = "Apply canonical text tracking" }
+                        ) { Text("Apply tracking", color = EditorPalette.violet, fontSize = 10.sp) }
+                    }
                 }
                 Text("Opacity · ${opacityDraft.roundToInt()}%", color = EditorPalette.text, fontSize = 12.sp)
                 Slider(
                     value = opacityDraft,
                     onValueChange = { opacityDraft = it },
-                    onValueChangeFinished = { if (canEdit) onSetLayerOpacity(composition.id, layer.id, opacityDraft.toDouble()) },
+                    onValueChangeFinished = { if (editable) onSetLayerOpacity(composition.id, layer.id, opacityDraft.toDouble()) },
                     valueRange = 0f..100f,
+                    enabled = editable,
                     modifier = Modifier.semantics { contentDescription = "Canonical layer opacity" }
                 )
                 Text(
@@ -1148,20 +1356,57 @@ private fun CanonicalProjectEditor(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(
-                        enabled = canEdit,
+                        enabled = editable,
                         onClick = { onAddLayerOpacityKeyframe(composition.id, layer.id, previewFrame, opacityDraft.toDouble()) },
                         modifier = Modifier.semantics { contentDescription = "Add canonical opacity keyframe" }
                     ) { Text("Add key · frame $previewFrame", color = EditorPalette.violet, fontSize = 11.sp) }
                     TextButton(
-                        enabled = canEdit,
+                        enabled = editable,
                         onClick = { onRemoveLayerOpacityKeyframe(composition.id, layer.id, previewFrame) },
                         modifier = Modifier.semantics { contentDescription = "Remove canonical opacity keyframe" }
                     ) { Text("Remove key · frame $previewFrame", color = EditorPalette.amber, fontSize = 11.sp) }
                 }
+                if (layer.shapeItems.isNotEmpty()) {
+                    Text("SHAPE PARAMETERS", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
+                    CanonicalParamGroupRows(
+                        groups = layer.shapeItems,
+                        section = "shape",
+                        editable = editable,
+                        paramDrafts = paramDrafts,
+                        onParamDraftChange = { uid, value -> paramDrafts = paramDrafts + (uid to value) },
+                        onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
+                        onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) }
+                    )
+                } else if (layer.source == "Shape") {
+                    Text("No editable shape parameters in this layer.", color = EditorPalette.muted, fontSize = 11.sp)
+                }
+                if (layer.effects.isNotEmpty()) {
+                    Text("EFFECTS", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
+                    CanonicalParamGroupRows(
+                        groups = layer.effects,
+                        section = "effect",
+                        editable = editable,
+                        paramDrafts = paramDrafts,
+                        onParamDraftChange = { uid, value -> paramDrafts = paramDrafts + (uid to value) },
+                        onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
+                        onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) }
+                    )
+                } else {
+                    Text("No effects on this layer.", color = EditorPalette.muted, fontSize = 11.sp)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, -1) }) { Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp) }
-                    TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, 1) }) { Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp) }
-                    TextButton(enabled = canEdit, onClick = { onDeleteLayer(composition.id, layer.id) }) { Text("Remove", color = Color(0xFFFF858D), fontSize = 11.sp) }
+                    TextButton(enabled = editable, onClick = { onMoveLayer(composition.id, layer.id, -1) }) { Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp) }
+                    TextButton(enabled = editable, onClick = { onMoveLayer(composition.id, layer.id, 1) }) { Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp) }
+                    TextButton(
+                        enabled = editable,
+                        onClick = {
+                            // Selection parity on delete: move selection to
+                            // the neighbor before the layer disappears, so
+                            // the inspector never shows a removed layer.
+                            layerId = ai.effectcraft.android.data.CanonicalLayerSelection.nextAfterDelete(composition.layers, layer.id)
+                            onDeleteLayer(composition.id, layer.id)
+                        }
+                    ) { Text("Remove", color = Color(0xFFFF858D), fontSize = 11.sp) }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicTextField(
@@ -1178,7 +1423,7 @@ private fun CanonicalProjectEditor(
                         }
                     )
                     TextButton(
-                        enabled = canEdit && nameDraft.trim().isNotEmpty() && nameDraft.trim() != layer.name,
+                        enabled = editable && nameDraft.trim().isNotEmpty() && nameDraft.trim() != layer.name,
                         onClick = { onRenameLayer(composition.id, layer.id, nameDraft) }
                     ) { Text("Apply", color = EditorPalette.violet) }
                 }
@@ -1204,6 +1449,72 @@ private fun CanonicalProjectEditor(
         }
         if (!canEdit) Text("Native editor bridge unavailable for this ABI; import/export remains read-only.", color = EditorPalette.amber, fontSize = 11.sp)
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/**
+ * Editable rows for one shape item or effect group: one text field plus
+ * Apply per scalar parameter, and one comma-separated field plus Apply per
+ * vector parameter. Parameters the native model does not expose as scalar
+ * or vector (color, path, gradient, popup) are absent from the list, never
+ * shown as editable.
+ */
+@Composable
+private fun CanonicalParamGroupRows(
+    groups: List<CanonicalParamGroup>,
+    section: String,
+    editable: Boolean,
+    paramDrafts: Map<Long, String>,
+    onParamDraftChange: (Long, String) -> Unit,
+    onApplyScalar: (Long, Double) -> Unit,
+    onApplyVec: (Long, Double, Double, Double) -> Unit
+) {
+    groups.forEach { group ->
+        Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
+        group.scalars.forEach { param ->
+            val draft = paramDrafts[param.uid] ?: param.value.toString()
+            val parsed = draft.toDoubleOrNull()
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                BasicTextField(
+                    value = draft,
+                    onValueChange = { onParamDraftChange(param.uid, it.take(32)) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical $section parameter ${group.name} ${param.name}" },
+                    decorationBox = { inner -> Box { if (draft.isEmpty()) Text(param.name, color = EditorPalette.muted); inner() } }
+                )
+                TextButton(
+                    enabled = editable && parsed?.isFinite() == true,
+                    onClick = { parsed?.let { onApplyScalar(param.uid, it) } },
+                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section parameter ${group.name} ${param.name}" }
+                ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+            }
+        }
+        group.vecs.forEach { param ->
+            val draft = paramDrafts[param.uid] ?: param.components.joinToString(", ")
+            val parsed = draft.split(",").map { it.trim().toDoubleOrNull() }
+            val valid = parsed.size == param.components.size && parsed.all { it?.isFinite() == true }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                BasicTextField(
+                    value = draft,
+                    onValueChange = { onParamDraftChange(param.uid, it.take(64)) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical $section parameter ${group.name} ${param.name}" },
+                    decorationBox = { inner -> Box { if (draft.isEmpty()) Text(param.name, color = EditorPalette.muted); inner() } }
+                )
+                TextButton(
+                    enabled = editable && valid,
+                    onClick = {
+                        val values = parsed.map { it!! }
+                        onApplyVec(param.uid, values[0], values.getOrElse(1) { 0.0 }, values.getOrElse(2) { 0.0 })
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section parameter ${group.name} ${param.name}" }
+                ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+            }
+        }
     }
 }
 
