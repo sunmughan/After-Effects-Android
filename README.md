@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 INCOMPLETE; M1 acceptance pending.** Scalar keyframe editing/interpolation primitives and four JVM tests are committed but not yet wired to canonical project persistence or timeline UI. An isolated `kotlinc` smoke harness passed the primitive operations; Gradle/JUnit CI is still pending. Removed the accidentally retained deliberately-failing diagnostic instrumentation test. Current-head CI is queued after these changes; no green run is claimed. EffectCraft `.ecproj` JSON and `.ecprojx` XML are implemented; Effekseer `.efkproj` and Adobe `.aep` remain unsupported. See [PHASES.md](PHASES.md).
+> **Current status: M0 INCOMPLETE; M1 acceptance pending.** CI #282 passed native ARM64/x86_64 builds, JNI packaging, Rust tests, dependency/license audit, APK assembly and JVM tests, but failed five Android instrumentation cases. Commit `9378f0e2855838ad9c66e2ce668f047c32e2471b` makes the phone inspector scrollable, gives Move/Delete controls explicit accessibility semantics, and corrects two test assumptions (four visible timeline rows and a longer composition-viewer heading). The temporary failing diagnostic was removed only after its CI failure message was read. Fresh current-head CI is pending; no green run is claimed. EffectCraft `.ecproj` JSON and `.ecprojx` XML are implemented; Effekseer `.efkproj` and Adobe `.aep` remain unsupported. See [PHASES.md](PHASES.md).
 
 ## Product direction
 

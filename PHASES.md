@@ -1,8 +1,19 @@
 # EffectCraft Android phase tracker
 
-### Run 18 — delete diagnostic in flight, DO NOT REMOVE (2026-11-03)
-- The user-approved delete-test fix task re-adds the temporary DeleteDiagTest. Two earlier diagnostic runs were cancelled by concurrent pushes or had the diagnostic removed by other agents before its CI failure message was read, so the delete status root cause is still unproven from CI evidence. This diagnostic deliberately fails with a semantics count dump in its failure message. It must stay in place until that message is read and the real delete cause is fixed, then it will be removed by the same task. No product test or assertion is removed by this commit.
-- Tip breaks already fixed by this task and still present at this HEAD: the adaptive test picker parameters (commit 2aafaa4) and the missing HeaderBar onExportEcprojx parameter (commit 3f02c32). No license chosen, no visibility change, PR #1 not merged, M0 not marked complete.
+### Run 19 — inspector reachability and instrumentation corrections (2026-11-03)
+- CI [#282](https://github.com/sunmughan/After-Effects-Android/actions/runs/41582544878) completed ARM64/x86_64 native builds, JNI packaging checks, Rust tests, dependency/license inventory, debug APK assembly and JVM tests; Android instrumentation failed 5 cases.
+- Exact diagnostic evidence from #282: the delete probe reported `BOUNDS left=0.0 top=0.0 right=0.0 bottom=0.0 | AFTER_REMOVE removed=0 unsavedChanges=1 keepOne=0 props=0 bg=1 title=1 accent=1 shape4=1 selShape4=1 selAccent=0`. The sheet dismissed while the model stayed unchanged; the text-only click was not reaching the delete action. The phone inspector content could overflow its sheet/short viewport.
+- Product fix commit `9378f0e2855838ad9c66e2ce668f047c32e2471b`: InspectorPanel is vertically scrollable (including tablet/short-window use), the bottom weighted spacer no longer consumes scroll height, and Move/Delete actions expose explicit accessible content descriptions. Instrumentation waits for the actual displayed action and clicks its semantics node. This is a UI reachability/accessibility fix, not a weakened delete assertion.
+- Corrected two false test assumptions from #282: saved offline project test now validates the restored five-layer model through DraftProjectStore because the visible timeline intentionally shows at most four rows; adaptive workspace test matches the actual `COMPOSITION VIEWER · OFFLINE DRAFT` heading by substring.
+- Temporary deliberately-failing DeleteDiagTest was removed after reading #282's diagnostic message. Run #283's newer pre-click bounds probe was still assembling when this implementation push superseded it; no output from #283 is claimed. The useful #282 failure evidence is recorded above.
+- Current product instrumentation: 17 EditorSmokeTest cases + 1 AdaptiveWorkspaceSmokeTest = 18; no diagnostic test remains. All assertions remain enabled.
+- Fresh CI for commit `9378f0e` and the subsequent tracker/README update is required. No current-head pass or M1 acceptance is claimed.
+
+### Run 18 — delete action diagnostic (resolved)
+- Temporary diagnostic was used to expose the delete interaction failure. CI #282's failure message was read and is preserved in Run 19 above.
+- Root cause was test interaction with a clipped/unreachable phone-inspector action; the inspector is now scrollable and delete/move controls have explicit accessibility semantics.
+- The deliberately failing diagnostic test has been removed in commit `9378f0e2855838ad9c66e2ce668f047c32e2471b` after evidence capture. No product assertions were removed.
+- The additional v4 pre-click-bounds run #283 was superseded before completion; it is not counted as evidence or a pass.
 
 ### Run 17 — scalar keyframe engine groundwork and diagnostic cleanup (2026-11-03)
 - Added immutable `PropertyTrack` / `PropertyKeyframe` data types and `PropertyTrackEditor` operations: sorted upsert (same-frame replacement), key removal, finite/non-negative validation, linear interpolation, and constant endpoint hold. This is pure Kotlin groundwork; it is **not yet wired to persisted canonical project tracks or timeline UI**, so M4 keyframe authoring remains incomplete.
