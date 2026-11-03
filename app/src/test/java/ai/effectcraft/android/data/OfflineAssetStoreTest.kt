@@ -53,6 +53,22 @@ class OfflineAssetStoreTest {
     }
 
     @Test
+    fun catalogSurvivesStoreRecreationAndSortsByDisplayName() {
+        val root = Files.createTempDirectory("effectcraft-assets-reopen").toFile()
+        try {
+            val firstStore = OfflineAssetStore(root)
+            firstStore.import(ByteArrayInputStream(byteArrayOf(1)), "zeta.png", "image/png")
+            firstStore.import(ByteArrayInputStream(byteArrayOf(2)), "Alpha.mov", "video/quicktime")
+
+            val reopened = OfflineAssetStore(root)
+            assertEquals(listOf("Alpha.mov", "zeta.png"), reopened.list().map { it.displayName })
+            reopened.open(reopened.list().first().sha256).use { assertEquals(2, it.read()) }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun rejectsOversizedStreamWithoutPublishingAnAsset() {
         val root = Files.createTempDirectory("effectcraft-assets-limit").toFile()
         try {
