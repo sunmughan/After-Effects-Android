@@ -1,7 +1,7 @@
 ### Run 60 — canonical preview follows workspace timeline (2026-11-04)
 - Connected the imported-project editor preview frame to the workspace playhead. Opening the canonical sheet starts at the current timeline frame; workspace scrubbing updates its frame label and invokes the native render callback for that exact frame. Scrubbing the canonical preview slider also updates the workspace timeline through the same callback, so the two playheads no longer diverge.
 - Added a Compose regression to CanonicalSelectionEditorTest: advance the parent playhead to frame 15, await the renderer request for frame 15, and assert the canonical preview reads frame 15/89. Existing gesture, selection, and history assertions remain.
-- Commit: pending in this entry; exact-head CI #454 was in progress before this change and must not be used as evidence for it. No test pass claimed yet.
+- Implementation commit: ff78d0e41a6539bc79b854de094bd64e5b2fe962; thread-safe test observation commit: fed35686eb37c11c897843c9f1c3c0682672e8e4. Exact-head CI #455 (ff78d0e) is pending and predates the test-only thread-safety commit; a fresh run for fed35686 is required. No test pass claimed yet.
 - Scope: this is preview/playhead synchronization, not a claim that position/scale/rotation keyframes are authored. M4 transform-keyframe parity remains open.
 
 ### Run 43 — allow valid sub-320 output dimensions
