@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 and scoped M1 accepted** (CI #289: 18/18 API 30 emulator instrumentation passed; CI #286 also records full dual-ABI/Rust/JVM/Wrapper evidence). M2 is in progress: canonical JSON/XML import, format guardrails, SHA-256 content-addressed offline media storage, native footage relinking, and an offline media library browser/removal flow are implemented. Latest CI #309 exposed one stale dedupe filename assertion after extension preservation; corrected in `ff9b71ed`, with exact-head CI pending. Tracker now distinguishes accepted M0/M1 from incomplete M2–M7. Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
+> **Current status: M0 and scoped M1 accepted** (CI #289: 18/18 API 30 emulator instrumentation passed; CI #286 also records full dual-ABI/Rust/JVM/Wrapper evidence). M2 is in progress: canonical JSON/XML import, format guardrails, SHA-256 content-addressed offline media storage, native footage relinking, and an offline media library browser/removal flow are implemented. CI #309 exposed a stale dedupe filename assertion after extension preservation; corrected in `ff9b71ed`. A fresh-store catalog persistence/sort test was added in `114e257e`; exact-head CI is pending. Tracker now distinguishes accepted M0/M1 from incomplete M2–M7. Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
 
 ## Product direction
 
@@ -43,3 +43,5 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - CI #309 completed native ARM64+x86_64, JNI packaging, 13 Rust tests, license inventory, APK and Kotlin compile, then failed unit tests: 29 completed, 1 failed at `OfflineAssetStoreTest.kt:48` because the test expected a bare hash filename after payloads were intentionally changed to hash + source extension. Fixed assertion to verify one hash-prefixed `.bin` payload; commit `ff9b71ed`.
 - Added offline media library browser/removal confirmation in editor; catalog refreshes after SAF relink and removal. Commits `1ba479ca`, `313cae9f`, `2f829e6f`.
 - Exact-head CI #312 is pending; no current-head pass claimed. See PHASES.md Run 11 for logs, evidence and remaining M2 blockers.
+
+- Offline media library now browses app-private assets and confirms removals; catalog refreshes after relink/remove. Catalog recreation/sort test `114e257e` supplements the four existing store tests. Full M2 asset-reference safety and recovery remain open.
