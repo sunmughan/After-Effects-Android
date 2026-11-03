@@ -40,9 +40,13 @@ object NativeProjectBridge {
     /** Renders a canonical composition frame through the pinned upstream CPU compositor. */
     fun renderEcprojFrame(json: String, compositionId: Long, frame: Long, maxSide: Int = 512): ByteArray? {
         ensureLoaded()
-        if (!available) return null
-        return runCatching { renderEcprojFrameNative(json, compositionId, frame, maxSide.toLong()) }
-            .getOrNull()?.takeIf { it.size >= 8 }
+        if (!available || frame < 0 || compositionId < 0 || maxSide !in 0..4096) return null
+        val key = RenderedFrameCache.key(json, compositionId, frame, maxSide)
+        RenderedFrameCache.get(key)?.let { return it }
+        val rendered = runCatching { renderEcprojFrameNative(json, compositionId, frame, maxSide.toLong()) }
+            .getOrNull()?.takeIf { it.size >= 8 } ?: return null
+        RenderedFrameCache.put(key, rendered)
+        return rendered
     }
 
     /** Sets canonical Transform/Position X and Y while preserving the existing Z value. */
