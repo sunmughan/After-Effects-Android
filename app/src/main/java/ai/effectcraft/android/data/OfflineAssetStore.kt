@@ -97,6 +97,14 @@ class OfflineAssetStore(
         return readIndex().getProperty(hash)?.decodeRecord(hash)
     }
 
+    /** Returns the immutable app-private payload path for native relinking. */
+    @Synchronized
+    fun fileFor(sha256: String): File? {
+        val hash = sha256.decodeHash()
+        if (readIndex().getProperty(hash) == null) return null
+        return payloadFile(hash).takeIf(File::isFile)
+    }
+
     @Synchronized
     @Throws(IOException::class)
     fun open(sha256: String): InputStream {
