@@ -1525,6 +1525,49 @@ fn set_layer_opacity_keyframe(source: &str, composition_id: u64, layer_id: u64, 
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Authors a native Transform Position, Scale or Rotation keyframe.
+/// Vector properties preserve Z; scalar Rotation uses X. A static property
+/// is seeded at frame zero before the requested key is inserted, so the
+/// upstream renderer evaluates the animated value at every composition tick.
+fn set_layer_transform_keyframe(
+    source: &str, composition_id: u64, layer_id: u64, property_name: &str,
+    frame: i64, x: f64, y: f64, z: f64,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+        return Err("Transform keyframe values must be finite".into());
+    }
+    let valid_property = matches!(property_name, "position" | "scale" | "rotation");
+    if !valid_property { return Err("Only position, scale and rotation keyframes are supported".into()); }
+    let limit = match property_name { "position" => 1_000_000.0, "scale" => 100_000.0, _ => 360_000.0 };
+    if x.abs() > limit || (property_name != "rotation" && y.abs() > limit) {
+        return Err("Transform keyframe value exceeds its property limit".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let transform = layer.props.sub_mut("transform")
+        .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let property = transform.prop_mut(property_name)
+        .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
+    let value = match (property_name, &property.value) {
+        ("position", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
+        ("scale", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
+        ("rotation", Value::Scalar(_)) => Value::Scalar(x),
+        _ => return Err(format!("Layer {layer_id} Transform {property_name} has an incompatible value type")),
+    };
+    if property.keys.is_empty() {
+        property.set_animated(true, Tick::ZERO);
+    }
+    property.set_value_at(Tick::from_rational(frame, frame_rate.den, frame_rate.num), value);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Removes the canonical Transform/Opacity keyframe at `frame`.
 /// Returns `(project_json, removed)`; `removed` is false when no key existed
 /// at that frame and the project is returned unchanged. Removing the last key
@@ -1647,6 +1690,28 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
     };
     let result = if composition_id < 0 || layer_id < 0 || frame < 0 { Err("Composition, layer and frame must be non-negative".to_owned()) }
         else { set_layer_opacity_keyframe(&source, composition_id as u64, layer_id as u64, frame, opacity as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerTransformKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    property: JString, frame: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble, z: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let property: String = match env.get_string(&property) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_layer_transform_keyframe(&source, composition_id as u64, layer_id as u64, &property, frame, x as f64, y as f64, z as f64)
+    };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -2572,6 +2637,31 @@ mod tests {
         assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, size_uid, 10.0).is_err());
         assert!(set_layer_vec_property(&source, comp_id.0, shape_id, roundness_uid, 1.0, 2.0, 0.0).is_err());
         assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, 999_999, 10.0).is_err());
+    }
+
+    #[test]
+    fn canonical_transform_keyframes_seed_and_interpolate_native_tracks() {
+        use effectcraft_project::Value;
+        use effectcraft_time::Tick;
+
+        let (source, comp_id, layer_id) = text_layer_project();
+        let at_zero = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 10.0, 20.0, 0.0).unwrap();
+        let at_fifteen = set_layer_transform_keyframe(&at_zero, comp_id, layer_id, "position", 15, 100.0, 200.0, 0.0).unwrap();
+        let scaled = set_layer_transform_keyframe(&at_fifteen, comp_id, layer_id, "scale", 0, 50.0, 75.0, 0.0).unwrap();
+        let rotated = set_layer_transform_keyframe(&scaled, comp_id, layer_id, "rotation", 0, 45.0, 0.0, 0.0).unwrap();
+        let project: Project = serde_json::from_str(&rotated).unwrap();
+        let transform = project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap();
+        let position = transform.prop("position").unwrap();
+        assert_eq!(position.keys.len(), 2);
+        assert_eq!(position.keys[0].time, Tick::ZERO);
+        assert_eq!(position.keys[0].value, Value::Vec3([10.0, 20.0, 0.0]));
+        assert_eq!(position.keys[1].time, Tick::from_rational(15, 1, 30));
+        assert_eq!(position.keys[1].value, Value::Vec3([100.0, 200.0, 0.0]));
+        assert_eq!(transform.prop("scale").unwrap().keys.len(), 1);
+        assert_eq!(transform.prop("rotation").unwrap().keys.len(), 1);
+        assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 2, f64::NAN, 0.0, 0.0).is_err());
+        assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "opacity", 2, 1.0, 0.0, 0.0).is_err());
+        assert!(set_layer_transform_keyframe(&source, comp_id, 999, "position", 2, 1.0, 0.0, 0.0).is_err());
     }
 
     #[test]
