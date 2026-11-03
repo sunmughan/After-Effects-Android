@@ -5,7 +5,6 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.printToLog
 import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
@@ -26,7 +25,6 @@ class DeleteDiagTest {
         compose.onNodeWithText("Move ↑", substring = true).performClick()
         compose.onNodeWithText("Remove layer", substring = true).performClick()
         compose.waitForIdle()
-        compose.onRoot(useUnmergedTree = true).printToLog("DELETE_DIAG")
         fun countText(text: String, substring: Boolean = false): Int =
             runCatching { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().size }.getOrDefault(-1)
         fun countDesc(text: String, substring: Boolean = false): Int =
