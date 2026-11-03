@@ -4,8 +4,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -190,7 +191,7 @@ class CanonicalSelectionEditorTest {
         compose.waitForIdle()
         assertEquals(setOf(2L), selectionState.value)
         compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("2 layers selected", substring = true).assertDoesNotExist()
+        compose.onAllNodesWithText("2 layers selected", substring = true).assertCountEquals(0)
 
         // Deleting the selected layer moves selection to its neighbor.
         compose.onNodeWithContentDescription("Remove canonical layer").performScrollTo().performClick()
