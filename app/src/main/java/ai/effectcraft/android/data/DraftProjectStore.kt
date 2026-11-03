@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -38,7 +39,14 @@ class DraftProjectStore(context: Context) {
         val target = existing ?: File(projectDirectory, "${safeName(updated.name)}-${updated.id.take(8)}.efx-draft")
         val fileName = target.name
         val temporary = File(projectDirectory, "$fileName.tmp")
-        temporary.writeText(encode(updated).toString(2), Charsets.UTF_8)
+        // Durably flush the complete candidate before atomic promotion. This
+        // closes the power-loss window where rename could succeed while
+        // buffered draft bytes were still only in the page cache.
+        FileOutputStream(temporary).use { output ->
+            output.write(encode(updated).toString(2).toByteArray(Charsets.UTF_8))
+            output.flush()
+            output.fd.sync()
+        }
 
         try {
             Files.move(
