@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import ai.effectcraft.android.ui.EditorScreen
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.CanonicalProjectDocument
@@ -190,7 +191,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
-        compose.onNodeWithContentDescription("Delete selected layer").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Delete selected layer").performScrollTo().assertIsDisplayed().performClick()
         // The phone inspector is a ModalBottomSheet dialog window; its removal
         // is platform-async and outside Compose idle tracking, so wait for the
         // status to surface instead of asserting in the same frame. The
@@ -208,7 +209,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
-        compose.onNodeWithContentDescription("Delete selected layer").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Delete selected layer").performScrollTo().assertIsDisplayed().performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             runCatching { compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed() }.isSuccess
         }
