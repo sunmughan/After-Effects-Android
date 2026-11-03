@@ -29,6 +29,7 @@ import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
+import ai.effectcraft.android.data.ProjectFileFormats
 import kotlinx.coroutines.delay
 
 private data class EditorHistorySnapshot(
@@ -71,6 +72,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         if (uri != null) {
             runCatching {
                 runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                val displayName = context.contentResolver.query(
+                    uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+                )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                    ?: uri.lastPathSegment?.substringAfterLast('/') ?: "selected document"
+                ProjectFileFormats.importError(displayName)?.let(::error)
                 val source = context.contentResolver.openInputStream(uri)?.use {
                     CanonicalProjectDocument.toCanonicalJson(CanonicalProjectDocument.readUtf8(it))
                 } ?: error("Unable to read selected document")
