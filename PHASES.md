@@ -491,3 +491,21 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - README progress synchronized through `aac7e69a`; current branch head after this tracker entry is recorded by the next progress commit.
 
 - Follow-up: startup cleanup runs on `Dispatchers.IO` to avoid blocking the Compose main thread while scanning cache files (commit `e8dacfba`). A second local Kotlin smoke harness passed retention of unknown/future timestamps and sequence-named directories.
+
+
+### Run 48 — recover interrupted atomic draft saves (2026-11-03)
+- M6 offline robustness: DraftProjectStore now reconciles store-owned *.efx-draft.tmp files on save/catalog load. It validates temp JSON and project identity against the target filename; a complete newer temp is atomically promoted (with replace fallback) when the committed target is absent, corrupt, or older. Incomplete/mismatched/superseded temps are removed while the last valid target is preserved. This recovers the latest fully serialized draft after process death between temp write and rename.
+- Added Android instrumentation draftStoreRecoversNewerCompleteAtomicTempAfterProcessDeath: it creates a valid newer temp beside a committed baseline, calls store load, and asserts recovered content plus temp removal. Fixture timestamps derive from the persisted target to avoid clock assumptions.
+- Source commit 4fadb5a5; test commit b5b7a3ec; timestamp-fixture correction 0e6d46e0. No tests/assertions were weakened.
+- CI investigation: run #411 failed exactly one emulator test because Kotlin inferred the callback frame list as List<Long> while the callback supplied Int; commit 00fbe747 preserves the frame type. Run #412's main Assemble-and-test job then completed successfully on 00fbe747: Rust 28/28, Gradle unit tests BUILD SUCCESSFUL, emulator 27/27 (0 skipped/failed), APK/audit/test artifacts uploaded. Its separate deterministic second-build comparison was still in progress at last inspection, so run #412 is not yet fully green/reproducibility accepted. New recovery commits trigger #413–#415; latest exact-head #415 is pending.
+- Current M6 status: media quota/dedup/rollback, stale sequence staging cleanup, and interrupted draft atomic-write recovery are implemented. Still open: durable journal across canonical model/keyframe/asset-manifest updates, export resume semantics, crash simulation across app process, perf/memory budgets, API/device matrix and accessibility.
+
+### Run 48 phase evidence snapshot
+- M0: INCOMPLETE — license/owner acceptance and final reproducibility gate remain.
+- M1: COMPLETE — scoped editor acceptance; latest run #412 emulator suite passed 27/27 on its tested commit (not yet the new recovery test head).
+- M2: IN PROGRESS — canonical .ecproj/.ecprojx, repository and offline media; physical SAF picker/relink/recovery evidence open; .efkproj/.aep unsupported.
+- M3: PARTIAL — native CPU render/session and GPU fallback; physical ARM64 GPU/surface/device-loss gates open.
+- M4: IN PROGRESS — canonical opacity keyframes are native-rendered; position/scale/rotation are static edits only, animated transform/effect parity remains.
+- M5: PARTIAL — real PNG and validated configurable PNG-sequence ZIP; video/audio export absent.
+- M6: IN PROGRESS — aggregate media quotas, rollback, stale ZIP cleanup and atomic draft-save recovery; broader crash/perf/device/accessibility gates open.
+- M7: NOT STARTED — signed/configurable release, artifact/install verification, release notes and final all-green gate remain.
