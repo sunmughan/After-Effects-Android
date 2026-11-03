@@ -87,10 +87,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 val native = NativeProjectBridge.inspectEcproj(source)
                     ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
                 val parsedInfo = CanonicalProjectDocument.validateNativeEnvelope(native)
-                offlineAssetReferences.clear()
-                referencedOfflineAssetIds = emptySet()
                 val status = "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
                 ecprojStore.save(source)
+                offlineAssetReferences.clear()
+                referencedOfflineAssetIds = emptySet()
                 importedEcproj = source
                 canonicalProjectInfo = parsedInfo
                 saveMessage = status
@@ -146,9 +146,16 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val metadata = NativeProjectBridge.inspectEcproj(updated)
                         ?: error("Unable to inspect updated canonical project")
                     val parsed = CanonicalProjectInfo.parse(metadata)
+                    val previousAsset = offlineAssetReferences.assetFor(itemId)
                     offlineAssetReferences.setReference(itemId, offlineAsset.sha256)
+                    try {
+                        ecprojStore.save(updated)
+                    } catch (failure: Throwable) {
+                        if (previousAsset == null) offlineAssetReferences.removeReference(itemId)
+                        else offlineAssetReferences.setReference(itemId, previousAsset)
+                        throw failure
+                    }
                     referencedOfflineAssetIds = offlineAssetReferences.referencedAssetIds()
-                    ecprojStore.save(updated)
                     importedEcproj = updated
                     canonicalProjectInfo = parsed
                     offlineAssets = offlineAssetStore.list()
