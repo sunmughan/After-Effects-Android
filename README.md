@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 INCOMPLETE; M1 acceptance pending.** CI #282 passed native ARM64/x86_64 builds, JNI packaging, Rust tests, dependency/license audit, APK assembly and JVM tests, but failed five Android instrumentation cases. Commit `9378f0e2855838ad9c66e2ce668f047c32e2471b` makes the phone inspector scrollable, gives Move/Delete controls explicit accessibility semantics, and corrects two test assumptions (four visible timeline rows and a longer composition-viewer heading). The temporary failing diagnostic was removed only after its CI failure message was read. Fresh current-head CI is pending; no green run is claimed. EffectCraft `.ecproj` JSON and `.ecprojx` XML are implemented; Effekseer `.efkproj` and Adobe `.aep` remain unsupported. See [PHASES.md](PHASES.md).
+> **Current status: M0 and M1 accepted on CI #286 (18/18 emulator instrumentation passed); M2 is in progress.** Exact tested commit: `bd274c7879cdd596d767303ace8791012543f199`. M2 import-format guard is commit `53b6bc6e844423703216f99eb8e3d0318f05d106`; latest HEAD `55932dbcb17381026f131cf7304bb64ab90a13a6` has CI #289 in progress. EffectCraft `.ecproj` JSON and `.ecprojx` XML are supported; Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
 
 ## Product direction
 
@@ -31,6 +31,6 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 ## Development status
 
-The M0 repository/dependency audit is tracked in [docs/M0_REPOSITORY_AUDIT.md](docs/M0_REPOSITORY_AUDIT.md). M0 is not complete yet. Its remaining closure gates are tracked in [PHASES.md](PHASES.md); M1 remains held until the exact current HEAD passes them.
+M0 foundation and M1 editor acceptance are complete at the tested CI #286 commit. M2 canonical import guard work is in progress; its exact-head CI and new JVM tests remain pending.
 
-M0/M1 evidence: [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232) (dual ABI, 13 Rust tests, JVM suite, 18/18 emulator tests and audit artifact). M2 import-format guard commit `53b6bc6e` is awaiting CI #287. See [PHASES.md](PHASES.md) for per-phase acceptance, test evidence, commits and blockers; [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones; and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge and engine integration gates.
+M0/M1 evidence: [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232) (dual ABI, 13 Rust tests, JVM suite, 18/18 emulator tests and audit artifact). M2 import-format guard commit `53b6bc6e` is awaiting CI #287. M0/M1 evidence: [CI #286](https://github.com/sunmughan/After-Effects-Android/actions/runs/41588154232) (dual ABI, 13 Rust tests, JVM suite, 18/18 emulator tests and audit artifact). M2 import-format guard commit `53b6bc6e` awaits current-head CI #289. See [PHASES.md](PHASES.md) for per-phase acceptance, test evidence, commits and blockers; [docs/ANDROID_IMPLEMENTATION.md](docs/ANDROID_IMPLEMENTATION.md) for product milestones; and [docs/NATIVE_ENGINE_INTEGRATION.md](docs/NATIVE_ENGINE_INTEGRATION.md) for the pinned Rust bridge and engine integration gates.
