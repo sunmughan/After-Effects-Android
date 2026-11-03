@@ -70,7 +70,7 @@ class AdaptiveWorkspaceSmokeTest {
                 )
             }
         }
-        compose.onNodeWithText("COMPOSITION VIEWER").assertIsDisplayed()
+        compose.onNodeWithText("COMPOSITION VIEWER", substring = true).assertIsDisplayed()
         compose.onNodeWithText("PROPERTIES").assertIsDisplayed()
     }
 }

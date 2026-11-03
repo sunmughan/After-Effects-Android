@@ -548,6 +548,7 @@ private fun InspectorPanel(
             .clip(RoundedCornerShape(18.dp))
             .background(EditorPalette.panel)
             .border(1.dp, EditorPalette.border, RoundedCornerShape(18.dp))
+            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -626,21 +627,21 @@ private fun InspectorPanel(
             )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { onMoveLayer(-1) }) {
+                TextButton(onClick = { onMoveLayer(-1) }, modifier = Modifier.semantics { contentDescription = "Move selected layer up" }) {
                     Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp)
                 }
-                TextButton(onClick = { onMoveLayer(1) }) {
+                TextButton(onClick = { onMoveLayer(1) }, modifier = Modifier.semantics { contentDescription = "Move selected layer down" }) {
                     Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onDeleteLayer) {
+            TextButton(onClick = onDeleteLayer, modifier = Modifier.semantics { contentDescription = "Delete selected layer" }) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Color(0xFFFF858D))
                 Text("  Remove layer", color = Color(0xFFFF858D), fontSize = 12.sp)
             }
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(12.dp))
         Text(
             "INSPECTOR",
             color = EditorPalette.muted.copy(alpha = 0.65f),

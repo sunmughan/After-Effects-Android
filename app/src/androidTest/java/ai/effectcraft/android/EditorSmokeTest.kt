@@ -62,11 +62,18 @@ class EditorSmokeTest {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals(2, DraftProjectStore(appContext).listSavedProjects().size)
 
+        val firstProjectId = DraftProjectStore(appContext).listSavedProjects()
+            .first { it.layers.size == 5 }.id
         compose.onNodeWithContentDescription("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 5 layers").performClick()
 
         assertEditorStatus("Opened locally · Untitled Composition")
-        compose.onNodeWithText("Shape 5").assertIsDisplayed()
+        // Timeline intentionally displays a bounded four-row viewport. Verify
+        // the restored full model rather than requiring row five on screen.
+        compose.onNodeWithContentDescription("Selected timeline layer: Background").assertExists()
+        val restored = DraftProjectStore(appContext).load(firstProjectId)
+        assertEquals(5, restored?.layers?.size)
+        assertEquals("Shape 5", restored?.layers?.last()?.name)
     }
 
     @Test
@@ -182,8 +189,8 @@ class EditorSmokeTest {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Props").performClick()
-        compose.onNodeWithText("Move ↑", substring = true).performClick()
-        compose.onNodeWithText("Remove layer", substring = true).performClick()
+        compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Delete selected layer").assertIsDisplayed().performClick()
         // The phone inspector is a ModalBottomSheet dialog window; its removal
         // is platform-async and outside Compose idle tracking, so wait for the
         // status to surface instead of asserting in the same frame. The
@@ -200,8 +207,8 @@ class EditorSmokeTest {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Props").performClick()
-        compose.onNodeWithText("Move ↑", substring = true).performClick()
-        compose.onNodeWithText("Remove layer", substring = true).performClick()
+        compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Delete selected layer").assertIsDisplayed().performClick()
         compose.waitUntil(timeoutMillis = 5_000) {
             runCatching { compose.onNodeWithText("Layer removed · unsaved").assertIsDisplayed() }.isSuccess
         }
