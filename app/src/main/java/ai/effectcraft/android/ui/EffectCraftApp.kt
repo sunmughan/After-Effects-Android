@@ -33,6 +33,7 @@ import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.data.ProjectFileFormats
+import ai.effectcraft.android.data.ProjectKeyframeStore
 import kotlinx.coroutines.delay
 
 private data class EditorHistorySnapshot(
@@ -47,6 +48,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
+    val projectKeyframeStore = remember(context) { ProjectKeyframeStore(File(context.filesDir, "keyframes")) }
     val manifestStore = remember(context) { ProjectAssetManifestStore(File(context.filesDir, "asset-manifests")) }
     val projectRepository = remember(context) { CanonicalProjectRepository(File(context.filesDir, "canonical-projects-repo")) }
     val safRegistry = remember(context) { SafPermissionRegistry(File(context.filesDir, "saf-permissions.properties")) }
@@ -71,6 +73,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var saveMessage by remember { mutableStateOf("Stored on this device") }
     var undoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
     var redoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
+    var projectKeyframeTracks by remember { mutableStateOf(projectKeyframeStore.load(project.id)) }
 
     // One place decides whether a payload is still referenced: every project
     // manifest, the legacy current-project references, and the payload files
@@ -263,6 +266,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         refreshReferences()
     }
 
+    LaunchedEffect(project.id) {
+        projectKeyframeTracks = runCatching { projectKeyframeStore.load(project.id) }
+            .getOrElse { failure -> saveMessage = "Keyframe load failed · ${failure.message ?: "storage error"}"; emptyList() }
+    }
+
     LaunchedEffect(importedEcproj) {
         canonicalProjectInfo = importedEcproj?.let { source ->
             NativeProjectBridge.inspectEcproj(source)?.let { runCatching { CanonicalProjectInfo.parse(it) }.getOrNull() }
@@ -329,6 +337,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
 
     val selectedLayer = project.layers.firstOrNull { it.id == selectedLayerId }
+    val selectedOpacityKeyframes = projectKeyframeTracks
+        .firstOrNull { it.layerId == selectedLayerId && it.track.property == "opacity" }
+        ?.track?.keyframes.orEmpty()
     fun applyCanonicalEdit(envelope: String?, successMessage: String) {
         runCatching {
             val response = JSONObject(envelope ?: error("Native EffectCraft bridge unavailable on this ABI"))
@@ -362,6 +373,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             selectedLayer = selectedLayer,
             selectedLayerId = selectedLayerId,
             playheadFrame = playheadFrame,
+            selectedOpacityKeyframes = selectedOpacityKeyframes,
             isPlaying = isPlaying,
             saveMessage = saveMessage,
             savedProjects = savedProjects,
@@ -401,6 +413,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "Saved project is unavailable"
                 } else {
                     project = opened
+                    projectKeyframeTracks = projectKeyframeStore.load(opened.id)
                     selectedLayerId = opened.layers.firstOrNull()?.id.orEmpty()
                     playheadFrame = 0
                     isPlaying = false
@@ -438,6 +451,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onNewProject = {
                 applyProjectChange(ProjectDocument.starter(), "New offline composition")
+                projectKeyframeTracks = emptyList()
                 selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
                 playheadFrame = 0
                 isPlaying = false
@@ -473,6 +487,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 applyProjectChange(project.copy(layers = ProjectEditorActions.setLayerOpacity(project.layers, selectedLayerId, opacity)))
             },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
+            onAddOpacityKeyframe = {
+                val layer = project.layers.firstOrNull { it.id == selectedLayerId }
+                if (layer == null) saveMessage = "Select a layer before adding a keyframe"
+                else runCatching {
+                    projectKeyframeStore.upsert(project.id, layer.id, "opacity", playheadFrame, layer.opacity)
+                    projectKeyframeTracks = projectKeyframeStore.load(project.id)
+                    saveMessage = "Opacity keyframe added · frame $playheadFrame"
+                }.onFailure { failure -> saveMessage = "Keyframe save failed · ${failure.message ?: "storage error"}" }
+            },
+            onRemoveOpacityKeyframe = {
+                runCatching {
+                    val removed = projectKeyframeStore.removeKeyframe(project.id, selectedLayerId, "opacity", playheadFrame)
+                    projectKeyframeTracks = projectKeyframeStore.load(project.id)
+                    saveMessage = if (removed) "Opacity keyframe removed · frame $playheadFrame" else "No opacity keyframe · frame $playheadFrame"
+                }.onFailure { failure -> saveMessage = "Keyframe remove failed · ${failure.message ?: "storage error"}" }
+            },
             onTogglePlayback = { isPlaying = !isPlaying },
             onApplyComposition = { width, height, fps, duration ->
                 if (width in 320..3840 && height in 320..3840 && fps in 1..120 && duration in 1..3600) {

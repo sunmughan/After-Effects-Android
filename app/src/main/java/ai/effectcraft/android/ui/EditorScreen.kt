@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectDocument
+import ai.effectcraft.android.data.PropertyKeyframe
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +104,7 @@ fun EditorScreen(
     selectedLayer: LayerDocument?,
     selectedLayerId: String,
     playheadFrame: Int,
+    selectedOpacityKeyframes: List<PropertyKeyframe>,
     isPlaying: Boolean,
     saveMessage: String,
     savedProjects: List<ProjectDocument>,
@@ -127,6 +129,8 @@ fun EditorScreen(
     onRenameLayer: (String) -> Unit,
     onOpacityChange: (Float) -> Unit,
     onScrub: (Int) -> Unit,
+    onAddOpacityKeyframe: () -> Unit,
+    onRemoveOpacityKeyframe: () -> Unit,
     onTogglePlayback: () -> Unit,
     onApplyComposition: (Int, Int, Int, Int) -> Unit,
     canonicalProject: CanonicalProjectInfo?,
@@ -252,9 +256,12 @@ fun EditorScreen(
                 project = project,
                 selectedLayerId = selectedLayerId,
                 playheadFrame = playheadFrame,
+                selectedOpacityKeyframes = selectedOpacityKeyframes,
                 isPlaying = isPlaying,
                 onSelectLayer = onSelectLayer,
                 onScrub = onScrub,
+                onAddOpacityKeyframe = onAddOpacityKeyframe,
+                onRemoveOpacityKeyframe = onRemoveOpacityKeyframe,
                 onTogglePlayback = onTogglePlayback,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1140,9 +1147,12 @@ private fun TimelinePanel(
     project: ProjectDocument,
     selectedLayerId: String,
     playheadFrame: Int,
+    selectedOpacityKeyframes: List<PropertyKeyframe>,
     isPlaying: Boolean,
     onSelectLayer: (String) -> Unit,
     onScrub: (Int) -> Unit,
+    onAddOpacityKeyframe: () -> Unit,
+    onRemoveOpacityKeyframe: () -> Unit,
     onTogglePlayback: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1164,6 +1174,14 @@ private fun TimelinePanel(
                 letterSpacing = 1.4.sp
             )
             Spacer(Modifier.weight(1f))
+            TextButton(
+                onClick = onAddOpacityKeyframe,
+                modifier = Modifier.height(28.dp).semantics { contentDescription = "Add opacity keyframe" }
+            ) { Text("K+", color = EditorPalette.violet, fontSize = 9.sp) }
+            TextButton(
+                onClick = onRemoveOpacityKeyframe,
+                modifier = Modifier.height(28.dp).semantics { contentDescription = "Remove opacity keyframe" }
+            ) { Text("K−", color = EditorPalette.amber, fontSize = 9.sp) }
             Text(
                 timecode(playheadFrame, project.frameRate),
                 color = EditorPalette.mint,
@@ -1195,7 +1213,9 @@ private fun TimelinePanel(
                 .padding(bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("LAYER", color = EditorPalette.muted, fontSize = 8.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(112.dp))
+            Text("LAYER", color = EditorPalette.muted, fontSize = 8.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
+            Text("OPACITY · ${selectedOpacityKeyframes.size} KEYS", color = EditorPalette.amber, fontSize = 8.sp)
+            Spacer(Modifier.width(8.dp))
             Text("00:00", color = EditorPalette.muted, fontSize = 8.sp)
             Spacer(Modifier.weight(1f))
             Text("00:${(project.durationFrames / project.frameRate).toString().padStart(2, '0')}", color = EditorPalette.muted, fontSize = 8.sp)
@@ -1211,6 +1231,8 @@ private fun TimelinePanel(
                 LayerTrack(
                     layer = layer,
                     selected = layer.id == selectedLayerId,
+                    keyframeFrames = if (layer.id == selectedLayerId) selectedOpacityKeyframes.map { it.frame } else emptyList(),
+                    durationFrames = project.durationFrames,
                     onClick = { onSelectLayer(layer.id) }
                 )
             }
@@ -1225,6 +1247,8 @@ private fun TimelinePanel(
 private fun LayerTrack(
     layer: LayerDocument,
     selected: Boolean,
+    keyframeFrames: List<Int>,
+    durationFrames: Int,
     onClick: () -> Unit
 ) {
     Row(
@@ -1259,6 +1283,17 @@ private fun LayerTrack(
                 .clip(RoundedCornerShape(5.dp))
                 .background(Color(0xFF202633))
         ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val frameRange = (durationFrames - 1).coerceAtLeast(1).toFloat()
+                keyframeFrames.forEach { frame ->
+                    val x = frame.coerceIn(0, durationFrames - 1).toFloat() / frameRange * size.width
+                    drawCircle(
+                        color = EditorPalette.amber,
+                        radius = 3.2f,
+                        center = androidx.compose.ui.geometry.Offset(x, size.height / 2f)
+                    )
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxHeight()

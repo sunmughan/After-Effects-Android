@@ -23,6 +23,7 @@ import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.CanonicalProjectDocument
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.data.ProjectDocument
+import ai.effectcraft.android.data.ProjectKeyframeStore
 import ai.effectcraft.android.engine.NativeProjectBridge
 import org.json.JSONObject
 import androidx.test.platform.app.InstrumentationRegistry
@@ -176,6 +177,30 @@ class EditorSmokeTest {
         visibility.assertIsOff()
         compose.onNodeWithText("Redo").performClick()
         assertEquals(0.5f, opacity.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0.001f)
+    }
+
+    @Test
+    fun opacityKeyframesCanBeAuthoredAtPlayheadAndPersistPerProject() {
+        compose.onNodeWithText("New").performClick()
+        compose.onNodeWithContentDescription("Add opacity keyframe").performClick()
+        assertEditorStatus("Opacity keyframe added · frame 0")
+        compose.onNodeWithContentDescription("Timeline playhead")
+            .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(30f) }
+        compose.onNodeWithContentDescription("Add opacity keyframe").performClick()
+        assertEditorStatus("Opacity keyframe added · frame 30")
+        compose.onNodeWithText("OPACITY · 2 KEYS").assertIsDisplayed()
+
+        compose.onNodeWithContentDescription("Save draft").performClick()
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val saved = DraftProjectStore(appContext).listSavedProjects().maxByOrNull { it.updatedAtEpochMillis }!!
+        val store = ProjectKeyframeStore(appContext.filesDir.resolve("keyframes"))
+        val stored = store.load(saved.id).single { it.layerId == saved.layers.first().id && it.track.property == "opacity" }
+        assertEquals(listOf(0, 30), stored.track.keyframes.map { it.frame })
+        assertEquals(listOf(1f, 1f), stored.track.keyframes.map { it.value })
+
+        compose.onNodeWithContentDescription("Remove opacity keyframe").performClick()
+        assertEditorStatus("Opacity keyframe removed · frame 30")
+        assertEquals(listOf(0), store.load(saved.id).single().track.keyframes.map { it.frame })
     }
 
     @Test
