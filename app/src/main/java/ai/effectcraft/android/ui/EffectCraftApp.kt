@@ -71,14 +71,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
                 val source = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
                     ?: error("Unable to read selected document")
-                JSONObject(source)
+                val source = context.contentResolver.openInputStream(uri)?.use { CanonicalProjectDocument.readUtf8(it) }
+                    ?: error("Unable to read selected document")
                 val native = NativeProjectBridge.inspectEcproj(source)
-                val parsedInfo = native?.let { CanonicalProjectInfo.parse(it) }
-                val status = if (parsedInfo != null) {
-                    "Canonical .ecproj validated · ${parsedInfo.compositions.size} compositions"
-                } else {
-                    ".ecproj JSON imported · native schema validation unavailable on this ABI"
-                }
+                    ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
+                val parsedInfo = CanonicalProjectDocument.validateNativeEnvelope(native)
+                val status = "Canonical .ecproj validated · ${parsedInfo.compositions.size} compositions"
                 ecprojStore.save(source)
                 importedEcproj = source
                 canonicalProjectInfo = parsedInfo

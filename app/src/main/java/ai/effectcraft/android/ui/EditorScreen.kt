@@ -146,6 +146,19 @@ fun EditorScreen(
     var showCompositionSettings by remember { mutableStateOf(false) }
     var showCanonicalEditor by remember { mutableStateOf(false) }
 
+    // The workspace viewer displays real upstream CPU-rendered frames for an
+    // imported canonical project. The bootstrap .efx-draft canvas is explicitly
+    // labelled as unrendered rather than showing a decorative fake composition.
+    val previewComposition = canonicalProject?.compositions?.firstOrNull()
+    var workspaceFrame by remember(previewComposition?.id) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(canonicalProject, previewComposition?.id, playheadFrame, canEditCanonicalProject) {
+        workspaceFrame = if (previewComposition != null && canEditCanonicalProject) {
+            withContext(Dispatchers.Default) {
+                onRenderCanonicalFrame(previewComposition.id, playheadFrame.toLong())?.let(::decodeRenderedFrame)
+            }
+        } else null
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -176,7 +189,9 @@ fun EditorScreen(
                     PreviewStage(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
+                            .fillMaxHeight(),
+                        bitmap = workspaceFrame,
+                        compositionName = previewComposition?.name
                     )
                     InspectorPanel(
                         modifier = Modifier
@@ -195,7 +210,9 @@ fun EditorScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                    bitmap = workspaceFrame,
+                    compositionName = previewComposition?.name
                 )
             }
 
@@ -410,7 +427,11 @@ private fun HeaderBar(
 }
 
 @Composable
-private fun PreviewStage(modifier: Modifier = Modifier) {
+private fun PreviewStage(
+    modifier: Modifier = Modifier,
+    bitmap: Bitmap?,
+    compositionName: String?
+) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
@@ -418,124 +439,48 @@ private fun PreviewStage(modifier: Modifier = Modifier) {
             .border(1.dp, EditorPalette.border, RoundedCornerShape(20.dp))
     ) {
         Text(
-            "COMPOSITION VIEWER",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 15.dp, top = 12.dp),
+            if (compositionName != null) "COMPOSITION VIEWER · $compositionName" else "COMPOSITION VIEWER · OFFLINE DRAFT",
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 15.dp, top = 12.dp),
             color = EditorPalette.muted,
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 1.6.sp
+            letterSpacing = 1.1.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
-
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 32.dp, bottom = 28.dp),
+            modifier = Modifier.fillMaxSize().padding(top = 32.dp, bottom = 20.dp),
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .aspectRatio(9f / 16f)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color(0xFF222B3B), Color(0xFF111722), Color(0xFF19132A))
-                        )
-                    )
-                    .border(1.dp, Color(0xFF59647A), RoundedCornerShape(13.dp))
-            ) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val gridColor = Color.White.copy(alpha = 0.055f)
-                    for (index in 1..5) {
-                        val x = size.width * index / 6f
-                        val y = size.height * index / 6f
-                        drawLine(gridColor, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, size.height), 1f)
-                        drawLine(gridColor, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), 1f)
-                    }
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            listOf(Color(0xFF9C83FF).copy(alpha = 0.28f), Color.Transparent)
-                        ),
-                        radius = size.width * 0.46f,
-                        center = androidx.compose.ui.geometry.Offset(size.width * 0.7f, size.height * 0.35f)
-                    )
-                    drawRoundRect(
-                        color = Color(0xFF8C78F2).copy(alpha = 0.17f),
-                        topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.08f, size.height * 0.57f),
-                        size = androidx.compose.ui.geometry.Size(size.width * 0.84f, size.height * 0.23f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(18f),
-                        style = Stroke(width = 1.5f)
-                    )
-                }
-
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Rendered composition frame",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxHeight().aspectRatio(bitmap.width.toFloat() / bitmap.height.toFloat())
+                )
+            } else {
                 Column(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        Modifier
-                            .size(43.dp)
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(Color(0xFF9A82F4).copy(alpha = 0.2f))
-                            .border(1.dp, Color(0xFFB5A4FF).copy(alpha = 0.55f), RoundedCornerShape(15.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("✦", color = EditorPalette.violet, fontSize = 24.sp)
-                    }
-                    Spacer(Modifier.height(18.dp))
-                    Text(
-                        "MAKE IT MOVE.",
-                        color = Color(0xFFF4F2FF),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.1.sp
-                    )
-                    Spacer(Modifier.height(5.dp))
-                    Text(
-                        "A new creative sequence",
-                        color = Color(0xFFB7BED0),
-                        fontSize = 10.sp
-                    )
-                    Spacer(Modifier.height(30.dp))
-                    Box(
-                        Modifier
-                            .width(80.dp)
-                            .height(3.dp)
-                            .clip(CircleShape)
-                            .background(EditorPalette.mint)
-                    )
-                }
-
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 12.dp),
-                    color = Color.Black.copy(alpha = 0.32f),
-                    shape = RoundedCornerShape(20.dp)
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "FRAME 001",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        color = Color.White.copy(alpha = 0.84f),
-                        fontSize = 8.sp,
-                        letterSpacing = 1.2.sp
+                        if (compositionName == null) "Draft preview not rendered" else "Native frame unavailable",
+                        color = EditorPalette.text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        if (compositionName == null) "Import a supported .ecproj to see the actual composition here. Draft editing remains offline."
+                        else "The project is loaded, but its native renderer did not return a frame for this ABI.",
+                        color = EditorPalette.muted,
+                        fontSize = 11.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
         }
-
-        Text(
-            "1080 × 1920  ·  30 FPS",
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 15.dp, bottom = 11.dp),
-            color = EditorPalette.muted,
-            fontSize = 9.sp
-        )
     }
 }
 

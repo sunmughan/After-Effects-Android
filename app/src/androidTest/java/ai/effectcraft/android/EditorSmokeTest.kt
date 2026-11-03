@@ -44,7 +44,8 @@ class EditorSmokeTest {
     fun editorLaunchesWithOfflineCompositionWorkspace() {
         compose.onNodeWithText("EFFECTCRAFT").assertIsDisplayed()
         compose.onNodeWithText("OFFLINE").assertIsDisplayed()
-        compose.onNodeWithText("COMPOSITION VIEWER").assertIsDisplayed()
+        compose.onNodeWithText("COMPOSITION VIEWER", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Draft preview not rendered").assertIsDisplayed()
         compose.onNodeWithText("TIMELINE").assertIsDisplayed()
     }
 
