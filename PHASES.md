@@ -443,3 +443,11 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Exporter is a reusable streaming core, not yet connected to a SAF ZIP launcher/render queue UI. It writes directly to the supplied stream; cancellation leaves a partial ZIP, so the caller must abandon/delete the document or stage in app-private storage first. No video codec/audio capability is claimed.
 - At start of run, CI #375 on the previous planner head was in progress after ARM64/x86_64 native builds, JNI, Rust tests and license inventory; APK/JVM/emulator pending. New commits supersede it; exact-head run for this executor must be inspected next.
 - Next: wire executor to a CreateDocument(application/zip) UI using an app-private temporary ZIP (to make cancellation atomic), pass NativeSession render/PNG encoding per planned frame, expose width/height/FPS/range settings, then add end-to-end ZIP artifact validation and cancellation tests.
+
+
+### Run 44 — offline media library aggregate quota and import rollback (2026-11-03)
+- M6 offline robustness: OfflineAssetStore now enforces both the existing per-asset streaming cap (512 MiB default) and a configurable aggregate indexed-media cap (2 GiB default). Quota is checked after hashing but before publishing a new payload/index; identical SHA-256 payloads reuse their first metadata and do not count twice.
+- New-payload publication is rolled back if index persistence fails, avoiding a dangling content-addressed file. The import temp file remains cleaned on quota rejection.
+- Added two JVM regression tests: aggregate quota rejects a second asset without publishing its payload/temp file; a duplicate payload at the exact quota is accepted and counted once. No existing tests/assertions were removed.
+- Exact-head CI #392 was inspected: #391 failed in Rust lib tests because the red-pixel test helper omitted image::ImageEncoder; commit 2ff34c83 adds the trait import and reports local cargo test --offline --lib 28/28. #392 is running on that fix head; this quota change will trigger #393 and requires its own exact-head JVM/emulator evidence.
+- Local execution limitation: this automation sandbox has no Android SDK 37/emulator or local Kotlin/Gradle dependency cache, so only repository CI can establish Android/JUnit acceptance. The quota logic is deterministic and is covered by new JVM tests.

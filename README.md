@@ -79,3 +79,8 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - Added a streaming ZIP executor that renders one PNG at a time from a bounded plan, validates PNG dimensions, writes stable frame entries, reports progress and checks cancellation. Three JVM tests cover byte-preserving ZIP output, progress, cancellation and invalid frames. Commits `1910de56` + `432f85ca`.
 - Standalone kotlinc + executable smoke harness passed ZIP order/payload, 50/100 progress, cancellation and dimension rejection. CI on this exact head is pending.
 - Not yet wired to Android SAF export UI; cancellation can leave a partial output and must be handled by staging/cleanup. Video/audio not implemented.
+
+
+### Run 44 — offline media storage quota
+- OfflineAssetStore now has a configurable 2 GiB aggregate library budget (in addition to 512 MiB per asset), checked before publishing new content; SHA-256 duplicates count once and retain existing metadata. Index-write failure removes a newly published unindexed payload.
+- Added JVM quota/dedupe/cleanup regressions. Exact-head CI #392 fixes the prior Rust ImageEncoder trait compile failure and is running; this new change requires a fresh CI run.
