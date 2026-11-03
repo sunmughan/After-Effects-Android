@@ -197,6 +197,8 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Add canonical opacity keyframe").performScrollTo().performClick()
         assertEquals(listOf(10L, 2L, 0, 100.0), added)
         compose.onNodeWithContentDescription("Remove canonical opacity keyframe").performScrollTo().performClick()
-        assertEquals(listOf(10L, 2L, 0), removed)
+        // Frame is Int in the callback, so listOf<Any> keeps the literal 0
+        // as Int instead of inferring List<Long> and coercing it to 0L.
+        assertEquals(listOf<Any>(10L, 2L, 0), removed)
     }
 }
