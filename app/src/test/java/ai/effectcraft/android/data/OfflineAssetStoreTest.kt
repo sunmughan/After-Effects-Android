@@ -68,12 +68,12 @@ class OfflineAssetStoreTest {
     }
 
     @Test
-    fun validatesAssetIdsAndRemovesIndexAndPayload() {
+    fun rejectsMalformedAssetIdsAndRemovesIndexAndPayload() {
         val root = Files.createTempDirectory("effectcraft-assets-delete").toFile()
         try {
             val store = OfflineAssetStore(root)
             val asset = store.import(ByteArrayInputStream("x".toByteArray()), "x.txt")
-            assertNull(store.get("not-a-hash"))
+            assertTrue(runCatching { store.get("not-a-hash") }.isFailure)
             assertTrue(store.delete(asset.sha256))
             assertNull(store.get(asset.sha256))
             assertFalse(File(root, asset.sha256).exists())
