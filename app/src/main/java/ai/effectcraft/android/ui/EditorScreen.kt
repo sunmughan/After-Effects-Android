@@ -1144,7 +1144,7 @@ private fun CanonicalProjectEditor(
                                     gestureLayers, gestureLayers.map { it.id }.toSet(), delta
                                 )
                                 val scales = ai.effectcraft.android.data.CanonicalGestureEdit.pinchedScales(
-                                    gestureLayers, gestureLayers.map { it.id }.toSet(), zoom
+                                    gestureLayers, gestureLayers.map { it.id }.toSet(), zoom.toDouble()
                                 )
                                 if (positions.isNotEmpty() || scales.isNotEmpty()) {
                                     gestureEditCallback(composition.id, positions, scales)

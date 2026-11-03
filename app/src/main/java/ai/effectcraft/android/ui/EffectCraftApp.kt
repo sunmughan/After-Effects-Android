@@ -620,8 +620,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
      * batch that changes nothing records no history.
      */
     fun applyCanonicalEditBatch(steps: List<(String) -> String?>, successMessage: String) {
-        val before = importedEcproj
-        if (before == null) {
+        val before = importedEcproj ?: run {
             saveMessage = "Import a canonical .ecproj first"
             return
         }
