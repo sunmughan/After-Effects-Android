@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 and M1 accepted on CI #286 (18/18 emulator instrumentation passed); M2 is in progress.** Exact tested commit: `bd274c7879cdd596d767303ace8791012543f199`. M2 import-format guard is commit `53b6bc6e844423703216f99eb8e3d0318f05d106`; latest HEAD `55932dbcb17381026f131cf7304bb64ab90a13a6` has CI #289 in progress. EffectCraft `.ecproj` JSON and `.ecprojx` XML are supported; Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
+> **Current status: M0 and M1 accepted on CI #286 (18/18 emulator instrumentation passed); M2 is in progress.** Exact tested commit: `bd274c7879cdd596d767303ace8791012543f199`. M2 import-format guard is commit `53b6bc6e844423703216f99eb8e3d0318f05d106`; latest HEAD `1982e17b3e4fddcd4a7a293d50e20aa849a9d27a` has CI #290 pending. EffectCraft `.ecproj` JSON and `.ecprojx` XML are supported; Effekseer `.efkproj` and Adobe `.aep` remain explicitly unsupported.
 
 ## Product direction
 
