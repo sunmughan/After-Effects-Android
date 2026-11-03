@@ -20,7 +20,7 @@ class SafDocumentWriterTest {
         var rollbackCalled = false
 
         val copied = SafDocumentWriter.copyTo(
-            source = ByteArrayInputStream(source),
+            openInput = { ByteArrayInputStream(source) },
             openOutput = { destination },
             rollbackDestination = { rollbackCalled = true },
             bufferSize = 16 * 1024,
@@ -73,7 +73,7 @@ class SafDocumentWriterTest {
 
         try {
             SafDocumentWriter.copyTo(
-                source = ByteArrayInputStream(ByteArray(32)),
+                openInput = { ByteArrayInputStream(ByteArray(32)) },
                 openOutput = { brokenOutput },
                 rollbackDestination = { rollbackCalled = true; throw IOException("delete unavailable") },
                 bufferSize = 8
@@ -96,7 +96,7 @@ class SafDocumentWriterTest {
     private fun assertInvalidBuffer(size: Int) {
         try {
             SafDocumentWriter.copyTo(
-                source = ByteArrayInputStream(byteArrayOf()),
+                openInput = { ByteArrayInputStream(byteArrayOf()) },
                 openOutput = { ByteArrayOutputStream() },
                 rollbackDestination = {},
                 bufferSize = size
