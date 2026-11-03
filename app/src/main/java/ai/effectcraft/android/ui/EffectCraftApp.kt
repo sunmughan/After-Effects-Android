@@ -274,7 +274,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val plan = RenderQueuePlan.create(settings)
                     saveMessage = "Rendering PNG sequence · 0/${plan.frameCount} (0%)"
                     withContext(Dispatchers.IO) {
-                        session = NativeSession.open(source, 0)
+                        val nativeRenderSide = minOf(
+                            maxOf(settings.width, settings.height),
+                            RenderedFramePng.MAX_NATIVE_RENDER_SIDE
+                        )
+                        session = NativeSession.open(source, nativeRenderSide)
                             ?: error("Native renderer unavailable for this project")
                         FileOutputStream(tempArchive).use { archiveOutput ->
                             PngSequenceZipExporter.export(
@@ -285,7 +289,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                                     val rgba = session?.render(compositionId, frame.toLong())
                                         ?: error("Native renderer returned no frame at $frame")
                                     ByteArrayOutputStream().use { pngOutput ->
-                                        RenderedFramePng.write(rgba, pngOutput)
+                                        RenderedFramePng.writeScaled(rgba, pngOutput, settings.width, settings.height)
                                         pngOutput.toByteArray()
                                     }
                                 },

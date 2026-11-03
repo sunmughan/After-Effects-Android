@@ -6,19 +6,57 @@ import java.io.IOException
 import java.io.OutputStream
 
 /**
- * Encodes the native renderer's [width,height,RGBA...] frame envelope as a
- * standards-compliant PNG. Dimensions and byte count are validated before
- * allocating a Bitmap so malformed JNI data cannot trigger an unbounded
- * allocation.
+ * Encodes a native RGBA frame envelope as PNG. Both the source and requested
+ * output dimensions are bounded before bitmap allocation.
  */
 object RenderedFramePng {
     data class Dimensions(val width: Int, val height: Int)
 
     const val MAX_SIDE = 8192
     const val MAX_PIXELS = 8_388_608L
+    /** Square native render cap below MAX_PIXELS; output may be scaled up within its own budget. */
+    const val MAX_NATIVE_RENDER_SIDE = 2896
 
     @Throws(IOException::class, IllegalArgumentException::class)
     fun write(frame: ByteArray, output: OutputStream): Dimensions {
+        val bitmap = decode(frame)
+        try {
+            encode(bitmap, output)
+            return Dimensions(bitmap.width, bitmap.height)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    /**
+     * Resamples a bounded native frame to the requested output dimensions.
+     * NativeSession should render with maxSide <= MAX_NATIVE_RENDER_SIDE so
+     * the source Bitmap also stays within the memory budget.
+     */
+    @Throws(IOException::class, IllegalArgumentException::class)
+    fun writeScaled(frame: ByteArray, output: OutputStream, targetWidth: Int, targetHeight: Int): Dimensions {
+        require(targetWidth in 1..MAX_SIDE && targetHeight in 1..MAX_SIDE) {
+            "Requested PNG dimensions are outside the supported range"
+        }
+        require(targetWidth.toLong() * targetHeight.toLong() <= MAX_PIXELS) {
+            "Requested PNG exceeds the pixel budget"
+        }
+        val source = decode(frame)
+        val scaled = if (source.width == targetWidth && source.height == targetHeight) {
+            source
+        } else {
+            Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true)
+        }
+        try {
+            encode(scaled, output)
+            return Dimensions(targetWidth, targetHeight)
+        } finally {
+            if (scaled !== source) scaled.recycle()
+            source.recycle()
+        }
+    }
+
+    private fun decode(frame: ByteArray): Bitmap {
         require(frame.size >= 8) { "Rendered frame is missing its dimension header" }
         val width = readInt(frame, 0)
         val height = readInt(frame, 4)
@@ -40,18 +78,16 @@ object RenderedFramePng {
             pixels[index] = Color.argb(alpha, red, green, blue)
             offset += 4
         }
-
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        try {
-            bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
-                throw IOException("Android PNG encoder returned false")
-            }
-            output.flush()
-        } finally {
-            bitmap.recycle()
+        return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+            it.setPixels(pixels, 0, width, 0, 0, width, height)
         }
-        return Dimensions(width, height)
+    }
+
+    private fun encode(bitmap: Bitmap, output: OutputStream) {
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+            throw IOException("Android PNG encoder returned false")
+        }
+        output.flush()
     }
 
     private fun readInt(bytes: ByteArray, offset: Int): Int =

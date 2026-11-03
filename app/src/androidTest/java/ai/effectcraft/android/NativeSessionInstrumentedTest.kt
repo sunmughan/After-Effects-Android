@@ -168,6 +168,28 @@ class NativeSessionInstrumentedTest {
     }
 
     @Test
+    fun pngSequenceExportScalesToRequestedDimensions() {
+        val frame = byteArrayOf(
+            0, 0, 0, 1, 0, 0, 0, 1,
+            255.toByte(), 0, 0, 255.toByte()
+        )
+        val output = ByteArrayOutputStream()
+        val dimensions = RenderedFramePng.writeScaled(frame, output, 2, 2)
+        assertEquals(2, dimensions.width)
+        assertEquals(2, dimensions.height)
+        val bitmap = BitmapFactory.decodeByteArray(output.toByteArray(), 0, output.size())
+        assertNotNull(bitmap)
+        bitmap!!
+        try {
+            assertEquals(2, bitmap.width)
+            assertEquals(2, bitmap.height)
+            assertEquals(Color.RED, bitmap.getPixel(1, 1))
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test
     fun pngExportRejectsMalformedAndOversizedFramesBeforeBitmapAllocation() {
         assertTrue(runCatching { RenderedFramePng.write(byteArrayOf(0, 0), ByteArrayOutputStream()) }.isFailure)
         val zeroWidth = byteArrayOf(0, 0, 0, 0, 0, 0, 0, 1)
