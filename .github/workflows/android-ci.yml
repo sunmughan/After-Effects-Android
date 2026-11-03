@@ -188,7 +188,9 @@ jobs:
             app/build/outputs/androidTest-results/connected/
             app/build/reports/tests/testDebugUnitTest/
             app/build/reports/androidTests/connected/
-          if-no-files-found: error
+          # Test compilation can fail before XML exists; preserve the primary
+          # failure and still publish any partial reports without a second error.
+          if-no-files-found: warn
           retention-days: 30
 
   # M0 criterion #1 (repository builds reproducibly): a second, independent
