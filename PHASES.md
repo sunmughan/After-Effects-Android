@@ -451,3 +451,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Added two JVM regression tests: aggregate quota rejects a second asset without publishing its payload/temp file; a duplicate payload at the exact quota is accepted and counted once. No existing tests/assertions were removed.
 - Exact-head CI #392 was inspected: #391 failed in Rust lib tests because the red-pixel test helper omitted image::ImageEncoder; commit 2ff34c83 adds the trait import and reports local cargo test --offline --lib 28/28. #392 is running on that fix head; this quota change will trigger #393 and requires its own exact-head JVM/emulator evidence.
 - Local execution limitation: this automation sandbox has no Android SDK 37/emulator or local Kotlin/Gradle dependency cache, so only repository CI can establish Android/JUnit acceptance. The quota logic is deterministic and is covered by new JVM tests.
+
+
+### Run 45 — validate PNG sequence frame range against canonical composition
+- M5 correctness: frame-range validation now checks the inclusive end frame against the selected canonical composition's actual duration before launching SAF CreateDocument, and rechecks immediately before rendering. Previously a user-entered out-of-duration frame could create an empty output document before the native renderer rejected it.
+- Added a composition-aware RenderQueuePlan overload and regression for zero-frame compositions, endFrame == durationFrames, and the last valid frame. Generic planner remains format-independent.
+- Exact-head CI #393/#394 required for Kotlin/JUnit/emulator acceptance.

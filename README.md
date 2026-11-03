@@ -84,3 +84,8 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 ### Run 44 — offline media storage quota
 - OfflineAssetStore now has a configurable 2 GiB aggregate library budget (in addition to 512 MiB per asset), checked before publishing new content; SHA-256 duplicates count once and retain existing metadata. Index-write failure removes a newly published unindexed payload.
 - Added JVM quota/dedupe/cleanup regressions. Exact-head CI #392 fixes the prior Rust ImageEncoder trait compile failure and is running; this new change requires a fresh CI run.
+
+
+### Run 45 — composition-bounded render frame range
+- PNG-sequence range is now validated against canonical composition duration before SAF output creation and rechecked before rendering; invalid end-frame selections no longer create empty ZIP documents.
+- Added composition-duration boundary regression. Latest exact-head CI is pending.

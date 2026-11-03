@@ -271,7 +271,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 val exportJob = currentCoroutineContext()[Job]
                 var session: NativeSession? = null
                 try {
-                    val plan = RenderQueuePlan.create(settings)
+                    val compositionFrames = canonicalProjectInfo?.compositions
+                        ?.firstOrNull { it.id == compositionId }?.durationFrames
+                        ?: error("Canonical composition is no longer available")
+                    val plan = RenderQueuePlan.create(settings, compositionFrames)
                     saveMessage = "Rendering PNG sequence · 0/${plan.frameCount} (0%)"
                     withContext(Dispatchers.IO) {
                         val nativeRenderSide = minOf(
@@ -661,7 +664,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "Cancel the frame export before starting a sequence"
                 } else {
                     runCatching {
-                        pendingSequenceSettings = RenderQueueSettings(width, height, fps, startFrame, endFrame)
+                        val settings = RenderQueueSettings(width, height, fps, startFrame, endFrame)
+                        RenderQueuePlan.create(settings, composition.durationFrames)
+                        pendingSequenceSettings = settings
                         pendingSequenceCompositionId = composition.id
                         exportPngSequenceLauncher.launch("EffectCraft-sequence.zip")
                     }.onFailure { failure ->

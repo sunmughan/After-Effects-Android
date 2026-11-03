@@ -52,6 +52,18 @@ data class RenderQueuePlan private constructor(
         const val MAX_FRAME_COUNT = 10_000
         const val MAX_UNCOMPRESSED_RGBA_BYTES = 8L * 1024L * 1024L * 1024L
 
+        /**
+         * Validates the requested inclusive range against a canonical composition
+         * before the user is asked to create an output document.
+         */
+        fun create(settings: RenderQueueSettings, compositionFrameCount: Int): RenderQueuePlan {
+            require(compositionFrameCount > 0) { "Composition must contain at least one frame" }
+            require(settings.endFrame < compositionFrameCount) {
+                "End frame must be below composition frame count ($compositionFrameCount)"
+            }
+            return create(settings)
+        }
+
         fun create(settings: RenderQueueSettings): RenderQueuePlan {
             require(settings.width in MIN_DIMENSION..MAX_DIMENSION) {
                 "Render width must be between $MIN_DIMENSION and $MAX_DIMENSION"
