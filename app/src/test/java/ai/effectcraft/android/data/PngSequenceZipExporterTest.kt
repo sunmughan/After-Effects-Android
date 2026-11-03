@@ -78,7 +78,9 @@ class PngSequenceZipExporterTest {
         assertThrows(IllegalArgumentException::class.java) {
             PngSequenceZipExporter.export(plan(start = 0, end = 0), ByteArrayOutputStream(), { png(640, 320) })
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        // Cancellation is checked before rendering, so a cancelled export throws
+        // CancellationException even with a valid PNG: it never reaches validation.
+        assertThrows(CancellationException::class.java) {
             PngSequenceZipExporter.export(plan(start = 0, end = 0), ByteArrayOutputStream(), { png() }, isCancelled = { true })
         }
     }

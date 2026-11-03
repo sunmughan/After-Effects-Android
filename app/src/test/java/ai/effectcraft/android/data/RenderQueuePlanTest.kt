@@ -58,8 +58,10 @@ class RenderQueuePlanTest {
         val uhd = RenderQueuePlan.create(settings(start = 0, end = 0, width = 3840, height = 2160))
         assertEquals(33_177_600L, uhd.estimatedUncompressedRgbaBytes)
         assertTrue(uhd.estimatedUncompressedRgbaBytes <= RenderQueuePlan.MAX_UNCOMPRESSED_RGBA_BYTES)
+        // 258 UHD frames = 8,559,820,800 bytes, still under the 8 GiB budget;
+        // 259 frames = 8,592,998,400 bytes, the first count that exceeds it.
         assertThrows(IllegalArgumentException::class.java) {
-            RenderQueuePlan.create(settings(start = 0, end = 257, width = 3840, height = 2160))
+            RenderQueuePlan.create(settings(start = 0, end = 258, width = 3840, height = 2160))
         }
     }
 }
