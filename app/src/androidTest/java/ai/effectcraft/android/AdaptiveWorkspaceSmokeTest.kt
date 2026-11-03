@@ -3,6 +3,7 @@ package ai.effectcraft.android
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -58,6 +59,16 @@ class AdaptiveWorkspaceSmokeTest {
                     isExportingFrame = false,
                     onExportRenderedFrame = {},
                     onCancelFrameExport = {},
+                    isExportingSequence = false,
+                    isSequenceExportWritingOutput = false,
+                    onExportPngSequence = { added = listOf("zip") },
+                    onCancelSequenceExport = {},
+                    sequenceExportProgress = 0,
+                    isExportingSequence = false,
+                    isSequenceExportWritingOutput = false,
+                    onExportPngSequence = {},
+                    onCancelSequenceExport = {},
+                    sequenceExportProgress = 0,
                     onNewProject = {},
                     onAddLayer = {},
                     onSelectLayer = {},
@@ -177,6 +188,8 @@ class AdaptiveWorkspaceSmokeTest {
                 )
             }
         }
+        compose.onNodeWithContentDescription("Export PNG sequence ZIP").assertIsDisplayed().performClick()
+        assertEquals(listOf("zip"), added)
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("Opacity keys · 1", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Add canonical opacity keyframe").performScrollTo().performClick()

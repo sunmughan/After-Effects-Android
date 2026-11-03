@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import java.io.File
+import java.io.ByteArrayOutputStream
+import java.io.FileOutputStream
 import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.CanonicalProjectDocument
 import ai.effectcraft.android.data.CanonicalProjectRepository
@@ -36,6 +38,9 @@ import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.data.ProjectFileFormats
 import ai.effectcraft.android.data.ProjectKeyframeStore
+import ai.effectcraft.android.data.PngSequenceZipExporter
+import ai.effectcraft.android.data.RenderQueuePlan
+import ai.effectcraft.android.data.RenderQueueSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,6 +49,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlin.math.roundToInt
 import androidx.compose.runtime.rememberCoroutineScope
 
 private data class EditorHistorySnapshot(
@@ -59,6 +65,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var frameExportJob by remember { mutableStateOf<Job?>(null) }
     var frameExportInProgress by remember { mutableStateOf(false) }
     var pendingFrameExport by remember { mutableIntStateOf(0) }
+    var sequenceExportJob by remember { mutableStateOf<Job?>(null) }
+    var sequenceExportInProgress by remember { mutableStateOf(false) }
+    var sequenceExportWritingOutput by remember { mutableStateOf(false) }
+    var sequenceExportProgress by remember { mutableIntStateOf(0) }
+    var pendingSequenceSettings by remember { mutableStateOf<RenderQueueSettings?>(null) }
+    var pendingSequenceCompositionId by remember { mutableStateOf<Long?>(null) }
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
@@ -232,6 +244,79 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         frameExportInProgress = false
                         frameExportJob = null
                     }
+                }
+            }
+        }
+    }
+
+    val exportPngSequenceLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri: Uri? ->
+        val settings = pendingSequenceSettings
+        val compositionId = pendingSequenceCompositionId
+        pendingSequenceSettings = null
+        pendingSequenceCompositionId = null
+        if (uri == null) {
+            saveMessage = "PNG sequence export cancelled"
+        } else if (settings == null || compositionId == null || importedEcproj == null) {
+            saveMessage = "Import a canonical composition before exporting a PNG sequence"
+        } else if (frameExportInProgress) {
+            saveMessage = "Cancel the frame export before starting a sequence"
+        } else {
+            val source = importedEcproj!!
+            sequenceExportInProgress = true
+            sequenceExportWritingOutput = false
+            sequenceExportProgress = 0
+            sequenceExportJob = exportScope.launch {
+                val tempArchive = File(context.cacheDir, "effectcraft-sequence-${System.nanoTime()}.zip")
+                val exportJob = currentCoroutineContext()[Job]
+                var session: NativeSession? = null
+                try {
+                    val plan = RenderQueuePlan.create(settings)
+                    saveMessage = "Rendering PNG sequence · 0/${plan.frameCount} (0%)"
+                    withContext(Dispatchers.IO) {
+                        session = NativeSession.open(source, 0)
+                            ?: error("Native renderer unavailable for this project")
+                        FileOutputStream(tempArchive).use { archiveOutput ->
+                            PngSequenceZipExporter.export(
+                                plan = plan,
+                                output = archiveOutput,
+                                renderPng = { frame ->
+                                    if (exportJob?.isActive != true) throw CancellationException("PNG sequence export cancelled")
+                                    val rgba = session?.render(compositionId, frame.toLong())
+                                        ?: error("Native renderer returned no frame at $frame")
+                                    ByteArrayOutputStream().use { pngOutput ->
+                                        RenderedFramePng.write(rgba, pngOutput)
+                                        pngOutput.toByteArray()
+                                    }
+                                },
+                                isCancelled = { exportJob?.isActive != true },
+                                onProgress = { completed, percent ->
+                                    sequenceExportProgress = percent
+                                    saveMessage = "Rendering PNG sequence · $completed/${plan.frameCount} ($percent%)"
+                                }
+                            )
+                        }
+                    }
+                    currentCoroutineContext().ensureActive()
+                    sequenceExportWritingOutput = true
+                    saveMessage = "Copying completed ZIP to selected destination…"
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { output ->
+                            tempArchive.inputStream().use { input -> input.copyTo(output, 64 * 1024) }
+                        } ?: error("Unable to open ZIP destination")
+                    }
+                    sequenceExportProgress = 100
+                    saveMessage = "Exported ${plan.frameCount} PNG frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS"
+                } catch (cancelled: CancellationException) {
+                    saveMessage = "PNG sequence export cancelled"
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    saveMessage = "PNG sequence export failed · ${failure.message ?: "render or write error"}"
+                } finally {
+                    session?.close()
+                    tempArchive.delete()
+                    sequenceExportInProgress = false
+                    sequenceExportWritingOutput = false
+                    sequenceExportJob = null
                 }
             }
         }
@@ -546,7 +631,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             isExportingFrame = frameExportInProgress,
             onExportRenderedFrame = {
-                if (importedEcproj == null || canonicalProjectInfo?.compositions.isNullOrEmpty()) {
+                if (sequenceExportInProgress) {
+                    saveMessage = "Finish or cancel the sequence export before rendering a single frame"
+                } else if (importedEcproj == null || canonicalProjectInfo?.compositions.isNullOrEmpty()) {
                     saveMessage = "Import a canonical composition before rendering a frame"
                 } else if (frameExportInProgress) {
                     saveMessage = "A frame export is already running"
@@ -556,6 +643,38 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }
             },
             onCancelFrameExport = { frameExportJob?.cancel() },
+            isExportingSequence = sequenceExportInProgress,
+            isSequenceExportWritingOutput = sequenceExportWritingOutput,
+            onExportPngSequence = {
+                val composition = canonicalProjectInfo?.compositions?.firstOrNull()
+                if (importedEcproj == null || composition == null) {
+                    saveMessage = "Import a canonical composition before exporting a sequence"
+                } else if (sequenceExportInProgress) {
+                    saveMessage = "A PNG sequence export is already running"
+                } else if (frameExportInProgress) {
+                    saveMessage = "Cancel the frame export before starting a sequence"
+                } else {
+                    runCatching {
+                        val fps = (composition.frameRateNum.toDouble() /
+                            composition.frameRateDen.coerceAtLeast(1)).roundToInt()
+                        pendingSequenceSettings = RenderQueueSettings(
+                            width = composition.width,
+                            height = composition.height,
+                            frameRate = fps,
+                            startFrame = 0,
+                            endFrame = composition.durationFrames - 1,
+                        )
+                        pendingSequenceCompositionId = composition.id
+                        exportPngSequenceLauncher.launch("EffectCraft-sequence.zip")
+                    }.onFailure { failure ->
+                        pendingSequenceSettings = null
+                        pendingSequenceCompositionId = null
+                        saveMessage = "PNG sequence plan rejected · ${failure.message ?: "unsupported composition"}"
+                    }
+                }
+            },
+            onCancelSequenceExport = { sequenceExportJob?.cancel() },
+            sequenceExportProgress = sequenceExportProgress,
             onSave = {
                 runCatching { projectStore.save(project) }
                     .onSuccess {

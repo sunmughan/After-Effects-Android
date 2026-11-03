@@ -123,6 +123,11 @@ fun EditorScreen(
     isExportingFrame: Boolean,
     onExportRenderedFrame: () -> Unit,
     onCancelFrameExport: () -> Unit,
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    onExportPngSequence: () -> Unit,
+    onCancelSequenceExport: () -> Unit,
+    sequenceExportProgress: Int,
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
@@ -206,6 +211,10 @@ fun EditorScreen(
                 isExportingFrame = isExportingFrame,
                 onExportRenderedFrame = onExportRenderedFrame,
                 onCancelFrameExport = onCancelFrameExport,
+                isExportingSequence = isExportingSequence,
+                isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                onExportPngSequence = onExportPngSequence,
+                onCancelSequenceExport = onCancelSequenceExport,
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
                 onOpenCanonicalEditor = { showCanonicalEditor = true }
@@ -484,6 +493,10 @@ private fun HeaderBar(
     isExportingFrame: Boolean,
     onExportRenderedFrame: () -> Unit,
     onCancelFrameExport: () -> Unit,
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    onExportPngSequence: () -> Unit,
+    onCancelSequenceExport: () -> Unit,
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit
@@ -566,6 +579,21 @@ private fun HeaderBar(
                             tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
                         )
                     }
+                    IconButton(
+                        onClick = if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport else onExportPngSequence,
+                        enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
+                            contentDescription = when {
+                                isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP"
+                                isExportingSequence -> "Cancel PNG sequence export"
+                                else -> "Export PNG sequence ZIP"
+                            },
+                            tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
+                        )
+                    }
                 }
             }
         } else {
@@ -614,6 +642,20 @@ private fun HeaderBar(
                         if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
                         contentDescription = if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG",
                         tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
+                    )
+                }
+                IconButton(
+                    onClick = if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport else onExportPngSequence,
+                    enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame,
+                ) {
+                    Icon(
+                        if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
+                        contentDescription = when {
+                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP"
+                            isExportingSequence -> "Cancel PNG sequence export"
+                            else -> "Export PNG sequence ZIP"
+                        },
+                        tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
                     )
                 }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
