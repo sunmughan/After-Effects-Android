@@ -369,4 +369,24 @@ class EditorSmokeTest {
         assertEquals("Recovered revision", JSONObject(target.readText(Charsets.UTF_8)).getString("name"))
     }
 
+    @Test
+    fun draftStoreDiscardsIncompleteAtomicTempAndPreservesCommittedProject() {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = appContext.filesDir.resolve("projects")
+        directory.mkdirs()
+        directory.listFiles()?.filter { it.name.endsWith(".efx-draft") || it.name.endsWith(".efx-draft.tmp") }
+            ?.forEach { it.delete() }
+
+        val store = DraftProjectStore(appContext)
+        val project = ProjectDocument.starter().copy(name = "Last committed")
+        val target = store.save(project)
+        val interrupted = target.resolveSibling(target.name + ".tmp")
+        interrupted.writeText("{ incomplete", Charsets.UTF_8)
+
+        val loaded = store.load(project.id)
+        assertEquals("Last committed", loaded?.name)
+        assertTrue("Invalid temp must be discarded", !interrupted.exists())
+        assertEquals(project.id, JSONObject(target.readText(Charsets.UTF_8)).getString("id"))
+    }
+
 }
