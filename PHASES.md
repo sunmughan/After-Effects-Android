@@ -489,3 +489,5 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Test-fixture correction during local validation: the stale-file test initially chose an epoch timestamp earlier than its 24-hour subtraction, which Java rejects as a negative `File.setLastModified`. Changed the fixture clock to 2,000,000,000 ms (commit `cc72496d`); assertions are unchanged. Compiled the cleanup utility with local `kotlinc` and ran a smoke harness: PASS (one stale matching ZIP removed, recent matching ZIP and unrelated ZIP retained). Android JUnit remains pending in CI #404.
 
 - README progress synchronized through `aac7e69a`; current branch head after this tracker entry is recorded by the next progress commit.
+
+- Follow-up: startup cleanup runs on `Dispatchers.IO` to avoid blocking the Compose main thread while scanning cache files (commit `e8dacfba`). A second local Kotlin smoke harness passed retention of unknown/future timestamps and sequence-named directories.
