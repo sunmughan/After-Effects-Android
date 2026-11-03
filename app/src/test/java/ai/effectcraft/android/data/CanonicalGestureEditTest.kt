@@ -75,6 +75,24 @@ class CanonicalGestureEditTest {
     }
 
     @Test
+    fun rotateGestureAppliesDegreesToSelectedUnlockedLayersOnly() {
+        val layers = listOf(
+            layer(2, 0.0, 0.0).copy(rotationDegrees = 15.0),
+            layer(3, 0.0, 0.0).copy(rotationDegrees = -20.0),
+            layer(4, 0.0, 0.0, locked = true).copy(rotationDegrees = 45.0)
+        )
+        assertEquals(mapOf(2L to 30.0, 3L to -5.0), CanonicalGestureEdit.rotatedLayers(layers, setOf(2, 3, 4), 15.0))
+    }
+
+    @Test
+    fun rotateGestureClampsAndRejectsInvalidDeltas() {
+        assertEquals(360_000.0, CanonicalGestureEdit.rotatedDegrees(359_999.0, 20.0), 0.000001)
+        assertEquals(-360_000.0, CanonicalGestureEdit.rotatedDegrees(-359_999.0, -20.0), 0.000001)
+        assertEquals(30.0, CanonicalGestureEdit.rotatedDegrees(30.0, Double.NaN), 0.000001)
+        assertEquals(emptyMap<Long, Double>(), CanonicalGestureEdit.rotatedLayers(listOf(layer(2, 0.0, 0.0)), setOf(2), 0.0))
+    }
+
+    @Test
     fun dragDeltaMagnitudeIsFiniteForHugeInputs() {
         val delta = CanonicalGestureEdit.dragPositionDelta(1e20f, 0f, 960f, 1920f)
         assertEquals(true, delta.first.isFinite())

@@ -164,7 +164,7 @@ fun EditorScreen(
     onRedoCanonical: () -> Unit = {},
     onSetCanonicalLayerOpacityForSelection: (Long, Set<Long>, Double) -> Unit = { _, _, _ -> },
     onSetCanonicalLayerVisibilityForSelection: (Long, Set<Long>, Boolean) -> Unit = { _, _, _ -> },
-    onGestureEditCanonicalSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>) -> Unit = { _, _, _ -> },
+    onGestureEditCanonicalSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>, Map<Long, Double>) -> Unit = { _, _, _ -> },
     onRenameCanonicalLayer: (Long, Long, String) -> Unit,
     onAddCanonicalTextLayer: (Long, String) -> Unit,
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
@@ -1002,7 +1002,7 @@ private fun CanonicalProjectEditor(
     onRedoCanonical: () -> Unit,
     onSetLayerOpacityForSelection: (Long, Set<Long>, Double) -> Unit,
     onSetLayerVisibilityForSelection: (Long, Set<Long>, Boolean) -> Unit,
-    onGestureEditSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>) -> Unit,
+    onGestureEditSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>, Map<Long, Double>) -> Unit,
     onRenameLayer: (Long, Long, String) -> Unit,
     onAddTextLayer: (Long, String) -> Unit,
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
@@ -1132,11 +1132,13 @@ private fun CanonicalProjectEditor(
                         while (true) {
                             var pan = Offset.Zero
                             var zoom = 1f
-                            detectTransformGestures { _, panChange, zoomChange, _ ->
+                            var rotationDegrees = 0f
+                            detectTransformGestures { _, panChange, zoomChange, rotationChange ->
                                 pan += panChange
                                 zoom *= zoomChange
+                                rotationDegrees += rotationChange
                             }
-                            if (canEdit && (pan != Offset.Zero || zoom != 1f)) {
+                            if (canEdit && (pan != Offset.Zero || zoom != 1f || rotationDegrees != 0f)) {
                                 val delta = ai.effectcraft.android.data.CanonicalGestureEdit.dragPositionDelta(
                                     pan.x, pan.y, previewWidthPx.toFloat(), composition.width.toFloat()
                                 )
@@ -1146,8 +1148,11 @@ private fun CanonicalProjectEditor(
                                 val scales = ai.effectcraft.android.data.CanonicalGestureEdit.pinchedScales(
                                     gestureLayers, gestureLayers.map { it.id }.toSet(), zoom.toDouble()
                                 )
-                                if (positions.isNotEmpty() || scales.isNotEmpty()) {
-                                    gestureEditCallback(composition.id, positions, scales)
+                                val rotations = ai.effectcraft.android.data.CanonicalGestureEdit.rotatedLayers(
+                                    gestureLayers, gestureLayers.map { it.id }.toSet(), rotationDegrees.toDouble()
+                                )
+                                if (positions.isNotEmpty() || scales.isNotEmpty() || rotations.isNotEmpty()) {
+                                    gestureEditCallback(composition.id, positions, scales, rotations)
                                 }
                             }
                         }
@@ -1165,7 +1170,7 @@ private fun CanonicalProjectEditor(
                     Text(previewMessage, color = EditorPalette.muted, fontSize = 11.sp)
                 }
             }
-            Text("Drag the preview to move selected layers · pinch to scale them", color = EditorPalette.muted, fontSize = 10.sp)
+            Text("Drag to move · pinch to scale · twist to rotate selected layers", color = EditorPalette.muted, fontSize = 10.sp)
             Text("Frame ${previewFrame} / ${composition.durationFrames - 1}", color = EditorPalette.muted, fontSize = 10.sp)
             Slider(
                 value = previewFrame.toFloat(),

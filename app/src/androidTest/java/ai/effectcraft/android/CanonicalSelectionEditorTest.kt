@@ -26,6 +26,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+private data class QuadGestureEdit(
+    val compositionId: Long,
+    val positions: Map<Long, Pair<Double, Double>>,
+    val scales: Map<Long, Pair<Double, Double>>,
+    val rotations: Map<Long, Double>
+)
+
 class CanonicalSelectionEditorTest {
     @get:Rule
     val compose = createComposeRule()
@@ -55,7 +62,7 @@ class CanonicalSelectionEditorTest {
         var undoClicks = 0
         var redoClicks = 0
         var visibilityForSelection: List<Any>? = null
-        var gestureEdit: Triple<Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>>? = null
+        var gestureEdit: QuadGestureEdit? = null
         var deleteCalls = 0
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -112,7 +119,7 @@ class CanonicalSelectionEditorTest {
                     onRedoCanonical = { redoClicks += 1 },
                     onSetCanonicalLayerOpacityForSelection = { _, _, _ -> },
                     onSetCanonicalLayerVisibilityForSelection = { c, ids, visible -> visibilityForSelection = listOf(c, ids, visible) },
-                    onGestureEditCanonicalSelection = { c, positions, scales -> gestureEdit = Triple(c, positions, scales) },
+                    onGestureEditCanonicalSelection = { c, positions, scales, rotations -> gestureEdit = QuadGestureEdit(c, positions, scales, rotations) },
                     onRenameCanonicalLayer = { _, _, _ -> },
                     onAddCanonicalTextLayer = { _, _ -> },
                     onSetCanonicalLayerVisibility = { _, _, _ -> },
@@ -165,13 +172,14 @@ class CanonicalSelectionEditorTest {
         }
         compose.waitForIdle()
         val edit = gestureEdit ?: error("Preview drag must invoke the gesture edit callback")
-        assertEquals(10L, edit.first)
-        assertEquals(2, edit.second.size)
-        assertTrue(edit.second.getValue(2).first > 10.0)
-        assertTrue(edit.second.getValue(3).first > 30.0)
-        assertEquals(20.0, edit.second.getValue(2).second, 0.001)
-        assertEquals(40.0, edit.second.getValue(3).second, 0.001)
-        assertEquals(emptyMap<Long, Pair<Double, Double>>(), edit.third)
+        assertEquals(10L, edit.compositionId)
+        assertEquals(2, edit.positions.size)
+        assertTrue(edit.positions.getValue(2).first > 10.0)
+        assertTrue(edit.positions.getValue(3).first > 30.0)
+        assertEquals(20.0, edit.positions.getValue(2).second, 0.001)
+        assertEquals(40.0, edit.positions.getValue(3).second, 0.001)
+        assertEquals(emptyMap<Long, Pair<Double, Double>>(), edit.scales)
+        assertEquals(emptyMap<Long, Double>(), edit.rotations)
 
         // With two layers selected, the visibility switch applies to the set.
         compose.onNodeWithContentDescription("Canonical layer visibility").performScrollTo().performClick()

@@ -1087,7 +1087,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     else applyCanonicalEditBatch(steps, "Canonical visibility updated for ${steps.size} layer(s) · saved locally")
                 }
             },
-            onGestureEditCanonicalSelection = { compositionId, positions, scales ->
+            onGestureEditCanonicalSelection = { compositionId, positions, scales, rotations ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
                 else {
@@ -1097,6 +1097,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                     scales.forEach { (layerId, scale) ->
                         steps.add { current: String -> NativeProjectBridge.setLayerScaleEcproj(current, compositionId, layerId, scale.first, scale.second) }
+                    }
+                    rotations.forEach { (layerId, degrees) ->
+                        steps.add { current: String -> NativeProjectBridge.setLayerRotationEcproj(current, compositionId, layerId, degrees) }
                     }
                     if (steps.isEmpty()) saveMessage = "No editable selected layers"
                     else applyCanonicalEditBatch(steps, "Canonical gesture edit applied · saved locally")
