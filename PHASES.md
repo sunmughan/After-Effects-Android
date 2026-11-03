@@ -1,7 +1,14 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-03 (M0/M1 current-head CI pending; canonical workspace preview and strict import committed)
+Updated: 2026-11-03 (run 13: CI #247 Kotlin compile failure fixed; exact-head verification pending)
 Latest implementation commit: `3b09f989b6ac9dc8573abeba60e7aa46b95db6e0` connects the main workspace viewer to real upstream CPU-rendered canonical `.ecproj` frames at the current playhead; bootstrap drafts are explicitly labelled unrendered instead of displaying a decorative fake. SAF imports now enforce a 64 MiB read limit and require native schema validation plus at least one valid composition before caching. Current-head CI #246 was queued; no pass is claimed.
+
+### Run 13 — CI compile failure diagnosed and corrected (2026-11-03)
+- CI run [#247](https://github.com/sunmughan/After-Effects-Android/actions/runs/41556118199) reached both native ABI builds, JNI packaging checks, Rust tests and dependency/license inventory successfully, then failed at `:app:compileDebugKotlin`.
+- Exact compiler diagnostics: `EffectCraftApp.kt:72` conflicting local declarations `source`; `CanonicalProjectDocument` unresolved at lines 74/78. Root cause was a stale unbounded bufferedReader read duplicated beside the new bounded streaming read, plus a missing import.
+- Corrective code commit `5701135514b3763534071d0fc05dea91c1459670` (`fix(import): resolve canonical document compilation errors`) removes the duplicate read and imports `CanonicalProjectDocument`. No tests were weakened.
+- This is a concrete M2 import-boundary correctness fix and restores the intended 64 MiB streaming limit. Fresh current-head CI must verify Kotlin compile, APK, JVM tests and emulator instrumentation; no pass is claimed.
+- Local Gradle/Android SDK is unavailable in this automation runtime; exact failure logs came from GitHub Actions. Next run must inspect the new run and continue with any compile/test failures.
 
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
@@ -21,7 +28,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] CI: Rust tests, ARM64 bridge build, APK assembly, Kotlin unit tests, emulator instrumentation, dependency/license inventory.
 - [x] CI concurrency group cancels stale PR commits so only the newest revision consumes a runner.
 - [x] Current-head CI run [41411204104](https://github.com/sunmughan/After-Effects-Android/actions/runs/41411204104) completed **success** (2026-11-02).
-- [ ] Current-head CI must pass dual-ABI packaging and emulator JNI load/parser instrumentation. Run #237 built ARM64 successfully but was superseded during x86_64 build; hardened run must complete all steps.
+- [x] Run #247 built ARM64 + x86_64 JNI libraries, verified both packaged ABIs, passed Rust tests and generated dependency/license inventory; it then exposed the Kotlin import compile error recorded in Run 13.
+- [ ] Fresh current-head CI after `57011355` must pass Kotlin compilation/APK, JVM tests and emulator JNI load/parser instrumentation.
 - [x] Official Gradle Wrapper (9.5.0) committed in `eb2c6498e75079550c0c3fb0a5441b36102a2207`; distribution SHA-256 pinned in `gradle/wrapper/gradle-wrapper.properties`; CI selects `./gradlew` when present. Exact-head clean-checkout build is still pending.
 - [x] Validate corrected layer-move edge test and visibility persistence changes: assertion corrected in `427f54a112a0167d6d3272613d94a7518bac6d78`; subsequent unit tests passed on run #92 (emulator infrastructure failed before instrumentation). Latest interaction instrumentation is awaiting run #97.
 - [x] M0 runtime gate is emulator x86_64 JNI invocation; physical ARM64 device validation is explicitly moved to M6 compatibility (not a foundation blocker).
@@ -30,7 +38,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Repository structure, direct/transitive dependency and license inventory are audited in `docs/M0_REPOSITORY_AUDIT.md`; owner-selected Android license and full release NOTICE/legal review are release governance gates (M7), not a reason to block technical M0. Wrapper reproducibility is in CI; exact-head clean-checkout proof pending.
 - [x] Wrapper JAR/scripts/properties and distribution checksum are committed (`eb2c6498e75079550c0c3fb0a5441b36102a2207`); current CI invokes `./gradlew`. Exact-head validation pending.
 - [ ] Confirm native ABI load and an actual JNI parser call on emulator; ARM64 device smoke test is M6.
-- **Exit gate:** pinned clean-checkout build, Rust + Kotlin tests, dual ABI package, Android emulator JNI test, audit inventory generated/reviewed; CI green on exact HEAD. Run #238 (cache-enabled, 90-minute job budget) is the next validation; no pass claimed yet.
+- **Exit gate:** pinned clean-checkout build, Rust + Kotlin tests, dual ABI package, Android emulator JNI test, audit inventory generated/reviewed; CI green on exact HEAD. Run #247 is the latest completed failure; fresh CI after `57011355` is required; no pass claimed yet.
 
 ## M1 — Professional native editor foundation
 **Status: HELD — M0 closure must pass first (existing implementation/test suite retained)**
