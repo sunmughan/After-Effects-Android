@@ -42,11 +42,10 @@ object NativeProjectBridge {
         ensureLoaded()
         if (!available || frame < 0 || compositionId < 0 || maxSide !in 0..4096) return null
         val key = RenderedFrameCache.key(json, compositionId, frame, maxSide)
-        RenderedFrameCache.get(key)?.let { return it }
-        val rendered = runCatching { renderEcprojFrameNative(json, compositionId, frame, maxSide.toLong()) }
-            .getOrNull()?.takeIf { it.size >= 8 } ?: return null
-        RenderedFrameCache.put(key, rendered)
-        return rendered
+        return RenderedFrameCache.getOrRender(key) {
+            runCatching { renderEcprojFrameNative(json, compositionId, frame, maxSide.toLong()) }
+                .getOrNull()
+        }
     }
 
     /** Sets canonical Transform/Position X and Y while preserving the existing Z value. */
