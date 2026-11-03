@@ -215,6 +215,7 @@ fun EditorScreen(
                 isSequenceExportWritingOutput = isSequenceExportWritingOutput,
                 onExportPngSequence = onExportPngSequence,
                 onCancelSequenceExport = onCancelSequenceExport,
+                sequenceExportProgress = sequenceExportProgress,
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
                 onOpenCanonicalEditor = { showCanonicalEditor = true }
@@ -497,6 +498,7 @@ private fun HeaderBar(
     isSequenceExportWritingOutput: Boolean,
     onExportPngSequence: () -> Unit,
     onCancelSequenceExport: () -> Unit,
+    sequenceExportProgress: Int,
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit
@@ -587,8 +589,8 @@ private fun HeaderBar(
                         Icon(
                             if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
                             contentDescription = when {
-                                isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP"
-                                isExportingSequence -> "Cancel PNG sequence export"
+                                isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
+                                isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
                                 else -> "Export PNG sequence ZIP"
                             },
                             tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
@@ -651,8 +653,8 @@ private fun HeaderBar(
                     Icon(
                         if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
                         contentDescription = when {
-                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP"
-                            isExportingSequence -> "Cancel PNG sequence export"
+                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
+                            isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
                             else -> "Export PNG sequence ZIP"
                         },
                         tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
