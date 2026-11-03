@@ -1,5 +1,7 @@
 package ai.effectcraft.android.ui
 
+import ai.effectcraft.android.data.OfflineAssetStore
+
 import android.graphics.Bitmap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -103,12 +105,15 @@ fun EditorScreen(
     isPlaying: Boolean,
     saveMessage: String,
     savedProjects: List<ProjectDocument>,
+    offlineAssets: List<OfflineAssetStore.Asset>,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onSave: () -> Unit,
     onOpenProject: (String) -> Unit,
+    onOpenMediaLibrary: () -> Unit,
+    onDeleteOfflineAsset: (String) -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
     onExportEcprojx: () -> Unit,
@@ -147,6 +152,8 @@ fun EditorScreen(
         showPhoneInspector = false
     }
     var showProjectPicker by remember { mutableStateOf(false) }
+    var showMediaLibrary by remember { mutableStateOf(false) }
+    var assetPendingDelete by remember { mutableStateOf<OfflineAssetStore.Asset?>(null) }
     var showCompositionSettings by remember { mutableStateOf(false) }
     var showCanonicalEditor by remember { mutableStateOf(false) }
 
@@ -176,6 +183,7 @@ fun EditorScreen(
                 saveMessage = saveMessage,
                 onSave = onSave,
                 onOpenProject = { showProjectPicker = true },
+                onOpenMediaLibrary = { showMediaLibrary = true },
                 onValidateEcproj = onValidateEcproj,
                 onExportEcproj = onExportEcproj,
                 onExportEcprojx = onExportEcprojx,
@@ -282,6 +290,53 @@ fun EditorScreen(
             )
         }
 
+        if (showMediaLibrary) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showMediaLibrary = false },
+                title = { Text("Offline media library") },
+                text = {
+                    Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                        if (offlineAssets.isEmpty()) {
+                            Text("No media imported yet. Relink footage from a canonical project to copy it here for offline use.", color = EditorPalette.muted)
+                        } else {
+                            offlineAssets.forEach { asset ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(asset.displayName, color = EditorPalette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text("${asset.extension.uppercase()} · ${asset.sizeBytes / 1024} KB · ${asset.sha256.take(12)}…",
+                                            color = EditorPalette.muted, fontSize = 10.sp)
+                                    }
+                                    TextButton(onClick = { assetPendingDelete = asset }) {
+                                        Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showMediaLibrary = false }) { Text("Close") } }
+            )
+        }
+
+        if (assetPendingDelete != null) {
+            val asset = assetPendingDelete!!
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { assetPendingDelete = null },
+                title = { Text("Remove offline media?") },
+                text = { Text("Delete ${asset.displayName} from this device? Any project footage path referencing it may become unavailable.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onDeleteOfflineAsset(asset.sha256)
+                        assetPendingDelete = null
+                    }) { Text("Delete", color = Color(0xFFFF8B91)) }
+                },
+                dismissButton = { TextButton(onClick = { assetPendingDelete = null }) { Text("Cancel") } }
+            )
+        }
+
         if (showCompositionSettings) {
             ModalBottomSheet(
                 onDismissRequest = { showCompositionSettings = false },
@@ -357,6 +412,7 @@ private fun HeaderBar(
     saveMessage: String,
     onSave: () -> Unit,
     onOpenProject: () -> Unit,
+    onOpenMediaLibrary: () -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
     onExportEcprojx: () -> Unit,
@@ -416,6 +472,9 @@ private fun HeaderBar(
                     IconButton(onClick = onOpenProject, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = "Open offline project", tint = EditorPalette.mint)
                     }
+                    IconButton(onClick = onOpenMediaLibrary, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Offline media library", tint = EditorPalette.violet)
+                    }
                     IconButton(onClick = onValidateEcproj, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text)
                     }
@@ -461,6 +520,7 @@ private fun HeaderBar(
                     Text("OFFLINE", modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                         color = EditorPalette.mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
+                IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Offline media library", tint = EditorPalette.violet) }
                 IconButton(onClick = onValidateEcproj) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text) }
                 IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
                     Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
