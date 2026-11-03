@@ -26,23 +26,19 @@ class DeleteDiagTest {
     private fun dump(tag: String): String =
         tag + " removed=" + countText("Layer removed · unsaved") +
             " unsavedChanges=" + countText("Unsaved changes") +
-            " keepOne=" + countText("A composition must keep at least one layer") +
             " props=" + countText("PROPERTIES") +
-            " bg=" + countText("Background") +
-            " title=" + countText("Title / Main") +
-            " accent=" + countText("Accent Shapes") +
             " shape4=" + countText("Shape 4") +
-            " selShape4=" + countDesc("Selected timeline layer: Shape 4") +
-            " selAccent=" + countDesc("Selected timeline layer: Accent Shapes")
+            " selShape4=" + countDesc("Selected timeline layer: Shape 4")
 
     @Test
-    fun deleteDiagBoundsAndSheet() {
+    fun deleteDiagBoundsCompare() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Props").performClick()
+        val moveNode = compose.onNodeWithText("Move ↑", substring = true).fetchSemanticsNode()
         val removeNode = compose.onNodeWithText("Remove layer", substring = true).fetchSemanticsNode()
-        val bounds = removeNode.boundsInWindow
-        val boundsInfo = "BOUNDS left=" + bounds.left + " top=" + bounds.top + " right=" + bounds.right + " bottom=" + bounds.bottom
+        val boundsInfo = "MOVE win=" + moveNode.boundsInWindow + " root=" + moveNode.boundsInRoot +
+            " | REMOVE win=" + removeNode.boundsInWindow + " root=" + removeNode.boundsInRoot
         compose.onNodeWithText("Remove layer", substring = true).performClick()
         compose.waitForIdle()
         fail(boundsInfo + " | " + dump("AFTER_REMOVE"))
