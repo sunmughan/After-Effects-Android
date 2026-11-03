@@ -169,13 +169,11 @@ class CanonicalSelectionEditorTest {
         // A horizontal drag on the preview moves both selected layers right
         // in composition pixels and leaves their heights unchanged.
         compose.onNodeWithContentDescription("Canonical preview gesture area").performTouchInput {
-            swipe(
-                start = Offset(size.width * 0.1f, size.height / 2f),
-                end = Offset(size.width * 0.9f, size.height / 2f),
-                durationMillis = 300
-            )
+            swipe(start = center - Offset(80f, 0f), end = center + Offset(80f, 0f), durationMillis = 300)
         }
-        compose.waitForIdle()
+        // The gesture callback arrives through input dispatch, which an idle
+        // wait does not guarantee; poll for it instead of reading too early.
+        compose.waitUntil(timeoutMillis = 5_000) { gestureEdit != null }
         val edit = gestureEdit ?: error("Preview drag must invoke the gesture edit callback")
         assertEquals(10L, edit.compositionId)
         assertEquals(2, edit.positions.size)
