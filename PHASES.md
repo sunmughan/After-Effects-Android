@@ -487,3 +487,5 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - M6 remains IN PROGRESS: abandoned sequence staging recovery is implemented; durable project autosave/recovery journal, crash simulation, memory/performance/device/API/accessibility gates remain. M5 remains PNG/ZIP only; video/audio absent. M0 license/owner gates remain open; M1 scoped accepted; M2/M3/M4 partial/in progress; M7 not started.
 
 - Test-fixture correction during local validation: the stale-file test initially chose an epoch timestamp earlier than its 24-hour subtraction, which Java rejects as a negative `File.setLastModified`. Changed the fixture clock to 2,000,000,000 ms (commit `cc72496d`); assertions are unchanged. Compiled the cleanup utility with local `kotlinc` and ran a smoke harness: PASS (one stale matching ZIP removed, recent matching ZIP and unrelated ZIP retained). Android JUnit remains pending in CI #404.
+
+- README progress synchronized through `aac7e69a`; current branch head after this tracker entry is recorded by the next progress commit.
