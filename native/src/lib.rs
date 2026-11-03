@@ -246,12 +246,19 @@ fn session_gpu(session: &NativeSession) -> Option<Gpu> {
     }
 }
 
-/// Clear a Lost flag without forcing a shared re-probe, then resolve from
-/// the shared slot. True when the session ends up GPU-backed.
+/// Clear a Lost flag — or a dead Attached handle, which is what a real
+/// mid-session device loss leaves behind — without forcing a shared
+/// re-probe, then resolve from the shared slot. True when the session ends
+/// up GPU-backed. Without the dead-Attached reset, recovery after a real
+/// loss would take two recover calls instead of one.
 fn reattach_session_gpu(session: &NativeSession) -> bool {
     if let Ok(mut state) = session.gpu_state.lock() {
-        if matches!(*state, SessionGpu::Lost(_)) {
-            *state = SessionGpu::Unattached;
+        match &*state {
+            SessionGpu::Lost(_) => *state = SessionGpu::Unattached,
+            SessionGpu::Attached(device) if !device.available() => {
+                *state = SessionGpu::Unattached;
+            }
+            _ => {}
         }
     }
     session_gpu(session).is_some()
