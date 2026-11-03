@@ -124,9 +124,11 @@ class OfflineAssetStore(
     fun delete(sha256: String): Boolean {
         val hash = sha256.decodeHash()
         val properties = readIndex()
-        if (properties.remove(hash) == null) return false
+        val record = properties.getProperty(hash) ?: return false
+        val asset = record.decodeRecord(hash)
+        properties.remove(hash)
         writeIndex(properties)
-        val payload = payloadFile(hash, (properties.getProperty(hash)?.decodeRecord(hash) ?: return true).extension)
+        val payload = payloadFile(hash, asset.extension)
         if (payload.exists() && !payload.delete()) throw IOException("Asset index removed but payload could not be deleted: $hash")
         return true
     }
