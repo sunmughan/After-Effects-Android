@@ -541,7 +541,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 else exportEcprojLauncher.launch("EffectCraft.ecproj")
             },
             onExportEcprojx = {
-                if (importedEcprojx == null) saveMessage = "Import a canonical EffectCraft project first"
+                if (importedEcproj == null) saveMessage = "Import a canonical EffectCraft project first"
                 else exportEcprojxLauncher.launch("EffectCraft.ecprojx")
             },
             isExportingFrame = frameExportInProgress,
