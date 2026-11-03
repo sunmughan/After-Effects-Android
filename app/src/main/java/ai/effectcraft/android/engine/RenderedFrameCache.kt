@@ -43,7 +43,7 @@ internal object RenderedFrameCache {
     internal fun key(projectJson: String, compositionId: Long, frame: Long, maxSide: Int): String {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(projectJson.toByteArray(Charsets.UTF_8))
-            .joinToString("") { byte -> "%02x".format(byte) }
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
         return "$digest:$compositionId:$frame:$maxSide"
     }
 }
