@@ -50,13 +50,22 @@ class EditorSmokeTest {
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 
+        // Saving the same project ID again must update its catalog entry, not
+        // leave an older 4-layer snapshot beside the newer 5-layer revision.
+        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithContentDescription("Save draft").performClick()
+        assertEditorStatus("Saved locally · Untitled Composition")
+
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        assertEquals(2, DraftProjectStore(appContext).listSavedProjects().size)
+
         compose.onNodeWithContentDescription("Open offline project").performClick()
-        compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
+        compose.onNodeWithText("1080×1920 · 30 FPS · 5 layers").performClick()
 
         assertEditorStatus("Opened locally · Untitled Composition")
-        compose.onNodeWithText("Shape 4").assertIsDisplayed()
+        compose.onNodeWithText("Shape 5").assertIsDisplayed()
     }
 
     @Test
