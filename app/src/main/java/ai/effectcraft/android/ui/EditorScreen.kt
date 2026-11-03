@@ -172,6 +172,7 @@ fun EditorScreen(
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
     onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
     onAddCanonicalLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
+    onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit,
     onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -581,6 +582,7 @@ fun EditorScreen(
                     onDeleteLayer = onDeleteCanonicalLayer,
                     onSetLayerOpacity = onSetCanonicalLayerOpacity,
                     onAddLayerOpacityKeyframe = onAddCanonicalLayerOpacityKeyframe,
+                    onAddLayerTransformKeyframe = onAddCanonicalLayerTransformKeyframe,
                     onRemoveLayerOpacityKeyframe = onRemoveCanonicalLayerOpacityKeyframe,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
                     onSetLayerScale = onSetCanonicalLayerScale,
@@ -1014,6 +1016,7 @@ private fun CanonicalProjectEditor(
     onDeleteLayer: (Long, Long) -> Unit,
     onSetLayerOpacity: (Long, Long, Double) -> Unit,
     onAddLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
+    onAddLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit,
     onRemoveLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -1335,6 +1338,24 @@ private fun CanonicalProjectEditor(
                         onClick = { onSetLayerRotation(composition.id, layer.id, rotationDraft.toDouble()) }
                     ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "position", previewFrame, layer.positionX, layer.positionY, 0.0) },
+                        modifier = Modifier.semantics { contentDescription = "Add position keyframe" }
+                    ) { Text("Key Position", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "scale", previewFrame, layer.scaleX, layer.scaleY, 0.0) },
+                        modifier = Modifier.semantics { contentDescription = "Add scale keyframe" }
+                    ) { Text("Key Scale", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "rotation", previewFrame, layer.rotationDegrees, 0.0, 0.0) },
+                        modifier = Modifier.semantics { contentDescription = "Add rotation keyframe" }
+                    ) { Text("Key Rotation", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Text("Transform keyframes are native and evaluated by the composition renderer.", color = EditorPalette.muted, fontSize = 10.sp)
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BasicTextField(
