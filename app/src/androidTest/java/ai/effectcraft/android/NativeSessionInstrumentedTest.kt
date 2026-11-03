@@ -2,6 +2,10 @@ package ai.effectcraft.android
 
 import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.engine.NativeSession
+import ai.effectcraft.android.engine.RenderedFramePng
+import android.graphics.BitmapFactory
+import android.graphics.Color
+import java.io.ByteArrayOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -135,6 +139,41 @@ class NativeSessionInstrumentedTest {
         val height = ((bytes[4].toInt() and 0xff) shl 24) or ((bytes[5].toInt() and 0xff) shl 16) or
             ((bytes[6].toInt() and 0xff) shl 8) or (bytes[7].toInt() and 0xff)
         return width to height
+    }
+
+    @Test
+    fun pngExportPreservesRgbaPixelsAndDimensions() {
+        val frame = byteArrayOf(
+            0, 0, 0, 1, // width
+            0, 0, 0, 1, // height
+            255.toByte(), 0, 0, 255.toByte() // opaque red RGBA
+        )
+        val output = ByteArrayOutputStream()
+        val dimensions = RenderedFramePng.write(frame, output)
+        assertEquals(1, dimensions.width)
+        assertEquals(1, dimensions.height)
+        val png = output.toByteArray()
+        assertTrue(png.size > 8)
+        assertEquals(0x89, png[0].toInt() and 0xff)
+        val bitmap = BitmapFactory.decodeByteArray(png, 0, png.size)
+        assertNotNull(bitmap)
+        bitmap!!
+        try {
+            assertEquals(1, bitmap.width)
+            assertEquals(1, bitmap.height)
+            assertEquals(Color.RED, bitmap.getPixel(0, 0))
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test
+    fun pngExportRejectsMalformedAndOversizedFramesBeforeBitmapAllocation() {
+        assertTrue(runCatching { RenderedFramePng.write(byteArrayOf(0, 0), ByteArrayOutputStream()) }.isFailure)
+        val zeroWidth = byteArrayOf(0, 0, 0, 0, 0, 0, 0, 1)
+        assertTrue(runCatching { RenderedFramePng.write(zeroWidth, ByteArrayOutputStream()) }.isFailure)
+        val oversized = byteArrayOf(0, 0, 0x20, 0, 0, 0x20, 0, 0)
+        assertTrue(runCatching { RenderedFramePng.write(oversized, ByteArrayOutputStream()) }.isFailure)
     }
 
     @Test

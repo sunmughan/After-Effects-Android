@@ -120,6 +120,9 @@ fun EditorScreen(
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
     onExportEcprojx: () -> Unit,
+    isExportingFrame: Boolean,
+    onExportRenderedFrame: () -> Unit,
+    onCancelFrameExport: () -> Unit,
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
@@ -198,6 +201,9 @@ fun EditorScreen(
                 onValidateEcproj = onValidateEcproj,
                 onExportEcproj = onExportEcproj,
                 onExportEcprojx = onExportEcprojx,
+                isExportingFrame = isExportingFrame,
+                onExportRenderedFrame = onExportRenderedFrame,
+                onCancelFrameExport = onCancelFrameExport,
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
                 onOpenCanonicalEditor = { showCanonicalEditor = true }
@@ -471,6 +477,9 @@ private fun HeaderBar(
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
     onExportEcprojx: () -> Unit,
+    isExportingFrame: Boolean,
+    onExportRenderedFrame: () -> Unit,
+    onCancelFrameExport: () -> Unit,
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit
@@ -542,6 +551,17 @@ private fun HeaderBar(
                     IconButton(onClick = onExportEcprojx, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint)
                     }
+                    IconButton(
+                        onClick = if (isExportingFrame) onCancelFrameExport else onExportRenderedFrame,
+                        enabled = isExportingFrame || hasCanonicalProject,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
+                            contentDescription = if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG",
+                            tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
+                        )
+                    }
                 }
             }
         } else {
@@ -582,6 +602,16 @@ private fun HeaderBar(
                 }
                 IconButton(onClick = onExportEcproj) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text) }
                 IconButton(onClick = onExportEcprojx) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint) }
+                IconButton(
+                    onClick = if (isExportingFrame) onCancelFrameExport else onExportRenderedFrame,
+                    enabled = isExportingFrame || hasCanonicalProject
+                ) {
+                    Icon(
+                        if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
+                        contentDescription = if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG",
+                        tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
+                    )
+                }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
                 TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }

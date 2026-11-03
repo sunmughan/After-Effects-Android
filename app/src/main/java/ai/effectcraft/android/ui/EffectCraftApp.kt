@@ -30,12 +30,21 @@ import ai.effectcraft.android.data.ProjectAssetManifestStore
 import ai.effectcraft.android.data.SafPermissionRegistry
 import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.engine.NativeSession
+import ai.effectcraft.android.engine.RenderedFramePng
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.data.ProjectFileFormats
 import ai.effectcraft.android.data.ProjectKeyframeStore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import androidx.compose.runtime.rememberCoroutineScope
 
 private data class EditorHistorySnapshot(
     val project: ProjectDocument,
@@ -46,6 +55,10 @@ private data class EditorHistorySnapshot(
 @Composable
 fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
+    val exportScope = rememberCoroutineScope()
+    var frameExportJob by remember { mutableStateOf<Job?>(null) }
+    var frameExportInProgress by remember { mutableStateOf(false) }
+    var pendingFrameExport by remember { mutableIntStateOf(0) }
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
@@ -175,6 +188,52 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }
                 saveMessage = "Exported canonical .ecproj"
             }.onFailure { error -> saveMessage = "Export failed · ${error.message ?: "storage error"}" }
+        }
+    }
+
+    val exportRenderedFrameLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri: Uri? ->
+        if (uri == null) {
+            saveMessage = "Frame export cancelled"
+        } else {
+            val source = importedEcproj
+            val composition = canonicalProjectInfo?.compositions?.firstOrNull()
+            val frame = pendingFrameExport
+            if (source == null || composition == null) {
+                saveMessage = "Import a canonical project before rendering a frame"
+            } else {
+                frameExportInProgress = true
+                frameExportJob = exportScope.launch {
+                    try {
+                        saveMessage = "Rendering frame $frame at full resolution…"
+                        val rendered = withContext(Dispatchers.IO) {
+                            val session = NativeSession.open(source, 0)
+                                ?: error("Native renderer unavailable for this project")
+                            try {
+                                session.render(composition.id, frame.toLong())
+                                    ?: error("Native renderer did not return a frame")
+                            } finally {
+                                session.close()
+                            }
+                        }
+                        currentCoroutineContext().ensureActive()
+                        saveMessage = "Writing PNG…"
+                        val dimensions = withContext(Dispatchers.IO) {
+                            context.contentResolver.openOutputStream(uri)?.use { output ->
+                                RenderedFramePng.write(rendered, output)
+                            } ?: error("Unable to open selected output document")
+                        }
+                        saveMessage = "Exported frame $frame · ${dimensions.width}×${dimensions.height} PNG"
+                    } catch (cancelled: CancellationException) {
+                        saveMessage = "Frame export cancelled"
+                        throw cancelled
+                    } catch (failure: Throwable) {
+                        saveMessage = "Frame export failed · ${failure.message ?: "render or write error"}"
+                    } finally {
+                        frameExportInProgress = false
+                        frameExportJob = null
+                    }
+                }
+            }
         }
     }
 
@@ -482,9 +541,21 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 else exportEcprojLauncher.launch("EffectCraft.ecproj")
             },
             onExportEcprojx = {
-                if (importedEcproj == null) saveMessage = "Import a canonical EffectCraft project first"
+                if (importedEcprojx == null) saveMessage = "Import a canonical EffectCraft project first"
                 else exportEcprojxLauncher.launch("EffectCraft.ecprojx")
             },
+            isExportingFrame = frameExportInProgress,
+            onExportRenderedFrame = {
+                if (importedEcproj == null || canonicalProjectInfo?.compositions.isNullOrEmpty()) {
+                    saveMessage = "Import a canonical composition before rendering a frame"
+                } else if (frameExportInProgress) {
+                    saveMessage = "A frame export is already running"
+                } else {
+                    pendingFrameExport = playheadFrame
+                    exportRenderedFrameLauncher.launch("EffectCraft-frame-${playheadFrame.toString().padStart(6, '0')}.png")
+                }
+            },
+            onCancelFrameExport = { frameExportJob?.cancel() },
             onSave = {
                 runCatching { projectStore.save(project) }
                     .onSuccess {
