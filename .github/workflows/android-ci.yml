@@ -171,3 +171,22 @@ jobs:
             build/audit/
           if-no-files-found: error
           retention-days: 30
+
+      # Per-test evidence: prior runs proved only aggregate counts (19/19)
+      # because the log carries no test names and the build artifact carries
+      # no test XMLs. This step uploads the actual JUnit XMLs the runners
+      # produce, so each named test can be proven individually. It runs
+      # even when tests fail (if: always) so a failing run still publishes
+      # its partial results; it changes no test, threshold, or other step.
+      - name: Upload test result reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: effectcraft-android-test-results
+          path: |
+            app/build/test-results/testDebugUnitTest/
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: error
+          retention-days: 30
