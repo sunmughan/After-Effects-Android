@@ -345,4 +345,28 @@ class EditorSmokeTest {
         assertEquals(false, restored?.layers?.first()?.visible)
         assertEquals(source.layers.size, restored?.layers?.size)
     }
+    @Test
+    fun draftStoreRecoversNewerCompleteAtomicTempAfterProcessDeath() {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = appContext.filesDir.resolve("projects")
+        directory.mkdirs()
+        directory.listFiles()?.filter { it.name.endsWith(".efx-draft") || it.name.endsWith(".efx-draft.tmp") }
+            ?.forEach { it.delete() }
+
+        val store = DraftProjectStore(appContext)
+        val project = ProjectDocument.starter().copy(name = "Committed baseline")
+        val target = store.save(project)
+        val interrupted = target.resolveSibling(target.name + ".tmp")
+        val pending = JSONObject(target.readText(Charsets.UTF_8))
+            .put("name", "Recovered revision")
+            .put("updatedAtEpochMillis", project.updatedAtEpochMillis + 60_000L)
+        interrupted.writeText(pending.toString(2), Charsets.UTF_8)
+
+        val recovered = store.load(project.id)
+        assertNotNull(recovered)
+        assertEquals("Recovered revision", recovered?.name)
+        assertTrue("A promoted atomic temp must no longer exist", !interrupted.exists())
+        assertEquals("Recovered revision", JSONObject(target.readText(Charsets.UTF_8)).getString("name"))
+    }
+
 }
