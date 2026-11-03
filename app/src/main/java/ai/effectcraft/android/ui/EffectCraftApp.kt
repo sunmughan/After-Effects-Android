@@ -29,6 +29,7 @@ import ai.effectcraft.android.data.OfflineAssetReferences
 import ai.effectcraft.android.data.ProjectAssetManifestStore
 import ai.effectcraft.android.data.SafPermissionRegistry
 import ai.effectcraft.android.engine.NativeProjectBridge
+import ai.effectcraft.android.engine.NativeSession
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
 import ai.effectcraft.android.data.ProjectDocument
@@ -59,6 +60,34 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var pendingRelinkItemId by remember { mutableStateOf<Long?>(null) }
     var pendingReplaceAssetHash by remember { mutableStateOf<String?>(null) }
     var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null) }
+    // The main workspace viewer renders through one shared native session
+    // for the current canonical project — not a per-frame re-parse, and not
+    // the draft placeholder. The holder (not the session itself) is what
+    // composition remembers, so dispose always closes the latest session.
+    val renderSessionHolder = remember { object { var session: NativeSession? = null } }
+
+    /**
+     * Moves the render session to [source]: opens it, swaps its project, or
+     * closes it when there is no canonical project. A session that rejects
+     * the update is closed and reopened so a failed edit never leaves the
+     * viewer pinned to a half-updated native state.
+     */
+    fun syncRenderSession(source: String?) {
+        val current = renderSessionHolder.session
+        if (source == null) {
+            current?.close()
+            renderSessionHolder.session = null
+            return
+        }
+        if (current == null) {
+            renderSessionHolder.session = NativeSession.open(source)
+            return
+        }
+        if (!current.updateProject(source)) {
+            current.close()
+            renderSessionHolder.session = NativeSession.open(source)
+        }
+    }
     var project by remember {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
     }
@@ -271,7 +300,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             .getOrElse { failure -> saveMessage = "Keyframe load failed · ${failure.message ?: "storage error"}"; emptyList() }
     }
 
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            renderSessionHolder.session?.close()
+            renderSessionHolder.session = null
+        }
+    }
+
     LaunchedEffect(importedEcproj) {
+        // Session first: the workspace viewer below must never render a
+        // frame from the previous project after this source changed.
+        syncRenderSession(importedEcproj)
         canonicalProjectInfo = importedEcproj?.let { source ->
             NativeProjectBridge.inspectEcproj(source)?.let { runCatching { CanonicalProjectInfo.parse(it) }.getOrNull() }
         }
@@ -356,6 +395,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 if (previousSource != null) runCatching { ecprojStore.save(previousSource) }
                 throw failure
             }
+            // Synchronous, before either state write: the workspace viewer's
+            // effect keys on canonicalProjectInfo, so it may render before a
+            // LaunchedEffect(importedEcproj) sync runs. The edit itself is
+            // already saved; a session failure only blanks the viewer.
+            syncRenderSession(updated)
             importedEcproj = updated
             canonicalProjectInfo = parsed
             saveMessage = successMessage
@@ -594,7 +638,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 relinkAssetLauncher.launch(arrayOf("*/*"))
             },
             onRenderCanonicalFrame = { compositionId, frame ->
-                importedEcproj?.let { NativeProjectBridge.renderEcprojFrame(it, compositionId, frame, 512) }
+                // Session-backed: the parsed project, MediaPool and preview
+                // size live natively for the whole workspace lifetime. When
+                // no session is open (no canonical project, or native
+                // unavailable) this returns null and the viewer keeps its
+                // honest "not rendered / unavailable" label.
+                renderSessionHolder.session?.render(compositionId, frame)
             },
             safGrants = safGrants,
             missingManifestEntries = manifestMissingCount,

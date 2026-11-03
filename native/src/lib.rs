@@ -1,27 +1,182 @@
 use effectcraft_project::Project;
 use jni::objects::{JClass, JString};
-use jni::sys::{jlong, jstring};
+use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
 use effectcraft_media::MediaPool;
 use effectcraft_render::{RenderOpts, Renderer};
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use effectcraft_time::Tick;
 
 static MEDIA_POOL: OnceLock<MediaPool> = OnceLock::new();
 
-fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u32) -> Result<Vec<u8>, String> {
-    if frame < 0 { return Err("Frame must be non-negative".into()); }
+/// One native render session: the parsed project, its own MediaPool, the
+/// preview size, and a cancellation flag, owned by the registry below.
+///
+/// Ownership/threading contract:
+/// - A session is created once and referenced by a nonzero handle; the
+///   registry owns one `Arc`, and each in-flight render holds another, so
+///   closing a session never frees memory under a running render.
+/// - Renders serialize on the per-session `render_lock`. Project replacement
+///   (update) and resize take the same lock first, so no render ever reads a
+///   half-swapped project or a half-applied preview size.
+/// - Cancellation is cooperative: the flag is checked before a render starts,
+///   after it acquires the render lock, and after the CPU frame finishes. It
+///   cannot interrupt a `comp_frame` already executing, and it is sticky: a
+///   cancelled session renders nothing again until it is closed. Closing a
+///   session also marks it cancelled, so a render that grabbed its `Arc`
+///   before close discards its result instead of delivering a stale frame.
+struct NativeSession {
+    project: RwLock<Project>,
+    footage: MediaPool,
+    render_lock: Mutex<()>,
+    cancelled: AtomicBool,
+    max_side: RwLock<u32>,
+}
+
+struct SessionRegistry {
+    sessions: Mutex<HashMap<u64, Arc<NativeSession>>>,
+    next_id: AtomicU64,
+}
+
+static SESSIONS: std::sync::LazyLock<SessionRegistry> = std::sync::LazyLock::new(|| SessionRegistry {
+    sessions: Mutex::new(HashMap::new()),
+    next_id: AtomicU64::new(1),
+});
+
+fn create_session(source: &str, max_side: u32) -> Result<u64, String> {
+    if max_side > 4096 {
+        return Err("Preview size must be between 0 and 4096".into());
+    }
     let project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let session = Arc::new(NativeSession {
+        project: RwLock::new(project),
+        footage: MediaPool::new(),
+        render_lock: Mutex::new(()),
+        cancelled: AtomicBool::new(false),
+        max_side: RwLock::new(max_side),
+    });
+    let id = SESSIONS.next_id.fetch_add(1, Ordering::SeqCst);
+    SESSIONS
+        .sessions
+        .lock()
+        .map_err(|_| "Session registry lock poisoned".to_string())?
+        .insert(id, session);
+    Ok(id)
+}
+
+fn lookup_session(id: u64) -> Result<Arc<NativeSession>, String> {
+    SESSIONS
+        .sessions
+        .lock()
+        .map_err(|_| "Session registry lock poisoned".to_string())?
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| format!("Unknown native session {id}"))
+}
+
+fn close_session(id: u64) -> bool {
+    // Cancelling here (not only in the JNI wrapper) is what makes the
+    // ownership contract hold for every caller: a render holding an Arc
+    // past close discards its result instead of delivering a stale frame.
+    match SESSIONS.sessions.lock() {
+        Ok(mut sessions) => match sessions.remove(&id) {
+            Some(session) => {
+                cancel_session(&session);
+                true
+            }
+            None => false,
+        },
+        Err(_) => false,
+    }
+}
+
+fn cancel_session(session: &NativeSession) {
+    session.cancelled.store(true, Ordering::SeqCst);
+}
+
+fn resize_session(session: &NativeSession, max_side: u32) -> Result<(), String> {
+    if max_side > 4096 {
+        return Err("Preview size must be between 0 and 4096".into());
+    }
+    if session.cancelled.load(Ordering::SeqCst) {
+        return Err("Session is cancelled".into());
+    }
+    let _render_guard = session
+        .render_lock
+        .lock()
+        .map_err(|_| "Session render lock poisoned".to_string())?;
+    if session.cancelled.load(Ordering::SeqCst) {
+        return Err("Session is cancelled".into());
+    }
+    let mut size = session
+        .max_side
+        .write()
+        .map_err(|_| "Session preview-size lock poisoned".to_string())?;
+    *size = max_side;
+    Ok(())
+}
+
+fn update_session_project(session: &NativeSession, source: &str) -> Result<(), String> {
+    let next: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let _render_guard = session
+        .render_lock
+        .lock()
+        .map_err(|_| "Session render lock poisoned".to_string())?;
+    if session.cancelled.load(Ordering::SeqCst) {
+        return Err("Session is cancelled".into());
+    }
+    let mut project = session
+        .project
+        .write()
+        .map_err(|_| "Session project lock poisoned".to_string())?;
+    *project = next;
+    Ok(())
+}
+
+fn render_session_frame(
+    session: &NativeSession,
+    composition_id: u64,
+    frame: i64,
+) -> Result<Vec<u8>, String> {
+    if session.cancelled.load(Ordering::SeqCst) {
+        return Err("Session is cancelled".into());
+    }
+    let _render_guard = session
+        .render_lock
+        .lock()
+        .map_err(|_| "Session render lock poisoned".to_string())?;
+    if session.cancelled.load(Ordering::SeqCst) {
+        return Err("Session is cancelled".into());
+    }
+    let max_side = *session
+        .max_side
+        .read()
+        .map_err(|_| "Session preview-size lock poisoned".to_string())?;
+    let project = session
+        .project
+        .read()
+        .map_err(|_| "Session project lock poisoned".to_string())?;
+    let bytes = render_parsed_frame(&project, &session.footage, composition_id, frame, max_side)?;
+    if session.cancelled.load(Ordering::SeqCst) {
+        return Err("Session render discarded after cancellation".into());
+    }
+    Ok(bytes)
+}
+
+fn render_parsed_frame(project: &Project, footage: &MediaPool, composition_id: u64, frame: i64, max_side: u32) -> Result<Vec<u8>, String> {
+    if frame < 0 { return Err("Frame must be non-negative".into()); }
     let comp = project.comp(ItemId(composition_id))
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let long = comp.width.max(comp.height).max(1) as f64;
     let scale = if max_side == 0 { 1.0 } else { (max_side as f64 / long).min(1.0) };
     let time = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
-    let footage = MEDIA_POOL.get_or_init(MediaPool::new);
-    let renderer = Renderer::new(&project, footage, RenderOpts { scale, ..Default::default() });
+    let renderer = Renderer::new(project, footage, RenderOpts { scale, ..Default::default() });
     let image = renderer.comp_frame(ItemId(composition_id), time);
     let rgba = image.to_rgba8_over(comp.background);
     let mut output = Vec::with_capacity(8 + rgba.len());
@@ -29,6 +184,13 @@ fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u3
     output.extend_from_slice(&image.height.to_be_bytes());
     output.extend_from_slice(&rgba);
     Ok(output)
+}
+
+fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u32) -> Result<Vec<u8>, String> {
+    let project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let footage = MEDIA_POOL.get_or_init(MediaPool::new);
+    render_parsed_frame(&project, footage, composition_id, frame, max_side)
 }
 
 #[no_mangle]
@@ -47,6 +209,100 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_re
     match result {
         Ok(bytes) => env.byte_array_from_slice(&bytes).map_or(std::ptr::null_mut(), |v| v.into_raw()),
         Err(_) => env.byte_array_from_slice(&[]).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    }
+}
+
+fn session_handle(id: jlong) -> Result<u64, String> {
+    if id <= 0 {
+        Err("Native session handle must be positive".into())
+    } else {
+        Ok(id as u64)
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_createSessionNative(
+    mut env: JNIEnv, _class: JClass, source: JString, max_side: jlong,
+) -> jlong {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(_) => return 0,
+    };
+    if max_side < 0 || max_side > 4096 {
+        return 0;
+    }
+    create_session(&source, max_side as u32).map_or(0, |id| id as jlong)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_renderSessionFrameNative(
+    env: JNIEnv, _class: JClass, handle: jlong, composition_id: jlong, frame: jlong,
+) -> jni::sys::jbyteArray {
+    let result = session_handle(handle)
+        .and_then(lookup_session)
+        .and_then(|session| {
+            if composition_id < 0 {
+                Err("Composition ID must be non-negative".to_owned())
+            } else {
+                render_session_frame(&session, composition_id as u64, frame as i64)
+            }
+        });
+    match result {
+        Ok(bytes) => env.byte_array_from_slice(&bytes).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+        Err(_) => env.byte_array_from_slice(&[]).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_updateSessionProjectNative(
+    mut env: JNIEnv, _class: JClass, handle: jlong, source: JString,
+) -> jboolean {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(_) => return 0,
+    };
+    let ok = session_handle(handle)
+        .and_then(lookup_session)
+        .and_then(|session| update_session_project(&session, &source))
+        .is_ok();
+    ok as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_resizeSessionNative(
+    _env: JNIEnv, _class: JClass, handle: jlong, max_side: jlong,
+) -> jboolean {
+    let ok = session_handle(handle)
+        .and_then(lookup_session)
+        .and_then(|session| {
+            if max_side < 0 || max_side > 4096 {
+                Err("Preview size must be between 0 and 4096".to_owned())
+            } else {
+                resize_session(&session, max_side as u32)
+            }
+        })
+        .is_ok();
+    ok as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_cancelSessionNative(
+    _env: JNIEnv, _class: JClass, handle: jlong,
+) {
+    if let Ok(session) = session_handle(handle).and_then(lookup_session) {
+        cancel_session(&session);
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_closeSessionNative(
+    _env: JNIEnv, _class: JClass, handle: jlong,
+) -> jboolean {
+    // close_session itself cancels, so a render holding the Arc past close
+    // discards its result instead of delivering a stale frame.
+    match session_handle(handle) {
+        Ok(id) => close_session(id) as jboolean,
+        Err(_) => 0,
     }
 }
 
@@ -816,5 +1072,183 @@ mod tests {
     fn rejects_non_project_json() {
         let result = inspect_project("{}");
         assert!(result.is_err());
+    }
+
+    fn text_comp_project(width: u32, height: u32) -> (String, u64) {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(width, height, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Preview", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let layer = build::layer(&mut project, &comp, "Text", LayerSource::Text, (width, height), None);
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        (project.to_file_json().unwrap(), comp_id.0)
+    }
+
+    fn frame_dimensions(bytes: &[u8]) -> (u32, u32) {
+        assert!(bytes.len() >= 8, "frame envelope must carry a dimension header");
+        (
+            u32::from_be_bytes(bytes[0..4].try_into().unwrap()),
+            u32::from_be_bytes(bytes[4..8].try_into().unwrap()),
+        )
+    }
+
+    #[test]
+    fn session_renders_without_reparsing_and_rejects_bad_handles() {
+        let (source, comp_id) = text_comp_project(320, 180);
+        let handle = create_session(&source, 160).unwrap();
+        let session = lookup_session(handle).unwrap();
+        let bytes = render_session_frame(&session, comp_id, 0).unwrap();
+        assert_eq!(frame_dimensions(&bytes), (160, 90));
+        assert_eq!(bytes.len(), 8 + 160 * 90 * 4);
+        // A second render through the same session is stable and independent.
+        let again = render_session_frame(&session, comp_id, 0).unwrap();
+        assert_eq!(again, bytes);
+        assert!(render_session_frame(&session, 999, 0).is_err());
+        assert!(render_session_frame(&session, comp_id, -1).is_err());
+        assert!(lookup_session(handle + 1_000_000).is_err());
+        assert!(close_session(handle));
+    }
+
+    #[test]
+    fn session_create_rejects_bad_json_and_oversized_preview() {
+        assert!(create_session("{}", 160).is_err());
+        assert!(create_session("not json", 160).is_err());
+        let (source, _) = text_comp_project(320, 180);
+        assert!(create_session(&source, 4097).is_err());
+    }
+
+    #[test]
+    fn session_resize_changes_output_dimensions() {
+        let (source, comp_id) = text_comp_project(320, 180);
+        let handle = create_session(&source, 160).unwrap();
+        let session = lookup_session(handle).unwrap();
+        assert_eq!(frame_dimensions(&render_session_frame(&session, comp_id, 0).unwrap()), (160, 90));
+        assert!(resize_session(&session, 80).is_ok());
+        assert_eq!(frame_dimensions(&render_session_frame(&session, comp_id, 0).unwrap()), (80, 45));
+        assert!(resize_session(&session, 4097).is_err());
+        assert!(resize_session(&session, 0).is_ok());
+        assert_eq!(frame_dimensions(&render_session_frame(&session, comp_id, 0).unwrap()), (320, 180));
+        assert!(close_session(handle));
+    }
+
+    #[test]
+    fn session_update_swaps_project_and_rejects_bad_replacement() {
+        let (first, first_comp) = text_comp_project(320, 180);
+        let (second, second_comp) = text_comp_project(200, 100);
+        let handle = create_session(&first, 160).unwrap();
+        let session = lookup_session(handle).unwrap();
+        assert_eq!(frame_dimensions(&render_session_frame(&session, first_comp, 0).unwrap()), (160, 90));
+        assert!(update_session_project(&session, &second).is_ok());
+        assert_eq!(frame_dimensions(&render_session_frame(&session, second_comp, 0).unwrap()), (160, 80));
+        // The old project's frame must be gone: the old ID now renders the
+        // new project's composition (IDs restart per project) or errors if
+        // the ID schemes differ — but never the old 160x90 frame.
+        match render_session_frame(&session, first_comp, 0) {
+            Ok(bytes) => assert_ne!(frame_dimensions(&bytes), (160, 90)),
+            Err(_) => {}
+        }
+        assert!(update_session_project(&session, "not json").is_err());
+        // A failed replacement leaves the current project rendering.
+        assert_eq!(frame_dimensions(&render_session_frame(&session, second_comp, 0).unwrap()), (160, 80));
+        assert!(close_session(handle));
+    }
+
+    #[test]
+    fn session_cancel_is_sticky_and_close_is_idempotent() {
+        let (source, comp_id) = text_comp_project(320, 180);
+        let handle = create_session(&source, 160).unwrap();
+        let session = lookup_session(handle).unwrap();
+        assert!(render_session_frame(&session, comp_id, 0).is_ok());
+        cancel_session(&session);
+        assert!(render_session_frame(&session, comp_id, 0).is_err());
+        assert!(update_session_project(&session, &source).is_err());
+        assert!(resize_session(&session, 80).is_err());
+        cancel_session(&session);
+        assert!(close_session(handle));
+        assert!(!close_session(handle));
+        assert!(lookup_session(handle).is_err());
+        assert!(render_session_frame(&session, comp_id, 0).is_err());
+    }
+
+    #[test]
+    fn session_close_cancels_in_flight_holders_and_isolates_sessions() {
+        let (first, first_comp) = text_comp_project(320, 180);
+        let (second, second_comp) = text_comp_project(200, 100);
+        let first_handle = create_session(&first, 160).unwrap();
+        let second_handle = create_session(&second, 160).unwrap();
+        assert_ne!(first_handle, second_handle);
+        let first_session = lookup_session(first_handle).unwrap();
+        let second_session = lookup_session(second_handle).unwrap();
+        assert!(close_session(first_handle));
+        // The held Arc still exists, but close cancelled it: no stale frame.
+        assert!(render_session_frame(&first_session, first_comp, 0).is_err());
+        assert_eq!(
+            frame_dimensions(&render_session_frame(&second_session, second_comp, 0).unwrap()),
+            (160, 80)
+        );
+        assert!(close_session(second_handle));
+    }
+
+    #[test]
+    fn session_renders_concurrently_from_many_threads() {
+        let (source, comp_id) = text_comp_project(320, 180);
+        let handle = create_session(&source, 160).unwrap();
+        let session = lookup_session(handle).unwrap();
+        let results: Vec<_> = std::thread::scope(|scope| {
+            let mut workers = Vec::new();
+            for _ in 0..8 {
+                let session = Arc::clone(&session);
+                workers.push(scope.spawn(move || render_session_frame(&session, comp_id, 0)));
+            }
+            workers.into_iter().map(|worker| worker.join().unwrap()).collect()
+        });
+        assert_eq!(results.len(), 8);
+        for result in &results {
+            let bytes = result.as_ref().unwrap();
+            assert_eq!(frame_dimensions(bytes), (160, 90));
+        }
+        assert!(results.windows(2).all(|pair| pair[0].as_ref().unwrap() == pair[1].as_ref().unwrap()));
+        assert!(close_session(handle));
+    }
+
+    #[test]
+    fn session_decodes_offline_png_footage_through_own_media_pool() {
+        use effectcraft_project::{build, Comp, Footage, FootageKind, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        use image::ImageEncoder;
+
+        let path = std::env::temp_dir().join(format!("effectcraft-session-{}.png", std::process::id()));
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(&[255, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
+            .unwrap();
+        std::fs::write(&path, png).unwrap();
+
+        let mut project = Project::default();
+        let comp = Comp::new(32, 32, FrameRate::FPS_30, Tick::from_seconds_f64(1.0));
+        let comp_id = project.add_item("Media preview", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let footage = Footage {
+            path: path.to_string_lossy().into_owned(),
+            kind: FootageKind::Still,
+            width: 1,
+            height: 1,
+            has_video: true,
+            missing: false,
+            ..Footage::default()
+        };
+        let item_id = project.add_item("Red pixel", Label::Sandstone, None, ItemKind::Footage(footage));
+        let layer = build::layer(&mut project, &comp, "Red pixel", LayerSource::Footage { item: item_id }, (32, 32), None);
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+
+        let handle = create_session(&project.to_file_json().unwrap(), 32).unwrap();
+        let session = lookup_session(handle).unwrap();
+        let bytes = render_session_frame(&session, comp_id.0, 0).unwrap();
+        assert!(bytes[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] < 20 && pixel[2] < 20 && pixel[3] > 200));
+        assert!(close_session(handle));
+        std::fs::remove_file(path).unwrap();
     }
 }

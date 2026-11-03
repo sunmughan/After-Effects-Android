@@ -167,9 +167,10 @@ fun EditorScreen(
     var showCompositionSettings by remember { mutableStateOf(false) }
     var showCanonicalEditor by remember { mutableStateOf(false) }
 
-    // The workspace viewer displays real upstream CPU-rendered frames for an
-    // imported canonical project. The bootstrap .efx-draft canvas is explicitly
-    // labelled as unrendered rather than showing a decorative fake composition.
+    // The workspace viewer renders through the shared native session for the
+    // imported canonical project (onRenderCanonicalFrame is session-backed).
+    // The bootstrap .efx-draft has no session and is explicitly labelled as
+    // unrendered rather than showing a decorative fake composition.
     val previewComposition = canonicalProject?.compositions?.firstOrNull()
     var workspaceFrame by remember(previewComposition?.id) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(canonicalProject, previewComposition?.id, playheadFrame, canEditCanonicalProject) {
