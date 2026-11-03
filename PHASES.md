@@ -122,7 +122,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Exit gate: SATISFIED for M1 foundation.** M2 onward continues independently.
 
 ## M2 — Project formats, import/save and media
-**Status: PARTIAL / M1 CI acceptance pending — EffectCraft `.ecproj` JSON and `.ecprojx` XML interchange now implemented; Effekseer `.efkproj` remains unsupported**
+**Status: IN PROGRESS — canonical import/edit and offline asset relinking implemented; exact latest-head CI pending**
 - [x] JNI validates canonical upstream `.ecproj` JSON through pinned `effectcraft-project` model and returns composition metadata.
 - [x] Added `docs/NATIVE_ENGINE_INTEGRATION.md` documenting actual JNI scope, platform ABI caveats, and render/project integration gates.
 - [x] Rust host test round-trips canonical `Project::default().to_file_json()` and checks metadata inspection (empty project only).
@@ -134,6 +134,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Lossless EffectCraft `.ecprojx` XML import normalization and export serializer; native `.ecproj` validation remains the gate before caching (Run 16; current-head instrumentation pending).
 - [x] Native metadata lists composition and layer IDs/names/source/visibility; Android canonical-project sheet selects composition/layer and renames via Rust project model, reserializes and atomically caches the edited `.ecproj` (ARM64 runtime only; CI x86_64 bridge cannot execute JNI).
 - [x] Instrumentation test verifies the canonical document cache preserves source bytes.
+- [x] `OfflineAssetStore` streams media with a 512 MiB cap, SHA-256 content-addressed immutable payloads, dedupe, atomic Properties index, validated IDs and list/get/open/delete (`020413c8`, `cd9a69f0`).
+- [x] SAF footage relinking imports through the offline store and passes the hash-addressed payload path to native model relink; filename extension is retained for decoder dispatch and deletion uses retained index metadata (`7157542e`, `3382df93`, `2a4008d1`).
+- [x] Four JVM asset-store tests cover import/read/metadata, dedupe, size-limit cleanup, malformed ID and deletion (`4fa95780`, `86fe9dd6`, `0df38e01`); exact-head CI pending.
+- [ ] Asset library browse/replace/remove UX, project-to-asset manifest/garbage collection, missing-media recovery and SAF permission lifecycle acceptance.
 - [x] Wire native canonical rename operation into imported-project editor UI and update imported document cache after edits.
 - [x] Canonical imported-project editor now exposes real upstream-model visibility, reorder and delete actions; JNI envelopes are revalidated, re-inspected, and atomically cached after each mutation (`8d32c9a`, `e168c6d`, `77ef2c9`).
 - [x] Rust tests exercise canonical layer stack order, visibility switch and deletion with ID-preserving serialization round-trip (`8fdf841`, assertion cleanup `ffab2a0`).
@@ -153,7 +157,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Format boundary:** bootstrap `.efx-draft` is private Android JSON, not `.ecproj`. EffectCraft `.ecproj` JSON + `.ecprojx` XML are supported interchange formats. Effekseer `.efkproj` is not implemented. Adobe `.aep` is proprietary; native import is not promised without a legally available compatible parser/conversion route.
 
 ## M3 — Actual preview/render engine
-**Status: PARTIAL — M1 acceptance pending; scalar interpolation/edit primitives added but not integrated**
+**Status: PARTIAL — M0/M1 accepted; real upstream CPU composition rendering through JNI is active for canonical projects; shared session/GPU/device gates remain**
 - [x] Pin upstream `effectcraft-render` at the same immutable revision; native `render_frame_rgba` parses canonical `.ecproj`, renders through the real CPU `Renderer`/persistent `MediaPool`, and emits bounded RGBA with dimensions. Rust test asserts a 320×180 composition produces a real 160×90 frame payload and rejects bad IDs/negative frames (`b75fe05`, `4f0aa79`).
 - [x] JNI frame request/output bridge and Kotlin wrapper (`4f0aa79`, `5fa1cf2`).
 - [x] Imported canonical editor now renders frames off the UI thread, displays returned pixels as an image, and scrubs frame index (`05e2c4a`, `4c86391`). This is actual upstream CPU compositing—not the decorative draft viewer.
@@ -167,11 +171,12 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Verify ARM64 native frame on physical phone/tablet; record device, ABI, SHA and pixel evidence.
 
 ## M4 — Editing/effects/timeline parity
-**Status: PAUSED BY OWNER UNTIL M1 COMPLETE (existing work preserved; no further scope now)**
+**Status: IN PROGRESS — canonical transform/property editing is implemented; scalar keyframe primitives exist but are not yet persisted or wired to timeline/native evaluation**
 - [x] Canonical Transform/Opacity is now a real upstream `Property` mutation (0–100, key-aware at frame zero), exposed by JNI, reflected in metadata and edited with a commit-on-release slider; each change reserializes the `.ecproj` and refreshes CPU preview (`9a0af7d`, `340e601`, `7997036`, `1166a2c`, `71509df`). Rust tests cover property mutation/range/ID; Kotlin parser test covers opacity metadata (`e049130`). CI/device validation pending.
 - [x] Canonical Transform/Position X/Y edits preserve Z and key-aware set at frame zero; native model test verifies exact vector and rejects non-finite coordinates/unknown IDs (`b2422dc`); JNI/Kotlin bridge and inspector numeric controls Apply into project cache (`a8a94c2`, `764c311`, `21f4a80`). Parser tests cover X/Y metadata (`0a96985`). CI/device validation pending.
 - [x] Canonical Transform Scale X/Y and Z Rotation editing: Rust mutations preserve Scale Z and set key-aware frame-zero values, bounded finite input validation, JNI/Kotlin APIs, metadata parsing, inspector Apply controls and CPU preview refresh; Rust round-trip/error tests and Kotlin metadata test added (`6b1b45f`). Current-head CI validation pending.
 - [ ] Anchor/3D rotation editing and text/shape/effect parameter UI; canonical layer lock and selection parity.
+- [x] Pure Kotlin scalar `PropertyTrackEditor` supports sorted key upsert/removal, finite-value validation and linear interpolation/endpoint hold (implementation `547db7ca`, tests `f4a7f9dc`); not yet connected to canonical persistence, native evaluation or timeline UI.
 - [ ] Keyframe authoring, interpolation and timeline tracks.
 - [ ] Undo/redo, gestures, multi-selection and selection persistence.
 - [ ] Verify every edit updates engine preview and canonical project data.
