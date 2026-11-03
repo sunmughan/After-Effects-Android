@@ -26,36 +26,26 @@ class DeleteDiagTest {
     private fun dump(tag: String): String =
         tag + " removed=" + countText("Layer removed · unsaved") +
             " unsavedChanges=" + countText("Unsaved changes") +
+            " keepOne=" + countText("A composition must keep at least one layer") +
+            " props=" + countText("PROPERTIES") +
             " bg=" + countText("Background") +
             " title=" + countText("Title / Main") +
             " accent=" + countText("Accent Shapes") +
             " shape4=" + countText("Shape 4") +
             " selShape4=" + countDesc("Selected timeline layer: Shape 4") +
-            " selAccent=" + countDesc("Selected timeline layer: Accent Shapes") +
-            " selTitle=" + countDesc("Selected timeline layer: Title / Main") +
-            " selBg=" + countDesc("Selected timeline layer: Background")
+            " selAccent=" + countDesc("Selected timeline layer: Accent Shapes")
 
     @Test
-    fun deleteDiagWithoutMove() {
+    fun deleteDiagBoundsAndSheet() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithText("Props").performClick()
+        val removeNode = compose.onNodeWithText("Remove layer", substring = true).fetchSemanticsNode()
+        val bounds = removeNode.boundsInWindow
+        val displayed = runCatching { compose.onNodeWithText("Remove layer", substring = true).assertIsDisplayed() }.isSuccess
+        val boundsInfo = "BOUNDS left=" + bounds.left + " top=" + bounds.top + " right=" + bounds.right + " bottom=" + bounds.bottom + " displayed=" + displayed
         compose.onNodeWithText("Remove layer", substring = true).performClick()
         compose.waitForIdle()
-        fail(dump("NO_MOVE"))
-    }
-
-    @Test
-    fun deleteDiagWithMoveThenUndo() {
-        compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
-        compose.onNodeWithText("Props").performClick()
-        compose.onNodeWithText("Move ↑", substring = true).performClick()
-        compose.onNodeWithText("Remove layer", substring = true).performClick()
-        compose.waitForIdle()
-        val afterDelete = dump("MOVE_DELETE")
-        compose.onNodeWithText("Undo").performClick()
-        compose.waitForIdle()
-        fail(afterDelete + " | " + dump("AFTER_UNDO"))
+        fail(boundsInfo + " | " + dump("AFTER_REMOVE"))
     }
 }
