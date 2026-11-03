@@ -896,6 +896,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical opacity keyframe added · frame $frame · saved locally"
                 )
             },
+            onAddCanonicalLayerTransformKeyframe = { compositionId, layerId, property, frame, x, y, z ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerTransformKeyframeEcproj(source, compositionId, layerId, property, frame.toLong(), x, y, z),
+                    "Canonical $property keyframe added · frame $frame · saved locally"
+                )
+            },
             onRemoveCanonicalLayerOpacityKeyframe = { compositionId, layerId, frame ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
