@@ -20,7 +20,7 @@ class OfflineAssetReferences(private val file: File) {
 
     @Synchronized
     fun referencedAssetIds(): Set<String> = read().stringPropertyNames()
-        .mapNotNull { key -> read().getProperty(key)?.takeIf { runCatching(::validateHash).isSuccess } }
+        .mapNotNull { key -> read().getProperty(key)?.takeIf { hash -> runCatching { validateHash(hash) }.isSuccess } }
         .toSet()
 
     @Synchronized
