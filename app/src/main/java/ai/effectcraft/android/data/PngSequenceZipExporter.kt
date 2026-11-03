@@ -30,6 +30,10 @@ object PngSequenceZipExporter {
         var framesWritten = 0
         var pngBytes = 0L
         ZipOutputStream(output).use { zip ->
+            val manifest = sequenceManifest(plan)
+            zip.putNextEntry(ZipEntry("sequence.json").apply { time = 0L })
+            zip.write(manifest)
+            zip.closeEntry()
             for (frame in plan.frames) {
                 checkNotCancelled(isCancelled)
                 val png = renderPng(frame)
@@ -46,6 +50,16 @@ object PngSequenceZipExporter {
         }
         return Result(framesWritten, pngBytes)
     }
+
+    internal fun sequenceManifest(plan: RenderQueuePlan): ByteArray = buildString {
+        append("{\"schema\":1,\"format\":\"png-sequence\",")
+        append("\"width\":").append(plan.settings.width).append(',')
+        append("\"height\":").append(plan.settings.height).append(',')
+        append("\"frameRate\":").append(plan.settings.frameRate).append(',')
+        append("\"startFrame\":").append(plan.settings.startFrame).append(',')
+        append("\"endFrame\":").append(plan.settings.endFrame).append(',')
+        append("\"frameCount\":").append(plan.frameCount).append('}')
+    }.toByteArray(Charsets.UTF_8)
 
     private fun checkNotCancelled(isCancelled: () -> Boolean) {
         if (isCancelled()) throw CancellationException("PNG sequence export cancelled")

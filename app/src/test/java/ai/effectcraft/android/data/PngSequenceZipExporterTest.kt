@@ -45,9 +45,16 @@ class PngSequenceZipExporterTest {
                 zip.closeEntry()
             }
         }
-        assertEquals(listOf("frame-000004.png", "frame-000005.png"), entries.map { it.first })
-        assertArrayEquals(frames.getValue(4), entries[0].second)
-        assertArrayEquals(frames.getValue(5), entries[1].second)
+        assertEquals(listOf("sequence.json", "frame-000004.png", "frame-000005.png"), entries.map { it.first })
+        val manifest = org.json.JSONObject(String(entries[0].second, Charsets.UTF_8))
+        assertEquals(320, manifest.getInt("width"))
+        assertEquals(320, manifest.getInt("height"))
+        assertEquals(24, manifest.getInt("frameRate"))
+        assertEquals(4, manifest.getInt("startFrame"))
+        assertEquals(5, manifest.getInt("endFrame"))
+        assertEquals(2, manifest.getInt("frameCount"))
+        assertArrayEquals(frames.getValue(4), entries[1].second)
+        assertArrayEquals(frames.getValue(5), entries[2].second)
     }
 
     @Test
