@@ -13,7 +13,7 @@ class StaleSequenceExportCleanupTest {
 
     @Test
     fun removesOnlyOldSequenceArchivesAndRetainsRecentOrUnrelatedFiles() {
-        val now = 10_000_000L
+        val now = 2_000_000_000L
         val stale = temp.newFile("effectcraft-sequence-abandoned.zip")
         stale.writeBytes(byteArrayOf(1, 2, 3))
         assertTrue(stale.setLastModified(now - 86_400_001L))
