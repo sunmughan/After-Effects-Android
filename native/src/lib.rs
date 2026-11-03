@@ -640,6 +640,30 @@ fn layer_opacity_percent(layer: &effectcraft_project::Layer) -> f64 {
     opacity.unwrap_or(100.0)
 }
 
+/// Canonical opacity keys as (frame, percent) pairs in composition frame
+/// units, using the same frame<->tick conversion as the renderer
+/// (`Tick::from_rational(frame, den, num)`), so metadata frames and rendered
+/// frames can never disagree about which tick a key sits on.
+fn layer_opacity_keys(layer: &effectcraft_project::Layer, frame_rate: effectcraft_time::FrameRate) -> Vec<serde_json::Value> {
+    let mut keys = Vec::new();
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        transform.walk("", &mut |_, property| {
+            if property.match_id == "opacity" {
+                for key in &property.keys {
+                    if let Value::Scalar(value) = key.value {
+                        keys.push(json!({
+                            "frame": key.time.to_rational_floor(frame_rate.den, frame_rate.num),
+                            "value": value
+                        }));
+                    }
+                }
+            }
+        });
+    }
+    keys.sort_by_key(|key| key["frame"].as_i64().unwrap_or(0));
+    keys
+}
+
 fn inspect_project(source: &str) -> Result<String, String> {
     let project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -653,6 +677,7 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "source": layer.source.type_name(),
                 "visible": layer.switches.video,
                 "opacityPercent": layer_opacity_percent(layer),
+                "opacityKeys": layer_opacity_keys(layer, comp.frame_rate),
                 "position": layer_position(layer),
                 "scale": layer_scale(layer),
                 "rotationDegrees": layer_rotation(layer)
@@ -971,6 +996,88 @@ fn set_layer_opacity(source: &str, composition_id: u64, layer_id: u64, opacity_p
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Authors one canonical Transform/Opacity keyframe at `frame`.
+/// The first key seeds frame 0 with the layer's current opacity, so a key
+/// authored mid-timeline never rewrites earlier frames; `set_value_at` then
+/// inserts or replaces the key in sorted order. Keys are linear by default,
+/// so the renderer interpolates between them and holds past the last key —
+/// the same semantics as the Kotlin `PropertyTrackEditor`.
+fn set_layer_opacity_keyframe(source: &str, composition_id: u64, layer_id: u64, frame: i64, opacity_percent: f64) -> Result<String, String> {
+    if !opacity_percent.is_finite() || !(0.0..=100.0).contains(&opacity_percent) {
+        return Err("Opacity must be between 0 and 100".into());
+    }
+    if frame < 0 {
+        return Err("Keyframe frame must be non-negative".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    let transform = layer.props.children.iter_mut().find_map(|node| match node {
+        Node::Group(group) if group.match_id == "transform" => Some(group),
+        _ => None,
+    }).ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let mut found = false;
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    transform.walk_mut(&mut |property| {
+        if property.match_id == "opacity" {
+            // `set_value_at` only keys when the property is already animated;
+            // seeding frame 0 first is what turns a static opacity into a track.
+            if property.keys.is_empty() {
+                property.set_animated(true, Tick::ZERO);
+            }
+            property.set_value_at(tick, Value::Scalar(opacity_percent));
+            found = true;
+        }
+    });
+    if !found { return Err(format!("Layer {layer_id} has no Transform opacity property")); }
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Removes the canonical Transform/Opacity keyframe at `frame`.
+/// Returns `(project_json, removed)`; `removed` is false when no key existed
+/// at that frame and the project is returned unchanged. Removing the last key
+/// collapses the property back to its static value at that frame.
+fn remove_layer_opacity_keyframe(source: &str, composition_id: u64, layer_id: u64, frame: i64) -> Result<(String, bool), String> {
+    if frame < 0 {
+        return Err("Keyframe frame must be non-negative".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    let transform = layer.props.children.iter_mut().find_map(|node| match node {
+        Node::Group(group) if group.match_id == "transform" => Some(group),
+        _ => None,
+    }).ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let mut found = false;
+    let mut removed = false;
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    transform.walk_mut(&mut |property| {
+        if property.match_id == "opacity" {
+            found = true;
+            if property.keys.iter().any(|key| key.time == tick) {
+                if property.keys.len() == 1 {
+                    // Keep the value the timeline showed at this frame.
+                    property.set_animated(false, tick);
+                } else {
+                    property.keys.retain(|key| key.time != tick);
+                }
+                removed = true;
+            }
+        }
+    });
+    if !found { return Err(format!("Layer {layer_id} has no Transform opacity property")); }
+    let json = project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))?;
+    Ok((json, removed))
+}
+
 fn relink_footage(source: &str, item_id: u64, path: &str) -> Result<String, String> {
     let normalized = path.trim();
     if normalized.is_empty() { return Err("Media path cannot be blank".into()); }
@@ -1037,6 +1144,34 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
     let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
         else { set_layer_opacity(&source, composition_id as u64, layer_id as u64, opacity as f64) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerOpacityKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong, opacity: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 { Err("Composition, layer and frame must be non-negative".to_owned()) }
+        else { set_layer_opacity_keyframe(&source, composition_id as u64, layer_id as u64, frame, opacity as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_removeLayerOpacityKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 { Err("Composition, layer and frame must be non-negative".to_owned()) }
+        else { remove_layer_opacity_keyframe(&source, composition_id as u64, layer_id as u64, frame) };
+    let output = match result { Ok((project_json, removed)) => json!({"valid": true, "project": project_json, "removed": removed}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
@@ -1272,6 +1407,171 @@ mod tests {
         assert_eq!(opacity, &Value::Scalar(35.0));
         assert!(set_layer_opacity(&source, comp_id.0, layer_id, 101.0).is_err());
         assert!(set_layer_opacity(&source, comp_id.0, 999, 50.0).is_err());
+    }
+
+    fn opacity_property(project: &Project, comp_id: u64, layer_id: u64) -> &effectcraft_project::Property {
+        let layer = project.comp(ItemId(comp_id)).unwrap().layers.iter().find(|l| l.id.0 == layer_id).unwrap();
+        layer.props.sub("transform").unwrap().get("opacity").unwrap()
+    }
+
+    fn text_layer_project() -> (String, u64, u64) {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let layer = build::layer(&mut project, &comp, "Text", LayerSource::Text, (640, 360), None);
+        let layer_id = layer.id.0;
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        (project.to_file_json().unwrap(), comp_id.0, layer_id)
+    }
+
+    #[test]
+    fn canonical_opacity_keyframes_interpolate_hold_and_roundtrip() {
+        use effectcraft_project::Value;
+        use effectcraft_time::Tick;
+
+        let (source, comp_id, layer_id) = text_layer_project();
+        let before: Project = serde_json::from_str(&source).unwrap();
+        let static_opacity = match opacity_property(&before, comp_id, layer_id).value {
+            Value::Scalar(value) => value,
+            _ => panic!("opacity property must be scalar"),
+        };
+        let tick = |frame: i64| Tick::from_rational(frame, 1, 30);
+
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        let updated: Project = serde_json::from_str(&keyed).unwrap();
+        let property = opacity_property(&updated, comp_id, layer_id);
+        assert_eq!(property.keys.len(), 2);
+        assert_eq!(property.keys[0].time, Tick::ZERO);
+        assert_eq!(property.keys[0].value, Value::Scalar(static_opacity));
+        assert_eq!(property.keys[1].time, tick(30));
+        assert_eq!(property.keys[1].value, Value::Scalar(0.0));
+        // Linear interpolation at the midpoint, endpoint hold past the last key.
+        let mid = match property.value_at(tick(15)) {
+            Value::Scalar(value) => value,
+            _ => panic!("interpolated opacity must be scalar"),
+        };
+        assert!((mid - static_opacity / 2.0).abs() < 1e-9, "midpoint opacity {mid} != {}", static_opacity / 2.0);
+        assert_eq!(property.value_at(tick(0)), Value::Scalar(static_opacity));
+        assert_eq!(property.value_at(tick(30)), Value::Scalar(0.0));
+        assert_eq!(property.value_at(tick(60)), Value::Scalar(0.0));
+        // Canonical serialization round-trips the keys, and metadata exposes them per frame.
+        let reparsed: Project = serde_json::from_str(&updated.to_file_json().unwrap()).unwrap();
+        assert_eq!(opacity_property(&reparsed, comp_id, layer_id).keys.len(), 2);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&keyed).unwrap()).unwrap();
+        assert_eq!(
+            metadata["compositions"][0]["layers"][0]["opacityKeys"],
+            json!([{"frame": 0, "value": static_opacity}, {"frame": 30, "value": 0.0}])
+        );
+    }
+
+    #[test]
+    fn canonical_opacity_keyframe_upsert_remove_and_rejects_invalid() {
+        use effectcraft_project::Value;
+
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        let replaced = set_layer_opacity_keyframe(&keyed, comp_id, layer_id, 30, 25.0).unwrap();
+        let updated: Project = serde_json::from_str(&replaced).unwrap();
+        assert_eq!(opacity_property(&updated, comp_id, layer_id).keys.len(), 2);
+        assert_eq!(opacity_property(&updated, comp_id, layer_id).keys[1].value, Value::Scalar(25.0));
+
+        let (removed, was_removed) = remove_layer_opacity_keyframe(&replaced, comp_id, layer_id, 30).unwrap();
+        assert!(was_removed);
+        let after_remove: Project = serde_json::from_str(&removed).unwrap();
+        assert_eq!(opacity_property(&after_remove, comp_id, layer_id).keys.len(), 1);
+        let (unchanged, was_removed_again) = remove_layer_opacity_keyframe(&removed, comp_id, layer_id, 30).unwrap();
+        assert!(!was_removed_again);
+        let still: Project = serde_json::from_str(&unchanged).unwrap();
+        assert_eq!(opacity_property(&still, comp_id, layer_id).keys.len(), 1);
+
+        // Removing the last key collapses back to the static value at that frame.
+        let (collapsed, was_removed_last) = remove_layer_opacity_keyframe(&removed, comp_id, layer_id, 0).unwrap();
+        assert!(was_removed_last);
+        let collapsed_project: Project = serde_json::from_str(&collapsed).unwrap();
+        let property = opacity_property(&collapsed_project, comp_id, layer_id);
+        assert!(property.keys.is_empty());
+        assert_eq!(property.value, Value::Scalar(100.0));
+
+        assert!(set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 101.0).is_err());
+        assert!(set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, -1.0).is_err());
+        assert!(set_layer_opacity_keyframe(&source, comp_id, layer_id, -1, 50.0).is_err());
+        assert!(set_layer_opacity_keyframe(&source, comp_id, 999, 30, 50.0).is_err());
+        assert!(set_layer_opacity_keyframe(&source, 999, layer_id, 30, 50.0).is_err());
+        assert!(remove_layer_opacity_keyframe(&source, comp_id, 999, 0).is_err());
+    }
+
+    fn red_pixel_footage_project() -> (String, u64, String) {
+        use effectcraft_project::{build, Comp, Footage, FootageKind, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(&[255, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
+            .unwrap();
+        let path = std::env::temp_dir().join("effectcraft-keyframe-red.png");
+        std::fs::write(&path, png).unwrap();
+
+        let mut project = Project::default();
+        let comp = Comp::new(32, 32, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Media preview", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let footage = Footage {
+            path: path.to_string_lossy().into_owned(),
+            kind: FootageKind::Still,
+            width: 1,
+            height: 1,
+            has_video: true,
+            missing: false,
+            ..Footage::default()
+        };
+        let item_id = project.add_item("Red pixel", Label::Sandstone, None, ItemKind::Footage(footage));
+        let layer = build::layer(&mut project, &comp, "Red pixel", LayerSource::Footage { item: item_id }, (32, 32), None);
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        (project.to_file_json().unwrap(), comp_id.0, path.to_string_lossy().into_owned())
+    }
+
+    fn has_strong_red(bytes: &[u8]) -> bool {
+        bytes.len() >= 8 && bytes[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] < 20 && pixel[2] < 20 && pixel[3] > 200)
+    }
+
+    #[test]
+    fn canonical_opacity_keyframes_change_rendered_frame() {
+        let (source, comp_id, path) = red_pixel_footage_project();
+        let layer_id = {
+            let project: Project = serde_json::from_str(&source).unwrap();
+            project.comp(ItemId(comp_id)).unwrap().layers[0].id.0
+        };
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        let frame0 = render_frame_rgba(&keyed, comp_id, 0, 32).unwrap();
+        let frame15 = render_frame_rgba(&keyed, comp_id, 15, 32).unwrap();
+        let frame30 = render_frame_rgba(&keyed, comp_id, 30, 32).unwrap();
+        assert!(has_strong_red(&frame0), "frame 0 must render the footage at full opacity");
+        assert!(!has_strong_red(&frame30), "frame 30 must render the footage faded out");
+        assert_ne!(frame15, frame0, "midpoint frame must differ from the full-opacity frame");
+        assert_ne!(frame15, frame30, "midpoint frame must differ from the faded-out frame");
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn session_renders_keyframed_opacity_at_playhead_frames() {
+        let (source, comp_id, path) = red_pixel_footage_project();
+        let layer_id = {
+            let project: Project = serde_json::from_str(&source).unwrap();
+            project.comp(ItemId(comp_id)).unwrap().layers[0].id.0
+        };
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        let handle = create_session(&keyed, 32).unwrap();
+        let session = lookup_session(handle).unwrap();
+        let frame0 = render_session_frame(&session, comp_id, 0).unwrap();
+        let frame30 = render_session_frame(&session, comp_id, 30).unwrap();
+        assert!(has_strong_red(&frame0));
+        assert!(!has_strong_red(&frame30));
+        assert!(close_session(handle));
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

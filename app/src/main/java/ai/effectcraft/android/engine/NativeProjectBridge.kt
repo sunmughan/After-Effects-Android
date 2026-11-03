@@ -69,6 +69,31 @@ object NativeProjectBridge {
         return runCatching { setLayerRotationEcprojNative(json, compositionId, layerId, degrees) }.getOrNull()
     }
 
+    /**
+     * Authors one canonical Transform/Opacity keyframe at [frame] (0–100 percent).
+     * The first key seeds frame 0 with the layer's current opacity, so authoring
+     * a later key never rewrites earlier frames; later keys interpolate linearly
+     * and hold past the last key, matching [ai.effectcraft.android.data.PropertyTrackEditor].
+     * Returns the edited-project envelope, or null when native is unavailable or the frame is invalid.
+     */
+    fun setLayerOpacityKeyframeEcproj(json: String, compositionId: Long, layerId: Long, frame: Long, opacityPercent: Double): String? {
+        ensureLoaded()
+        if (!available || frame < 0) return null
+        return runCatching { setLayerOpacityKeyframeEcprojNative(json, compositionId, layerId, frame, opacityPercent) }.getOrNull()
+    }
+
+    /**
+     * Removes the canonical Transform/Opacity keyframe at [frame]. The envelope
+     * carries `removed: true` when a key was deleted and `removed: false` when
+     * no key existed at that frame (the project is then returned unchanged).
+     * Removing the last key collapses the property back to its static value.
+     */
+    fun removeLayerOpacityKeyframeEcproj(json: String, compositionId: Long, layerId: Long, frame: Long): String? {
+        ensureLoaded()
+        if (!available || frame < 0) return null
+        return runCatching { removeLayerOpacityKeyframeEcprojNative(json, compositionId, layerId, frame) }.getOrNull()
+    }
+
     /** Sets the upstream Transform/Opacity property (0–100 percent). */
     fun setLayerOpacityEcproj(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String? {
         ensureLoaded()
@@ -126,6 +151,12 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerOpacityEcprojNative(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String
+
+    @JvmStatic
+    private external fun setLayerOpacityKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, opacityPercent: Double): String
+
+    @JvmStatic
+    private external fun removeLayerOpacityKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long): String
 
     @JvmStatic
     private external fun renderEcprojFrameNative(json: String, compositionId: Long, frame: Long, maxSide: Long): ByteArray

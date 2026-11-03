@@ -12,7 +12,9 @@ data class CanonicalLayerInfo(
     val positionY: Double,
     val scaleX: Double,
     val scaleY: Double,
-    val rotationDegrees: Double
+    val rotationDegrees: Double,
+    /** Canonical opacity keys, sorted by frame; empty when the layer is not keyframed. */
+    val opacityKeys: List<PropertyKeyframe> = emptyList()
 )
 
 data class CanonicalCompositionInfo(
@@ -58,6 +60,19 @@ data class CanonicalProjectInfo(
                     val layer = layerArray!!.getJSONObject(layerIndex)
                     val position = layer.optJSONArray("position")
                     val scale = layer.optJSONArray("scale")
+                    // Opacity keys ride the same sorted-upsert semantics as the
+                    // draft timeline editor, so a reordered or duplicated
+                    // metadata entry can never surface as an unsorted track.
+                    val opacityKeysJson = layer.optJSONArray("opacityKeys")
+                    var opacityTrack = PropertyTrack("opacity", emptyList())
+                    for (keyIndex in 0 until (opacityKeysJson?.length() ?: 0)) {
+                        val key = opacityKeysJson!!.getJSONObject(keyIndex)
+                        opacityTrack = PropertyTrackEditor.upsert(
+                            opacityTrack,
+                            key.getInt("frame"),
+                            key.getDouble("value").toFloat()
+                        )
+                    }
                     CanonicalLayerInfo(
                         id = layer.getLong("id"),
                         name = layer.optString("name", "Layer"),
@@ -68,7 +83,8 @@ data class CanonicalProjectInfo(
                         positionY = position?.optDouble(1) ?: 0.0,
                         scaleX = scale?.optDouble(0) ?: 100.0,
                         scaleY = scale?.optDouble(1) ?: 100.0,
-                        rotationDegrees = layer.optDouble("rotationDegrees", 0.0)
+                        rotationDegrees = layer.optDouble("rotationDegrees", 0.0),
+                        opacityKeys = opacityTrack.keyframes
                     )
                 }
                 CanonicalCompositionInfo(

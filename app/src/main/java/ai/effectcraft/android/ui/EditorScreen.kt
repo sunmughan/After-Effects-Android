@@ -144,6 +144,8 @@ fun EditorScreen(
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
     onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
+    onAddCanonicalLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
+    onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerRotation: (Long, Long, Double) -> Unit,
@@ -433,6 +435,8 @@ fun EditorScreen(
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
                     onSetLayerOpacity = onSetCanonicalLayerOpacity,
+                    onAddLayerOpacityKeyframe = onAddCanonicalLayerOpacityKeyframe,
+                    onRemoveLayerOpacityKeyframe = onRemoveCanonicalLayerOpacityKeyframe,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
                     onSetLayerScale = onSetCanonicalLayerScale,
                     onSetLayerRotation = onSetCanonicalLayerRotation,
@@ -806,6 +810,8 @@ private fun CanonicalProjectEditor(
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
     onSetLayerOpacity: (Long, Long, Double) -> Unit,
+    onAddLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
+    onRemoveLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetLayerScale: (Long, Long, Double, Double) -> Unit,
     onSetLayerRotation: (Long, Long, Double) -> Unit,
@@ -840,7 +846,7 @@ private fun CanonicalProjectEditor(
     }
     val previewBitmap = remember(renderedFrameBytes) { renderedFrameBytes?.let(::decodeRenderedFrame) }
 
-    Column(modifier = modifier.heightIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier = modifier.heightIn(max = 620.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("CANONICAL .ECPROJ", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Text("Native project model · ${project.compositions.size} compositions", color = EditorPalette.muted, fontSize = 12.sp)
         if (composition == null) {
@@ -990,6 +996,25 @@ private fun CanonicalProjectEditor(
                     valueRange = 0f..100f,
                     modifier = Modifier.semantics { contentDescription = "Canonical layer opacity" }
                 )
+                Text(
+                    "Opacity keys · ${layer.opacityKeys.size}" +
+                        if (layer.opacityKeys.isEmpty()) "" else " · " + layer.opacityKeys.joinToString { "${it.frame}: ${it.value.roundToInt()}%" },
+                    color = EditorPalette.amber,
+                    fontSize = 11.sp,
+                    modifier = Modifier.semantics { contentDescription = "Canonical opacity keys" }
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        enabled = canEdit,
+                        onClick = { onAddLayerOpacityKeyframe(composition.id, layer.id, previewFrame, opacityDraft.toDouble()) },
+                        modifier = Modifier.semantics { contentDescription = "Add canonical opacity keyframe" }
+                    ) { Text("Add key · frame $previewFrame", color = EditorPalette.violet, fontSize = 11.sp) }
+                    TextButton(
+                        enabled = canEdit,
+                        onClick = { onRemoveLayerOpacityKeyframe(composition.id, layer.id, previewFrame) },
+                        modifier = Modifier.semantics { contentDescription = "Remove canonical opacity keyframe" }
+                    ) { Text("Remove key · frame $previewFrame", color = EditorPalette.amber, fontSize = 11.sp) }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, -1) }) { Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp) }
                     TextButton(enabled = canEdit, onClick = { onMoveLayer(composition.id, layer.id, 1) }) { Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp) }

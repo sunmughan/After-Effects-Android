@@ -32,6 +32,27 @@ class CanonicalProjectInfoTest {
         assertFalse(footage.missing)
     }
 
+    @Test
+    fun parsesOpacityKeysSortedWithSameFrameReplacement() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0,"position":[0.0,0.0],"scale":[100.0,100.0],"rotationDegrees":0.0,"opacityKeys":[{"frame":30,"value":0.0},{"frame":0,"value":100.0},{"frame":30,"value":25.0}]}]}]}"""
+
+        val layer = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single()
+
+        assertEquals(
+            listOf(PropertyKeyframe(0, 100f), PropertyKeyframe(30, 25f)),
+            layer.opacityKeys
+        )
+    }
+
+    @Test
+    fun opacityKeysDefaultToEmptyWhenMetadataCarriesNone() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0}]}]}"""
+
+        val layer = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single()
+
+        assertEquals(emptyList<PropertyKeyframe>(), layer.opacityKeys)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsInvalidNativeMetadataEnvelope() {
         CanonicalProjectInfo.parse("""{"valid":false,"error":"invalid project"}""")

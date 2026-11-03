@@ -680,6 +680,33 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical opacity updated · saved locally"
                 )
             },
+            onAddCanonicalLayerOpacityKeyframe = { compositionId, layerId, frame, opacityPercent ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerOpacityKeyframeEcproj(source, compositionId, layerId, frame.toLong(), opacityPercent),
+                    "Canonical opacity keyframe added · frame $frame · saved locally"
+                )
+            },
+            onRemoveCanonicalLayerOpacityKeyframe = { compositionId, layerId, frame ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    // Removal is idempotent at the native layer: no key at the
+                    // frame is a neutral status, not an edit failure.
+                    val envelope = NativeProjectBridge.removeLayerOpacityKeyframeEcproj(source, compositionId, layerId, frame.toLong())
+                    val removed = runCatching { JSONObject(envelope ?: "").optBoolean("removed", true) }.getOrDefault(true)
+                    val valid = runCatching { JSONObject(envelope ?: "").optBoolean("valid") }.getOrDefault(false)
+                    if (valid && !removed) {
+                        saveMessage = "No canonical opacity keyframe · frame $frame"
+                    } else {
+                        applyCanonicalEdit(
+                            envelope,
+                            "Canonical opacity keyframe removed · frame $frame · saved locally"
+                        )
+                    }
+                }
+            },
             onSetCanonicalLayerPosition = { compositionId, layerId, x, y ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
