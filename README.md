@@ -73,3 +73,9 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 ### Run 35 — render queue planning groundwork (2026-11-03)
 - Added bounded `RenderQueuePlan` for inclusive PNG-sequence frame ranges, deterministic ZIP entry names, frame progress and resolution/FPS validation. Hard limits: 10,000 frames, 8,388,608 pixels/frame and 8 GiB estimated RGBA. Four JVM regression methods cover range, progress, invalid inputs and UHD budget.
 - This is a planner only: the current app exports one native-rendered PNG frame; ZIP sequence execution, video codecs/audio and UI settings remain unimplemented. Exact-head CI pending.
+
+
+### Run 36 — streaming PNG sequence ZIP core (2026-11-03)
+- Added a streaming ZIP executor that renders one PNG at a time from a bounded plan, validates PNG dimensions, writes stable frame entries, reports progress and checks cancellation. Three JVM tests cover byte-preserving ZIP output, progress, cancellation and invalid frames. Commits `1910de56` + `432f85ca`.
+- Standalone kotlinc + executable smoke harness passed ZIP order/payload, 50/100 progress, cancellation and dimension rejection. CI on this exact head is pending.
+- Not yet wired to Android SAF export UI; cancellation can leave a partial output and must be handled by staging/cleanup. Video/audio not implemented.
