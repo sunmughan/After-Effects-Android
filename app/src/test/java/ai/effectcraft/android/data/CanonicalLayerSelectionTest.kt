@@ -33,7 +33,7 @@ class CanonicalLayerSelectionTest {
     fun resolveAllKeepsCompositionOrderAndFallsBackToFirstLayer() {
         val layers = listOf(layer(2, "A"), layer(3, "B"), layer(4, "C"))
 
-        assertEquals(listOf(4L, 2L), CanonicalLayerSelection.resolveAll(layers, setOf(4, 2, 99)).map { it.id })
+        assertEquals(listOf(2L, 4L), CanonicalLayerSelection.resolveAll(layers, setOf(4, 2, 99)).map { it.id })
         assertEquals(listOf(2L), CanonicalLayerSelection.resolveAll(layers, setOf(99)).map { it.id })
         assertEquals(listOf(2L), CanonicalLayerSelection.resolveAll(layers, emptySet()).map { it.id })
         assertEquals(emptyList<CanonicalLayerInfo>(), CanonicalLayerSelection.resolveAll(emptyList(), setOf(2)))
