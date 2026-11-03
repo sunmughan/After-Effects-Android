@@ -44,6 +44,12 @@ class OfflineAssetReferences(private val file: File) {
 
     @Synchronized
     @Throws(IOException::class)
+    fun clear() {
+        write(Properties())
+    }
+
+    @Synchronized
+    @Throws(IOException::class)
     fun removeReference(itemId: Long): Boolean {
         require(itemId > 0) { "Footage item ID must be positive" }
         val properties = read()
