@@ -19,6 +19,7 @@ class DraftProjectStore(context: Context) {
 
     @Throws(IOException::class)
     fun save(project: ProjectDocument): File {
+        recoverInterruptedWrites()
         val validationErrors = project.validationErrors()
         require(validationErrors.isEmpty()) { validationErrors.joinToString("; ") }
         if (!projectDirectory.exists() && !projectDirectory.mkdirs()) {
@@ -57,7 +58,9 @@ class DraftProjectStore(context: Context) {
     }
 
     /** Returns all valid offline drafts, newest first, de-duplicated by stable project ID. */
-    fun listSavedProjects(): List<ProjectDocument> = draftFiles()
+    fun listSavedProjects(): List<ProjectDocument> {
+        recoverInterruptedWrites()
+        return draftFiles()
         .mapNotNull { file -> runCatching { decode(JSONObject(file.readText(Charsets.UTF_8))) to file }.getOrNull() }
         .sortedWith(
             compareByDescending<Pair<ProjectDocument, File>> { it.first.updatedAtEpochMillis }
@@ -66,6 +69,44 @@ class DraftProjectStore(context: Context) {
         )
         .map { it.first }
         .distinctBy { it.id }
+    }
+
+    /**
+     * Reconciles atomic-write temp files left by process death. A fully written,
+     * valid temp is promoted when it is newer than its target (or the target is
+     * absent/corrupt); incomplete or superseded temps are discarded. Only the
+     * exact store-owned `*.efx-draft.tmp` naming pattern is touched.
+     */
+    private fun recoverInterruptedWrites() {
+        val files = projectDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".efx-draft.tmp") }.orEmpty()
+        files.forEach { temporary ->
+            runCatching {
+                val targetName = temporary.name.removeSuffix(".tmp")
+                if (!targetName.endsWith(".efx-draft")) {
+                    temporary.delete()
+                    return@runCatching
+                }
+                val recovered = decode(JSONObject(temporary.readText(Charsets.UTF_8)))
+                require(targetName.endsWith("-${recovered.id.take(8)}.efx-draft")) {
+                    "Interrupted draft filename does not match its project ID"
+                }
+                val target = File(projectDirectory, targetName)
+                val current = if (target.isFile) runCatching { decode(JSONObject(target.readText(Charsets.UTF_8))) }.getOrNull() else null
+                if (current == null || recovered.id == current.id && recovered.updatedAtEpochMillis >= current.updatedAtEpochMillis) {
+                    try {
+                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                    } catch (_: Exception) {
+                        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
+                } else {
+                    temporary.delete()
+                }
+            }.onFailure {
+                // An incomplete temp is not a project. Keep the last committed target intact.
+                runCatching { temporary.delete() }
+            }
+        }
+    }
 
     /** Opens a previously saved draft by its stable project ID. */
     fun load(projectId: String): ProjectDocument? = listSavedProjects().firstOrNull { it.id == projectId }
