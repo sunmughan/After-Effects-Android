@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
- > **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** Latest implementation `099cd972` makes Undo/Redo restore project, selected layer and playhead snapshots; timeline selection has accessible selected/unselected semantics and delete→Undo→Redo instrumentation. Run #242 was superseded during cold ARM64 compilation; fresh current-head CI is pending. No pass is claimed. See [PHASES.md](PHASES.md).
+ > **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** Implementation `3b09f989` displays actual upstream CPU-rendered `.ecproj` frames in the main workspace, updates on timeline movement, and makes canonical import strict/bounded. Draft canvas is honestly labelled unrendered. Latest code CI #246 was queued; fresh current-head CI and all 15 editor instrumentation tests are pending. No pass is claimed. See [PHASES.md](PHASES.md).
 
 ## Product direction
 

@@ -1,7 +1,7 @@
 # EffectCraft Android phase tracker
 
-Updated: 2026-11-03 (M0 CI rerun pending; M1 history/selection regression committed; M2–M4 remain sequenced after M1)
-Latest implementation commit: `099cd972be1be909a0f54646ab90dd044b1a9e43` now snapshots project + selected layer ID + playhead in the 50-entry Undo/Redo history. Undoing deletion restores the removed layer as selected; Redo restores the adjacent selection. Timeline layer rows expose explicit selected/unselected accessibility descriptions, and an instrumentation regression asserts delete → Undo → Redo selection continuity. Current-head CI #243 is pending; no pass is claimed.
+Updated: 2026-11-03 (M0/M1 current-head CI pending; canonical workspace preview and strict import committed)
+Latest implementation commit: `3b09f989b6ac9dc8573abeba60e7aa46b95db6e0` connects the main workspace viewer to real upstream CPU-rendered canonical `.ecproj` frames at the current playhead; bootstrap drafts are explicitly labelled unrendered instead of displaying a decorative fake. SAF imports now enforce a 64 MiB read limit and require native schema validation plus at least one valid composition before caching. Current-head CI #246 was queued; no pass is claimed.
 
 This tracker is the source of truth for acceptance. A phase is **complete only when its code, tests, and evidence meet every required gate**. A green bootstrap CI run does not imply the product roadmap is complete.
 
@@ -91,6 +91,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Pin upstream `effectcraft-render` at the same immutable revision; native `render_frame_rgba` parses canonical `.ecproj`, renders through the real CPU `Renderer`/persistent `MediaPool`, and emits bounded RGBA with dimensions. Rust test asserts a 320×180 composition produces a real 160×90 frame payload and rejects bad IDs/negative frames (`b75fe05`, `4f0aa79`).
 - [x] JNI frame request/output bridge and Kotlin wrapper (`4f0aa79`, `5fa1cf2`).
 - [x] Imported canonical editor now renders frames off the UI thread, displays returned pixels as an image, and scrubs frame index (`05e2c4a`, `4c86391`). This is actual upstream CPU compositing—not the decorative draft viewer.
+- [x] Main workspace viewer now requests the current imported canonical composition frame through JNI on `Dispatchers.Default`, decodes RGBA and displays the actual upstream CPU renderer output; scrubbing/playback refreshes the frame (`3b09f989`). The bootstrap `.efx-draft` remains non-renderable and is explicitly labelled `Draft preview not rendered` rather than faking output.
 - [ ] Replace main `.efx-draft` placeholder canvas with project/session-backed rendering; no shared native session yet.
 - [x] Add pinned upstream `effectcraft-media::MediaPool` as a persistent native `FootageSource`; renderer now decodes app-private relinked still/video/audio files through upstream FilmCraft codecs instead of `NoFootage` (`bc7ddc7`, `de7bce1`).
 - [x] Host Rust test writes a PNG fixture to a local path and asserts its red pixels appear in the CPU composition frame (`b76e545`, `3da9fb9`); latest CI must validate cross-build and decode test.
@@ -166,3 +167,12 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - CI #237 on `9743f952` completed ARM64 native compilation successfully; x86_64 compilation was still active at 22:33 UTC. Because a cold dual-ABI compile was approaching the former 45-minute job timeout, it is superseded rather than treated as a test result.
 - Workflow now caches Cargo registry/git/target and `cargo-ndk`, with a lockfile/toolchain-keyed cache and restore prefix; Android job timeout raised to 90 minutes so first cache-miss dual-ABI build can finish. This is a build-time optimization, not a test bypass.
 - The replacement CI run must verify both ABIs, Rust tests, dependency/license report, Gradle Wrapper build, APK/unit tests and all 14 emulator instrumentation cases. M0 remains INCOMPLETE and M1 remains pending until that exact-head run passes.
+
+
+### Run 13 — canonical workspace preview and strict project import (2026-11-03)
+- Product commit `3b09f989b6ac9dc8573abeba60e7aa46b95db6e0` (PR #1 branch `feat/android-app-foundation`).
+- Connected the main workspace composition viewer to the pinned upstream CPU renderer: selected canonical composition + playhead are rendered through JNI off the UI thread, decoded to a Bitmap and shown in the viewer; playback/scrubbing updates the frame. This is actual render output, not a visual mock.
+- Removed the temporary `DeleteDiagTest` log-dump instrumentation. Added a durable M1 assertion that an offline draft is clearly labelled `Draft preview not rendered`; no fabricated rendered frame is shown.
+- Added `CanonicalProjectDocument`: SAF input is streamed with a 64 MiB maximum; import is persisted only after JNI schema validation succeeds and the native metadata contains at least one composition with positive dimensions/FPS and finite positive duration. A missing native ABI/parser now fails import clearly instead of caching arbitrary JSON as a valid project.
+- Added five JVM tests for bounded UTF-8 reading, size-limit rejection, valid native envelope, empty-composition rejection and invalid dimension rejection. Existing test assertions were retained.
+- Current code CI #246 was pending at commit time. Docs update triggers fresh current-head CI; full dual-ABI/Rust/JVM/15-test emulator verification remains required. M0 and M1 are not complete.
