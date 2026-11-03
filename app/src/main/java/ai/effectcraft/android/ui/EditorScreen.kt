@@ -1,6 +1,7 @@
 package ai.effectcraft.android.ui
 
 import ai.effectcraft.android.data.OfflineAssetStore
+import ai.effectcraft.android.data.SafPermissionRegistry
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.BorderStroke
@@ -140,7 +141,12 @@ fun EditorScreen(
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerRotation: (Long, Long, Double) -> Unit,
     onRelinkCanonicalAsset: (Long) -> Unit,
-    onRenderCanonicalFrame: (Long, Long) -> ByteArray?
+    onRenderCanonicalFrame: (Long, Long) -> ByteArray?,
+    safGrants: List<SafPermissionRegistry.Grant>,
+    missingManifestEntries: Int,
+    onReleaseSafGrant: (String, SafPermissionRegistry.Kind) -> Unit,
+    onReplaceOfflineAsset: (String) -> Unit,
+    onCollectUnusedOfflineAssets: () -> Unit
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var showPhoneInspector by remember { mutableStateOf(false) }
@@ -296,9 +302,20 @@ fun EditorScreen(
                 title = { Text("Offline media library") },
                 text = {
                     Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                        if (missingManifestEntries > 0) {
+                            Text(
+                                "$missingManifestEntries linked item${if (missingManifestEntries == 1) "" else "s"} ${if (missingManifestEntries == 1) "is" else "are"} missing media. Relink ${if (missingManifestEntries == 1) "it" else "them"} from the canonical project sheet.",
+                                color = EditorPalette.amber, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
                         if (offlineAssets.isEmpty()) {
                             Text("No media imported yet. Relink footage from a canonical project to copy it here for offline use.", color = EditorPalette.muted)
                         } else {
+                            if (offlineAssets.any { it.sha256 !in referencedOfflineAssetIds }) {
+                                TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }) {
+                                    Text("Remove unused media", color = EditorPalette.violet, fontSize = 11.sp)
+                                }
+                            }
                             offlineAssets.forEach { asset ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
@@ -311,10 +328,36 @@ fun EditorScreen(
                                     }
                                     if (asset.sha256 in referencedOfflineAssetIds) {
                                         Text("Linked", color = EditorPalette.mint, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp))
+                                        TextButton(onClick = { showMediaLibrary = false; onReplaceOfflineAsset(asset.sha256) }) {
+                                            Text("Replace", color = EditorPalette.violet, fontSize = 11.sp)
+                                        }
                                     } else {
                                         TextButton(onClick = { assetPendingDelete = asset }) {
                                             Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
                                         }
+                                    }
+                                }
+                            }
+                        }
+                        Text("Storage access", color = EditorPalette.text, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+                        if (safGrants.isEmpty()) {
+                            Text("No persisted document access recorded yet. Importing or exporting a document records its access here.", color = EditorPalette.muted, fontSize = 11.sp)
+                        } else {
+                            safGrants.forEach { grant ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(grant.displayName, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
+                                        Text(
+                                            "${grant.kind.name} · ${if (grant.status == SafPermissionRegistry.Status.LOST) "LOST — re-open the document to restore it" else "Granted"}",
+                                            color = if (grant.status == SafPermissionRegistry.Status.LOST) EditorPalette.amber else EditorPalette.muted,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                    TextButton(onClick = { onReleaseSafGrant(grant.uri, grant.kind) }) {
+                                        Text("Release", color = Color(0xFFFF8B91), fontSize = 11.sp)
                                     }
                                 }
                             }
@@ -330,7 +373,7 @@ fun EditorScreen(
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { assetPendingDelete = null },
                 title = { Text("Remove offline media?") },
-                text = { Text(if (asset.sha256 in referencedOfflineAssetIds) "This media is linked by the current canonical project and cannot be removed yet." else "Delete ${asset.displayName} from this device?") },
+                text = { Text(if (asset.sha256 in referencedOfflineAssetIds) "This media is linked by a project and cannot be removed yet." else "Delete ${asset.displayName} from this device?") },
                 confirmButton = {
                     TextButton(onClick = {
                         if (asset.sha256 !in referencedOfflineAssetIds) onDeleteOfflineAsset(asset.sha256)

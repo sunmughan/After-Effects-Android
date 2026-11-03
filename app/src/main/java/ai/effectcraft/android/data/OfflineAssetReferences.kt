@@ -32,6 +32,16 @@ class OfflineAssetReferences(private val file: File) {
         return sha256 in referencedAssetIds()
     }
 
+    /** Footage item ids currently mapped to [sha256]; used by asset replacement. */
+    @Synchronized
+    fun itemIdsFor(sha256: String): Set<Long> {
+        validateHash(sha256)
+        val properties = read()
+        return properties.stringPropertyNames().mapNotNull { key ->
+            key.toLongOrNull()?.takeIf { properties.getProperty(key) == sha256 }
+        }.toSet()
+    }
+
     @Synchronized
     @Throws(IOException::class)
     fun setReference(itemId: Long, sha256: String) {

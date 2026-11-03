@@ -69,7 +69,12 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
                     onRelinkCanonicalAsset = {},
-                    onRenderCanonicalFrame = { _, _ -> null }
+                    onRenderCanonicalFrame = { _, _ -> null },
+                    safGrants = emptyList(),
+                    missingManifestEntries = 0,
+                    onReleaseSafGrant = { _, _ -> },
+                    onReplaceOfflineAsset = {},
+                    onCollectUnusedOfflineAssets = {}
                 )
             }
         }

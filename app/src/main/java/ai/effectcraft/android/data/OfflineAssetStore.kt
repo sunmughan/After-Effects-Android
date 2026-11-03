@@ -123,6 +123,64 @@ class OfflineAssetStore(
         return FileInputStream(payload)
     }
 
+    /** Recomputes the payload digest and size and compares them to the index record. */
+    @Synchronized
+    fun verify(sha256: String): Boolean {
+        val hash = sha256.decodeHash()
+        val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: return false
+        val payload = payloadFile(hash, asset.extension)
+        if (!payload.isFile() || payload.length() != asset.sizeBytes) return false
+        val digest = MessageDigest.getInstance("SHA-256")
+        payload.inputStream().buffered().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                if (read > 0) digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().toHex() == hash
+    }
+
+    /** Indexed assets whose payload is missing, resized or digest-mismatched. */
+    @Synchronized
+    fun verifyAll(): List<Asset> = list().filterNot { verify(it.sha256) }
+
+    data class GcResult(
+        val deleted: List<Asset>,
+        val orphanPayloadsRemoved: Int,
+        val failed: List<String>
+    )
+
+    /**
+     * Deletes every indexed asset not in [referencedHashes] plus every
+     * content-addressed payload file with no index entry, and returns what
+     * was removed. A failed delete never aborts the sweep: the hash is
+     * reported in [GcResult.failed] for the next run. Re-running collection
+     * with the same referenced set is a no-op.
+     */
+    @Synchronized
+    fun collectGarbage(referencedHashes: Set<String>): GcResult {
+        val referenced = referencedHashes.map { it.decodeHash() }.toSet()
+        val deleted = mutableListOf<Asset>()
+        val failed = mutableListOf<String>()
+        list().filter { it.sha256 !in referenced }.forEach { asset ->
+            runCatching { delete(asset.sha256) }
+                .onSuccess { removed -> if (removed) deleted += asset }
+                .onFailure { failed += asset.sha256 }
+        }
+        val indexed = list().map { payloadFile(it.sha256, it.extension).name }.toSet()
+        var orphans = 0
+        if (root.isDirectory) {
+            root.listFiles { file ->
+                file.isFile && file.name.matches(Regex("[a-f0-9]{64}\\.[a-z0-9]{1,10}")) && file.name !in indexed
+            }.orEmpty().forEach { orphan ->
+                if (orphan.delete()) orphans++ else failed += orphan.name
+            }
+        }
+        return GcResult(deleted, orphans, failed)
+    }
+
     @Synchronized
     @Throws(IOException::class)
     fun delete(sha256: String): Boolean {

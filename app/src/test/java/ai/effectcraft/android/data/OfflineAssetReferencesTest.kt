@@ -33,6 +33,22 @@ class OfflineAssetReferencesTest {
     }
 
     @Test
+    fun itemIdsForReportsEveryItemMappedToAnAsset() {
+        val root = Files.createTempDirectory("effectcraft-asset-refs-items").toFile()
+        try {
+            val refs = OfflineAssetReferences(File(root, "references.properties"))
+            refs.setReference(3, firstHash)
+            refs.setReference(9, firstHash)
+            refs.setReference(4, secondHash)
+            assertEquals(setOf(3L, 9L), refs.itemIdsFor(firstHash))
+            assertEquals(setOf(4L), refs.itemIdsFor(secondHash))
+            assertTrue(refs.itemIdsFor("c".repeat(64)).isEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun removesReferenceAndRejectsInvalidIdsOrHashes() {
         val root = Files.createTempDirectory("effectcraft-asset-refs-remove").toFile()
         try {

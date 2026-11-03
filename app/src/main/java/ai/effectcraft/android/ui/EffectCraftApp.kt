@@ -21,10 +21,13 @@ import org.json.JSONObject
 import java.io.File
 import ai.effectcraft.android.data.CanonicalProjectInfo
 import ai.effectcraft.android.data.CanonicalProjectDocument
+import ai.effectcraft.android.data.CanonicalProjectRepository
 import ai.effectcraft.android.data.DraftProjectStore
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.data.OfflineAssetStore
 import ai.effectcraft.android.data.OfflineAssetReferences
+import ai.effectcraft.android.data.ProjectAssetManifestStore
+import ai.effectcraft.android.data.SafPermissionRegistry
 import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
@@ -44,8 +47,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
+    val manifestStore = remember(context) { ProjectAssetManifestStore(File(context.filesDir, "asset-manifests")) }
+    val projectRepository = remember(context) { CanonicalProjectRepository(File(context.filesDir, "canonical-projects-repo")) }
+    val safRegistry = remember(context) { SafPermissionRegistry(File(context.filesDir, "saf-permissions.properties")) }
     var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
+    var repositoryProjectId by remember { mutableStateOf<String?>(null) }
+    var safGrants by remember(safRegistry) { mutableStateOf(safRegistry.grants()) }
+    var manifestMissingCount by remember { mutableStateOf(0) }
     var pendingRelinkItemId by remember { mutableStateOf<Long?>(null) }
+    var pendingReplaceAssetHash by remember { mutableStateOf<String?>(null) }
     var canonicalProjectInfo by remember { mutableStateOf<CanonicalProjectInfo?>(null) }
     var project by remember {
         mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
@@ -62,6 +72,25 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var undoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
     var redoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
 
+    // One place decides whether a payload is still referenced: every project
+    // manifest, the legacy current-project references, and the payload files
+    // the canonical document itself still points at. The last set is what
+    // makes library Replace safe: after a manifest replace, the old payload
+    // survives until the item is relinked in the canonical sheet and the
+    // native path moves, and only then may garbage collection remove it.
+    fun refreshReferences() {
+        val nativeHashes = canonicalProjectInfo?.items?.mapNotNull { item ->
+            item.path?.substringAfterLast('/')?.takeIf { name ->
+                name.length > 65 && name.substring(0, 64).matches(Regex("[a-f0-9]{64}"))
+            }?.substring(0, 64)
+        }?.toSet() ?: emptySet()
+        referencedOfflineAssetIds = manifestStore.allReferencedHashes() +
+            offlineAssetReferences.referencedAssetIds() + nativeHashes
+        manifestMissingCount = repositoryProjectId?.let { id ->
+            runCatching { manifestStore.load(id).missingEntries().size }.getOrNull()
+        } ?: 0
+    }
+
     fun applyProjectChange(next: ProjectDocument, message: String = "Unsaved changes") {
         // Keep selection and playhead with the project snapshot. Undoing a layer
         // deletion must restore the deleted layer as selected; redo must restore
@@ -75,7 +104,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             runCatching {
-                runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                val readGranted = runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }.isSuccess
                 val displayName = context.contentResolver.query(
                     uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
                 )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
@@ -89,10 +118,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 val parsedInfo = CanonicalProjectDocument.validateNativeEnvelope(native)
                 val status = "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
                 ecprojStore.save(source)
+                repositoryProjectId = projectRepository.create(displayName, source, "ecproj", displayName).id
                 offlineAssetReferences.clear()
-                referencedOfflineAssetIds = emptySet()
+                if (readGranted) {
+                    runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.READ, displayName) }
+                    safGrants = safRegistry.grants()
+                }
                 importedEcproj = source
                 canonicalProjectInfo = parsedInfo
+                refreshReferences()
                 saveMessage = status
             }.onFailure { error -> saveMessage = "Import failed · ${error.message ?: "invalid project"}" }
         }
@@ -103,6 +137,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 val source = importedEcproj ?: error("No canonical .ecproj has been imported")
                 context.contentResolver.openOutputStream(uri)?.use { it.write(source.toByteArray(Charsets.UTF_8)) }
                     ?: error("Unable to write selected document")
+                if (runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }.isSuccess) {
+                    runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.WRITE, "EffectCraft.ecproj") }
+                    safGrants = safRegistry.grants()
+                }
                 saveMessage = "Exported canonical .ecproj"
             }.onFailure { error -> saveMessage = "Export failed · ${error.message ?: "storage error"}" }
         }
@@ -115,6 +153,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 val xml = CanonicalProjectDocument.toXml(source)
                 context.contentResolver.openOutputStream(uri)?.use { it.write(xml.toByteArray(Charsets.UTF_8)) }
                     ?: error("Unable to write selected document")
+                if (runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }.isSuccess) {
+                    runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.WRITE, "EffectCraft.ecprojx") }
+                    safGrants = safRegistry.grants()
+                }
                 saveMessage = "Exported canonical .ecprojx"
             }.onFailure { error -> saveMessage = "XML export failed · ${error.message ?: "storage error"}" }
         }
@@ -146,28 +188,136 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val metadata = NativeProjectBridge.inspectEcproj(updated)
                         ?: error("Unable to inspect updated canonical project")
                     val parsed = CanonicalProjectInfo.parse(metadata)
+                    // Relink rollback chain: manifest, then legacy reference,
+                    // then canonical cache, then repository entry. Any failure
+                    // restores every earlier step, so a failed relink never
+                    // leaves a half-applied reference update behind. The
+                    // imported payload itself is never deleted on rollback:
+                    // its hash may be referenced by another project, so only
+                    // garbage collection may remove it.
+                    val manifestId = repositoryProjectId ?: error("No repository project for this import")
+                    val manifest = manifestStore.load(manifestId)
+                    val previousEntry = manifest.entryFor(itemId)
+                    manifest.link(itemId, offlineAsset.sha256, target.absolutePath)
+                    manifestStore.save(manifest)
+                    val restoreManifest: () -> Unit = {
+                        runCatching {
+                            val current = manifestStore.load(manifestId)
+                            if (previousEntry == null) current.restoreAbsent(itemId) else current.restore(previousEntry)
+                            manifestStore.save(current)
+                        }
+                    }
                     val previousAsset = offlineAssetReferences.assetFor(itemId)
                     offlineAssetReferences.setReference(itemId, offlineAsset.sha256)
                     try {
                         ecprojStore.save(updated)
                     } catch (failure: Throwable) {
+                        restoreManifest()
                         if (previousAsset == null) offlineAssetReferences.removeReference(itemId)
                         else offlineAssetReferences.setReference(itemId, previousAsset)
                         throw failure
                     }
-                    referencedOfflineAssetIds = offlineAssetReferences.referencedAssetIds()
+                    try {
+                        projectRepository.update(manifestId, updated)
+                    } catch (failure: Throwable) {
+                        restoreManifest()
+                        if (previousAsset == null) offlineAssetReferences.removeReference(itemId)
+                        else offlineAssetReferences.setReference(itemId, previousAsset)
+                        runCatching { ecprojStore.save(source) }
+                        throw failure
+                    }
                     importedEcproj = updated
                     canonicalProjectInfo = parsed
                     offlineAssets = offlineAssetStore.list()
+                    refreshReferences()
                     saveMessage = "Media copied offline · relinked"
                 }.onFailure { error -> saveMessage = "Media relink failed · ${error.message ?: "storage error"}" }
             }
         }
     }
 
+    // Launch reconciliation, once: the single-document cache is the working
+    // copy, so a cached document with no repository entry is imported (this
+    // also migrates pre-repository installs); SAF grants are reconciled
+    // against what Android still reports, so a lost grant shows as LOST
+    // instead of silently disappearing.
+    LaunchedEffect(Unit) {
+        runCatching {
+            val cached = ecprojStore.load()
+            repositoryProjectId = if (cached != null) {
+                val matching = projectRepository.list().firstOrNull { projectRepository.load(it.id) == cached }
+                matching?.id ?: projectRepository.importLegacyDocument(cached, "Imported project").id
+            } else {
+                projectRepository.list().firstOrNull()?.id
+            }
+            projectRepository.migrateAll()
+        }
+        val held = context.contentResolver.persistedUriPermissions.flatMap { permission ->
+            buildList {
+                if (permission.isReadPermission) add(SafPermissionRegistry.GrantKey(permission.uri.toString(), SafPermissionRegistry.Kind.READ))
+                if (permission.isWritePermission) add(SafPermissionRegistry.GrantKey(permission.uri.toString(), SafPermissionRegistry.Kind.WRITE))
+            }
+        }.toSet()
+        safRegistry.reconcile(held)
+        safGrants = safRegistry.grants()
+        refreshReferences()
+    }
+
     LaunchedEffect(importedEcproj) {
         canonicalProjectInfo = importedEcproj?.let { source ->
             NativeProjectBridge.inspectEcproj(source)?.let { runCatching { CanonicalProjectInfo.parse(it) }.getOrNull() }
+        }
+    }
+
+    // Keeps manifest missing flags in sync with the native item metadata:
+    // an item the engine reports missing is missing in the manifest, and a
+    // relinked item stops being missing. The manifest never invents a flag
+    // the native metadata does not support.
+    LaunchedEffect(canonicalProjectInfo) {
+        val info = canonicalProjectInfo
+        val manifestId = repositoryProjectId
+        if (info != null && manifestId != null) {
+            runCatching {
+                val manifest = manifestStore.load(manifestId)
+                var changed = false
+                info.items.forEach { item ->
+                    if (item.missing) {
+                        if (manifest.markMissing(item.id)) changed = true
+                    } else if (manifest.entryFor(item.id) != null) {
+                        if (manifest.markPresent(item.id)) changed = true
+                    }
+                }
+                if (changed) manifestStore.save(manifest)
+            }
+            refreshReferences()
+        }
+    }
+
+    val replaceAssetLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val oldHash = pendingReplaceAssetHash
+        pendingReplaceAssetHash = null
+        if (uri != null && oldHash != null) {
+            runCatching {
+                val displayName = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "asset"
+                val mimeType = context.contentResolver.getType(uri)
+                val replacement = context.contentResolver.openInputStream(uri)?.use { input ->
+                    offlineAssetStore.import(input, displayName, mimeType)
+                } ?: error("Unable to read selected media")
+                // Manifests and legacy references move to the new hash. The old
+                // payload is deliberately kept: the canonical document's native
+                // path still points at it until that item is relinked, and the
+                // union referenced set keeps garbage collection from removing
+                // it in the meantime.
+                val changedEntries = manifestStore.replaceAssetEverywhere(oldHash, replacement.sha256)
+                offlineAssetReferences.itemIdsFor(oldHash).forEach { itemId ->
+                    offlineAssetReferences.setReference(itemId, replacement.sha256)
+                }
+                offlineAssets = offlineAssetStore.list()
+                refreshReferences()
+                saveMessage = "Media replaced in $changedEntries project link(s) · relink the item in the canonical sheet to move its native path"
+            }.onFailure { error -> saveMessage = "Media replace failed · ${error.message ?: "storage error"}" }
         }
     }
 
@@ -187,7 +337,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             val metadata = NativeProjectBridge.inspectEcproj(updated)
                 ?: error("Unable to inspect updated canonical project")
             val parsed = CanonicalProjectInfo.parse(metadata)
+            val previousSource = importedEcproj
             ecprojStore.save(updated)
+            try {
+                repositoryProjectId?.let { projectRepository.update(it, updated) }
+            } catch (failure: Throwable) {
+                if (previousSource != null) runCatching { ecprojStore.save(previousSource) }
+                throw failure
+            }
             importedEcproj = updated
             canonicalProjectInfo = parsed
             saveMessage = successMessage
@@ -253,8 +410,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }
             },
             onDeleteOfflineAsset = { sha256 ->
-                if (offlineAssetReferences.isReferenced(sha256)) {
-                    saveMessage = "Cannot remove media · linked by current project"
+                if (sha256 in referencedOfflineAssetIds) {
+                    saveMessage = "Cannot remove media · linked by a project"
                 } else runCatching { offlineAssetStore.delete(sha256) }
                     .onSuccess {
                         offlineAssets = offlineAssetStore.list()
@@ -408,6 +565,33 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onRenderCanonicalFrame = { compositionId, frame ->
                 importedEcproj?.let { NativeProjectBridge.renderEcprojFrame(it, compositionId, frame, 512) }
+            },
+            safGrants = safGrants,
+            missingManifestEntries = manifestMissingCount,
+            onReleaseSafGrant = { uriString, kind ->
+                runCatching {
+                    context.contentResolver.releasePersistableUriPermission(
+                        Uri.parse(uriString),
+                        if (kind == SafPermissionRegistry.Kind.READ) Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        else Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                }
+                safRegistry.release(uriString)
+                safGrants = safRegistry.grants()
+                saveMessage = "Storage access released"
+            },
+            onReplaceOfflineAsset = { sha256 ->
+                pendingReplaceAssetHash = sha256
+                replaceAssetLauncher.launch(arrayOf("*/*"))
+            },
+            onCollectUnusedOfflineAssets = {
+                runCatching { offlineAssetStore.collectGarbage(referencedOfflineAssetIds) }
+                    .onSuccess { result ->
+                        offlineAssets = offlineAssetStore.list()
+                        val failedNote = if (result.failed.isNotEmpty()) " · ${result.failed.size} could not be removed" else ""
+                        saveMessage = "Removed ${result.deleted.size} unused file(s), ${result.orphanPayloadsRemoved} orphan(s)$failedNote"
+                    }
+                    .onFailure { saveMessage = "Unused-media cleanup failed · ${it.message ?: "storage error"}" }
             }
         )
     }

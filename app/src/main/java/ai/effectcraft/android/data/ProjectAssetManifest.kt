@@ -1,0 +1,305 @@
+package ai.effectcraft.android.data
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+
+/**
+ * Durable per-project record of which offline assets a canonical project uses.
+ *
+ * This is the manifest half of the M2 cluster: [OfflineAssetStore] owns the
+ * content-addressed payloads, [OfflineAssetReferences] remains the legacy
+ * single-project mapping for the currently cached document, and this manifest
+ * is the multi-project record that garbage collection and missing-media
+ * recovery read. One manifest belongs to one repository project id.
+ *
+ * An entry is either a single asset (one SHA-256) or an image sequence
+ * (ordered frames, each deduplicated through the store). `missing` records
+ * that the item's media could not be found at last check; relinking clears it.
+ * Linking is idempotent: linking the same item to the same asset twice leaves
+ * the serialized manifest unchanged.
+ */
+class ProjectAssetManifest(val projectId: String) {
+    enum class Kind { SINGLE, SEQUENCE }
+
+    data class Frame(val name: String, val sha256: String)
+
+    data class Entry(
+        val itemId: Long,
+        val kind: Kind,
+        val sha256: String?,
+        val frames: List<Frame>,
+        val missing: Boolean,
+        val lastKnownPath: String?
+    ) {
+        /** Every payload hash this entry depends on, in entry order. */
+        fun hashes(): List<String> = when (kind) {
+            Kind.SINGLE -> listOfNotNull(sha256)
+            Kind.SEQUENCE -> frames.map { it.sha256 }
+        }
+    }
+
+    private val entriesById = mutableMapOf<Long, Entry>()
+
+    init {
+        validateProjectId(projectId)
+    }
+
+    fun link(itemId: Long, sha256: String, lastKnownPath: String? = null): Entry {
+        val id = validateItemId(itemId)
+        val hash = validateHash(sha256)
+        val path = validatePath(lastKnownPath)
+        val entry = Entry(id, Kind.SINGLE, hash, emptyList(), false, path)
+        entriesById[id] = entry
+        return entry
+    }
+
+    fun linkSequence(itemId: Long, frames: List<Frame>, lastKnownPath: String? = null): Entry {
+        val id = validateItemId(itemId)
+        require(frames.isNotEmpty()) { "An image sequence needs at least one frame" }
+        val validated = frames.map { Frame(validateFrameName(it.name), validateHash(it.sha256)) }
+        require(validated.map { it.name }.toSet().size == validated.size) {
+            "Image sequence frame names must be unique"
+        }
+        val entry = Entry(id, Kind.SEQUENCE, null, validated, false, validatePath(lastKnownPath))
+        entriesById[id] = entry
+        return entry
+    }
+
+    fun entryFor(itemId: Long): Entry? = entriesById[validateItemId(itemId)]
+
+    fun entries(): List<Entry> = entriesById.values.sortedBy { it.itemId }
+
+    fun remove(itemId: Long): Boolean = entriesById.remove(validateItemId(itemId)) != null
+
+    /** Marks an entry missing; returns false when the item has no entry. */
+    fun markMissing(itemId: Long): Boolean {
+        val current = entriesById[validateItemId(itemId)] ?: return false
+        entriesById[itemId] = current.copy(missing = true)
+        return true
+    }
+
+    /** Clears the missing flag; returns false when the item has no entry. */
+    fun markPresent(itemId: Long): Boolean {
+        val current = entriesById[validateItemId(itemId)] ?: return false
+        entriesById[itemId] = current.copy(missing = false)
+        return true
+    }
+
+    fun missingEntries(): List<Entry> = entries().filter { it.missing }
+
+    fun allHashes(): Set<String> = entries().flatMap { it.hashes() }.toSet()
+
+    /**
+     * Rewrites every reference to [oldHash] as [newHash] and returns how many
+     * entries changed. An entry counts once even when several of its sequence
+     * frames pointed at the old hash. The old payload itself is never deleted
+     * here: the native document path may still point at it, so garbage
+     * collection owns deletion once nothing references it.
+     */
+    fun replaceAsset(oldHash: String, newHash: String): Int {
+        val old = validateHash(oldHash)
+        val fresh = validateHash(newHash)
+        var changed = 0
+        entriesById.forEach { (id, entry) ->
+            val updated = when (entry.kind) {
+                Kind.SINGLE -> if (entry.sha256 == old) entry.copy(sha256 = fresh) else null
+                Kind.SEQUENCE -> {
+                    val frames = entry.frames.map { if (it.sha256 == old) it.copy(sha256 = fresh) else it }
+                    if (frames != entry.frames) entry.copy(frames = frames) else null
+                }
+            }
+            if (updated != null) {
+                entriesById[id] = updated
+                changed++
+            }
+        }
+        return changed
+    }
+
+    /** Restores an entry captured before an operation, or removes it when it did not exist. */
+    fun restore(previous: Entry?) {
+        if (previous == null) return
+        entriesById[previous.itemId] = previous
+    }
+
+    fun restoreAbsent(itemId: Long) {
+        entriesById.remove(validateItemId(itemId))
+    }
+
+    fun toJson(): String {
+        val document = JSONObject().apply {
+            put("format", FORMAT)
+            put("version", VERSION)
+            put("projectId", projectId)
+            put("entries", JSONArray().apply {
+                entries().forEach { entry ->
+                    put(JSONObject().apply {
+                        put("itemId", entry.itemId)
+                        put("kind", entry.kind.name.lowercase())
+                        put("missing", entry.missing)
+                        if (entry.lastKnownPath != null) put("lastKnownPath", entry.lastKnownPath)
+                        when (entry.kind) {
+                            Kind.SINGLE -> put("sha256", entry.sha256)
+                            Kind.SEQUENCE -> put("frames", JSONArray().apply {
+                                entry.frames.forEach { frame ->
+                                    put(JSONObject().put("name", frame.name).put("sha256", frame.sha256))
+                                }
+                            })
+                        }
+                    })
+                }
+            })
+        }
+        return document.toString()
+    }
+
+    companion object {
+        private const val FORMAT = "effectcraft-android-asset-manifest"
+        private const val VERSION = 1
+        private val HASH = Regex("[a-f0-9]{64}")
+
+        fun fromJson(json: String): ProjectAssetManifest {
+            try {
+                val document = JSONObject(json)
+                require(document.optString("format") == FORMAT) { "Unsupported asset manifest format" }
+                require(document.optInt("version", -1) == VERSION) { "Unsupported asset manifest version" }
+                val manifest = ProjectAssetManifest(document.getString("projectId"))
+                val array = document.getJSONArray("entries")
+                for (index in 0 until array.length()) {
+                    val raw = array.getJSONObject(index)
+                    val itemId = raw.getLong("itemId")
+                    require(!manifest.entriesById.containsKey(itemId)) { "Duplicate manifest entry for item $itemId" }
+                    val missing = raw.optBoolean("missing", false)
+                    val path = raw.optString("lastKnownPath").takeIf { it.isNotEmpty() }?.also(::validatePath)
+                    when (raw.getString("kind")) {
+                        "single" -> manifest.entriesById[itemId] = Entry(
+                            itemId, Kind.SINGLE, validateHash(raw.getString("sha256")),
+                            emptyList(), missing, path
+                        )
+                        "sequence" -> {
+                            val framesJson = raw.getJSONArray("frames")
+                            val frames = (0 until framesJson.length()).map { frameIndex ->
+                                val frame = framesJson.getJSONObject(frameIndex)
+                                Frame(validateFrameName(frame.getString("name")), validateHash(frame.getString("sha256")))
+                            }
+                            require(frames.isNotEmpty()) { "An image sequence needs at least one frame" }
+                            require(frames.map { it.name }.toSet().size == frames.size) {
+                                "Image sequence frame names must be unique"
+                            }
+                            manifest.entriesById[itemId] = Entry(itemId, Kind.SEQUENCE, null, frames, missing, path)
+                        }
+                        else -> error("Unknown manifest entry kind")
+                    }
+                }
+                return manifest
+            } catch (failure: Exception) {
+                if (failure is IOException) throw failure
+                throw IOException("Unable to read asset manifest: ${failure.message ?: "invalid document"}", failure)
+            }
+        }
+
+        fun validateProjectId(value: String): String {
+            require(value.isNotBlank() && value.length <= 256) { "Project ID must contain 1–256 characters" }
+            return value
+        }
+
+        fun validateItemId(value: Long): Long {
+            require(value > 0) { "Footage item ID must be positive" }
+            return value
+        }
+
+        fun validateHash(value: String): String {
+            require(value.matches(HASH)) { "Asset ID must be a lowercase SHA-256 digest" }
+            return value
+        }
+
+        fun validateFrameName(value: String): String {
+            require(value.isNotBlank() && value.length <= 255) { "Sequence frame name must contain 1–255 characters" }
+            return value
+        }
+
+        fun validatePath(value: String?): String? {
+            if (value != null) require(value.length <= 2048) { "Last-known media path is too long" }
+            return value
+        }
+    }
+}
+
+/**
+ * File-backed store for per-project manifests. Files are named by the SHA-256
+ * of the project id (same pattern as [ProjectKeyframeStore]) so arbitrary
+ * project ids never become filesystem paths. Writes are atomic replacements.
+ */
+class ProjectAssetManifestStore(private val root: File) {
+    @Synchronized
+    fun load(projectId: String): ProjectAssetManifest {
+        val id = ProjectAssetManifest.validateProjectId(projectId)
+        val file = fileFor(id)
+        if (!file.isFile) return ProjectAssetManifest(id)
+        return ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8))
+    }
+
+    @Synchronized
+    @Throws(IOException::class)
+    fun save(manifest: ProjectAssetManifest) {
+        if (!root.exists() && !root.mkdirs()) throw IOException("Unable to create asset manifest directory")
+        if (!root.isDirectory) throw IOException("Asset manifest path is not a directory")
+        val target = fileFor(manifest.projectId)
+        val temporary = File(root, "${target.name}.tmp")
+        temporary.writeText(manifest.toJson(), Charsets.UTF_8)
+        try {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: Exception) {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    @Synchronized
+    fun delete(projectId: String): Boolean {
+        val file = fileFor(ProjectAssetManifest.validateProjectId(projectId))
+        if (!file.exists()) return false
+        if (!file.delete()) throw IOException("Unable to remove asset manifest")
+        return true
+    }
+
+    /** Project ids with a readable manifest on disk; corrupt files are skipped, not fatal. */
+    @Synchronized
+    fun projectIds(): List<String> {
+        if (!root.isDirectory) return emptyList()
+        return root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
+            .mapNotNull { file -> runCatching { ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8)).projectId }.getOrNull() }
+            .sorted()
+    }
+
+    @Synchronized
+    fun allReferencedHashes(): Set<String> =
+        projectIds().flatMap { load(it).allHashes() }.toSet()
+
+    /** Rewrites [oldHash] as [newHash] in every project manifest; returns entries changed. */
+    @Synchronized
+    fun replaceAssetEverywhere(oldHash: String, newHash: String): Int {
+        ProjectAssetManifest.validateHash(oldHash)
+        ProjectAssetManifest.validateHash(newHash)
+        var changed = 0
+        projectIds().forEach { id ->
+            val manifest = load(id)
+            val count = manifest.replaceAsset(oldHash, newHash)
+            if (count > 0) {
+                save(manifest)
+                changed += count
+            }
+        }
+        return changed
+    }
+
+    private fun fileFor(projectId: String): File = File(root, "${projectId.sha256()}.json")
+
+    private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
+        .digest(toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+}
