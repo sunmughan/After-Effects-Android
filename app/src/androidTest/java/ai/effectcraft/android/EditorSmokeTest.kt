@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import ai.effectcraft.android.ui.EditorScreen
 import ai.effectcraft.android.data.DraftProjectStore
+import ai.effectcraft.android.data.CanonicalProjectDocument
 import ai.effectcraft.android.data.EcprojDocumentStore
 import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.engine.NativeProjectBridge
@@ -66,6 +67,29 @@ class EditorSmokeTest {
 
         assertEditorStatus("Opened locally · Untitled Composition")
         compose.onNodeWithText("Shape 5").assertIsDisplayed()
+    }
+
+    @Test
+    fun effectCraftEcprojxXmlRoundTripsTypedProjectValues() {
+        val source = JSONObject()
+            .put("schema", 3)
+            .put("name", "XML < & round-trip")
+            .put("items", org.json.JSONArray().put(
+                JSONObject().put("id", 42).put("enabled", true).put("nullable", JSONObject.NULL)
+            ))
+            .toString()
+
+        val xml = CanonicalProjectDocument.toXml(source)
+        assertTrue(xml.startsWith("<?xml"))
+        assertTrue(xml.contains("<EffectCraftProject encoding=\\"json\\" version=\\"1\\">"))
+        val restored = JSONObject(CanonicalProjectDocument.toCanonicalJson(xml))
+
+        assertEquals(3, restored.getInt("schema"))
+        assertEquals("XML < & round-trip", restored.getString("name"))
+        val item = restored.getJSONArray("items").getJSONObject(0)
+        assertEquals(42, item.getInt("id"))
+        assertTrue(item.getBoolean("enabled"))
+        assertEquals(JSONObject.NULL, item.get("nullable"))
     }
 
     @Test
