@@ -509,3 +509,19 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - M5: PARTIAL — real PNG and validated configurable PNG-sequence ZIP; video/audio export absent.
 - M6: IN PROGRESS — aggregate media quotas, rollback, stale ZIP cleanup and atomic draft-save recovery; broader crash/perf/device/accessibility gates open.
 - M7: NOT STARTED — signed/configurable release, artifact/install verification, release notes and final all-green gate remain.
+
+### Run 49 — harden interrupted draft recovery (2026-11-03)
+- M6 recovery refinement: incomplete/mismatched draft temp files are discarded without touching the committed target; a complete temp with newer updatedAt is promoted, and a valid target with a different embedded project ID is treated as corrupt relative to its filename. A transient rename failure now retains the recoverable temp for the next startup instead of deleting it.
+- Added Android instrumentation draftStoreDiscardsIncompleteAtomicTempAndPreservesCommittedProject alongside the complete-temp promotion test. Test timestamp is based on the persisted target, not starter-model wall clock. Commits: recovery refinement be511076; incomplete-temp test 92db0261.
+- Exact-head CI #418 was cancelled by the subsequent test commit. #415 is still running on older timestamp-fixture head 0e6d46e0 (not the recovery source/test head); #419 is expected from latest test head 92db0261. Run #412 main job was successful (Rust 28/28, unit tests, emulator 27/27, artifacts), but its second-build reproducibility job was cancelled by newer pushes, so M0 reproducibility is not accepted.
+- Environment: this automation runner cannot resolve github.com from its local container, so no local checkout/Gradle execution is possible here. GitHub Actions is the build/test authority; commits were made through the repository API and exact-head runs must be allowed to finish before further changes.
+
+### Run 49 acceptance/status update
+- M0 INCOMPLETE: deterministic second APK rebuild comparison still needs a complete green workflow; license/owner acceptance remains external.
+- M1 COMPLETE on previously accepted scoped feature set; newest draft-recovery instrumentation awaits exact-head CI.
+- M2 IN PROGRESS; canonical format/media/SAF and physical device acceptance open.
+- M3 PARTIAL; native CPU renderer works, physical GPU/surface/device matrix open.
+- M4 IN PROGRESS; opacity animation is canonical and rendered; animated position/scale/rotation/effect tracks are not yet wired.
+- M5 PARTIAL; PNG and PNG-sequence ZIP only, no video/audio codecs.
+- M6 IN PROGRESS; media quotas, rollback, stale ZIP cleanup, interrupted draft atomic-save recovery; broader durable journal, performance, memory, crash and accessibility gates open.
+- M7 NOT STARTED; release signing/artifacts/install verification/docs finalization open.
