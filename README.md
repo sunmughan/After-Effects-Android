@@ -2,7 +2,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** CI #247 built both JNI ABIs, passed Rust tests and license inventory, then failed Kotlin compilation due to a duplicate canonical import read and missing `CanonicalProjectDocument` import. Fixed in `57011355`; fresh current-head CI is pending. See [PHASES.md](PHASES.md).
+> **Current status: M0 INCOMPLETE; M1 editor acceptance pending.** CI #254 passed dual-ABI native builds, Rust tests, license inventory, APK assembly and JVM tests, then exposed missing `savedProjects`/`onOpenProject` arguments in the adaptive Compose test. Fixed in `2aafaa47`. Offline save-upsert/dedup regression now verifies a second save of the same project ID updates the opened revision; temporary diagnostic test removed in `8ff29ce8`. Fresh current-head CI and all instrumentation are pending. See [PHASES.md](PHASES.md).
 
 ## Product direction
 
