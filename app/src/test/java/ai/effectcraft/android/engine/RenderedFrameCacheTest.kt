@@ -3,10 +3,15 @@ package ai.effectcraft.android.engine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertArrayEquals
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class RenderedFrameCacheTest {
     @Before fun reset() = RenderedFrameCache.clear()
@@ -41,6 +46,32 @@ class RenderedFrameCacheTest {
         val (entries, bytes) = RenderedFrameCache.stats()
         assertEquals(12, entries)
         assertEquals(12 * 1024 * 1024, bytes)
+    }
+
+    @Test fun concurrentIdenticalRequestsRenderOnlyOnce() {
+        val pool = Executors.newFixedThreadPool(8)
+        val ready = CountDownLatch(8)
+        val start = CountDownLatch(1)
+        val renders = AtomicInteger()
+        try {
+            val futures = (0 until 8).map {
+                pool.submit<ByteArray?> {
+                    ready.countDown()
+                    start.await()
+                    RenderedFrameCache.getOrRender("same-frame") {
+                        renders.incrementAndGet()
+                        Thread.sleep(25)
+                        byteArrayOf(0, 0, 0, 1, 0, 0, 0, 1, 42)
+                    }
+                }
+            }
+            assertTrue(ready.await(2, TimeUnit.SECONDS))
+            start.countDown()
+            futures.forEach { assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0, 0, 0, 1, 42), it.get(3, TimeUnit.SECONDS)) }
+            assertEquals(1, renders.get())
+        } finally {
+            pool.shutdownNow()
+        }
     }
 
     @Test fun oversizedFramesAreNotRetainedAndClearResetsBudget() {
