@@ -292,7 +292,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Verify ARM64 native frame on physical phone/tablet; record device, ABI, SHA and pixel evidence.
 
 ## M4 — Editing/effects/timeline parity
-**Status: IN PROGRESS — canonical opacity keyframes now serialize and evaluate in the upstream renderer; exact-head CI #382 is still running; transform/effect parity and remaining timeline gates open**
+**Status: IN PROGRESS — canonical opacity keyframes serialize/evaluate in upstream rendering; latest transform/effect and full timeline parity remain open. Current head `6de686c`; CI #395 pending for the accumulated changes**
 - [x] Canonical Transform/Opacity is now a real upstream `Property` mutation (0–100, key-aware at frame zero), exposed by JNI, reflected in metadata and edited with a commit-on-release slider; each change reserializes the `.ecproj` and refreshes CPU preview (`9a0af7d`, `340e601`, `7997036`, `1166a2c`, `71509df`). Rust tests cover property mutation/range/ID; Kotlin parser test covers opacity metadata (`e049130`). CI/device validation pending.
 - [x] Canonical Transform/Position X/Y edits preserve Z and key-aware set at frame zero; native model test verifies exact vector and rejects non-finite coordinates/unknown IDs (`b2422dc`); JNI/Kotlin bridge and inspector numeric controls Apply into project cache (`a8a94c2`, `764c311`, `21f4a80`). Parser tests cover X/Y metadata (`0a96985`). CI/device validation pending.
 - [x] Canonical Transform Scale X/Y and Z Rotation editing: Rust mutations preserve Scale Z and set key-aware frame-zero values, bounded finite input validation, JNI/Kotlin APIs, metadata parsing, inspector Apply controls and CPU preview refresh; Rust round-trip/error tests and Kotlin metadata test added (`6b1b45f`). Current-head CI validation pending.
@@ -305,7 +305,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Verify every edit updates engine preview and canonical project data.
 
 ## M5 — Render and export
-**Status: PARTIAL — native single-frame PNG and SAF full-composition PNG-sequence ZIP export are implemented; video/audio and configurable output modules remain**
+**Status: PARTIAL — native PNG and configurable SAF PNG-sequence ZIP (dimensions/FPS/range, resampling, manifest, staged ZIP integrity) implemented; composition range now preflighted before SAF. Video/audio codecs, crop/letterbox, and provider-side atomic cancellation remain**
 - [x] SAF CreateDocument export of the current canonical composition/playhead frame as PNG, using a temporary full-resolution native session, bounded RGBA validation and correct pixel conversion; cancel before output write and show render/write/completion/failure status. Implementation commit `09c1f1b`; pixel fidelity and malformed/over-budget emulator tests.
 - [x] Streaming ZIP sequence core: one frame at a time, PNG signature/IHDR/dimension validation, stable entry names/timestamps, progress and cooperative cancellation. Implementation `1910de56`, JVM tests `432f85ca`; green containing-head CI #380 on `f7d0ba3` verified 68/68 unit + 25/25 emulator cases.
 - [x] `sequence.json` records schema/format, width/height/FPS, inclusive frame range and frame count; validator checks manifest CRC/size and plan equality before SAF copy (Run 42, latest CI pending).
@@ -317,7 +317,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Tested 720p/1080p; 4K only on device tiers meeting measured budgets.
 
 ## M6 — Performance, reliability and UX
-**Status: NOT STARTED**
+**Status: IN PROGRESS — first offline-storage guardrails implemented; performance, recovery, device matrix and accessibility remain open**
+- [x] Per-asset streaming cap (512 MiB default) plus configurable 2 GiB aggregate offline media quota; content-addressed duplicates count once; quota rejection publishes no asset (Run 44, commit `7843f3e`).
+- [x] Roll back a newly staged media payload when atomic index publication fails; fault-injection regression added (Run 46, commit `6de686c`). Exact-head CI #395 pending.
 - [ ] Memory/frame pacing/thermal budgets and large-project benchmarks.
 - [ ] Crash recovery, atomic save, process death and lifecycle/rotation.
 - [ ] API 26+ phone/tablet/foldable matrix; accessibility and input polish.
@@ -464,3 +466,14 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Added fault-injection JVM regression by making assets.properties.tmp a directory, forcing index publication to fail after payload staging; asserts no indexed asset or orphan payload remains. No tests removed.
 - Tree repair note: Run 45's Git tree was accidentally based on the pre-Run-44 tree despite its parent commit. This commit reconstructs from Run 44's actual tree, preserving aggregate media quota/tests together with Run 45 composition-bounded render ranges. 
 - Exact-head CI #395 pending.
+
+
+## Current phase status snapshot (2026-11-03, branch head 6de686c)
+- M0 NOT COMPLETE: technical CI/reproducibility is accepted on earlier exact green heads; licensing and owner acceptance remain explicit gates.
+- M1 COMPLETE: scoped editor foundation has named emulator/JUnit acceptance.
+- M2 IN PROGRESS: canonical .ecproj/.ecprojx and offline asset/repository/SAF workflows; physical device, repository picker and recovery acceptance remain.
+- M3 PARTIAL: native CPU preview/session and GPU fallback integration; physical ARM64 GPU and Android surface/device-loss acceptance remain.
+- M4 IN PROGRESS: canonical opacity keyframes evaluate in native preview; transform/effect/timeline graph parity remains.
+- M5 PARTIAL: single-frame PNG and configurable, validated PNG-sequence ZIP; no video/audio codec export.
+- M6 IN PROGRESS: bounded offline media storage/quota and import rollback guardrails; memory/performance, crash recovery, device/API matrix and accessibility remain.
+- M7 NOT STARTED: signed configurable release artifacts, physical install/run, notices and release gate review remain.
