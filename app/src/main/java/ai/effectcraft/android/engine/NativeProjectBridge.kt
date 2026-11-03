@@ -69,6 +69,82 @@ object NativeProjectBridge {
         return runCatching { setLayerRotationEcprojNative(json, compositionId, layerId, degrees) }.getOrNull()
     }
 
+    /** Sets canonical Transform/Anchor Point X and Y while preserving the existing Z value. */
+    fun setLayerAnchorEcproj(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerAnchorEcprojNative(json, compositionId, layerId, x, y) }.getOrNull()
+    }
+
+    /** Sets canonical Transform/Orientation X, Y and Z in degrees. */
+    fun setLayerOrientationEcproj(json: String, compositionId: Long, layerId: Long, x: Double, y: Double, z: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerOrientationEcprojNative(json, compositionId, layerId, x, y, z) }.getOrNull()
+    }
+
+    /** Sets canonical Transform/X Rotation in degrees. */
+    fun setLayerRotationXEcproj(json: String, compositionId: Long, layerId: Long, degrees: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerRotationXEcprojNative(json, compositionId, layerId, degrees) }.getOrNull()
+    }
+
+    /** Sets canonical Transform/Y Rotation in degrees. */
+    fun setLayerRotationYEcproj(json: String, compositionId: Long, layerId: Long, degrees: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerRotationYEcprojNative(json, compositionId, layerId, degrees) }.getOrNull()
+    }
+
+    /**
+     * Sets the canonical layer lock switch. This is the only layer edit that
+     * is allowed on a locked layer, so a locked layer can always be unlocked.
+     */
+    fun setLayerLockedEcproj(json: String, compositionId: Long, layerId: Long, locked: Boolean): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerLockedEcprojNative(json, compositionId, layerId, locked) }.getOrNull()
+    }
+
+    /** Sets the Source Text string of a canonical Text layer. */
+    fun setTextLayerTextEcproj(json: String, compositionId: Long, layerId: Long, text: String): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setTextLayerTextEcprojNative(json, compositionId, layerId, text) }.getOrNull()
+    }
+
+    /** Sets the Source Text size of a canonical Text layer. */
+    fun setTextLayerSizeEcproj(json: String, compositionId: Long, layerId: Long, size: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setTextLayerSizeEcprojNative(json, compositionId, layerId, size) }.getOrNull()
+    }
+
+    /** Sets the Source Text tracking of a canonical Text layer. */
+    fun setTextLayerTrackingEcproj(json: String, compositionId: Long, layerId: Long, tracking: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setTextLayerTrackingEcprojNative(json, compositionId, layerId, tracking) }.getOrNull()
+    }
+
+    /** Sets one scalar shape-item or effect parameter, addressed by its native uid. */
+    fun setLayerScalarPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerScalarPropertyEcprojNative(json, compositionId, layerId, uid, value) }.getOrNull()
+    }
+
+    /**
+     * Sets one vector shape-item or effect parameter, addressed by its native
+     * uid. Vec2 parameters use X and Y and ignore Z; Vec3 parameters use all three.
+     */
+    fun setLayerVecPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, x: Double, y: Double, z: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { setLayerVecPropertyEcprojNative(json, compositionId, layerId, uid, x, y, z) }.getOrNull()
+    }
+
     /**
      * Authors one canonical Transform/Opacity keyframe at [frame] (0–100 percent).
      * The first key seeds frame 0 with the layer's current opacity, so authoring
@@ -148,6 +224,36 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerRotationEcprojNative(json: String, compositionId: Long, layerId: Long, degrees: Double): String
+
+    @JvmStatic
+    private external fun setLayerAnchorEcprojNative(json: String, compositionId: Long, layerId: Long, x: Double, y: Double): String
+
+    @JvmStatic
+    private external fun setLayerOrientationEcprojNative(json: String, compositionId: Long, layerId: Long, x: Double, y: Double, z: Double): String
+
+    @JvmStatic
+    private external fun setLayerRotationXEcprojNative(json: String, compositionId: Long, layerId: Long, degrees: Double): String
+
+    @JvmStatic
+    private external fun setLayerRotationYEcprojNative(json: String, compositionId: Long, layerId: Long, degrees: Double): String
+
+    @JvmStatic
+    private external fun setLayerLockedEcprojNative(json: String, compositionId: Long, layerId: Long, locked: Boolean): String
+
+    @JvmStatic
+    private external fun setTextLayerTextEcprojNative(json: String, compositionId: Long, layerId: Long, text: String): String
+
+    @JvmStatic
+    private external fun setTextLayerSizeEcprojNative(json: String, compositionId: Long, layerId: Long, size: Double): String
+
+    @JvmStatic
+    private external fun setTextLayerTrackingEcprojNative(json: String, compositionId: Long, layerId: Long, tracking: Double): String
+
+    @JvmStatic
+    private external fun setLayerScalarPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String
+
+    @JvmStatic
+    private external fun setLayerVecPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, x: Double, y: Double, z: Double): String
 
     @JvmStatic
     private external fun setLayerOpacityEcprojNative(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String
