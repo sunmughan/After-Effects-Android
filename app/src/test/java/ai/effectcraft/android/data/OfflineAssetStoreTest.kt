@@ -45,7 +45,8 @@ class OfflineAssetStoreTest {
             assertEquals(first.sha256, second.sha256)
             assertEquals(first, second)
             assertEquals(1, store.list().size)
-            assertEquals(1, root.listFiles { file -> file.isFile && file.name.matches(Regex("[a-f0-9]{64}")) }!!.size)
+            assertEquals(1, root.listFiles { file -> file.isFile && file.name.startsWith("${first.sha256}.") }!!.size)
+            assertTrue(File(root, "${first.sha256}.bin").isFile)
         } finally {
             root.deleteRecursively()
         }
