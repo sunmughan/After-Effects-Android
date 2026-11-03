@@ -359,6 +359,7 @@ private fun HeaderBar(
     onOpenProject: () -> Unit,
     onValidateEcproj: () -> Unit,
     onExportEcproj: () -> Unit,
+    onExportEcprojx: () -> Unit,
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit
