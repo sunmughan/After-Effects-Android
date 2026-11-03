@@ -17,7 +17,7 @@ object SafDocumentWriter {
     const val DEFAULT_BUFFER_SIZE = 64 * 1024
 
     fun copyTo(
-        source: InputStream,
+        openInput: () -> InputStream,
         openOutput: () -> OutputStream,
         rollbackDestination: () -> Unit,
         bufferSize: Int = DEFAULT_BUFFER_SIZE,
@@ -27,7 +27,7 @@ object SafDocumentWriter {
         require(bufferSize in 1..(1024 * 1024)) { "Copy buffer must be between 1 byte and 1 MiB" }
         var copied = 0L
         try {
-            source.use { input ->
+            openInput().use { input ->
                 openOutput().use { output ->
                     val buffer = ByteArray(bufferSize)
                     while (true) {
@@ -68,7 +68,7 @@ object SafDocumentWriter {
         ensureActive: () -> Unit = {},
         onBytesCopied: (Long) -> Unit = {}
     ): Long = copyTo(
-        source = sourceFile.inputStream(),
+        openInput = { sourceFile.inputStream() },
         openOutput = {
             context.contentResolver.openOutputStream(destination, "wt")
                 ?: throw IOException("Unable to open SAF output document")
