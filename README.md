@@ -140,3 +140,8 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - Marker regression placement follow-up (2fd99d5d): tap the workspace timeline before opening the canonical modal, then verify nearest-key seek; exact-head CI pending.
 
 - Canonical transform track now uses the selected imported composition's duration (not local draft duration) for marker position and tap seeking; test fixture covers 90-frame canonical duration (618553d4). Exact-head CI pending.
+
+
+### Run 66 — accessible transform keyframe seeking (2026-11-04)
+- TRANSFORM marker lane exposes a screen-reader semantic click action that seeks the nearest canonical key relative to the current playhead; connected regression now uses Compose `performClick()` rather than only pointer input. Commits `8e17934c`, `a69ae2d5`, tracker `944e5c88`.
+- CI #501 failure was a visibility assertion after a successful frame-15 seek; the label was below the modal scroll position. Fix `b217fea3` scrolls the frame label into view without removing the assertion. CI #502 was running on `b217fea3`; the accessibility commits need a fresh exact-head CI. No new test pass claimed.
