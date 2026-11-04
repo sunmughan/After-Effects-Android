@@ -2246,7 +2246,7 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, c
             modifier = Modifier.weight(1f).height(17.dp)
                 .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
                 .semantics {
-                    contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}; drag a marker to move its key"
+                    contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}"
                     onClick("Seek to nearest transform keyframe") {
                         val target = frames.minByOrNull { kotlin.math.abs(it - currentFrame) } ?: currentFrame
                         onScrub(target.coerceIn(0, (durationFrames - 1).coerceAtLeast(0)))
