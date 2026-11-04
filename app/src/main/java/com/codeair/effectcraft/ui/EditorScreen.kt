@@ -1290,24 +1290,6 @@ private fun CanonicalProjectEditor(
                 }
             }
             Text("Drag the preview to move selected layers", color = EditorPalette.muted, fontSize = 10.sp)
-            if (backendStatusText != null) {
-                Text("Render backend · $backendStatusText", color = EditorPalette.muted, fontSize = 11.sp)
-            }
-            // let-bound: a delegated `by remember` state value cannot be
-            // smart-cast after a null check, so bind it to a local first.
-            mediaCacheStatusText?.let {
-                Text(it, color = EditorPalette.muted, fontSize = 11.sp)
-            }
-            Text("SURFACE PREVIEW", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
-            // The same native frame, presented on a TextureView Surface:
-            // attach/resize re-renders through surfaceRenderNonce, and a
-            // session loss/recovery re-attaches through surfacePresentation.
-            TexturePreview(
-                frameBytes = renderedFrameBytes,
-                onSurfaceReady = { surfaceRenderNonce++ },
-                modifier = Modifier.fillMaxWidth().height(220.dp),
-                presentation = surfacePresentation,
-            )
             Text("Frame ${previewFrame} / ${composition.durationFrames - 1}", color = EditorPalette.muted, fontSize = 10.sp)
             Slider(
                 value = previewFrame.toFloat(),
@@ -1368,6 +1350,28 @@ private fun CanonicalProjectEditor(
                     }
                 }
             }
+            // Surface preview sits below the layer list: the 220dp surface
+            // above the list pushed the list below the sheet fold, so the
+            // layer rows failed assertIsDisplayed on open. The preview
+            // itself is unchanged, only its position in this column.
+            if (backendStatusText != null) {
+                Text("Render backend · $backendStatusText", color = EditorPalette.muted, fontSize = 11.sp)
+            }
+            // let-bound: a delegated `by remember` state value cannot be
+            // smart-cast after a null check, so bind it to a local first.
+            mediaCacheStatusText?.let {
+                Text(it, color = EditorPalette.muted, fontSize = 11.sp)
+            }
+            Text("SURFACE PREVIEW", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
+            // The same native frame, presented on a TextureView Surface:
+            // attach/resize re-renders through surfaceRenderNonce, and a
+            // session loss/recovery re-attaches through surfacePresentation.
+            TexturePreview(
+                frameBytes = renderedFrameBytes,
+                onSurfaceReady = { surfaceRenderNonce++ },
+                modifier = Modifier.fillMaxWidth().height(220.dp),
+                presentation = surfacePresentation,
+            )
             if (layer != null) {
                 // A locked layer shows its fields but accepts no edit: every
                 // control below is disabled while locked, and the native
