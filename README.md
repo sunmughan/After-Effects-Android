@@ -1,3 +1,7 @@
+### Run 82 — Bezier preview-state correction
+- Fixed speed/influence sliders to compose against the current local graph preview instead of stale canonical values; bounded speed to 1e6 before Float conversion. Commit de61d322.
+- CI #585 was superseded; exact-head #586 pending. No test pass claimed for the UI yet.
+
 ### Run 75 — roadmap evidence consolidated
 - Phase summaries now reflect CI #545's completed Assemble/test job (Rust 38/38, JVM task success, emulator 70/70) while correctly leaving the cancelled cold APK comparison unaccepted. M0 owner acceptance remains open; M1 scoped foundation accepted; M2/M3/M4/M5/M6/M7 remain at their documented partial/in-progress states.
 - M4 includes native Anchor/Orientation/Rotation X/Y keyframes and graph Add-at-playhead; recursive Anchor lookup fix and connected test committed. Exact combined-head CI #560 is pending; no pass claimed for Runs 73–74.
