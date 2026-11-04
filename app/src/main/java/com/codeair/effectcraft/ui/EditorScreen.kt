@@ -783,7 +783,13 @@ private fun HeaderBar(
     BoxWithConstraints(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
     ) {
-        if (maxWidth < 620.dp) {
+        // The single-row desktop header needs ~840dp to fit its action bar
+        // (logo, OFFLINE chip, nine icon buttons, three text buttons) without
+        // squeezing the status column to zero width — on a 731dp landscape
+        // phone the old 620dp threshold chose it and the status text was
+        // measured to zero and never displayed. Narrower windows use the
+        // two-row header, where the status has its own full-width row.
+        if (maxWidth < 840.dp) {
             // Two compact rows prevent the project status from being squeezed to zero
             // width by the desktop-style action bar on phones.
             Column(Modifier.fillMaxWidth().height(88.dp)) {

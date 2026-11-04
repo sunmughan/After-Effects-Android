@@ -45,17 +45,23 @@ class OfflineAcceptanceTest {
         val requested = info.requestedPermissions?.toSet().orEmpty()
         assertFalse("Offline app must not request account access", requested.any { it.contains("ACCOUNT") })
         assertFalse("Offline app must not request credentials", requested.any { it.contains("CREDENTIAL") })
-        // INTERNET is allowed ONLY as FCM transport (see the manifest
-        // comment); anything beyond INTERNET + POST_NOTIFICATIONS would
-        // be a new network-adjacent permission and must fail here.
+        // The app declares only INTERNET (FCM transport, see the manifest
+        // comment) + POST_NOTIFICATIONS, but manifest merging adds the
+        // FCM library's own permissions (WAKE_LOCK, ACCESS_NETWORK_STATE,
+        // c2dm RECEIVE) and AndroidX's app-id-scoped dynamic-receiver
+        // permission. None is an account/credential permission. Anything
+        // beyond this allowlist — a future account, location, or media
+        // permission, say — must fail here.
         val allowed = setOf(
             "android.permission.INTERNET",
-            "android.permission.POST_NOTIFICATIONS"
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.WAKE_LOCK",
+            "com.google.android.c2dm.permission.RECEIVE"
         )
-        assertEquals(
-            "Only FCM transport + notification permissions may be requested",
-            allowed,
-            requested
+        org.junit.Assert.assertTrue(
+            "Unexpected requested permissions: $requested",
+            requested.all { it in allowed || it.endsWith("DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION") }
         )
     }
 
