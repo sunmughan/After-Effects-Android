@@ -196,6 +196,7 @@ fun EditorScreen(
     onMoveCanonicalCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
     onSetCanonicalCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onAddCanonicalCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+    onRemoveCanonicalCurveKey: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
     onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -656,6 +657,7 @@ fun EditorScreen(
                     onMoveCanonicalCurveKey = onMoveCanonicalCurveKey,
                     onSetCanonicalCurveHandle = onSetCanonicalCurveHandle,
                     onAddCanonicalCurveKey = onAddCanonicalCurveKey,
+                    onRemoveCanonicalCurveKey = onRemoveCanonicalCurveKey,
                     onRemoveLayerOpacityKeyframe = onRemoveCanonicalLayerOpacityKeyframe,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
                     onSetLayerScale = onSetCanonicalLayerScale,
@@ -1101,6 +1103,7 @@ private fun CanonicalProjectEditor(
     onMoveCanonicalCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
     onSetCanonicalCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onAddCanonicalCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+    onRemoveCanonicalCurveKey: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
     onRemoveLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -1514,7 +1517,8 @@ private fun CanonicalProjectEditor(
                         editable = editable,
                         onMoveCurveKey = onMoveCanonicalCurveKey,
                         onSetCurveHandle = onSetCanonicalCurveHandle,
-                        onAddCurveKey = onAddCanonicalCurveKey
+                        onAddCurveKey = onAddCanonicalCurveKey,
+                        onRemoveCurveKey = onRemoveCanonicalCurveKey
                     )
                 }
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
@@ -2147,7 +2151,8 @@ private fun CurveGraphSection(
     editable: Boolean,
     onMoveCurveKey: (Long, Long, String, Int, Int) -> Unit,
     onSetCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit,
-    onAddCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit
+    onAddCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit,
+    onRemoveCurveKey: (Long, Long, String, Int) -> Unit
 ) {
     var selectedSelector by remember(layer.id) { mutableStateOf("transform:position") }
     val paramOptions = (layer.shapeItems + layer.effects).flatMap { group ->
@@ -2250,17 +2255,21 @@ private fun CurveGraphSection(
                     // TalkBack users cannot drag Canvas points. Expose the same
                     // key-move operation as a custom action so every curve key
                     // can be moved to the shared playhead without pointer input.
-                    customActions = if (editable) track.keys.map { key ->
-                        CustomAccessibilityAction(
-                            "Move key at frame ${key.frame} to playhead frame $previewFrame"
-                        ) {
-                            if (key.frame == previewFrame) {
-                                false
-                            } else {
-                                onMoveCurveKey(composition.id, layer.id, selector, key.frame, previewFrame)
+                    customActions = if (editable) track.keys.flatMap { key ->
+                        listOf(
+                            CustomAccessibilityAction(
+                                "Move key at frame ${key.frame} to playhead frame $previewFrame"
+                            ) {
+                                if (key.frame == previewFrame) false else {
+                                    onMoveCurveKey(composition.id, layer.id, selector, key.frame, previewFrame)
+                                    true
+                                }
+                            },
+                            CustomAccessibilityAction("Delete curve key at frame ${key.frame}") {
+                                onRemoveCurveKey(composition.id, layer.id, selector, key.frame)
                                 true
                             }
-                        }
+                        )
                     } else emptyList()
                 }
                 .pointerInput(track, graphWidth, graphHeight) {

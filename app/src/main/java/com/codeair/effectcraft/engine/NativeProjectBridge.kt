@@ -235,6 +235,13 @@ object NativeProjectBridge {
         return runCatching { removeLayerTransformKeyframeEcprojNative(json, compositionId, layerId, property, frame) }.getOrNull()
     }
 
+    /** Removes a native key from any curve selector (Transform or param UID); idempotent. */
+    fun removeLayerCurveKeyframeEcproj(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || !selector.matches(Regex("transform:(position|scale|rotation|opacity)|param:[0-9]+"))) return null
+        return runCatching { removeLayerCurveKeyframeEcprojNative(json, compositionId, layerId, selector, frame) }.getOrNull()
+    }
+
     /** Sets the upstream Transform/Opacity property (0–100 percent). */
     fun setLayerOpacityEcproj(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String? {
         ensureLoaded()
@@ -340,6 +347,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerParamKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, x: Double, y: Double, z: Double): String
+
+    @JvmStatic
+    private external fun removeLayerCurveKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long): String
 
     @JvmStatic
     private external fun removeLayerTransformKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String

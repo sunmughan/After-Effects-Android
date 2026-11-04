@@ -470,6 +470,25 @@ class CanonicalEditPreviewSyncTest {
     }
 
     @Test
+    fun curveGraphDeleteRemovesTransformKeyAndRestoresStaticPreview() {
+        val fixture = baseFixture()
+        val keyed = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, "position", 0L, 0.0, 0.0, 0.0)
+        )
+        val animated = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "position", 30L, 100.0, 0.0, 0.0)
+        )
+        assertEquals(listOf(0, 30), layer(canonical(animated), fixture.firstId).transformCurves["position"]!!.map { it.frame })
+        val (staticProject, removed) = removeEdit(
+            NativeProjectBridge.removeLayerCurveKeyframeEcproj(animated, fixture.compositionId, fixture.firstId, "transform:position", 30L)
+        )
+        assertTrue("Curve key removal must report removed", removed)
+        assertEquals(listOf(0), layer(canonical(staticProject), fixture.firstId).transformCurves["position"]!!.map { it.frame })
+        val (animatedFrame, staticFrame) = previewBeforeAndAfter(animated, staticProject, fixture.compositionId, 30)
+        assertFramesDiffer(animatedFrame, staticFrame, "Removing the frame-30 position key must restore the static-position preview")
+    }
+
+    @Test
     fun opacityKeyframeInterpolatesInPreview() {
         val fixture = baseFixture()
         val keyed = applyEdit(

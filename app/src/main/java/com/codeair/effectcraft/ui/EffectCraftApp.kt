@@ -968,6 +968,23 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical $selector keyframe moved $fromFrame to $toFrame · saved locally"
                 )
             },
+            onRemoveCanonicalCurveKey = { compositionId, layerId, selector, frame ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, selector, frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) {
+                        saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove curve key"
+                    } else if (!removed) {
+                        saveMessage = "No canonical $selector keyframe · frame $frame"
+                    } else {
+                        applyCanonicalEdit(envelope, "Canonical $selector keyframe removed · frame $frame · saved locally")
+                    }
+                }
+            },
             onSetCanonicalCurveHandle = { compositionId, layerId, selector, frame, side, speed, influence ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

@@ -1909,6 +1909,40 @@ fn move_keyframe(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Removes a key from any editable canonical curve selector (Transform or param UID).
+/// If the last key is removed, the property's static value is restored at that tick.
+fn remove_curve_keyframe(
+    source: &str, composition_id: u64, layer_id: u64, selector: &str, frame: i64,
+) -> Result<(String, bool), String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = resolve_curve_property_mut(layer, selector)?;
+    if property.static_only {
+        return Err(format!("Curve property {selector} cannot be keyframed"));
+    }
+    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_)) {
+        return Err(format!("Curve property {selector} is not animatable"));
+    }
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    let removed = property.keys.iter().any(|key| key.time == tick);
+    if removed {
+        if property.keys.len() == 1 {
+            property.set_animated(false, tick);
+        } else {
+            property.keys.retain(|key| key.time != tick);
+        }
+    }
+    let json = project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))?;
+    Ok((json, removed))
+}
+
 /// Authors one shape-item or effect scalar/vector parameter keyframe at
 /// `frame`, addressed by its native uid. The first key seeds frame 0 with
 /// the parameter's current value, so a key authored mid-timeline never
@@ -2209,6 +2243,28 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
         set_layer_param_keyframe(&source, composition_id as u64, layer_id as u64, uid as u64, frame, x as f64, y as f64, z as f64)
     };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_removeLayerCurveKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    selector: JString, frame: jlong,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let selector: String = match env.get_string(&selector) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        remove_curve_keyframe(&source, composition_id as u64, layer_id as u64, &selector, frame)
+    };
+    let output = match result { Ok((project_json, removed)) => json!({"valid": true, "project": project_json, "removed": removed}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
@@ -3327,6 +3383,18 @@ mod tests {
         assert_eq!(param_keys[1]["inInterp"], "Bezier");
         assert!(set_layer_param_keyframe(&source, comp_id.0, null_id, 999_999, 15, 1.0, 0.0, 0.0).is_err());
         assert!(move_keyframe(&bezier, comp_id.0, null_id, &selector, 15, -1).is_err());
+        let (without_param_mid, removed_param_mid) = remove_curve_keyframe(&dragged, comp_id.0, null_id, &selector, 24).unwrap();
+        assert!(removed_param_mid);
+        let param_after_mid: Project = serde_json::from_str(&without_param_mid).unwrap();
+        let param_property = param_after_mid.comp(comp_id).unwrap().layers[1].props.prop(&format!("@{blur_uid}")).unwrap();
+        assert_eq!(param_property.keys.len(), 1);
+        assert_eq!(param_property.keys[0].time, Tick::ZERO);
+        let (param_static, removed_param_zero) = remove_curve_keyframe(&without_param_mid, comp_id.0, null_id, &selector, 0).unwrap();
+        assert!(removed_param_zero);
+        let static_param_project: Project = serde_json::from_str(&param_static).unwrap();
+        let static_blur = static_param_project.comp(comp_id).unwrap().layers[1].props.prop(&format!("@{blur_uid}")).unwrap();
+        assert!(static_blur.keys.is_empty());
+        assert_eq!(static_blur.value, Value::Scalar(0.0));
     }
 
     #[test]
