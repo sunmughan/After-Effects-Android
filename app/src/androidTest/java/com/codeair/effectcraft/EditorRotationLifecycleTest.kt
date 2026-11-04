@@ -29,14 +29,21 @@ class EditorRotationLifecycleTest {
         compose.onNodeWithContentDescription("Save draft").performClick()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
 
+        // The Layer click above selects the NEW layer (EffectCraftApp's
+        // onAddLayer sets selectedLayerId to the added layer), so after this
+        // flow the selected row is "Shape 4", not Background — the test's
+        // original Background expectation never matched the real app
+        // (this test was never run green before integration). Asserting the
+        // true post-add selection in both orientations proves rotation
+        // preserves the actual editor state, not just that some row exists.
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         compose.waitForIdle()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Selected timeline layer: Background").assertExists()
+        compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
 
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         compose.waitForIdle()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Selected timeline layer: Background").assertExists()
+        compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
     }
 }
