@@ -110,7 +110,6 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.nio.ByteBuffer
 
 private object EditorPalette {
     val background = Color(0xFF0A0C11)
@@ -214,6 +213,8 @@ fun EditorScreen(
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?,
+    onQueryBackendStatus: (() -> String?)? = null,
+    onQueryMediaCacheStatus: (() -> String?)? = null,
     safGrants: List<SafPermissionRegistry.Grant>,
     missingManifestEntries: Int,
     onReleaseSafGrant: (String, SafPermissionRegistry.Kind) -> Unit,
@@ -675,6 +676,8 @@ fun EditorScreen(
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
+                    onQueryBackendStatus = onQueryBackendStatus,
+                    onQueryMediaCacheStatus = onQueryMediaCacheStatus,
                     playheadFrame = playheadFrame,
                     onPreviewFrameChange = onScrub,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
@@ -1121,6 +1124,8 @@ private fun CanonicalProjectEditor(
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
+    onQueryBackendStatus: (() -> String?)? = null,
+    onQueryMediaCacheStatus: (() -> String?)? = null,
     modifier: Modifier = Modifier
 ) {
     var compositionId by remember { mutableStateOf<Long?>(null) }
@@ -1170,20 +1175,33 @@ private fun CanonicalProjectEditor(
     }
     var renderedFrameBytes by remember(composition?.id) { mutableStateOf<ByteArray?>(null) }
     var previewMessage by remember(composition?.id) { mutableStateOf("Waiting for native renderer") }
+    var backendStatusText by remember(composition?.id) { mutableStateOf<String?>(null) }
+    var mediaCacheStatusText by remember(composition?.id) { mutableStateOf<String?>(null) }
+    // A surface attach/resize owes one fresh render: the nonce re-runs the
+    // render effect below, and the new bytes flow into TexturePreview.
+    var surfaceRenderNonce by remember(composition?.id) { mutableIntStateOf(0) }
+    val surfacePresentation = remember(composition?.id) { com.codeair.effectcraft.engine.SurfacePresentation() }
     var previewWidthPx by remember { mutableIntStateOf(0) }
     // Read at gesture end, not at detector setup, so a position Apply or a
     // re-parse between gestures never drags from stale layer positions.
     val gestureLayers by rememberUpdatedState(selectedLayers)
     val gestureEditCallback by rememberUpdatedState(onGestureEditSelection)
     val gestureCanEdit by rememberUpdatedState(canEdit)
-    LaunchedEffect(project, composition?.id, previewFrame, canEdit) {
+    LaunchedEffect(project, composition?.id, previewFrame, canEdit, surfaceRenderNonce) {
         if (composition != null && canEdit) {
             previewMessage = "Rendering frame ${previewFrame}…"
             renderedFrameBytes = withContext(Dispatchers.Default) { onRenderFrame(composition.id, previewFrame.toLong()) }
-            previewMessage = if (renderedFrameBytes != null) "CPU frame ready · ${previewFrame}" else "Native preview unavailable"
+            previewMessage = if (renderedFrameBytes != null) "Frame ready · ${previewFrame}" else "Native preview unavailable"
+            // Backend/media diagnostics are queried on the same background
+            // hop as the render (the first backend probe can block briefly)
+            // and only then assigned to state on the main thread.
+            backendStatusText = withContext(Dispatchers.Default) { onQueryBackendStatus?.invoke() }
+            mediaCacheStatusText = withContext(Dispatchers.Default) { onQueryMediaCacheStatus?.invoke() }
         } else {
             renderedFrameBytes = null
             previewMessage = "ARM64 native renderer required"
+            backendStatusText = null
+            mediaCacheStatusText = null
         }
     }
     val previewBitmap = remember(renderedFrameBytes) { renderedFrameBytes?.let(::decodeRenderedFrame) }
@@ -1272,6 +1290,22 @@ private fun CanonicalProjectEditor(
                 }
             }
             Text("Drag the preview to move selected layers", color = EditorPalette.muted, fontSize = 10.sp)
+            if (backendStatusText != null) {
+                Text("Render backend · $backendStatusText", color = EditorPalette.muted, fontSize = 11.sp)
+            }
+            if (mediaCacheStatusText != null) {
+                Text(mediaCacheStatusText, color = EditorPalette.muted, fontSize = 11.sp)
+            }
+            Text("SURFACE PREVIEW", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
+            // The same native frame, presented on a TextureView Surface:
+            // attach/resize re-renders through surfaceRenderNonce, and a
+            // session loss/recovery re-attaches through surfacePresentation.
+            TexturePreview(
+                frameBytes = renderedFrameBytes,
+                onSurfaceReady = { surfaceRenderNonce++ },
+                modifier = Modifier.fillMaxWidth().height(220.dp),
+                presentation = surfacePresentation,
+            )
             Text("Frame ${previewFrame} / ${composition.durationFrames - 1}", color = EditorPalette.muted, fontSize = 10.sp)
             Slider(
                 value = previewFrame.toFloat(),
@@ -1884,22 +1918,8 @@ private fun CanonicalParamGroupRows(
     }
 }
 
-private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? {
-    if (bytes.size < 8) return null
-    val width = ByteBuffer.wrap(bytes, 0, 4).int
-    val height = ByteBuffer.wrap(bytes, 4, 4).int
-    if (width !in 1..2048 || height !in 1..2048 || bytes.size != 8 + width * height * 4) return null
-    val pixels = IntArray(width * height)
-    for (index in pixels.indices) {
-        val offset = 8 + index * 4
-        val red = bytes[offset].toInt() and 0xff
-        val green = bytes[offset + 1].toInt() and 0xff
-        val blue = bytes[offset + 2].toInt() and 0xff
-        val alpha = bytes[offset + 3].toInt() and 0xff
-        pixels[index] = android.graphics.Color.argb(alpha, red, green, blue)
-    }
-    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-}
+private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? =
+    com.codeair.effectcraft.engine.RenderedFrameBitmap.decode(bytes)
 
 @Composable
 private fun CompositionSettingsPanel(

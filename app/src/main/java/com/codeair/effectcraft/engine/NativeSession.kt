@@ -73,6 +73,9 @@ class NativeSession private constructor(
         private external fun backendStatusSessionNative(handle: Long): String
 
         @JvmStatic
+        private external fun mediaPoolStatsSessionNative(handle: Long): String
+
+        @JvmStatic
         private external fun recoverGpuSessionNative(handle: Long): Boolean
 
         @JvmStatic
@@ -93,6 +96,25 @@ class NativeSession private constructor(
         val lost: Boolean,
     ) {
         val isGpu: Boolean get() = backend == "gpu"
+
+        /**
+         * The exact string the editor shows for this status: GPU names its
+         * adapter, CPU names its fallback reason, a lost device is labelled.
+         * Never a bare "GPU"/"CPU" when the native side gave a detail.
+         */
+        fun displayText(): String {
+            val detail = if (backend == "gpu") adapter else reason
+            val base = if (detail.isNullOrEmpty()) backend.uppercase() else "${backend.uppercase()} · $detail"
+            return if (lost) "$base · device lost" else base
+        }
+
+        /**
+         * One loggable line carrying the actual reported values verbatim,
+         * so a test run's log records which backend really ran — not just
+         * that the value had the right shape.
+         */
+        fun reportLine(): String =
+            "backend=$backend adapter=${adapter ?: "-"} reason=${reason ?: "-"} lost=$lost"
     }
 
     @Volatile
@@ -166,6 +188,20 @@ class NativeSession private constructor(
                 lost = obj.optBoolean("lost", false),
             )
         }.getOrNull()
+    }
+
+    /**
+     * Reports this session's decoded-media cache accounting, or null when
+     * closed, cancelled, or the native side cannot answer. Call from a
+     * background dispatcher like [backendStatus].
+     */
+    @Synchronized
+    fun mediaPoolStats(): MediaPoolStats? {
+        val sessionHandle = handle
+        if (sessionHandle == 0L || cancelled) return null
+        val json = runCatching { mediaPoolStatsSessionNative(sessionHandle) }.getOrNull()
+            ?.takeIf { it.isNotEmpty() } ?: return null
+        return MediaPoolStats.parse(json)
     }
 
     /**
