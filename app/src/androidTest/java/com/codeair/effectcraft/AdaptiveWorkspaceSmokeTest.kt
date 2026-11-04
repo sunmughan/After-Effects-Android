@@ -96,8 +96,8 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerOpacity = { _, _, _ -> },
                     onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
                     onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
-                    onAddCanonicalLayerTransformKeyframe = onAddTransformKeyframe,
-                    onRemoveCanonicalLayerTransformKeyframe = onRemoveTransformKeyframe,
+                    onAddCanonicalLayerTransformKeyframe = { _, _, _, _, _, _, _ -> },
+                    onRemoveCanonicalLayerTransformKeyframe = { _, _, _, _ -> },
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
@@ -423,9 +423,13 @@ class AdaptiveWorkspaceSmokeTest {
         val canonical = base.copy(
             compositions = listOf(composition.copy(layers = listOf(headline, composition.layers[1])))
         )
-        setCanonicalEditorContent(canonical, CanonicalCaptures()) { c, l, selector, from, to ->
+        // Named argument, not a trailing lambda: the helper gained
+        // onRemoveCurveKey/onAddTransformKeyframe/onRemoveTransformKeyframe
+        // parameters after onMoveCurveKey, so a trailing lambda would bind to
+        // the wrong (4-parameter) callback.
+        setCanonicalEditorContent(canonical, CanonicalCaptures(), onMoveCurveKey = { c, l, selector, from, to ->
             moved = listOf(c, l, selector, from, to)
-        }
+        })
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         // The official test API for this is performCustomAccessibilityActionWithLabel
         // (finds the node's custom action by label and invokes it); the earlier
@@ -462,10 +466,19 @@ class AdaptiveWorkspaceSmokeTest {
         val graph = compose.onNodeWithContentDescription(
             "Curve graph for Position X with keys 0: 100.0, 15: 320.0, 30: 500.0"
         ).performScrollTo()
+        // TouchInjectionScope.longClick does not resolve in this project's
+        // ui-test version, so hold the pointer down past the long-press
+        // timeout with the primitive down/advance/up calls (the same gesture
+        // detectTapGestures observes for onLongPress), then poll for the
+        // callback like the preview-drag test does.
         val size = graph.fetchSemanticsNode().size
+        val target = Offset(size.width * 15f / 90f, size.height / 2f)
         graph.performTouchInput {
-            longClick(Offset(size.width * 15f / 90f, size.height / 2f))
+            down(0, target)
+            advanceEventTime(600)
+            up(0)
         }
+        compose.waitUntil(timeoutMillis = 5_000) { removed != null }
         assertEquals(listOf<Any>(10L, 2L, "transform:position", 15), removed)
     }
 
