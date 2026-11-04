@@ -58,6 +58,27 @@ class RenderQueuePlanTest {
     }
 
     @Test
+    fun mp4PlanRequiresEvenYuv420DimensionsAndBoundedBitrate() {
+        val mp4 = RenderQueueSettings(
+            width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29,
+            outputFormat = RenderOutputFormat.MP4_H264, videoBitrate = 8_000_000
+        )
+        assertEquals(30, RenderQueuePlan.create(mp4).frameCount)
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(width = 641))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(height = 359))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(videoBitrate = 249_999))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(videoBitrate = 50_000_001))
+        }
+    }
+
+    @Test
     fun enforcesPerFramePixelsAndTotalRgbaBudget() {
         assertThrows(IllegalArgumentException::class.java) {
             RenderQueuePlan.create(settings(width = 4096, height = 4096))
