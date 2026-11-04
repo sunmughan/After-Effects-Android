@@ -15,6 +15,16 @@ use effectcraft_time::Tick;
 
 static MEDIA_POOL: OnceLock<MediaPool> = OnceLock::new();
 
+/// Android media-pool frame-cache budget: 256 MiB per pool, replacing the
+/// upstream 1 GiB default, which is not a phone budget. Every pool the
+/// bridge creates — one per session plus the shared stateless pool — uses
+/// this value, and [`session_media_pool_stats`] reports it so the Kotlin
+/// side can assert the live budget instead of assuming it. The upstream
+/// LRU evicts least-recently-used frames when the budget shrinks, always
+/// keeping the newest frame; oversized single frames are still decoded
+/// (they are needed for the current frame) but are not retained past it.
+const ANDROID_MEDIA_POOL_BUDGET_BYTES: usize = 256 * 1024 * 1024;
+
 /// One native render session: the parsed project, its own MediaPool, the
 /// preview size, and a cancellation flag, owned by the registry below.
 ///
@@ -60,7 +70,7 @@ fn create_session(source: &str, max_side: u32) -> Result<u64, String> {
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
     let session = Arc::new(NativeSession {
         project: RwLock::new(project),
-        footage: MediaPool::new(),
+        footage: MediaPool::with_budget(ANDROID_MEDIA_POOL_BUDGET_BYTES),
         render_lock: Mutex::new(()),
         cancelled: AtomicBool::new(false),
         max_side: RwLock::new(max_side),
@@ -335,6 +345,23 @@ fn session_backend_status(session: &NativeSession) -> String {
     }
 }
 
+/// JSON accounting for one session's media pool: cached decoded frames
+/// and bytes against the Android budget, plus cache hits/misses. The
+/// Kotlin side parses this where it enters and displays/asserts it; the
+/// budget value here is the live one, not a documented guess.
+fn session_media_pool_stats(session: &NativeSession) -> String {
+    let stats = session.footage.stats();
+    json!({
+        "frames": stats.frames,
+        "bytes": stats.bytes,
+        "budget": session.footage.budget(),
+        "hits": stats.hits,
+        "misses": stats.misses,
+        "opened": stats.opened,
+    })
+    .to_string()
+}
+
 fn resize_session(session: &NativeSession, max_side: u32) -> Result<(), String> {
     if max_side > 4096 {
         return Err("Preview size must be between 0 and 4096".into());
@@ -443,7 +470,7 @@ fn render_parsed_frame(project: &Project, footage: &MediaPool, composition_id: u
 fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u32) -> Result<Vec<u8>, String> {
     let project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
-    let footage = MEDIA_POOL.get_or_init(MediaPool::new);
+    let footage = MEDIA_POOL.get_or_init(|| MediaPool::with_budget(ANDROID_MEDIA_POOL_BUDGET_BYTES));
     let gpu = resolve_shared_gpu();
     render_parsed_frame(&project, footage, composition_id, frame, max_side, gpu.as_ref().map(|device| device as &dyn Accelerator))
 }
@@ -568,6 +595,19 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_backendS
     let result = session_handle(handle)
         .and_then(lookup_session)
         .map(|session| session_backend_status(&session));
+    match result {
+        Ok(status) => env.new_string(status).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_mediaPoolStatsSessionNative(
+    env: JNIEnv, _class: JClass, handle: jlong,
+) -> jstring {
+    let result = session_handle(handle)
+        .and_then(lookup_session)
+        .map(|session| session_media_pool_stats(&session));
     match result {
         Ok(status) => env.new_string(status).map_or(std::ptr::null_mut(), |v| v.into_raw()),
         Err(_) => std::ptr::null_mut(),
@@ -2689,6 +2729,65 @@ mod tests {
             serde_json::from_str(&session_backend_status(&session)).unwrap();
         assert!(final_status["backend"] == "gpu" || final_status["backend"] == "cpu");
         assert!(close_session(handle));
+    }
+
+    #[test]
+    fn session_media_pool_uses_android_budget_and_reports_live_stats() {
+        let (source, comp_id) = text_comp_project(320, 180);
+        let handle = create_session(&source, 160).unwrap();
+        let session = lookup_session(handle).unwrap();
+        // The live budget is the Android value, not the upstream 1 GiB
+        // default — and it is read from the pool itself, not restated.
+        let stats: serde_json::Value =
+            serde_json::from_str(&session_media_pool_stats(&session)).unwrap();
+        assert_eq!(stats["budget"], ANDROID_MEDIA_POOL_BUDGET_BYTES as u64);
+        assert_eq!(stats["budget"], 256 * 1024 * 1024);
+        assert_eq!(stats["frames"], 0);
+        assert_eq!(stats["bytes"], 0);
+        assert!(close_session(handle));
+    }
+
+    #[test]
+    fn media_pool_budget_shrink_evicts_all_but_newest_decoded_frame() {
+        use effectcraft_project::{Footage, FootageKind};
+        use effectcraft_time::Tick;
+        use image::ImageEncoder;
+
+        // Two distinct 1x1 stills decode into two cached frames; shrinking
+        // the budget below their combined size must evict the older one
+        // while keeping the newest (the upstream LRU contract).
+        let pool = MediaPool::with_budget(1 << 20);
+        let mut paths = Vec::new();
+        for index in 0..2 {
+            let path = std::env::temp_dir()
+                .join(format!("effectcraft-budget-{}-{}.png", std::process::id(), index));
+            let mut png = Vec::new();
+            image::codecs::png::PngEncoder::new(&mut png)
+                .write_image(&[255, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
+                .unwrap();
+            std::fs::write(&path, png).unwrap();
+            let footage = Footage {
+                path: path.to_string_lossy().into_owned(),
+                kind: FootageKind::Still,
+                width: 1,
+                height: 1,
+                has_video: true,
+                missing: false,
+                ..Footage::default()
+            };
+            pool.frame_at(&footage, Tick::from_seconds_f64(0.0)).unwrap();
+            paths.push(path);
+        }
+        let before = pool.stats();
+        assert_eq!(before.frames, 2);
+        assert!(before.bytes > 0);
+        pool.set_budget(before.bytes - 1);
+        let after = pool.stats();
+        assert_eq!(after.frames, 1);
+        assert!(after.bytes < before.bytes);
+        for path in paths {
+            std::fs::remove_file(path).unwrap();
+        }
     }
 
     #[test]
