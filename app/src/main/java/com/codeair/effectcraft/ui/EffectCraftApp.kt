@@ -46,6 +46,7 @@ import com.codeair.effectcraft.data.ProjectKeyframeStore
 import com.codeair.effectcraft.data.PngSequenceZipExporter
 import com.codeair.effectcraft.data.PngSequenceZipValidator
 import com.codeair.effectcraft.data.Mp4SequenceExporter
+import com.codeair.effectcraft.data.Mp4OutputValidator
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
@@ -453,7 +454,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         ?: error("Canonical composition is no longer available")
                     val plan = RenderQueuePlan.create(settings, compositionFrames)
                     saveMessage = "Rendering H.264 MP4 · 0/${plan.frameCount} (0%)"
-                    withContext(Dispatchers.IO) {
+                    val encoded = withContext(Dispatchers.IO) {
                         val nativeRenderSide = minOf(
                             maxOf(settings.width, settings.height),
                             RenderedFramePng.MAX_NATIVE_RENDER_SIDE
@@ -478,9 +479,19 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         } ?: error("Unable to open the selected MP4 destination")
                     }
                     currentCoroutineContext().ensureActive()
+                    val verified = withContext(Dispatchers.IO) {
+                        Mp4OutputValidator.validate(context, uri, plan)
+                    }
+                    check(verified.frameCount == encoded.framesEncoded) {
+                        "MP4 validation frame count differs from encoder output"
+                    }
+                    check(verified.durationUs == encoded.durationUs) {
+                        "MP4 validation duration differs from encoder output"
+                    }
+                    currentCoroutineContext().ensureActive()
                     outputCompleted = true
                     mp4ExportProgress = 100
-                    saveMessage = "Exported ${plan.frameCount} H.264 frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS"
+                    saveMessage = "Exported & verified ${verified.frameCount} H.264 frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS"
                 } catch (cancelled: CancellationException) {
                     saveMessage = "MP4 export cancelled"
                     throw cancelled
