@@ -1628,7 +1628,7 @@ fn set_layer_transform_keyframe(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
-/// Applies a real upstream temporal interpolation preset to a transform key at an exact frame.
+/// Applies a real upstream interpolation preset to one or both sides of a transform key.
 fn set_layer_transform_keyframe_interpolation(
     source: &str, composition_id: u64, layer_id: u64, property_name: &str,
     frame: i64, preset: &str,
@@ -1637,8 +1637,17 @@ fn set_layer_transform_keyframe_interpolation(
     if !matches!(property_name, "position" | "scale" | "rotation") {
         return Err("Only position, scale and rotation interpolation is supported".into());
     }
+    // Legacy names continue to edit both sides; side-qualified names preserve
+    // the opposite tangent/interpolation when editing one side in the inspector.
+    let (incoming, outgoing, preset) = if let Some(preset) = preset.strip_prefix("incoming_") {
+        (true, false, preset)
+    } else if let Some(preset) = preset.strip_prefix("outgoing_") {
+        (false, true, preset)
+    } else {
+        (true, true, preset)
+    };
     if !matches!(preset, "linear" | "easy_ease" | "hold") {
-        return Err("Interpolation preset must be linear, easy_ease or hold".into());
+        return Err("Interpolation preset must be linear, easy_ease or hold (optionally incoming_/outgoing_)".into());
     }
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -1656,28 +1665,22 @@ fn set_layer_transform_keyframe_interpolation(
         .ok_or_else(|| format!("No {property_name} keyframe exists at frame {frame}"))?;
     match preset {
         "linear" => {
-            key.in_interp = Interp::Linear;
-            key.out_interp = Interp::Linear;
-            key.in_ease.clear();
-            key.out_ease.clear();
-            key.auto_bezier = false;
-            key.continuous = false;
+            if incoming { key.in_interp = Interp::Linear; key.in_ease.clear(); }
+            if outgoing { key.out_interp = Interp::Linear; key.out_ease.clear(); }
         }
         "easy_ease" => {
-            *key = key.clone().eased();
-            key.auto_bezier = false;
-            key.continuous = false;
+            let eased = key.clone().eased();
+            if incoming { key.in_interp = eased.in_interp; key.in_ease = eased.in_ease; }
+            if outgoing { key.out_interp = eased.out_interp; key.out_ease = eased.out_ease; }
         }
         "hold" => {
-            key.in_interp = Interp::Hold;
-            key.out_interp = Interp::Hold;
-            key.in_ease.clear();
-            key.out_ease.clear();
-            key.auto_bezier = false;
-            key.continuous = false;
+            if incoming { key.in_interp = Interp::Hold; key.in_ease.clear(); }
+            if outgoing { key.out_interp = Interp::Hold; key.out_ease.clear(); }
         }
-        _ => return Err("Unsupported interpolation preset".into()),
+        _ => unreachable!("preset validated above"),
     }
+    key.auto_bezier = false;
+    key.continuous = false;
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
@@ -2838,15 +2841,23 @@ mod tests {
         let (source, comp_id, layer_id) = text_layer_project();
         let at_zero = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 10.0, 20.0, 0.0).unwrap();
         let at_fifteen = set_layer_transform_keyframe(&at_zero, comp_id, layer_id, "position", 15, 100.0, 200.0, 0.0).unwrap();
-        let eased = set_layer_transform_keyframe_interpolation(&at_fifteen, comp_id, layer_id, "position", 15, "easy_ease").unwrap();
-        let eased_project: Project = serde_json::from_str(&eased).unwrap();
-        let eased_key = &eased_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
-        assert_eq!(eased_key.in_interp, Interp::Bezier);
-        assert_eq!(eased_key.out_interp, Interp::Bezier);
-        assert_eq!(eased_key.in_ease[0].influence, 1.0 / 3.0);
-        assert_eq!(eased_key.out_ease[0].influence, 1.0 / 3.0);
+        let incoming_eased = set_layer_transform_keyframe_interpolation(&at_fifteen, comp_id, layer_id, "position", 15, "incoming_easy_ease").unwrap();
+        let incoming_project: Project = serde_json::from_str(&incoming_eased).unwrap();
+        let incoming_key = &incoming_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
+        assert_eq!(incoming_key.in_interp, Interp::Bezier);
+        assert_eq!(incoming_key.out_interp, Interp::Linear, "incoming edit must preserve outgoing interpolation");
+        assert_eq!(incoming_key.in_ease[0].influence, 1.0 / 3.0);
+        assert!(incoming_key.out_ease.is_empty(), "incoming edit must preserve outgoing ease");
 
-        let held = set_layer_transform_keyframe_interpolation(&eased, comp_id, layer_id, "position", 15, "hold").unwrap();
+        let outgoing_hold = set_layer_transform_keyframe_interpolation(&incoming_eased, comp_id, layer_id, "position", 15, "outgoing_hold").unwrap();
+        let outgoing_project: Project = serde_json::from_str(&outgoing_hold).unwrap();
+        let outgoing_key = &outgoing_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
+        assert_eq!(outgoing_key.in_interp, Interp::Bezier, "outgoing edit must preserve incoming interpolation");
+        assert_eq!(outgoing_key.out_interp, Interp::Hold);
+        assert!(!outgoing_key.in_ease.is_empty());
+        assert!(outgoing_key.out_ease.is_empty());
+
+        let held = set_layer_transform_keyframe_interpolation(&outgoing_hold, comp_id, layer_id, "position", 15, "hold").unwrap();
         let held_project: Project = serde_json::from_str(&held).unwrap();
         let held_key = &held_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
         assert_eq!(held_key.in_interp, Interp::Hold);
