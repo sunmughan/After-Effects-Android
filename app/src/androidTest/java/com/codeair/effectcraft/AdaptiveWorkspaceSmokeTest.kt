@@ -8,9 +8,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performCustomAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
+import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalParamGroup
 import com.codeair.effectcraft.data.CanonicalProjectInfo
@@ -240,7 +242,11 @@ class AdaptiveWorkspaceSmokeTest {
         var vecProperty: List<Any>? = null
     }
 
-    private fun setCanonicalEditorContent(canonical: CanonicalProjectInfo, captures: CanonicalCaptures) {
+    private fun setCanonicalEditorContent(
+        canonical: CanonicalProjectInfo,
+        captures: CanonicalCaptures,
+        onMoveCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> }
+    ) {
         val project = ProjectDocument.starter()
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
@@ -297,6 +303,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerOpacity = { _, _, _ -> },
                     onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
                     onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
+                    onMoveCanonicalCurveKey = onMoveCurveKey,
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
@@ -357,6 +364,33 @@ class AdaptiveWorkspaceSmokeTest {
             layers = listOf(layer, other)
         )
         return CanonicalProjectInfo(compositions = listOf(composition))
+    }
+
+    @Test
+    fun curveGraphKeyMoveHasAccessibleCustomAction() {
+        var moved: List<Any>? = null
+        val base = canonicalM4Layer(locked = false)
+        val composition = base.compositions.single()
+        val headline = composition.layers.first().copy(
+            transformCurves = mapOf(
+                "position" to listOf(
+                    CanonicalCurveKey(frame = 0, value = 100.0),
+                    CanonicalCurveKey(frame = 15, value = 320.0),
+                    CanonicalCurveKey(frame = 30, value = 500.0)
+                )
+            )
+        )
+        val canonical = base.copy(
+            compositions = listOf(composition.copy(layers = listOf(headline, composition.layers[1])))
+        )
+        setCanonicalEditorContent(canonical, CanonicalCaptures()) { c, l, selector, from, to ->
+            moved = listOf(c, l, selector, from, to)
+        }
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription(
+            "Curve graph for Position X with keys 0: 100.0, 15: 320.0, 30: 500.0"
+        ).performScrollTo().performCustomAction("Move key at frame 15 to playhead frame 0")
+        assertEquals(listOf<Any>(10L, 2L, "transform:position", 15, 0), moved)
     }
 
     @Test

@@ -82,6 +82,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -2245,6 +2246,21 @@ private fun CurveGraphSection(
                 .semantics {
                     contentDescription = "Curve graph for $label with keys " +
                         displayTrack.keys.joinToString(", ") { "${it.frame}: ${it.value}" }
+                    // TalkBack users cannot drag Canvas points. Expose the same
+                    // key-move operation as a custom action so every curve key
+                    // can be moved to the shared playhead without pointer input.
+                    customActions = if (editable) track.keys.map { key ->
+                        CustomAccessibilityAction(
+                            "Move key at frame ${key.frame} to playhead frame $previewFrame"
+                        ) {
+                            if (key.frame == previewFrame) {
+                                false
+                            } else {
+                                onMoveCurveKey(composition.id, layer.id, selector, key.frame, previewFrame)
+                                true
+                            }
+                        }
+                    } else emptyList()
                 }
                 .pointerInput(track, graphWidth, graphHeight) {
                     detectDragGestures(
