@@ -19,7 +19,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Progress (2026-11-04, latest: accessible Bezier curve-key manipulation):** M1 scoped editor accepted; M0 owner sign-off remains open. M2 canonical formats/repository/offline assets are implemented with integrity and recovery work but physical SAF/media gates remain; Effekseer .efkproj and proprietary Adobe .aep unsupported. M3 actual upstream CPU renderer/native session is integrated; physical ARM64 GPU/Surface validation remains. M4 native opacity/transform/parameter keyframes, timeline navigation, per-side interpolation and draggable Bezier graph are implemented; this run adds TalkBack custom actions to move graph keys, exact-head CI #538 pending. M5 validated PNG/sequence ZIP only, no video/audio. M6 persistence durability and accessibility semantics implemented; physical performance/TalkBack matrix open. M7 release gates not started. CI #537 on graph-editor head passed Assemble/test (Rust 38, JVM 146, emulator 68) while reproducibility job remained in progress. See PHASES Run 70.
+> **Progress (2026-11-04, latest: first transform keyframe authored-frame regression fix):** M1 scoped editor accepted; M0 owner sign-off remains open. M2 canonical formats/repository/offline assets implemented, physical SAF/media gates remain; .efkproj/.aep unsupported. M3 actual upstream CPU renderer/native session integrated, physical ARM64 GPU/Surface validation remains. M4 native 2D/3D transform keyframes and Bezier editing continue; CI #561 exposed first non-zero-frame key initialization storing a static zero value, corrected in commit e5a05113 with exact authored-frame regression assertions; new exact-head CI pending. M5 validated PNG/sequence ZIP only, no video/audio. M6 persistence/accessibility code present; physical device/performance/TalkBack matrix open. M7 release gates not started.
 
 Run 60 connects the canonical preview scrubber and workspace timeline playhead in both directions, with a Compose regression requesting native frame 15. Exact-head CI is pending; transform keyframe authoring remains unimplemented.
 
@@ -188,3 +188,8 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 ### Run 71 — native curve-key deletion (2026-11-04)
 - Native canonical curve-key removal now covers transform and param UID tracks, last-key static restoration, and idempotent missing-key behavior. TalkBack exposes Delete key actions and commits through the normal edit/history/save/preview path. Rust + API 30 regression coverage is committed; exact-head CI #541 is pending.
 - Run #539's Kotlin failure (missing `customActions` import) was diagnosed from the exact log; #540 adds the import and is running. See [PHASES.md](PHASES.md) Run 71 for evidence and blockers.
+
+
+### Run 76 — first transform keyframe correction (2026-11-04)
+- CI #561 failed Rust 38/39: first Orientation key at frame 15 had zero value. Diagnosed upstream set_animated seeding static values at the requested non-zero tick; fixed by zero-seeding, writing the authored key, and deleting only the synthetic zero seed for first non-zero-frame keys. Regression asserts exact key count/time/value for Orientation and Rotation Y.
+- Commit [e5a05113](https://github.com/sunmughan/After-Effects-Android/commit/e5a0511349e4edee672d153a0d6010f6df02ab93). Fresh exact-head CI pending; no pass claimed. See PHASES.md Run 76.
