@@ -2272,6 +2272,22 @@ private fun CurveGraphSection(
                         )
                     } else emptyList()
                 }
+                .pointerInput(track, graphWidth, graphHeight, editable, previewFrame) {
+                    detectTapGestures(
+                        onLongPress = { press ->
+                            if (editable) {
+                                val nearest = track.keys.minByOrNull { key ->
+                                    (Offset(frameToX(key.frame.toDouble()), valueToY(key.value)) - press).getDistance()
+                                }
+                                if (nearest != null &&
+                                    (Offset(frameToX(nearest.frame.toDouble()), valueToY(nearest.value)) - press).getDistance() <= 28f
+                                ) {
+                                    onRemoveCurveKey(composition.id, layer.id, selector, nearest.frame)
+                                }
+                            }
+                        }
+                    )
+                }
                 .pointerInput(track, graphWidth, graphHeight) {
                     detectDragGestures(
                         onDragStart = { start ->
