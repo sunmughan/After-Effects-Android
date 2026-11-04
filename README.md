@@ -145,3 +145,5 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 ### Run 66 — accessible transform keyframe seeking (2026-11-04)
 - TRANSFORM marker lane exposes a screen-reader semantic click action that seeks the nearest canonical key relative to the current playhead; connected regression now uses Compose `performClick()` rather than only pointer input. Commits `8e17934c`, `a69ae2d5`, tracker `944e5c88`.
 - CI #501 failure was a visibility assertion after a successful frame-15 seek; the label was below the modal scroll position. Fix `b217fea3` scrolls the frame label into view without removing the assertion. CI #502 was running on `b217fea3`; the accessibility commits need a fresh exact-head CI. No new test pass claimed.
+
+- Accessibility regression refinement (`e77da4ea`): semantic click seeks nearest key to current playhead, so test begins at frame 29 and expects frame 30. Tracker `d1b39c87`; CI after this test/docs head pending.
