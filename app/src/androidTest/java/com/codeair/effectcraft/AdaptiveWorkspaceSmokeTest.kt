@@ -7,8 +7,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.semantics.CustomActions
-import androidx.compose.ui.test.fetchSemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
@@ -397,7 +396,7 @@ class AdaptiveWorkspaceSmokeTest {
         val graphNode = compose.onNodeWithContentDescription(
             "Curve graph for Position X with keys 0: 100.0, 15: 320.0, 30: 500.0"
         ).performScrollTo().fetchSemanticsNode()
-        val moveAction = graphNode.config[CustomActions].first {
+        val moveAction = graphNode.config[SemanticsProperties.CustomActions].first {
             it.label == "Move key at frame 15 to playhead frame 0"
         }
         assertTrue(moveAction.action())
