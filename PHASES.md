@@ -654,3 +654,5 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - No M4 completion claim: new metadata/navigation JVM and Rust assertions and emulator tests await CI; canonical keyframe editing/rendering still has property parity gaps. M0 owner/license gates and physical-device validation remain open.
 
 - Run 64 test-fixture follow-up: transform metadata intentionally omits empty tracks; parser regression now asserts absent anchor track rather than expecting an empty list. Commit [e051cec1](https://github.com/sunmughan/After-Effects-Android/commit/e051cec1daccdf26fd87e8e416e9ea4c6722527d). No acceptance weakened.
+
+- Run 64 connected regression follow-up: canonical selection editor fixture now supplies Position/Scale/Rotation key frames, scrubs to frame 20, taps the Position jump action, and asserts the shared workspace playhead returns to nearest key frame 15. Commit [c020ac86](https://github.com/sunmughan/After-Effects-Android/commit/c020ac8678f93f4f4c11ccc257867996f22d4501). This test is pending exact-head CI; no test evidence is claimed yet.
