@@ -8,7 +8,8 @@ package com.codeair.effectcraft.data
  * allocating a frame list or retaining decoded bitmaps.
  */
 enum class RenderOutputFormat {
-    PNG_SEQUENCE_ZIP
+    PNG_SEQUENCE_ZIP,
+    MP4_H264
 }
 
 data class RenderQueueSettings(
@@ -17,7 +18,8 @@ data class RenderQueueSettings(
     val frameRate: Int,
     val startFrame: Int,
     val endFrame: Int,
-    val outputFormat: RenderOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP
+    val outputFormat: RenderOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP,
+    val videoBitrate: Int = 8_000_000
 )
 
 data class RenderQueuePlan private constructor(
@@ -79,6 +81,14 @@ data class RenderQueuePlan private constructor(
             val countLong = settings.endFrame.toLong() - settings.startFrame.toLong() + 1L
             require(countLong in 1L..MAX_FRAME_COUNT.toLong()) {
                 "Render queue must contain between 1 and $MAX_FRAME_COUNT frames"
+            }
+            if (settings.outputFormat == RenderOutputFormat.MP4_H264) {
+                require(settings.width % 2 == 0 && settings.height % 2 == 0) {
+                    "H.264 YUV420 dimensions must be even"
+                }
+                require(settings.videoBitrate in 250_000..50_000_000) {
+                    "H.264 bitrate must be between 250 kbps and 50 Mbps"
+                }
             }
             val pixels = settings.width.toLong() * settings.height.toLong()
             require(pixels <= MAX_PIXELS_PER_FRAME) {
