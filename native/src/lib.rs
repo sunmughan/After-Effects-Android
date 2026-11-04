@@ -3271,7 +3271,10 @@ mod tests {
         let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&eased).unwrap()).unwrap();
         let tracks = &metadata["compositions"][0]["layers"][0]["transformKeys"];
         assert_eq!(tracks["anchor"], json!([0]));
-        assert_eq!(tracks["orientation"], json!([15]));
+        // Orientation has two authored keys (15 and 30, asserted above), so
+        // its track must list both; [15] alone is stale from before the
+        // frame-30 keyframe was added to this test.
+        assert_eq!(tracks["orientation"], json!([15, 30]));
         assert_eq!(tracks["rotationX"], json!([0]));
         assert_eq!(tracks["rotationY"], json!([15]));
         let (without_anchor, removed) = remove_layer_transform_keyframe(&eased, comp_id, layer_id, "anchor", 0).unwrap();
