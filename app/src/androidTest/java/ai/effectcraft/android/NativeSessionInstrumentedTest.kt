@@ -267,6 +267,77 @@ class NativeSessionInstrumentedTest {
     }
 
     @Test
+    fun sessionRecordsActualBackendValue() {
+        assertTrue(NativeProjectBridge.isAvailable())
+        val session = NativeSession.open(FIXTURE_JSON, 160)
+        assertNotNull("Session must open for the canonical fixture", session)
+        session!!
+        try {
+            val status = session.backendStatus()
+            assertNotNull("Backend status must be reported", status)
+            status!!
+            // This is the fix for the Run 37 gap: the previous test asserted
+            // only the value's shape (gpu-or-cpu, non-empty adapter/reason)
+            // and never recorded which backend actually ran. This test logs
+            // the verbatim report line under a greppable tag AND asserts the
+            // line contains the actual reported values, so the run's logcat
+            // and the assertion agree on the backend that ran.
+            val report = status.reportLine()
+            android.util.Log.i("EffectCraftBackend", "M3 backend report: $report")
+            assertTrue(report.contains("backend=${status.backend}"))
+            if (status.backend == "gpu") {
+                assertTrue(!status.adapter.isNullOrEmpty())
+                assertTrue(report.contains("adapter=${status.adapter}"))
+                assertTrue(status.displayText().contains(status.adapter!!))
+            } else {
+                assertTrue(!status.reason.isNullOrEmpty())
+                assertTrue(report.contains("reason=${status.reason}"))
+                assertTrue(status.displayText().contains(status.reason!!))
+            }
+            // The CPU-fallback-after-simulated-loss leg, with the loss
+            // itself recorded the same way.
+            session.simulateGpuLoss()
+            val lost = session.backendStatus()
+            assertNotNull(lost)
+            assertEquals("cpu", lost!!.backend)
+            assertTrue(lost.lost)
+            android.util.Log.i("EffectCraftBackend", "M3 backend report after simulated loss: ${lost.reportLine()}")
+            val fallback = session.render(FIXTURE_COMPOSITION_ID, 11)
+            assertNotNull("CPU fallback must render after device loss", fallback)
+            assertEquals(160 to 90, frameDimensions(fallback!!))
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun sessionMediaPoolStatsReportAndroidBudget() {
+        assertTrue(NativeProjectBridge.isAvailable())
+        val session = NativeSession.open(FIXTURE_JSON, 160)
+        assertNotNull("Session must open for the canonical fixture", session)
+        session!!
+        try {
+            val stats = session.mediaPoolStats()
+            assertNotNull("Media pool stats must be reported", stats)
+            stats!!
+            assertEquals(
+                "Session media pool must use the Android 256 MiB budget, not the upstream 1 GiB default",
+                256L * 1024 * 1024, stats.budgetBytes,
+            )
+            assertTrue("Cached media bytes must stay within budget", stats.withinBudget)
+            android.util.Log.i("EffectCraftBackend", "M3 media cache report: ${stats.displayText()}")
+            val frame = session.render(FIXTURE_COMPOSITION_ID, 12)
+            assertNotNull(frame)
+            val after = session.mediaPoolStats()
+            assertNotNull(after)
+            assertTrue(after!!.withinBudget)
+            assertEquals(256L * 1024 * 1024, after.budgetBytes)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
     fun sessionRendersResizesCancelsAndCloses() {
         assertTrue(NativeProjectBridge.isAvailable())
         val session = NativeSession.open(FIXTURE_JSON, 160)

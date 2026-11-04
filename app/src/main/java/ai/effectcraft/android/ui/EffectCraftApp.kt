@@ -1185,6 +1185,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 // honest "not rendered / unavailable" label.
                 renderSessionHolder.session?.render(compositionId, frame)
             },
+            onQueryBackendStatus = {
+                renderSessionHolder.session?.backendStatus()?.displayText()
+            },
+            onQueryMediaCacheStatus = {
+                renderSessionHolder.session?.mediaPoolStats()?.displayText()
+            },
             safGrants = safGrants,
             missingManifestEntries = manifestMissingCount,
             onReleaseSafGrant = { uriString, kind ->
