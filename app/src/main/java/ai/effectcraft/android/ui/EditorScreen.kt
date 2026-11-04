@@ -173,6 +173,7 @@ fun EditorScreen(
     onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
     onAddCanonicalLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+    onRemoveCanonicalLayerTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
     onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -583,6 +584,7 @@ fun EditorScreen(
                     onSetLayerOpacity = onSetCanonicalLayerOpacity,
                     onAddLayerOpacityKeyframe = onAddCanonicalLayerOpacityKeyframe,
                     onAddLayerTransformKeyframe = onAddCanonicalLayerTransformKeyframe,
+                    onRemoveLayerTransformKeyframe = onRemoveCanonicalLayerTransformKeyframe,
                     onRemoveLayerOpacityKeyframe = onRemoveCanonicalLayerOpacityKeyframe,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
                     onSetLayerScale = onSetCanonicalLayerScale,
@@ -1017,6 +1019,7 @@ private fun CanonicalProjectEditor(
     onSetLayerOpacity: (Long, Long, Double) -> Unit,
     onAddLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit,
+    onRemoveLayerTransformKeyframe: (Long, Long, String, Int) -> Unit,
     onRemoveLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -1355,7 +1358,16 @@ private fun CanonicalProjectEditor(
                         modifier = Modifier.semantics { contentDescription = "Add rotation keyframe" }
                     ) { Text("Key Rotation", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
-                Text("Transform keyframes are native and evaluated by the composition renderer.", color = EditorPalette.muted, fontSize = 10.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("position", "scale", "rotation").forEach { property ->
+                        TextButton(
+                            enabled = editable,
+                            onClick = { onRemoveLayerTransformKeyframe(composition.id, layer.id, property, previewFrame) },
+                            modifier = Modifier.semantics { contentDescription = "Remove ${property} keyframe" }
+                        ) { Text("− ${property.replaceFirstChar { it.uppercase() }}", color = EditorPalette.amber, fontSize = 10.sp) }
+                    }
+                }
+                Text("Transform keys are native and evaluated by the composition renderer.", color = EditorPalette.muted, fontSize = 10.sp)
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BasicTextField(

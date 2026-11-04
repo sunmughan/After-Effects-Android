@@ -177,6 +177,13 @@ object NativeProjectBridge {
         return runCatching { removeLayerOpacityKeyframeEcprojNative(json, compositionId, layerId, frame) }.getOrNull()
     }
 
+    /** Removes a native Position, Scale or Rotation key at [frame]; removal is idempotent. */
+    fun removeLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation")) return null
+        return runCatching { removeLayerTransformKeyframeEcprojNative(json, compositionId, layerId, property, frame) }.getOrNull()
+    }
+
     /** Sets the upstream Transform/Opacity property (0–100 percent). */
     fun setLayerOpacityEcproj(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String? {
         ensureLoaded()
@@ -270,6 +277,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerOpacityKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, opacityPercent: Double): String
+
+    @JvmStatic
+    private external fun removeLayerTransformKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String
 
     @JvmStatic
     private external fun removeLayerOpacityKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long): String

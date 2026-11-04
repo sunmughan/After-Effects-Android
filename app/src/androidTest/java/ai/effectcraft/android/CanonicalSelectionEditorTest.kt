@@ -69,6 +69,7 @@ class CanonicalSelectionEditorTest {
         var visibilityForSelection: List<Any>? = null
         var gestureEdit: QuadGestureEdit? = null
         var transformKeyframe: List<Any>? = null
+        var removedTransformKeyframe: List<Any>? = null
         var deleteCalls = 0
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -134,6 +135,7 @@ class CanonicalSelectionEditorTest {
                     onSetCanonicalLayerOpacity = { _, _, _ -> },
                     onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
                     onAddCanonicalLayerTransformKeyframe = { c, l, property, frame, x, y, z -> transformKeyframe = listOf(c, l, property, frame, x, y, z) },
+                    onRemoveCanonicalLayerTransformKeyframe = { c, l, property, frame -> removedTransformKeyframe = listOf(c, l, property, frame) },
                     onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
@@ -173,6 +175,8 @@ class CanonicalSelectionEditorTest {
         // using the selected canonical layer's current inspector values.
         compose.onNodeWithContentDescription("Add position keyframe").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, "position", 15, 10.0, 20.0, 0.0), transformKeyframe)
+        compose.onNodeWithContentDescription("Remove position keyframe").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "position", 15), removedTransformKeyframe)
 
         // Tap selects one layer; long-press adds a second layer to the set.
         compose.onNodeWithContentDescription("Canonical layer row Title").performClick()
