@@ -186,7 +186,7 @@ class CanonicalSelectionEditorTest {
         compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(20L) }
         compose.onNodeWithContentDescription("Jump to Position keyframe").performScrollTo().performClick()
         assertEquals(15, workspaceFrame.intValue)
-        compose.onNodeWithText("Frame 15 / 89").assertIsDisplayed()
+        compose.onNodeWithText("Frame 15 / 89").performScrollTo().assertIsDisplayed()
 
         // Native transform keys are authored at the same workspace frame,
         // using the selected canonical layer's current inspector values.
