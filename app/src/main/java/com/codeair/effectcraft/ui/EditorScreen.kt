@@ -2219,6 +2219,8 @@ private fun CurveGraphSection(
     var dragHandleSide by remember(layer, selector) { mutableStateOf<String?>(null) }
     var dragTargetFrame by remember(layer, selector) { mutableStateOf<Int?>(null) }
     var dragHandle by remember(layer, selector) { mutableStateOf<CurveHandle?>(null) }
+    var selectedCurveHandle by remember(layer, selector) { mutableStateOf<Pair<Int, String>?>(null) }
+    var preciseHandlePreview by remember(layer, selector) { mutableStateOf<CurveHandle?>(null) }
     val displayTrack = dragPreview ?: track
 
     val values = displayTrack.keys.map { it.value }
@@ -2317,6 +2319,34 @@ private fun CurveGraphSection(
                 }
                 .pointerInput(track, graphWidth, graphHeight, editable, previewFrame) {
                     detectTapGestures(
+                        onTap = { tap ->
+                            if (!editable) selectedCurveHandle = null else {
+                                var nearestFrame: Int? = null
+                                var nearestSide: String? = null
+                                var nearestDistance = 28f
+                                track.keys.forEachIndexed { index, key ->
+                                    val outgoing = key.outHandle ?: if (key.outInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+                                    if (outgoing != null && index < track.keys.lastIndex) {
+                                        val distance = (handlePoint(key, track.keys[index + 1], outgoing, "outgoing") - tap).getDistance()
+                                        if (distance < nearestDistance) {
+                                            nearestDistance = distance
+                                            nearestFrame = key.frame
+                                            nearestSide = "outgoing"
+                                        }
+                                    }
+                                    val incoming = key.inHandle ?: if (key.inInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+                                    if (incoming != null && index > 0) {
+                                        val distance = (handlePoint(key, track.keys[index - 1], incoming, "incoming") - tap).getDistance()
+                                        if (distance < nearestDistance) {
+                                            nearestDistance = distance
+                                            nearestFrame = key.frame
+                                            nearestSide = "incoming"
+                                        }
+                                    }
+                                }
+                                selectedCurveHandle = if (nearestFrame != null && nearestSide != null) nearestFrame!! to nearestSide!! else null
+                            }
+                        },
                         onLongPress = { press ->
                             if (editable) {
                                 val nearest = track.keys.minByOrNull { key ->
@@ -2456,12 +2486,18 @@ private fun CurveGraphSection(
                         val point = handlePoint(key, displayTrack.keys[index + 1], outgoing, "outgoing")
                         drawLine(color = EditorPalette.violet, start = center, end = point, strokeWidth = 1.5f)
                         drawCircle(color = EditorPalette.violet, radius = 5f, center = point)
+                        if (selectedCurveHandle == (key.frame to "outgoing")) {
+                            drawCircle(color = Color.White, radius = 8f, center = point, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                        }
                     }
                     val incoming = key.inHandle ?: if (key.inInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
                     if (incoming != null && index > 0) {
                         val point = handlePoint(key, displayTrack.keys[index - 1], incoming, "incoming")
                         drawLine(color = EditorPalette.amber, start = center, end = point, strokeWidth = 1.5f)
                         drawCircle(color = EditorPalette.amber, radius = 5f, center = point)
+                        if (selectedCurveHandle == (key.frame to "incoming")) {
+                            drawCircle(color = Color.White, radius = 8f, center = point, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                        }
                     }
                     drawCircle(color = EditorPalette.mint, radius = 6f, center = center)
                 }
@@ -2471,6 +2507,61 @@ private fun CurveGraphSection(
             "Keys · ${displayTrack.keys.joinToString(", ") { "${it.frame}: ${it.value}" }}",
             color = EditorPalette.muted,
             fontSize = 10.sp
+        )
+    }
+    val selectedHandleSpec = selectedCurveHandle?.let { (frame, side) ->
+        val index = track.keys.indexOfFirst { it.frame == frame }
+        val key = track.keys.getOrNull(index)
+        val neighbor = if (side == "outgoing") track.keys.getOrNull(index + 1) else track.keys.getOrNull(index - 1)
+        val handle = key?.let {
+            if (side == "outgoing") it.outHandle ?: if (it.outInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+            else it.inHandle ?: if (it.inInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+        }
+        if (key != null && neighbor != null && handle != null) Triple(key, neighbor, handle) else null
+    }
+    if (selectedCurveHandle != null && selectedHandleSpec != null) {
+        val (selectedKey, selectedNeighbor, selectedHandle) = selectedHandleSpec
+        val selectedSide = selectedCurveHandle!!.second
+        val selectedFrame = selectedCurveHandle!!.first
+        val segmentFrames = abs(selectedNeighbor.frame - selectedKey.frame).toDouble().coerceAtLeast(1.0)
+        val maxSpeed = maxOf(abs(selectedNeighbor.value - selectedKey.value) * fps / segmentFrames * 2.0, 10.0)
+        Text("Selected $selectedSide handle · frame $selectedFrame", color = EditorPalette.text, fontSize = 10.sp)
+        Text("Speed ${String.format(Locale.US, "%.2f", selectedHandle.speed)}", color = EditorPalette.muted, fontSize = 9.sp)
+        Slider(
+            value = selectedHandle.speed.toFloat().coerceIn(-maxSpeed.toFloat(), maxSpeed.toFloat()),
+            onValueChange = { value ->
+                val next = CurveHandle(value.toDouble(), selectedHandle.influence)
+                preciseHandlePreview = next
+                dragPreview = runCatching { BezierCurveEditor.withHandle(track, selectedFrame, selectedSide, next) }.getOrNull()
+            },
+            onValueChangeFinished = {
+                preciseHandlePreview?.let { next ->
+                    onSetCurveHandle(composition.id, layer.id, selector, selectedFrame, selectedSide, next.speed, next.influence)
+                }
+                dragPreview = null
+                preciseHandlePreview = null
+            },
+            valueRange = -maxSpeed.toFloat()..maxSpeed.toFloat(),
+            modifier = Modifier.testTag("curve-handle-speed").semantics { contentDescription = "Curve handle speed" }
+        )
+        Text("Influence ${String.format(Locale.US, "%.2f", selectedHandle.influence)}", color = EditorPalette.muted, fontSize = 9.sp)
+        Slider(
+            value = selectedHandle.influence.toFloat(),
+            onValueChange = { value ->
+                val next = CurveHandle(selectedHandle.speed, value.toDouble())
+                preciseHandlePreview = next
+                dragPreview = runCatching { BezierCurveEditor.withHandle(track, selectedFrame, selectedSide, next) }.getOrNull()
+            },
+            onValueChangeFinished = {
+                preciseHandlePreview?.let { next ->
+                    onSetCurveHandle(composition.id, layer.id, selector, selectedFrame, selectedSide, next.speed, next.influence)
+                }
+                dragPreview = null
+                preciseHandlePreview = null
+            },
+            valueRange = 0f..1f,
+            steps = 19,
+            modifier = Modifier.testTag("curve-handle-influence").semantics { contentDescription = "Curve handle influence" }
         )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

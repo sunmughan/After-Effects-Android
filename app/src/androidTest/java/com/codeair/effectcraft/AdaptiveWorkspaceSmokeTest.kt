@@ -508,6 +508,37 @@ class AdaptiveWorkspaceSmokeTest {
     }
 
     @Test
+    fun curveBezierHandleSelectionExposesPreciseSpeedAndInfluenceControls() {
+        val base = canonicalM4Layer(locked = false)
+        val composition = base.compositions.single()
+        val headline = composition.layers.first().copy(
+            transformCurves = mapOf(
+                "position" to listOf(
+                    CanonicalCurveKey(frame = 0, value = 100.0, outInterp = "Bezier", outSpeed = 12.0, outInfluence = 0.25),
+                    CanonicalCurveKey(frame = 30, value = 320.0, inInterp = "Bezier", inSpeed = 10.0, inInfluence = 0.2)
+                )
+            )
+        )
+        val canonical = base.copy(
+            compositions = listOf(composition.copy(layers = listOf(headline, composition.layers[1])))
+        )
+        setCanonicalEditorContent(canonical, CanonicalCaptures())
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        val graph = compose.onNodeWithContentDescription(
+            "Curve graph for Position X with keys 0: 100.0, 30: 320.0"
+        ).performScrollTo()
+        val size = graph.fetchSemanticsNode().size
+        val handlePoint = Offset(size.width * (7.5f / 90f), size.height * 0.88f)
+        graph.performTouchInput {
+            down(0, handlePoint)
+            up(0)
+        }
+        compose.onNodeWithText("Selected outgoing handle · frame 0").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Curve handle speed").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Curve handle influence").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun canonicalAnchor3dRotationTextShapeEffectAndLockControlsTargetSelectedLayer() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalM4Layer(locked = false), captures)

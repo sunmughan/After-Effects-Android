@@ -137,6 +137,21 @@ class BezierCurveEditorTest {
     }
 
     @Test
+    fun withHandleCanPreciselyAdjustSpeedAndInfluence() {
+        val track = twoKeyTrack("position")
+        val speedAdjusted = BezierCurveEditor.withHandle(track, 0, "outgoing", CurveHandle(45.0, 0.5))
+        assertEquals(45.0, speedAdjusted.keys.first().outHandle!!.speed, 0.0)
+        assertEquals(0.5, speedAdjusted.keys.first().outHandle!!.influence, 0.0)
+        val influenceAdjusted = BezierCurveEditor.withHandle(speedAdjusted, 0, "outgoing", CurveHandle(45.0, 0.75))
+        assertEquals(45.0, influenceAdjusted.keys.first().outHandle!!.speed, 0.0)
+        assertEquals(0.75, influenceAdjusted.keys.first().outHandle!!.influence, 0.0)
+        assertNotEquals(
+            BezierCurveEditor.sample(speedAdjusted, 8, 30.0),
+            BezierCurveEditor.sample(influenceAdjusted, 8, 30.0)
+        )
+    }
+
+    @Test
     fun rejectsInvalidHandleValues() {
         assertThrows(IllegalArgumentException::class.java) { CurveHandle(Double.NaN, 0.5) }
         assertThrows(IllegalArgumentException::class.java) { CurveHandle(0.0, 1.5) }
