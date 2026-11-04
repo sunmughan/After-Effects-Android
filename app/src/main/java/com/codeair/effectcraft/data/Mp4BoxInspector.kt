@@ -51,12 +51,30 @@ object Mp4BoxInspector {
         val boxes = mutableListOf<Box>()
         var offset = start
         while (offset + 8 <= end) {
-            val size = readU32(bytes, offset)
+            val size32 = readU32(bytes, offset)
             val type = String(bytes, offset + 4, 4, Charsets.US_ASCII)
-            require(size >= 8) { "MP4 box $type has an invalid size" }
-            val boxEnd = offset + size.toInt()
-            require(boxEnd <= end) { "MP4 box $type extends past its parent" }
-            boxes += Box(type, offset + 8, boxEnd)
+            // ISO BMFF box sizes: 1 means a 64-bit largesize follows the type
+            // field (Android's MediaMuxer writes large mdat boxes this way),
+            // and 0 means the box extends to the end of its parent. Both must
+            // be skipped by size, never read as a literal 1- or 0-byte box.
+            val (headerSize, boxEnd) = when (size32) {
+                1L -> {
+                    require(offset + 16 <= end) { "MP4 box $type has a truncated largesize header" }
+                    val large = readU64(bytes, offset + 8)
+                    require(large >= 16) { "MP4 box $type has an invalid largesize" }
+                    val endLong = offset.toLong() + large
+                    require(endLong <= end) { "MP4 box $type extends past its parent" }
+                    16 to endLong.toInt()
+                }
+                0L -> 8 to end
+                else -> {
+                    require(size32 >= 8) { "MP4 box $type has an invalid size" }
+                    val endInt = offset + size32.toInt()
+                    require(endInt <= end) { "MP4 box $type extends past its parent" }
+                    8 to endInt
+                }
+            }
+            boxes += Box(type, offset + headerSize, boxEnd)
             offset = boxEnd
         }
         require(offset == end) { "MP4 box region ends with trailing bytes" }

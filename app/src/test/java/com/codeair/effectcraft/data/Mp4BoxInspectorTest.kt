@@ -131,4 +131,38 @@ class Mp4BoxInspectorTest {
     fun rejectsZeroSampleTracks() {
         assertThrows(IllegalArgumentException::class.java) { Mp4BoxInspector.inspect(mp4(samples = 0)) }
     }
+
+    @Test
+    fun skipsLargesizeMdatBeforeMoov() {
+        // Layout of mp4(): ftyp (24 bytes) + moov + mdat (24 bytes, last).
+        // Rebuild it with a 64-bit largesize mdat between ftyp and moov, as
+        // Android's MediaMuxer writes: the parser must skip it by largesize
+        // and still find the video track in moov.
+        val base = mp4()
+        val ftyp = base.copyOfRange(0, 24)
+        val moov = base.copyOfRange(24, base.size - 24)
+        val mdatHeader = ByteBuffer.allocate(16).order(ByteOrder.BIG_ENDIAN)
+        mdatHeader.putInt(1)
+        mdatHeader.put("mdat".toByteArray(Charsets.US_ASCII))
+        mdatHeader.putLong(16L + 16L)
+        val out = ByteArrayOutputStream()
+        out.write(ftyp)
+        out.write(mdatHeader.array())
+        out.write(ByteArray(16))
+        out.write(moov)
+        val result = Mp4BoxInspector.inspect(out.toByteArray())
+        assertEquals("avc1", result.videoTrack.codec)
+        assertEquals(6L, result.videoTrack.sampleCount)
+    }
+
+    @Test
+    fun acceptsZeroSizeTrailingMdat() {
+        // Size 0 means "extends to end of parent": zero the trailing mdat's
+        // size field and the file must still inspect.
+        val bytes = mp4()
+        ByteBuffer.wrap(bytes, bytes.size - 24, 4).order(ByteOrder.BIG_ENDIAN).putInt(0)
+        val result = Mp4BoxInspector.inspect(bytes)
+        assertEquals("avc1", result.videoTrack.codec)
+        assertEquals(6L, result.videoTrack.sampleCount)
+    }
 }
