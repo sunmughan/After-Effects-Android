@@ -7,7 +7,10 @@ import org.junit.Test
 
 class Yuv420FrameConverterTest {
     private fun envelope(width: Int, height: Int, rgba: List<Int>): ByteArray {
-        val bytes = ByteArray(8 + width * height * 4)
+        // Size by the payload actually supplied, not by the dimensions:
+        // sizing by dimensions padded a short payload with zeros, so the
+        // malformed-payload case below never failed the length check.
+        val bytes = ByteArray(8 + rgba.size)
         fun putInt(offset: Int, value: Int) {
             bytes[offset] = (value ushr 24).toByte()
             bytes[offset + 1] = (value ushr 16).toByte()
