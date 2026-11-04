@@ -1,3 +1,8 @@
+### Run 81 — Bezier handle controls + test compilation correction
+- CI #581 failed Android-test compilation only: missing `swipeLeft` import in AdaptiveWorkspaceSmokeTest; commit 33af117d fixed the import, and CI #582 Assemble/test passed on that head. Cold APK reproducibility remains in progress.
+- M4 commit f148ad82 adds tap-selectable Bezier handles, selected-handle highlight, precise Speed/Influence sliders with local curve preview and canonical commit-on-release; JVM + API 30 regressions added. Exact-head CI #584 pending; no pass claimed.
+- M0 owner acceptance/reproducibility, M2 physical SAF/media, M3 GPU/physical ARM64, M4 roving/spatial/full property parity, M5 video/audio, M6 physical device/performance/TalkBack, and M7 signed release/install remain open. No Adobe .aep or Effekseer .efkproj support claim.
+
 ### Run 75 — roadmap evidence consolidated
 - Phase summaries now reflect CI #545's completed Assemble/test job (Rust 38/38, JVM task success, emulator 70/70) while correctly leaving the cancelled cold APK comparison unaccepted. M0 owner acceptance remains open; M1 scoped foundation accepted; M2/M3/M4/M5/M6/M7 remain at their documented partial/in-progress states.
 - M4 includes native Anchor/Orientation/Rotation X/Y keyframes and graph Add-at-playhead; recursive Anchor lookup fix and connected test committed. Exact combined-head CI #560 is pending; no pass claimed for Runs 73–74.
@@ -19,7 +24,7 @@
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
 
-> **Progress (2026-11-04, latest: first transform keyframe authored-frame regression fix):** M1 scoped editor accepted; M0 owner sign-off remains open. M2 canonical formats/repository/offline assets implemented, physical SAF/media gates remain; .efkproj/.aep unsupported. M3 actual upstream CPU renderer/native session integrated, physical ARM64 GPU/Surface validation remains. M4 native 2D/3D transform keyframes and Bezier editing continue; CI #561 exposed first non-zero-frame key initialization storing a static zero value, corrected in commit e5a05113 with exact authored-frame plus subsequent-frame regression assertions (commit 04baebc7); new exact-head CI pending. M5 validated PNG/sequence ZIP only, no video/audio. M6 persistence/accessibility code present; physical device/performance/TalkBack matrix open. M7 release gates not started.
+> **Progress (2026-11-04, latest: precise Bezier handle speed/influence controls, commit f148ad82; exact-head CI #584 pending):** M1 scoped editor accepted; M0 owner sign-off remains open. M2 canonical formats/repository/offline assets implemented, physical SAF/media gates remain; .efkproj/.aep unsupported. M3 actual upstream CPU renderer/native session integrated, physical ARM64 GPU/Surface validation remains. M4 native 2D/3D transform keyframes and Bezier editing continue; CI #561 exposed first non-zero-frame key initialization storing a static zero value, corrected in commit e5a05113 with exact authored-frame plus subsequent-frame regression assertions (commit 04baebc7); new exact-head CI pending. M5 validated PNG/sequence ZIP only, no video/audio. M6 persistence/accessibility code present; physical device/performance/TalkBack matrix open. M7 release gates not started.
 
 Run 60 connects the canonical preview scrubber and workspace timeline playhead in both directions, with a Compose regression requesting native frame 15. Exact-head CI is pending; transform keyframe authoring remains unimplemented.
 
