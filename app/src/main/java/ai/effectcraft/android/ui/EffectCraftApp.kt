@@ -563,6 +563,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val selectedOpacityKeyframes = projectKeyframeTracks
         .firstOrNull { it.layerId == selectedLayerId && it.track.property == "opacity" }
         ?.track?.keyframes.orEmpty()
+    val selectedCanonicalTransformKeyframes = canonicalProjectInfo?.compositions
+        ?.flatMap { composition -> composition.layers.filter { it.id in canonicalSelectedIds }
+            .flatMap { layer -> layer.transformKeyframes.values.flatten() } }
+        ?.distinct()?.sorted().orEmpty()
     /**
      * Commits an already validated canonical project source: inspect, parse,
      * save to the local cache and repository, refresh the render session,
@@ -657,6 +661,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             selectedLayerId = selectedLayerId,
             playheadFrame = playheadFrame,
             selectedOpacityKeyframes = selectedOpacityKeyframes,
+            canonicalTransformKeyframes = selectedCanonicalTransformKeyframes,
             isPlaying = isPlaying,
             saveMessage = saveMessage,
             savedProjects = savedProjects,

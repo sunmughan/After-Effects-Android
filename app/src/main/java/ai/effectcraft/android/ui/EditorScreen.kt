@@ -119,6 +119,7 @@ fun EditorScreen(
     selectedLayerId: String,
     playheadFrame: Int,
     selectedOpacityKeyframes: List<PropertyKeyframe>,
+    canonicalTransformKeyframes: List<Int> = emptyList(),
     isPlaying: Boolean,
     saveMessage: String,
     savedProjects: List<ProjectDocument>,
@@ -332,6 +333,7 @@ fun EditorScreen(
                 selectedLayerId = selectedLayerId,
                 playheadFrame = playheadFrame,
                 selectedOpacityKeyframes = selectedOpacityKeyframes,
+                canonicalTransformKeyframes = canonicalTransformKeyframes,
                 isPlaying = isPlaying,
                 onSelectLayer = onSelectLayer,
                 onScrub = onScrub,
@@ -1857,6 +1859,7 @@ private fun TimelinePanel(
     selectedLayerId: String,
     playheadFrame: Int,
     selectedOpacityKeyframes: List<PropertyKeyframe>,
+    canonicalTransformKeyframes: List<Int>,
     isPlaying: Boolean,
     onSelectLayer: (String) -> Unit,
     onScrub: (Int) -> Unit,
@@ -1947,6 +1950,40 @@ private fun TimelinePanel(
             }
             if (project.layers.size > 4) {
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
+            }
+            if (canonicalTransformKeyframes.isNotEmpty()) {
+                CanonicalTransformTrack(canonicalTransformKeyframes, project.durationFrames)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int) {
+    val frames = keyframes.filter { it >= 0 }.distinct().sorted()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(27.dp)
+            .semantics { contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}" }
+            .padding(horizontal = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("TRANSFORM", modifier = Modifier.width(107.dp), color = EditorPalette.mint, fontSize = 9.sp)
+        Box(
+            modifier = Modifier.weight(1f).height(17.dp)
+                .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val frameRange = (durationFrames - 1).coerceAtLeast(1).toFloat()
+                frames.forEach { frame ->
+                    val x = frame.coerceIn(0, durationFrames - 1).toFloat() / frameRange * size.width
+                    drawCircle(
+                        color = EditorPalette.mint,
+                        radius = 3.2f,
+                        center = androidx.compose.ui.geometry.Offset(x, size.height / 2f)
+                    )
+                }
             }
         }
     }

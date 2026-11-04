@@ -80,6 +80,7 @@ class CanonicalSelectionEditorTest {
                     selectedLayerId = project.layers.first().id,
                     playheadFrame = workspaceFrame.intValue,
                     selectedOpacityKeyframes = emptyList(),
+                    canonicalTransformKeyframes = listOf(0, 15, 30),
                     isPlaying = false,
                     saveMessage = "Saved",
                     savedProjects = emptyList(),
@@ -163,6 +164,8 @@ class CanonicalSelectionEditorTest {
 
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("CANONICAL .ECPROJ").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
+            .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
 
         // The canonical preview follows the workspace timeline in both
