@@ -638,6 +638,8 @@ fun EditorScreen(
                     onRemoveLayerTransformKeyframe = onRemoveCanonicalLayerTransformKeyframe,
                     interpolationProperty = interpolationProperty,
                     onInterpolationPropertyChange = { interpolationProperty = it },
+                    interpolationSide = interpolationSide,
+                    onInterpolationSideChange = { interpolationSide = it },
                     onSetLayerTransformInterpolation = onSetCanonicalLayerTransformInterpolation,
                     onRemoveLayerOpacityKeyframe = onRemoveCanonicalLayerOpacityKeyframe,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
@@ -1078,6 +1080,8 @@ private fun CanonicalProjectEditor(
     onRemoveLayerTransformKeyframe: (Long, Long, String, Int) -> Unit,
     interpolationProperty: String = "position",
     onInterpolationPropertyChange: (String) -> Unit = {},
+    interpolationSide: String = "both",
+    onInterpolationSideChange: (String) -> Unit = {},
     onSetLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
     onRemoveLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
@@ -1464,7 +1468,7 @@ private fun CanonicalProjectEditor(
                     listOf("both" to "Both", "incoming" to "Incoming", "outgoing" to "Outgoing").forEach { (side, label) ->
                         FilterChip(
                             selected = interpolationSide == side,
-                            onClick = { interpolationSide = side },
+                            onClick = { onInterpolationSideChange(side) },
                             enabled = editable,
                             label = { Text(label, fontSize = 10.sp) },
                             modifier = Modifier.semantics { contentDescription = "Select $side interpolation side" }
