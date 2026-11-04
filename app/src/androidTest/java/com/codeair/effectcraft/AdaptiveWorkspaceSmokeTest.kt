@@ -7,8 +7,9 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.semantics.CustomActions
+import androidx.compose.ui.test.fetchSemanticsNode
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performCustomAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
@@ -23,6 +24,7 @@ import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.PropertyKeyframe
 import com.codeair.effectcraft.ui.EditorScreen
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -387,9 +389,18 @@ class AdaptiveWorkspaceSmokeTest {
             moved = listOf(c, l, selector, from, to)
         }
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
-        compose.onNodeWithContentDescription(
+        // performCustomAction does not exist in this Compose test version, so
+        // invoke the exposed custom action directly from the node's semantics.
+        // The label lookup and the callback assertion below are unchanged:
+        // the action must exist under its TalkBack label and fire with the
+        // same move arguments.
+        val graphNode = compose.onNodeWithContentDescription(
             "Curve graph for Position X with keys 0: 100.0, 15: 320.0, 30: 500.0"
-        ).performScrollTo().performCustomAction("Move key at frame 15 to playhead frame 0")
+        ).performScrollTo().fetchSemanticsNode()
+        val moveAction = graphNode.config[CustomActions].first {
+            it.label == "Move key at frame 15 to playhead frame 0"
+        }
+        assertTrue(moveAction.action())
         assertEquals(listOf<Any>(10L, 2L, "transform:position", 15, 0), moved)
     }
 
