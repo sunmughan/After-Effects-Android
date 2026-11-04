@@ -18,7 +18,9 @@
 
 - **Version:** `[versionName from app/build.gradle.kts as built]`
   (versionCode `[versionCode as built]`)
-- **Application ID:** `ai.effectcraft.android`
+- **Application ID:** `[id actually built — decided id is
+  `com.codeair.effectcraft`, but quote the built APK's id until the
+  `ec-pkg` rename + rebase has landed in the release branch]`
 - **Branch / commit built:** `[branch] @ [full commit SHA]`
 - **Release workflow run:** `[Actions run URL + run number]`
 - **Release artifact:** `[artifact name effectcraft-android-release]`
@@ -32,6 +34,11 @@
   secret value.]`
 - **Signature verification:** `[apksigner verify result, or jarsigner
   result + note that apksigner was unavailable, or FAILED]`
+- **Signing certificate fingerprints (copied exactly from the release
+  workflow's "Print signing certificate fingerprints" step, for
+  Firebase registration — never invented or reused from another
+  build):** SHA-1 `[value or NOT PRINTED]`, SHA-256 `[value or
+  NOT PRINTED]`
 - **Current-head debug CI at release time:** `[android-ci run URL,
   result, and the test counts it actually reported — Rust / JVM /
   emulator — or NOT GREEN]`

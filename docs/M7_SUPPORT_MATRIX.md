@@ -10,7 +10,7 @@
 
 | Item | Value (source) | Notes |
 |---|---|---|
-| Application ID | `ai.effectcraft.android` | `app/build.gradle.kts` |
+| Application ID (decided) | `com.codeair.effectcraft` | Owner decision 2026-11-04; code rename lands via branch `ec-pkg` + rebase of this branch (see build doc §1) — until then the code still says `ai.effectcraft.android`, and release notes must quote the id actually built |
 | Version at time of writing | `0.1.0` (code `1`) | Same file; quote the built values, not this doc, at release time |
 | minSdk | API 26 (Android 8.0) | Same file |
 | targetSdk / compileSdk | API 37 | Same file |

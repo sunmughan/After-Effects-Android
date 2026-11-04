@@ -11,7 +11,16 @@
 
 ## 1. What a release build is in this project
 
-- Application ID: `ai.effectcraft.android` (see `app/build.gradle.kts`).
+- Application ID: `com.codeair.effectcraft` (owner-decided package name,
+  coordinator update 2026-11-04). NOTE FOR THIS BRANCH: the code in
+  branch `ec-m7` still carries the previous id `ai.effectcraft.android`
+  in `app/build.gradle.kts` (namespace/applicationId) and the manifest;
+  that rename is owned by a dedicated rename branch (`ec-pkg`), which
+  is integrated to the feature branch first, after which this branch
+  is rebased onto the new feature head before finalizing. Do NOT
+  rename the id in this branch. Any release built from this branch
+  before that rebase still carries the old id, and its release notes
+  must quote the id actually built, not this decided id.
 - Version at the time of writing: `versionName 0.1.0`, `versionCode 1`
   (same file). Do not bump these in a build step; a version change is a
   separate, owner-approved commit, and the release notes must quote the
@@ -111,6 +120,13 @@ Rules that are enforced by the workflow and by this document alike:
    - the "Verify release artifacts are signed and hash them" step
      passed (META-INF signature files present, plus apksigner
      verification when available on the runner, else jarsigner);
+   - the "Print signing certificate fingerprints" step printed the
+     SHA-1 and SHA-256 of the signer certificate actually present in
+     the APK. Copy those values exactly as printed for the Firebase
+     registration step; never invent, retype from memory, or reuse
+     fingerprints from another build. Fingerprints are not secrets
+     (they are embedded in the APK), but a wrong fingerprint breaks
+     Firebase/Google sign-in registration for that build;
    - the SHA-256 values in the log match `release-artifact-sha256.txt`
      and match the downloaded files (`sha256sum app-release.apk
      app-release.aab` locally).

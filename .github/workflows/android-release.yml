@@ -35,6 +35,11 @@
 # Outputs (uploaded as one artifact, retention 90 days):
 #   app-release.apk, app-release.aab, R8 mapping.txt, SHA-256 sums,
 #   release dependency/license inventory.
+# The job also prints the APK signer's certificate SHA-1 and SHA-256
+# fingerprints, taken from the actual artifact (never invented), so
+# the coordinator can deliver exact fingerprints for the Firebase
+# registration step. Certificate fingerprints are not secrets: they
+# are embedded in the APK itself and are safe to print and share.
 # Hash behaviour: the workflow prints SHA-256 for both artifacts. Two
 # release builds from the same commit with the SAME signing key are
 # expected to be reproducible in content (see the debug reproducibility
@@ -216,6 +221,30 @@ jobs:
           fi
           sha256sum "$apk" "$aab" | tee build/audit-release/release-artifact-sha256.txt
           echo "APK and AAB are present, signed (see checks above), and hashed."
+
+      # Fingerprints are read from the artifact that was just built,
+      # never invented or copied from another build. When the secrets
+      # gate passed, this is the release certificate; the step labels
+      # the output as "the signer actually present in this artifact"
+      # so a reader can never mistake it for a claimed release cert
+      # if the artifact somehow were not release-signed. (The secrets
+      # gate above already fails the job before any build when the
+      # release secrets are absent, so an unsigned artifact reaching
+      # this step would mean the earlier signature check also failed
+      # and the job would already have stopped there.)
+      - name: Print signing certificate fingerprints
+        run: |
+          apk="$(find app/build/outputs/apk/release -name 'app-release.apk' | head -n 1)"
+          test -n "$apk" && test -s "$apk"
+          echo "Signing certificate fingerprints for $apk (signer actually present in this artifact):"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f 2>/dev/null | sort | tail -n 1)"
+          if [[ -n "$apksigner" ]]; then
+            "$apksigner" verify --print-certs "$apk"
+          else
+            echo "apksigner not found under build-tools; falling back to keytool -printcert."
+            keytool -printcert -jarfile "$apk"
+          fi
+          echo "Record the SHA-1 and SHA-256 values above exactly as printed for Firebase registration; do not retype them from memory."
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
