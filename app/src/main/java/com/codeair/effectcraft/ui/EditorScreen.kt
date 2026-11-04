@@ -2537,6 +2537,10 @@ private fun curveCurrentValue(layer: CanonicalLayerInfo, selector: String): Trip
         "transform:position" -> Triple(layer.positionX, layer.positionY, 0.0)
         "transform:scale" -> Triple(layer.scaleX, layer.scaleY, 0.0)
         "transform:rotation" -> Triple(layer.rotationDegrees, 0.0, 0.0)
+        "transform:anchor" -> Triple(layer.anchorX, layer.anchorY, 0.0)
+        "transform:orientation" -> Triple(layer.orientationX, layer.orientationY, layer.orientationZ)
+        "transform:rotationX" -> Triple(layer.rotationXDegrees, 0.0, 0.0)
+        "transform:rotationY" -> Triple(layer.rotationYDegrees, 0.0, 0.0)
         "transform:opacity" -> Triple(layer.opacityPercent, 0.0, 0.0)
         else -> {
             val uid = selector.removePrefix("param:").toLongOrNull()
