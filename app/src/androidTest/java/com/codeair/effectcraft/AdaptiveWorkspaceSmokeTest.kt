@@ -390,6 +390,9 @@ class AdaptiveWorkspaceSmokeTest {
             }
         )
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithText("Anchor X").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Add Anchor X keyframe at playhead").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "anchor", 0, 120.5, 80.25, 0.0), captures.transformKeyframe)
         compose.onNodeWithContentDescription("Add anchor keyframe").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, "anchor", 0, 120.5, 80.25, 0.0), captures.transformKeyframe)
         compose.onNodeWithContentDescription("Add orientation keyframe").performScrollTo().performClick()
