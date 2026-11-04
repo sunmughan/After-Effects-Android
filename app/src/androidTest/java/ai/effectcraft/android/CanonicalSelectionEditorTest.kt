@@ -81,6 +81,7 @@ class CanonicalSelectionEditorTest {
                     playheadFrame = workspaceFrame.intValue,
                     selectedOpacityKeyframes = emptyList(),
                     canonicalTransformKeyframes = listOf(0, 15, 30),
+                    canonicalTransformDurationFrames = 90,
                     isPlaying = false,
                     saveMessage = "Saved",
                     savedProjects = emptyList(),

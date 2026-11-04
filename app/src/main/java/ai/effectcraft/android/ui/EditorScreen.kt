@@ -121,6 +121,7 @@ fun EditorScreen(
     playheadFrame: Int,
     selectedOpacityKeyframes: List<PropertyKeyframe>,
     canonicalTransformKeyframes: List<Int> = emptyList(),
+    canonicalTransformDurationFrames: Int = project.durationFrames,
     isPlaying: Boolean,
     saveMessage: String,
     savedProjects: List<ProjectDocument>,
@@ -335,6 +336,7 @@ fun EditorScreen(
                 playheadFrame = playheadFrame,
                 selectedOpacityKeyframes = selectedOpacityKeyframes,
                 canonicalTransformKeyframes = canonicalTransformKeyframes,
+                canonicalTransformDurationFrames = canonicalTransformDurationFrames,
                 isPlaying = isPlaying,
                 onSelectLayer = onSelectLayer,
                 onScrub = onScrub,
@@ -1861,6 +1863,7 @@ private fun TimelinePanel(
     playheadFrame: Int,
     selectedOpacityKeyframes: List<PropertyKeyframe>,
     canonicalTransformKeyframes: List<Int>,
+    canonicalTransformDurationFrames: Int,
     isPlaying: Boolean,
     onSelectLayer: (String) -> Unit,
     onScrub: (Int) -> Unit,
@@ -1953,7 +1956,7 @@ private fun TimelinePanel(
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
             }
             if (canonicalTransformKeyframes.isNotEmpty()) {
-                CanonicalTransformTrack(canonicalTransformKeyframes, project.durationFrames, onScrub)
+                CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, onScrub)
             }
         }
     }
