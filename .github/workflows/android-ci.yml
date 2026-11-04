@@ -24,6 +24,26 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      # The emulator system image is installed late, after two Rust Android
+      # ABIs and Gradle outputs have consumed runner storage. CI #665 failed
+      # here with "No space left on device" while sdkmanager unpacked API 30.
+      # Reclaim unrelated hosted-runner runtimes/packages before tool setup;
+      # retain the preinstalled Android SDK and swap, then install JDK/Rust
+      # explicitly below. This changes runner capacity, not test coverage.
+      - name: Reclaim unused hosted-runner disk space
+        run: df -h /
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          tool-cache: true
+          swap-storage: false
+      - name: Confirm runner disk space after cleanup
+        run: df -h /
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -218,6 +238,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+
+      # Keep the independent rebuild cold while freeing unrelated runner
+      # runtimes; Android SDK itself is retained and setup-android follows.
+      - name: Reclaim unused hosted-runner disk space
+        run: df -h /
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          tool-cache: true
+          swap-storage: false
+      - name: Confirm runner disk space after cleanup
+        run: df -h /
 
       - name: Record rebuilt commit
         run: |
