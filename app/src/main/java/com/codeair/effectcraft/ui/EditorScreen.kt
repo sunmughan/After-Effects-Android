@@ -2510,9 +2510,9 @@ private fun CurveGraphSection(
         )
     }
     val selectedHandleSpec = selectedCurveHandle?.let { (frame, side) ->
-        val index = track.keys.indexOfFirst { it.frame == frame }
-        val key = track.keys.getOrNull(index)
-        val neighbor = if (side == "outgoing") track.keys.getOrNull(index + 1) else track.keys.getOrNull(index - 1)
+        val index = displayTrack.keys.indexOfFirst { it.frame == frame }
+        val key = displayTrack.keys.getOrNull(index)
+        val neighbor = if (side == "outgoing") displayTrack.keys.getOrNull(index + 1) else displayTrack.keys.getOrNull(index - 1)
         val handle = key?.let {
             if (side == "outgoing") it.outHandle ?: if (it.outInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
             else it.inHandle ?: if (it.inInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
@@ -2524,7 +2524,7 @@ private fun CurveGraphSection(
         val selectedSide = selectedCurveHandle!!.second
         val selectedFrame = selectedCurveHandle!!.first
         val segmentFrames = abs(selectedNeighbor.frame - selectedKey.frame).toDouble().coerceAtLeast(1.0)
-        val maxSpeed = maxOf(abs(selectedNeighbor.value - selectedKey.value) * fps / segmentFrames * 2.0, 10.0)
+        val maxSpeed = maxOf(abs(selectedNeighbor.value - selectedKey.value) * fps / segmentFrames * 2.0, 10.0).coerceAtMost(1_000_000.0)
         Text("Selected $selectedSide handle · frame $selectedFrame", color = EditorPalette.text, fontSize = 10.sp)
         Text("Speed ${String.format(Locale.US, "%.2f", selectedHandle.speed)}", color = EditorPalette.muted, fontSize = 9.sp)
         Slider(
@@ -2532,7 +2532,7 @@ private fun CurveGraphSection(
             onValueChange = { value ->
                 val next = CurveHandle(value.toDouble(), selectedHandle.influence)
                 preciseHandlePreview = next
-                dragPreview = runCatching { BezierCurveEditor.withHandle(track, selectedFrame, selectedSide, next) }.getOrNull()
+                dragPreview = runCatching { BezierCurveEditor.withHandle(displayTrack, selectedFrame, selectedSide, next) }.getOrNull()
             },
             onValueChangeFinished = {
                 preciseHandlePreview?.let { next ->
