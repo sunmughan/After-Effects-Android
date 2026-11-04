@@ -211,6 +211,12 @@ class CanonicalSelectionEditorTest {
         // on Background (line-205 failure: expected [3] but was [2]).
         // Scroll each row back into view first, as the indicator and preview
         // steps below already do.
+        // The row scrollTo above only scrolls the inner layer list, not the
+        // sheet itself, so the sheet stays scrolled down at the inspector
+        // and the tap is still swallowed. Scroll the sheet header, a direct
+        // child of the sheet column, back into view first to bring the rows
+        // back, then tap the row.
+        compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo()
         compose.onNodeWithContentDescription("Canonical layer row Title").performScrollTo().performClick()
         assertEquals(setOf(3L), selectionState.value)
         compose.onNodeWithText("● Title", substring = true).assertIsDisplayed()
