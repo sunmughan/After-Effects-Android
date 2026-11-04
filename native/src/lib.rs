@@ -3243,7 +3243,8 @@ mod tests {
         use effectcraft_project::Value;
         let (source, comp_id, layer_id) = text_layer_project();
         let anchor = set_layer_transform_keyframe(&source, comp_id, layer_id, "anchor", 0, 12.0, 34.0, 0.0).unwrap();
-        let orientation = set_layer_transform_keyframe(&anchor, comp_id, layer_id, "orientation", 15, 10.0, 20.0, 30.0).unwrap();
+        let orientation_15 = set_layer_transform_keyframe(&anchor, comp_id, layer_id, "orientation", 15, 10.0, 20.0, 30.0).unwrap();
+        let orientation = set_layer_transform_keyframe(&orientation_15, comp_id, layer_id, "orientation", 30, 40.0, 50.0, 60.0).unwrap();
         let rotation_x = set_layer_transform_keyframe(&orientation, comp_id, layer_id, "rotationX", 0, 45.0, 0.0, 0.0).unwrap();
         let rotation_y = set_layer_transform_keyframe(&rotation_x, comp_id, layer_id, "rotationY", 15, -30.0, 0.0, 0.0).unwrap();
         let eased = set_layer_transform_keyframe_interpolation(&rotation_y, comp_id, layer_id, "orientation", 15, "easy_ease").unwrap();
@@ -3252,11 +3253,13 @@ mod tests {
         let anchor_key = &find_property_ref(transform, "anchor").unwrap().keys[0];
         assert!(matches!(&anchor_key.value, Value::Vec3(v) if v[0] == 12.0 && v[1] == 34.0));
         let orientation_keys = &transform.prop("orientation").unwrap().keys;
-        assert_eq!(orientation_keys.len(), 1, "first authored key must not leave a frame-zero seed");
+        assert_eq!(orientation_keys.len(), 2, "first authored key must not leave a frame-zero seed");
         assert_eq!(orientation_keys[0].time, Tick::from_rational(15, 1, 30));
         assert_eq!(orientation_keys[0].value, Value::Vec3([10.0, 20.0, 30.0]));
         assert_eq!(orientation_keys[0].in_interp, Interp::Bezier);
         assert_eq!(orientation_keys[0].out_interp, Interp::Bezier);
+        assert_eq!(orientation_keys[1].time, Tick::from_rational(30, 1, 30));
+        assert_eq!(orientation_keys[1].value, Value::Vec3([40.0, 50.0, 60.0]));
         let rotation_x_keys = &transform.prop("rotationX").unwrap().keys;
         assert_eq!(rotation_x_keys.len(), 1);
         assert_eq!(rotation_x_keys[0].time, Tick::ZERO);
