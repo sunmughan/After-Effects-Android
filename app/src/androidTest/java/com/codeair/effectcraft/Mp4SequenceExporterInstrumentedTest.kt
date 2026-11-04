@@ -4,7 +4,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import androidx.test.ext.junit.runners.Android4JUnitRunner
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.codeair.effectcraft.data.Mp4SequenceExporter
 import com.codeair.effectcraft.data.RenderOutputFormat
