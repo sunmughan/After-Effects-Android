@@ -21,23 +21,40 @@ class Mp4BoxInspectorTest {
     private fun u32(value: Long): ByteArray =
         ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(value.toInt()).array()
 
-    private fun mvhd(timescale: Long, duration: Long): ByteArray {
+    private fun u64(value: Long): ByteArray =
+        ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(value).array()
+
+    private fun mvhd(timescale: Long, duration: Long, version: Int = 0): ByteArray {
         val body = ByteArrayOutputStream()
-        body.write(ByteArray(4)) // version/flags
-        body.write(u32(0)) // creation time
-        body.write(u32(0)) // modification time
-        body.write(u32(timescale))
-        body.write(u32(duration))
+        body.write(byteArrayOf(version.toByte(), 0, 0, 0)) // version/flags
+        if (version == 0) {
+            body.write(u32(0)) // creation time
+            body.write(u32(0)) // modification time
+            body.write(u32(timescale))
+            body.write(u32(duration))
+        } else {
+            body.write(u64(0)) // creation time
+            body.write(u64(0)) // modification time
+            body.write(u32(timescale)) // timescale stays 32-bit in v1
+            body.write(u64(duration))
+        }
         return box("mvhd", body.toByteArray())
     }
 
-    private fun mdhd(timescale: Long, duration: Long): ByteArray {
+    private fun mdhd(timescale: Long, duration: Long, version: Int = 0): ByteArray {
         val body = ByteArrayOutputStream()
-        body.write(ByteArray(4))
-        body.write(u32(0))
-        body.write(u32(0))
-        body.write(u32(timescale))
-        body.write(u32(duration))
+        body.write(byteArrayOf(version.toByte(), 0, 0, 0))
+        if (version == 0) {
+            body.write(u32(0))
+            body.write(u32(0))
+            body.write(u32(timescale))
+            body.write(u32(duration))
+        } else {
+            body.write(u64(0))
+            body.write(u64(0))
+            body.write(u32(timescale))
+            body.write(u64(duration))
+        }
         body.write(ByteArray(4)) // language + pre-defined
         return box("mdhd", body.toByteArray())
     }
@@ -79,7 +96,7 @@ class Mp4BoxInspectorTest {
         return box("stsz", body.toByteArray())
     }
 
-    private fun mp4(codec: String = "avc1", samples: Int = 6, timescale: Long = 1000, duration: Long = 6000): ByteArray {
+    private fun mp4(codec: String = "avc1", samples: Int = 6, timescale: Long = 1000, duration: Long = 6000, version: Int = 0): ByteArray {
         val out = ByteArrayOutputStream()
         val ftyp = ByteArrayOutputStream()
         ftyp.write("isom".toByteArray(Charsets.US_ASCII))
@@ -92,14 +109,14 @@ class Mp4BoxInspectorTest {
         val minf = ByteArrayOutputStream()
         minf.write(box("stbl", stbl.toByteArray()))
         val mdia = ByteArrayOutputStream()
-        mdia.write(mdhd(timescale, duration))
+        mdia.write(mdhd(timescale, duration, version))
         mdia.write(hdlr("vide"))
         mdia.write(box("minf", minf.toByteArray()))
         val trak = ByteArrayOutputStream()
         trak.write(box("tkhd", ByteArray(80)))
         trak.write(box("mdia", mdia.toByteArray()))
         val moov = ByteArrayOutputStream()
-        moov.write(mvhd(timescale, duration))
+        moov.write(mvhd(timescale, duration, version))
         moov.write(box("trak", trak.toByteArray()))
         out.write(box("moov", moov.toByteArray()))
         out.write(box("mdat", ByteArray(16)))
@@ -117,6 +134,15 @@ class Mp4BoxInspectorTest {
         assertEquals(6L, result.videoTrack.sampleCount)
         assertEquals(1000L, result.movieTimescale)
         assertEquals(6000L, result.movieDuration)
+    }
+
+    @Test
+    fun readsVersionOneMovieAndMediaHeaderTimescaleAndDuration() {
+        val result = Mp4BoxInspector.inspect(mp4(timescale = 48_000, duration = 288_000, version = 1))
+        assertEquals(48_000L, result.movieTimescale)
+        assertEquals(288_000L, result.movieDuration)
+        assertEquals(48_000L, result.videoTrack.timescale)
+        assertEquals(288_000L, result.videoTrack.duration)
     }
 
     @Test
