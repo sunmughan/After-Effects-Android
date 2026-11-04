@@ -167,7 +167,7 @@ class CanonicalSelectionEditorTest {
         // Workspace transform markers are available before opening the modal
         // canonical inspector; tapping the lane seeks the nearest key frame.
         compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
-            .assertIsDisplayed().performTouchInput { click(center) }
+            .assertIsDisplayed().performClick() // screen-reader click action must seek just like a pointer tap
         assertEquals(30, workspaceFrame.intValue)
 
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
