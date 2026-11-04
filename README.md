@@ -124,7 +124,7 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 
 ### Run 64 — native transform keyframe navigation (2026-11-04)
 - Canonical inspector now lists Position/Scale/Rotation key frames from native metadata and jumps the shared preview/workspace playhead to the nearest key on tap. Rust metadata uses the same Tick/frame-rate conversion as renderer; Kotlin parser sorts/deduplicates and has a new JVM regression. Code commit a37275a5.
-- CI #475 failed test compilation because JUnit fail() in Elvis fallback widened bridge values to Any; corrected with throw AssertionError in c618641e, no test weakening. #476 is running on that fix; exact-head #477 for the timeline feature is pending. No pass claimed.
+- CI #475 failed test compilation because JUnit fail() in Elvis fallback widened bridge values to Any; corrected with throw AssertionError in c618641e, no test weakening. #476/#477 were cancelled by subsequent pushes; #482 is still in progress on an older docs head and latest exact-head #485 is pending. No pass claimed.
 
 - Transform-key metadata JVM fixture corrected to assert absent empty tracks (commit e051cec1); latest-head CI pending.
 
