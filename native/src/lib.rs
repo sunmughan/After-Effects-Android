@@ -3104,14 +3104,14 @@ mod tests {
         let (source, comp_id) = text_comp_project(320, 180);
         let project: Project = serde_json::from_str(&source).unwrap();
         let footage = MediaPool::new();
-        let cpu = render_parsed_frame(&project, &footage, comp_id, 0, 160, None).unwrap();
+        let cpu = render_parsed_frame(&project, &footage, comp_id, 0, 160, None, None).unwrap();
 
         let live = CountingAccel {
             asked: std::sync::atomic::AtomicUsize::new(0),
             available: true,
         };
         let via_live =
-            render_parsed_frame(&project, &footage, comp_id, 0, 160, Some(&live)).unwrap();
+            render_parsed_frame(&project, &footage, comp_id, 0, 160, Some(&live), None).unwrap();
         assert_eq!(live.asked.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(via_live, cpu);
 
@@ -3120,7 +3120,7 @@ mod tests {
             available: false,
         };
         let via_retired =
-            render_parsed_frame(&project, &footage, comp_id, 0, 160, Some(&retired)).unwrap();
+            render_parsed_frame(&project, &footage, comp_id, 0, 160, Some(&retired), None).unwrap();
         assert_eq!(retired.asked.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert_eq!(via_retired, cpu);
     }
