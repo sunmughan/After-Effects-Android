@@ -118,5 +118,5 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 
 
 ### Run 63 — native transform key removal + CI green
-- CI #471 passed exact HEAD `71414e3`: ARM64+x86_64 native, JNI ABI, Rust 33/33, JVM, API 30 emulator 34/34, cold APK reproducibility. See [PHASES.md Run 63](PHASES.md#run-63--native-transform-keyframe-removal--exact-head-ci-green-2026-11-04).
-- Added Position/Scale/Rotation remove-key controls at the shared playhead, native idempotent key deletion/static restoration, canonical save/history wiring and Rust/Compose regression coverage. New commit requires fresh exact-head CI.
+- CI #471 passed exact tested HEAD `71414e3`: ARM64+x86_64 native, JNI ABI, Rust 33/33, JVM, API 30 emulator 34/34, cold APK reproducibility. M4 #8 (selection/gesture/history) is marked PASS in PHASES with exact named evidence.
+- Added Position/Scale/Rotation remove-key controls at the shared playhead, native idempotent key deletion/static restoration, canonical save/history wiring and Rust/Compose regression coverage in [aef523c0](https://github.com/sunmughan/After-Effects-Android/commit/aef523c0ff239b494df26232fe96624fff62db55). Exact-head CI #473 pending.
