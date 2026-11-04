@@ -1,16 +1,16 @@
 package com.codeair.effectcraft
 
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsToggleable
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -69,7 +69,14 @@ class EditorAccessibilitySemanticsTest {
         // The layer-rename field previously had only placeholder text, which
         // TalkBack does not announce as a label; it must be a labelled edit
         // field with a set-text action.
-        compose.onNodeWithContentDescription("Layer name").assertExists().assert(hasSetTextAction())
+        // This project's Compose test version has no SemanticsNodeInteraction
+        // .assert(matcher) API, so the set-text action is proven the
+        // repo-proven way: fetch the labelled node and check its semantics
+        // config carries the SetText action (the same intent, no weaker).
+        assertTrue(
+            compose.onNodeWithContentDescription("Layer name")
+                .fetchSemanticsNode().config.contains(SemanticsActions.SetText)
+        )
         compose.onNodeWithContentDescription("Layer visibility").assertExists().assertIsToggleable()
         compose.onNodeWithContentDescription("Layer opacity").assertExists()
     }
