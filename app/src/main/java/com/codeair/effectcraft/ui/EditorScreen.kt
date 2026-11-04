@@ -103,6 +103,7 @@ import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.PropertyKeyframe
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
 import java.util.Locale
@@ -159,6 +160,12 @@ fun EditorScreen(
     onExportPngSequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int) -> Unit,
     onCancelSequenceExport: () -> Unit,
     sequenceExportProgress: Int,
+    isExportingMp4: Boolean,
+    isMp4ExportWritingOutput: Boolean,
+    onOpenMp4Settings: () -> Unit,
+    onCancelMp4Sequence: () -> Unit,
+    mp4ExportProgress: Int,
+    onExportMp4Sequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int, bitrate: Int) -> Unit,
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
@@ -244,8 +251,12 @@ fun EditorScreen(
     var sequenceFpsText by remember { mutableStateOf("30") }
     var sequenceStartText by remember { mutableStateOf("0") }
     var sequenceEndText by remember { mutableStateOf("0") }
+    var sequenceBitrateText by remember { mutableStateOf("8000000") }
+    var sequenceOutputFormat by remember { mutableStateOf(RenderOutputFormat.PNG_SEQUENCE_ZIP) }
     var sequenceSettingsError by remember { mutableStateOf<String?>(null) }
-    val openSequenceSettings = {
+    val openSequenceSettings: (RenderOutputFormat) -> Unit = { format ->
+        sequenceOutputFormat = format
+        sequenceBitrateText = "8000000"
         val composition = canonicalProject?.compositions?.firstOrNull()
         if (composition == null) {
             sequenceSettingsError = "Import a canonical composition first"
@@ -296,7 +307,7 @@ fun EditorScreen(
                 onCancelFrameExport = onCancelFrameExport,
                 isExportingSequence = isExportingSequence,
                 isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                onExportPngSequence = openSequenceSettings,
+                onExportPngSequence = { openSequenceSettings(RenderOutputFormat.PNG_SEQUENCE_ZIP) },
                 onCancelSequenceExport = onCancelSequenceExport,
                 sequenceExportProgress = sequenceExportProgress,
                 onNewProject = onNewProject,
@@ -535,7 +546,7 @@ fun EditorScreen(
             val composition = canonicalProject?.compositions?.firstOrNull()
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showSequenceSettings = false },
-                title = { Text("PNG sequence settings") },
+                title = { Text(if (sequenceOutputFormat == RenderOutputFormat.MP4_H264) "H.264 MP4 settings" else "PNG sequence settings") },
                 text = {
                     Column(
                         Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
@@ -546,6 +557,10 @@ fun EditorScreen(
                             color = EditorPalette.muted,
                             fontSize = 12.sp
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP }) { Text("PNG ZIP") }
+                            TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 }) { Text("MP4 H.264") }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = sequenceWidthText, onValueChange = { sequenceWidthText = it.filter(Char::isDigit) },
@@ -575,7 +590,21 @@ fun EditorScreen(
                                 singleLine = true, modifier = Modifier.weight(1f)
                             )
                         }
-                        Text("PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track.", color = EditorPalette.muted, fontSize = 11.sp)
+                        if (sequenceOutputFormat == RenderOutputFormat.MP4_H264) {
+                            OutlinedTextField(
+                                value = sequenceBitrateText,
+                                onValueChange = { sequenceBitrateText = it.filter(Char::isDigit) },
+                                label = { Text("Bitrate (bps)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true, modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Text(
+                            if (sequenceOutputFormat == RenderOutputFormat.MP4_H264)
+                                "H.264 MP4 uses the device MediaCodec encoder; audio is not included."
+                            else "PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track.",
+                            color = EditorPalette.muted, fontSize = 11.sp
+                        )
                         sequenceSettingsError?.let { Text(it, color = EditorPalette.amber, fontSize = 12.sp) }
                     }
                 },
@@ -586,17 +615,21 @@ fun EditorScreen(
                         val fps = sequenceFpsText.toIntOrNull()
                         val start = sequenceStartText.toIntOrNull()
                         val end = sequenceEndText.toIntOrNull()
+                        val bitrate = sequenceBitrateText.toIntOrNull() ?: 8_000_000
                         if (width == null || height == null || fps == null || start == null || end == null) {
                             sequenceSettingsError = "Enter valid numeric settings"
                         } else {
-                            runCatching { RenderQueuePlan.create(RenderQueueSettings(width, height, fps, start, end)) }
+                            val settings = RenderQueueSettings(width, height, fps, start, end, sequenceOutputFormat, bitrate)
+                            runCatching { RenderQueuePlan.create(settings, composition?.durationFrames ?: end + 1) }
                                 .onSuccess {
                                     showSequenceSettings = false
-                                    onExportPngSequence(width, height, fps, start, end)
+                                    if (sequenceOutputFormat == RenderOutputFormat.MP4_H264)
+                                        onExportMp4Sequence(width, height, fps, start, end, bitrate)
+                                    else onExportPngSequence(width, height, fps, start, end)
                                 }
                                 .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
                         }
-                    }) { Text("Render ZIP") }
+                    }) { Text(if (sequenceOutputFormat == RenderOutputFormat.MP4_H264) "Render MP4" else "Render ZIP") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showSequenceSettings = false }) { Text("Cancel") }
@@ -890,6 +923,23 @@ private fun HeaderBar(
                     )
                 }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
+                IconButton(
+                    onClick = if (isExportingMp4 && !isMp4ExportWritingOutput) onCancelMp4Sequence else {
+                        openSequenceSettings(RenderOutputFormat.MP4_H264)
+                        onOpenMp4Settings()
+                    },
+                    enabled = if (isExportingMp4) !isMp4ExportWritingOutput else hasCanonicalProject && !isExportingFrame && !isExportingSequence
+                ) {
+                    Icon(
+                        if (isExportingMp4) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
+                        contentDescription = when {
+                            isExportingMp4 && isMp4ExportWritingOutput -> "Writing MP4 · $mp4ExportProgress%"
+                            isExportingMp4 -> "Cancel MP4 export · $mp4ExportProgress%"
+                            else -> "Export H.264 MP4"
+                        },
+                        tint = if (isExportingMp4) EditorPalette.amber else EditorPalette.violet
+                    )
+                }
                 TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onOpenRepositoryPicker) { Text("Projects", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }

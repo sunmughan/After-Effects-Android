@@ -3,6 +3,7 @@ package com.codeair.effectcraft.ui
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +44,8 @@ import com.codeair.effectcraft.data.ProjectFileFormats
 import com.codeair.effectcraft.data.ProjectKeyframeStore
 import com.codeair.effectcraft.data.PngSequenceZipExporter
 import com.codeair.effectcraft.data.PngSequenceZipValidator
+import com.codeair.effectcraft.data.Mp4SequenceExporter
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
 import com.codeair.effectcraft.data.SafDocumentWriter
@@ -77,6 +80,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var sequenceExportProgress by remember { mutableIntStateOf(0) }
     var pendingSequenceSettings by remember { mutableStateOf<RenderQueueSettings?>(null) }
     var pendingSequenceCompositionId by remember { mutableStateOf<Long?>(null) }
+    var mp4ExportJob by remember { mutableStateOf<Job?>(null) }
+    var mp4ExportInProgress by remember { mutableStateOf(false) }
+    var mp4ExportWritingOutput by remember { mutableStateOf(false) }
+    var mp4ExportProgress by remember { mutableIntStateOf(0) }
+    var pendingMp4Settings by remember { mutableStateOf<RenderQueueSettings?>(null) }
+    var pendingMp4CompositionId by remember { mutableStateOf<Long?>(null) }
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
@@ -386,6 +395,78 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     sequenceExportInProgress = false
                     sequenceExportWritingOutput = false
                     sequenceExportJob = null
+                }
+            }
+        }
+    }
+
+    val exportMp4Launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { uri: Uri? ->
+        val settings = pendingMp4Settings
+        val compositionId = pendingMp4CompositionId
+        pendingMp4Settings = null
+        pendingMp4CompositionId = null
+        if (uri == null) {
+            saveMessage = "MP4 export cancelled"
+        } else if (settings == null || compositionId == null || importedEcproj == null) {
+            saveMessage = "Import a canonical composition before exporting MP4"
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+        } else if (frameExportInProgress || sequenceExportInProgress) {
+            saveMessage = "Finish or cancel the current render before starting MP4"
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+        } else {
+            val source = importedEcproj!!
+            mp4ExportInProgress = true
+            mp4ExportWritingOutput = false
+            mp4ExportProgress = 0
+            mp4ExportJob = exportScope.launch {
+                var session: NativeSession? = null
+                var outputCompleted = false
+                val exportJob = currentCoroutineContext()[Job]
+                try {
+                    val compositionFrames = canonicalProjectInfo?.compositions
+                        ?.firstOrNull { it.id == compositionId }?.durationFrames
+                        ?: error("Canonical composition is no longer available")
+                    val plan = RenderQueuePlan.create(settings, compositionFrames)
+                    saveMessage = "Rendering H.264 MP4 · 0/${plan.frameCount} (0%)"
+                    withContext(Dispatchers.IO) {
+                        val nativeRenderSide = minOf(
+                            maxOf(settings.width, settings.height),
+                            RenderedFramePng.MAX_NATIVE_RENDER_SIDE
+                        )
+                        session = NativeSession.open(source, nativeRenderSide)
+                            ?: error("Native renderer unavailable for this project")
+                        context.contentResolver.openFileDescriptor(uri, "rw")?.use { descriptor ->
+                            Mp4SequenceExporter.export(
+                                plan = plan,
+                                output = descriptor.fileDescriptor,
+                                renderRgba = { frame ->
+                                    if (exportJob?.isActive != true) throw CancellationException("MP4 export cancelled")
+                                    session?.render(compositionId, frame.toLong())
+                                        ?: error("Native renderer returned no frame at $frame")
+                                },
+                                isCancelled = { exportJob?.isActive != true },
+                                onProgress = { completed, percent ->
+                                    mp4ExportProgress = percent
+                                    saveMessage = "Rendering H.264 MP4 · $completed/${plan.frameCount} ($percent%)"
+                                }
+                            )
+                        } ?: error("Unable to open the selected MP4 destination")
+                    }
+                    currentCoroutineContext().ensureActive()
+                    outputCompleted = true
+                    mp4ExportProgress = 100
+                    saveMessage = "Exported ${plan.frameCount} H.264 frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS"
+                } catch (cancelled: CancellationException) {
+                    saveMessage = "MP4 export cancelled"
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    saveMessage = "MP4 export failed · ${failure.message ?: "render or codec error"}"
+                } finally {
+                    session?.close()
+                    if (!outputCompleted) runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+                    mp4ExportInProgress = false
+                    mp4ExportWritingOutput = false
+                    mp4ExportJob = null
                 }
             }
         }
@@ -812,6 +893,34 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onCancelSequenceExport = { sequenceExportJob?.cancel() },
             sequenceExportProgress = sequenceExportProgress,
+            isExportingMp4 = mp4ExportInProgress,
+            isMp4ExportWritingOutput = mp4ExportWritingOutput,
+            onOpenMp4Settings = {
+                if (sequenceExportInProgress || frameExportInProgress) saveMessage = "Finish or cancel the current render first"
+                else saveMessage = "H.264 MP4 settings opened"
+            },
+            onCancelMp4Sequence = { if (!mp4ExportWritingOutput) mp4ExportJob?.cancel() },
+            mp4ExportProgress = mp4ExportProgress,
+            onExportMp4Sequence = { width, height, fps, startFrame, endFrame, bitrate ->
+                val composition = canonicalProjectInfo?.compositions?.firstOrNull()
+                if (importedEcproj == null || composition == null) {
+                    saveMessage = "Import a canonical composition before exporting MP4"
+                } else if (mp4ExportInProgress || sequenceExportInProgress || frameExportInProgress) {
+                    saveMessage = "Another render is already running"
+                } else {
+                    runCatching {
+                        val settings = RenderQueueSettings(width, height, fps, startFrame, endFrame, RenderOutputFormat.MP4_H264, bitrate)
+                        RenderQueuePlan.create(settings, composition.durationFrames)
+                        pendingMp4Settings = settings
+                        pendingMp4CompositionId = composition.id
+                        exportMp4Launcher.launch("EffectCraft-video.mp4")
+                    }.onFailure { failure ->
+                        pendingMp4Settings = null
+                        pendingMp4CompositionId = null
+                        saveMessage = "MP4 plan rejected · ${failure.message ?: "unsupported composition"}"
+                    }
+                }
+            },
             onSave = {
                 runCatching { projectStore.save(project) }
                     .onSuccess {
