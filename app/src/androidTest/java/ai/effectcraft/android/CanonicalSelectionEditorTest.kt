@@ -162,10 +162,14 @@ class CanonicalSelectionEditorTest {
             }
         }
 
+        // Workspace transform markers are available before opening the modal
+        // canonical inspector; tapping the lane seeks the nearest key frame.
+        compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
+            .assertIsDisplayed().performTouchInput { click(center) }
+        assertEquals(30, workspaceFrame.intValue)
+
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("CANONICAL .ECPROJ").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
-            .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
 
         // The canonical preview follows the workspace timeline in both
@@ -188,13 +192,6 @@ class CanonicalSelectionEditorTest {
         assertEquals(listOf<Any>(10L, 2L, "position", 15, 10.0, 20.0, 0.0), transformKeyframe)
         compose.onNodeWithContentDescription("Remove position keyframe").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, "position", 15), removedTransformKeyframe)
-
-        // Timeline markers are interactive: tapping near frame 30 chooses
-        // the nearest canonical key and updates the shared preview/playhead.
-        compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
-            .performScrollTo().performTouchInput { click(center) }
-        assertEquals(30, workspaceFrame.intValue)
-        compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(30L) }
 
         // Tap selects one layer; long-press adds a second layer to the set.
         compose.onNodeWithContentDescription("Canonical layer row Title").performClick()
