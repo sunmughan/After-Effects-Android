@@ -2833,6 +2833,11 @@ mod tests {
         assert!(set_layer_transform_keyframe(&source, comp_id, 999, "position", 2, 1.0, 0.0, 0.0).is_err());
     }
 
+    #[test]
+    fn canonical_transform_keyframe_interpolation_presets() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let at_zero = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 10.0, 20.0, 0.0).unwrap();
+        let at_fifteen = set_layer_transform_keyframe(&at_zero, comp_id, layer_id, "position", 15, 100.0, 200.0, 0.0).unwrap();
         let eased = set_layer_transform_keyframe_interpolation(&at_fifteen, comp_id, layer_id, "position", 15, "easy_ease").unwrap();
         let eased_project: Project = serde_json::from_str(&eased).unwrap();
         let eased_key = &eased_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
@@ -2856,6 +2861,7 @@ mod tests {
         assert!(linear_key.in_ease.is_empty() && linear_key.out_ease.is_empty());
         assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 14, "easy_ease").is_err());
         assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 15, "unknown").is_err());
+    }
 
     #[test]
     fn canonical_transform_keyframe_remove_is_idempotent_and_restores_static_value() {
