@@ -15,7 +15,6 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -72,7 +71,7 @@ class CanonicalEditPreviewSyncTest {
     )
 
     private fun applyEdit(envelope: String?): String {
-        val response = JSONObject(envelope ?: fail("Native bridge returned null; native library unavailable"))
+        val response = JSONObject(envelope ?: throw AssertionError("Native bridge returned null; native library unavailable"))
         assertTrue(
             "Canonical edit must succeed, got error: ${response.optString("error")}",
             response.optBoolean("valid")
@@ -81,7 +80,7 @@ class CanonicalEditPreviewSyncTest {
     }
 
     private fun removeEdit(envelope: String?): Pair<String, Boolean> {
-        val response = JSONObject(envelope ?: fail("Native bridge returned null; native library unavailable"))
+        val response = JSONObject(envelope ?: throw AssertionError("Native bridge returned null; native library unavailable"))
         assertTrue(
             "Canonical key removal must succeed, got error: ${response.optString("error")}",
             response.optBoolean("valid")
@@ -91,13 +90,13 @@ class CanonicalEditPreviewSyncTest {
 
     private fun canonical(project: String): CanonicalProjectInfo {
         val metadata = NativeProjectBridge.inspectEcproj(project)
-            ?: fail("Native inspect returned null for the edited project")
+            ?: throw AssertionError("Native inspect returned null for the edited project")
         return CanonicalProjectInfo.parse(metadata)
     }
 
     private fun layer(info: CanonicalProjectInfo, id: Long): CanonicalLayerInfo {
         return info.compositions.single().layers.firstOrNull { it.id == id }
-            ?: fail("Layer $id missing from canonical metadata")
+            ?: throw AssertionError("Layer $id missing from canonical metadata")
     }
 
     private fun baseFixture(): Fixture {
@@ -153,14 +152,14 @@ class CanonicalEditPreviewSyncTest {
             val candidate = layers.getJSONObject(index)
             if (candidate.optString("name") == "Title") layerObject = candidate
         }
-        val layerJson = layerObject ?: fail("Title layer missing from raw project JSON")
+        val layerJson = layerObject ?: throw AssertionError("Title layer missing from raw project JSON")
         val children = layerJson.getJSONObject("props").getJSONArray("children")
         var effectsChildren: JSONArray? = null
         for (index in 0 until children.length()) {
             val child = children.getJSONObject(index)
             if (child.optString("match") == "effects") effectsChildren = child.getJSONArray("children")
         }
-        val effects = effectsChildren ?: fail("Effects group missing from Title layer props")
+        val effects = effectsChildren ?: throw AssertionError("Effects group missing from Title layer props")
         effects.put(
             JSONObject(
                 """{"node":"Group","uid":90020,"match":"gaussianBlur","name":"Gaussian Blur","children":[
@@ -201,16 +200,16 @@ class CanonicalEditPreviewSyncTest {
      */
     private fun previewBeforeAndAfter(before: String, after: String, compositionId: Long, frame: Long): Pair<ByteArray, ByteArray> {
         val session = NativeSession.open(before, 160)
-            ?: fail("Preview session must open for the pre-edit project")
+            ?: throw AssertionError("Preview session must open for the pre-edit project")
         try {
             val baseFrame = session.render(compositionId, frame)
-                ?: fail("Preview session must render the pre-edit frame $frame")
+                ?: throw AssertionError("Preview session must render the pre-edit frame $frame")
             assertTrue(
                 "Preview session must accept the edited project",
                 session.updateProject(after)
             )
             val editedFrame = session.render(compositionId, frame)
-                ?: fail("Preview session must render the edited frame $frame")
+                ?: throw AssertionError("Preview session must render the edited frame $frame")
             return baseFrame to editedFrame
         } finally {
             session.close()
@@ -432,13 +431,13 @@ class CanonicalEditPreviewSyncTest {
         val keys = layer(canonical(keyed), fixture.firstId).opacityKeys
         assertEquals(listOf(0, 30), keys.map { it.frame })
         val session = NativeSession.open(fixture.project, 160)
-            ?: fail("Preview session must open for the pre-keyframe project")
+            ?: throw AssertionError("Preview session must open for the pre-keyframe project")
         try {
             val frameZero = session.render(fixture.compositionId, 0)
-                ?: fail("Preview session must render frame 0")
+                ?: throw AssertionError("Preview session must render frame 0")
             assertTrue("Preview session must accept the keyframed project", session.updateProject(keyed))
             val frameThirty = session.render(fixture.compositionId, 30)
-                ?: fail("Preview session must render frame 30")
+                ?: throw AssertionError("Preview session must render frame 30")
             assertFramesDiffer(frameZero, frameThirty, "Preview at the keyframe frame must differ from frame 0")
         } finally {
             session.close()
@@ -457,13 +456,13 @@ class CanonicalEditPreviewSyncTest {
         assertTrue("Removing the frame 30 key must report removed", removed)
         assertEquals(listOf(0), layer(canonical(unkeyed), fixture.firstId).opacityKeys.map { it.frame })
         val session = NativeSession.open(keyed, 160)
-            ?: fail("Preview session must open for the keyframed project")
+            ?: throw AssertionError("Preview session must open for the keyframed project")
         try {
             val keyedFrame = session.render(fixture.compositionId, 30)
-                ?: fail("Preview session must render keyframed frame 30")
+                ?: throw AssertionError("Preview session must render keyframed frame 30")
             assertTrue("Preview session must accept the key-removed project", session.updateProject(unkeyed))
             val unkeyedFrame = session.render(fixture.compositionId, 30)
-                ?: fail("Preview session must render unkeyframed frame 30")
+                ?: throw AssertionError("Preview session must render unkeyframed frame 30")
             assertFramesDiffer(keyedFrame, unkeyedFrame, "Preview at frame 30 must change when its key is removed")
         } finally {
             session.close()
@@ -477,14 +476,14 @@ class CanonicalEditPreviewSyncTest {
             NativeProjectBridge.setLayerOpacityKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, 30L, 0.0)
         )
         val session = NativeSession.open(keyed, 160)
-            ?: fail("Preview session must open for the keyframed project")
+            ?: throw AssertionError("Preview session must open for the keyframed project")
         try {
             val frameZero = session.render(fixture.compositionId, 0)
-                ?: fail("Preview session must render frame 0")
+                ?: throw AssertionError("Preview session must render frame 0")
             val frameMid = session.render(fixture.compositionId, 15)
-                ?: fail("Preview session must render frame 15")
+                ?: throw AssertionError("Preview session must render frame 15")
             val frameThirty = session.render(fixture.compositionId, 30)
-                ?: fail("Preview session must render frame 30")
+                ?: throw AssertionError("Preview session must render frame 30")
             assertFramesDiffer(frameZero, frameMid, "Preview at the midpoint must differ from frame 0")
             assertFramesDiffer(frameMid, frameThirty, "Preview at the midpoint must differ from frame 30")
         } finally {
@@ -499,14 +498,14 @@ class CanonicalEditPreviewSyncTest {
             NativeProjectBridge.setLayerOpacityKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, 30L, 0.0)
         )
         val session = NativeSession.open(keyed, 160)
-            ?: fail("Preview session must open for the keyframed project")
+            ?: throw AssertionError("Preview session must open for the keyframed project")
         try {
             val frameZero = session.render(fixture.compositionId, 0)
-                ?: fail("Preview session must render frame 0")
+                ?: throw AssertionError("Preview session must render frame 0")
             val frameThirty = session.render(fixture.compositionId, 30)
-                ?: fail("Preview session must render frame 30")
+                ?: throw AssertionError("Preview session must render frame 30")
             val frameSixty = session.render(fixture.compositionId, 60)
-                ?: fail("Preview session must render frame 60")
+                ?: throw AssertionError("Preview session must render frame 60")
             assertFramesDiffer(frameZero, frameThirty, "Preview at frame 30 must differ from frame 0")
             assertArrayEquals("Preview past the last key must hold the last key frame", frameThirty, frameSixty)
         } finally {
@@ -592,7 +591,7 @@ class CanonicalEditPreviewSyncTest {
         assertTrue(layer(canonical(locked), fixture.firstId).locked)
         val blocked = JSONObject(
             NativeProjectBridge.setLayerPositionEcproj(locked, fixture.compositionId, fixture.firstId, 40.0, 40.0)
-                ?: fail("Native bridge returned null for the locked edit")
+                ?: throw AssertionError("Native bridge returned null for the locked edit")
         )
         assertFalse("A position edit on a locked layer must be rejected", blocked.optBoolean("valid"))
         assertEquals(160.0, layer(canonical(locked), fixture.firstId).positionX, 0.001)
