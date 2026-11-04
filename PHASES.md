@@ -1,3 +1,8 @@
+### Run 90 — preserve standalone EditorScreen test/API compatibility
+- Follow-up review found that direct Compose test fixtures instantiate EditorScreen by named arguments and do not exercise the production MP4 callbacks. The newly added MP4-only parameters now have safe no-op/default values, preserving existing test fixtures and internal preview embedding while production EffectCraftApp supplies real callbacks. This is compatibility, not a fake encoder path: only the production app wires SAF/MediaCodec.
+- Commit changes the parameter defaults only; exact-head CI #625 is pending for eb229b7a and will be superseded by this commit. Continue to inspect #626 and add a direct MP4 settings interaction test once the current compile is verified.
+- M5 still needs current-head unit + emulator encoder/demux, SAF output validation/playback, audio and durable background queue. No M5 completion claim.
+
 ### Run 89 — wire H.264 MP4 into the editor export flow (2026-11-04)
 - M5 product integration: the export settings dialog now switches between PNG ZIP and H.264 MP4, exposes bitrate for video, and validates composition dimensions/frame range/FPS before invoking the output picker. The editor toolbar exposes MP4 export and a cancel/progress action.
 - EffectCraftApp adds a `CreateDocument("video/mp4")` SAF path. It opens a canonical NativeSession once, streams requested frame RGBA into `Mp4SequenceExporter` on Dispatchers.IO, updates progress, closes the session, and deletes the partial document on cancellation/failure. Audio is explicitly not included; no fake fallback is produced if the device has no flexible-YUV420 AVC encoder.
