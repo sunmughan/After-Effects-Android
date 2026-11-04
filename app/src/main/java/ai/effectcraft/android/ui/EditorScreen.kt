@@ -208,6 +208,7 @@ fun EditorScreen(
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var interpolationProperty by remember { mutableStateOf("position") }
+    var interpolationSide by remember { mutableStateOf("both") }
     var showPhoneInspector by remember { mutableStateOf(false) }
     // Deleting the inspected layer removes the inspector's subject, so on a
     // phone the inspector sheet must close and reveal the updated editor and
@@ -1460,17 +1461,29 @@ private fun CanonicalProjectEditor(
                 }
                 val hasInterpolationKey = layer.transformKeyframes[interpolationProperty].orEmpty().contains(previewFrame)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("both" to "Both", "incoming" to "Incoming", "outgoing" to "Outgoing").forEach { (side, label) ->
+                        FilterChip(
+                            selected = interpolationSide == side,
+                            onClick = { interpolationSide = side },
+                            enabled = editable,
+                            label = { Text(label, fontSize = 10.sp) },
+                            modifier = Modifier.semantics { contentDescription = "Select $side interpolation side" }
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("linear" to "Linear", "easy_ease" to "Easy Ease", "hold" to "Hold").forEach { (preset, label) ->
                         TextButton(
                             enabled = editable && hasInterpolationKey,
                             onClick = {
-                                onSetLayerTransformInterpolation(composition.id, layer.id, interpolationProperty, previewFrame, preset)
+                                val nativePreset = if (interpolationSide == "both") preset else "${interpolationSide}_${preset}"
+                                onSetLayerTransformInterpolation(composition.id, layer.id, interpolationProperty, previewFrame, nativePreset)
                             },
-                            modifier = Modifier.semantics { contentDescription = "Set $interpolationProperty key to $label at frame $previewFrame" }
+                            modifier = Modifier.semantics { contentDescription = "Set $interpolationProperty key to $label on $interpolationSide side at frame $previewFrame" }
                         ) { Text(label, color = if (preset == "easy_ease") EditorPalette.violet else EditorPalette.mint, fontSize = 10.sp) }
                     }
                 }
-                Text("Interpolation applies to both sides of the selected native key.", color = EditorPalette.muted, fontSize = 10.sp)
+                Text("Both edits both tangents; Incoming/Outgoing preserves the opposite side.", color = EditorPalette.muted, fontSize = 10.sp)
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BasicTextField(
