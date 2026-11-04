@@ -66,6 +66,53 @@ object Yuv420FrameConverter {
         return Frame(width, height, output)
     }
 
+    /**
+     * Scales an ARGB bitmap to the encoder's requested size and converts it
+     * directly to I420. Alpha is composited over black. The bitmap is not
+     * recycled here; ownership stays with the caller.
+     */
+    fun fromBitmap(bitmap: android.graphics.Bitmap, targetWidth: Int, targetHeight: Int): Frame {
+        require(targetWidth in 2..MAX_SIDE && targetHeight in 2..MAX_SIDE &&
+            targetWidth % 2 == 0 && targetHeight % 2 == 0) {
+            "YUV420 output dimensions must be even and between 2 and $MAX_SIDE"
+        }
+        val pixelCount = targetWidth.toLong() * targetHeight
+        require(pixelCount <= MAX_PIXELS) { "Bitmap exceeds the YUV420 pixel budget" }
+        val scaled = if (bitmap.width == targetWidth && bitmap.height == targetHeight) bitmap
+            else android.graphics.Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        try {
+            val argb = IntArray(pixelCount.toInt())
+            scaled.getPixels(argb, 0, targetWidth, 0, 0, targetWidth, targetHeight)
+            val ySize = argb.size
+            val chromaSize = ySize / 4
+            val output = ByteArray(ySize + chromaSize * 2)
+            var chromaIndex = 0
+            for (blockY in 0 until targetHeight step 2) {
+                for (blockX in 0 until targetWidth step 2) {
+                    var sumU = 0
+                    var sumV = 0
+                    for (dy in 0..1) for (dx in 0..1) {
+                        val color = argb[(blockY + dy) * targetWidth + blockX + dx]
+                        val alpha = (color ushr 24) and 0xff
+                        val red = (((color ushr 16) and 0xff) * alpha + 127) / 255
+                        val green = (((color ushr 8) and 0xff) * alpha + 127) / 255
+                        val blue = ((color and 0xff) * alpha + 127) / 255
+                        val index = (blockY + dy) * targetWidth + blockX + dx
+                        output[index] = clamp(16 + ((66 * red + 129 * green + 25 * blue + 128) shr 8)).toByte()
+                        sumU += clamp(128 + ((-38 * red - 74 * green + 112 * blue + 128) shr 8))
+                        sumV += clamp(128 + ((112 * red - 94 * green - 18 * blue + 128) shr 8))
+                    }
+                    output[ySize + chromaIndex] = (sumU / 4).toByte()
+                    output[ySize + chromaSize + chromaIndex] = (sumV / 4).toByte()
+                    chromaIndex++
+                }
+            }
+            return Frame(targetWidth, targetHeight, output)
+        } finally {
+            if (scaled !== bitmap) scaled.recycle()
+        }
+    }
+
     /** Converts I420 planes to NV12 (Y followed by interleaved U,V chroma). */
     fun toNv12(frame: Frame): ByteArray {
         val ySize = frame.width * frame.height
