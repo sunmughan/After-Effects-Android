@@ -1,3 +1,8 @@
+### Run 72 — native curve-key long-press deletion (2026-11-04)
+- Bezier graph supports pointer long-press deletion within the key hit radius, routed through canonical remove-key callback; drag editing remains separate. API 30 regression asserts frame-15 hit/callback on a 90-frame graph. Commits e9956366 (implementation), 5e8d541c (test).
+- CI #544 exposed an instrumentation compile issue (non-public SemanticsProperties.CustomActions); fixed using official performCustomAccessibilityActionWithLabel in d4fdd620. CI #545 on that correction passed native/Rust/JVM and 70/70 emulator tests; cold APK reproducibility was still in progress. New long-press test exact-head CI #547 is pending; no pass claimed.
+- M4 graph key editing continues; easing/velocity graph and full effect parity remain open. M0 owner acceptance, M2/M3 physical device gates, M5 video/audio, M6 device matrix and M7 release remain open.
+
 # EffectCraft for Android
 
 An offline-first Android editor project targeting phones, tablets, and foldables.
