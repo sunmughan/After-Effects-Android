@@ -1,0 +1,49 @@
+package com.codeair.effectcraft.data
+
+/**
+ * Audio policy for MP4 export. Passthrough only: an AAC (audio/mp4a-latm)
+ * track is copied sample-for-sample through MediaExtractor/MediaMuxer, and
+ * any other codec, missing file, or composition without audio produces a
+ * video-only export. An audio track is never synthesized or faked.
+ */
+enum class AudioStatus {
+    INCLUDED,
+    NO_AUDIO_IN_COMPOSITION,
+    AUDIO_FILE_UNAVAILABLE,
+    AUDIO_TRACK_UNSUPPORTED;
+
+    /** Visible status text: the video-only reason is always stated, never hidden. */
+    fun describe(): String = when (this) {
+        INCLUDED -> "with audio"
+        NO_AUDIO_IN_COMPOSITION -> "video-only — composition has no audio"
+        AUDIO_FILE_UNAVAILABLE -> "video-only — audio file unavailable"
+        AUDIO_TRACK_UNSUPPORTED -> "video-only — no compatible AAC audio track"
+    }
+}
+
+data class AudioCandidate(
+    val mimeType: String,
+    val sampleRateHz: Int,
+    val channelCount: Int
+)
+
+object AudioTrackSelection {
+    const val PASSTHROUGH_MIME = "audio/mp4a-latm"
+
+    /** Index of the first AAC track, or null when no track can be passed through. */
+    fun selectPassthroughIndex(candidates: List<AudioCandidate>): Int? =
+        candidates.indexOfFirst { it.mimeType == PASSTHROUGH_MIME }.takeIf { it >= 0 }
+
+    /**
+     * Shifts an audio sample timestamp into the exported range, or null when
+     * the sample falls outside [rangeStartUs, rangeEndUs). The range is in
+     * composition-timeline microseconds, so the caller supplies composition
+     * FPS-derived bounds, not export-FPS bounds, keeping audio in sync when
+     * the export frame rate differs from the composition frame rate.
+     */
+    fun shiftedPts(ptsUs: Long, rangeStartUs: Long, rangeEndUs: Long): Long? {
+        require(rangeEndUs >= rangeStartUs) { "Audio range end must be at or after its start" }
+        if (ptsUs < rangeStartUs || ptsUs >= rangeEndUs) return null
+        return ptsUs - rangeStartUs
+    }
+}

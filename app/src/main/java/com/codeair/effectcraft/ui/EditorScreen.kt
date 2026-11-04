@@ -611,7 +611,7 @@ fun EditorScreen(
                         }
                         Text(
                             if (sequenceOutputFormat == RenderOutputFormat.MP4_H264)
-                                "H.264 MP4 uses the device MediaCodec encoder; audio is not included."
+                                "H.264 MP4 uses the device MediaCodec encoder; AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
                             else "PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track.",
                             color = EditorPalette.muted, fontSize = 11.sp
                         )

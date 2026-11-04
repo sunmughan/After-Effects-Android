@@ -45,12 +45,13 @@ import com.codeair.effectcraft.data.ProjectFileFormats
 import com.codeair.effectcraft.data.ProjectKeyframeStore
 import com.codeair.effectcraft.data.PngSequenceZipExporter
 import com.codeair.effectcraft.data.PngSequenceZipValidator
-import com.codeair.effectcraft.data.Mp4SequenceExporter
+import com.codeair.effectcraft.data.Mp4ExportWorker
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
 import com.codeair.effectcraft.data.SafDocumentWriter
 import com.codeair.effectcraft.data.StaleSequenceExportCleanup
+import com.codeair.effectcraft.data.StaleVideoExportCleanup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -446,41 +447,60 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             mp4ExportJob = exportScope.launch {
                 var session: NativeSession? = null
                 var outputCompleted = false
+                var stagedMp4: File? = null
                 val exportJob = currentCoroutineContext()[Job]
                 try {
-                    val compositionFrames = canonicalProjectInfo?.compositions
-                        ?.firstOrNull { it.id == compositionId }?.durationFrames
+                    val composition = canonicalProjectInfo?.compositions
+                        ?.firstOrNull { it.id == compositionId }
                         ?: error("Canonical composition is no longer available")
-                    val plan = RenderQueuePlan.create(settings, compositionFrames)
+                    val plan = RenderQueuePlan.create(settings, composition.durationFrames)
                     saveMessage = "Rendering H.264 MP4 · 0/${plan.frameCount} (0%)"
-                    withContext(Dispatchers.IO) {
+                    val staged = File(context.cacheDir, "effectcraft-video-${System.nanoTime()}.mp4")
+                    stagedMp4 = staged
+                    val stagedResult = withContext(Dispatchers.IO) {
                         val nativeRenderSide = minOf(
                             maxOf(settings.width, settings.height),
                             RenderedFramePng.MAX_NATIVE_RENDER_SIDE
                         )
                         session = NativeSession.open(source, nativeRenderSide)
                             ?: error("Native renderer unavailable for this project")
-                        context.contentResolver.openFileDescriptor(uri, "rw")?.use { descriptor ->
-                            Mp4SequenceExporter.export(
-                                plan = plan,
-                                output = descriptor.fileDescriptor,
-                                renderRgba = { frame ->
-                                    if (exportJob?.isActive != true) throw CancellationException("MP4 export cancelled")
-                                    session?.render(compositionId, frame.toLong())
-                                        ?: error("Native renderer returned no frame at $frame")
-                                },
-                                isCancelled = { exportJob?.isActive != true },
-                                onProgress = { completed, percent ->
-                                    mp4ExportProgress = percent
-                                    saveMessage = "Rendering H.264 MP4 · $completed/${plan.frameCount} ($percent%)"
-                                }
-                            )
-                        } ?: error("Unable to open the selected MP4 destination")
+                        val audio = Mp4ExportWorker.resolveAudio(
+                            canonicalProjectInfo?.items ?: emptyList()
+                        ) { sha256 -> offlineAssetStore.fileFor(sha256) }
+                        Mp4ExportWorker.exportToStaged(
+                            plan = plan,
+                            stagedFile = staged,
+                            renderRgba = { frame ->
+                                if (exportJob?.isActive != true) throw CancellationException("MP4 export cancelled")
+                                session?.render(compositionId, frame.toLong())
+                                    ?: error("Native renderer returned no frame at $frame")
+                            },
+                            audioFile = audio.file,
+                            hasAudioItems = audio.hasAudioItems,
+                            compositionFrameRateNum = composition.frameRateNum,
+                            compositionFrameRateDen = composition.frameRateDen,
+                            isCancelled = { exportJob?.isActive != true },
+                            onProgress = { completed, percent ->
+                                mp4ExportProgress = percent
+                                saveMessage = "Rendering H.264 MP4 · $completed/${plan.frameCount} ($percent%)"
+                            }
+                        )
+                    }
+                    // Only the validated staged file is ever copied to SAF.
+                    mp4ExportWritingOutput = true
+                    saveMessage = "Copying validated MP4 to selected destination…"
+                    withContext(Dispatchers.IO) {
+                        SafDocumentWriter.copyFileToDocument(
+                            context = context,
+                            sourceFile = staged,
+                            destination = uri,
+                            ensureActive = { exportJob?.ensureActive() }
+                        )
                     }
                     currentCoroutineContext().ensureActive()
                     outputCompleted = true
                     mp4ExportProgress = 100
-                    saveMessage = "Exported ${plan.frameCount} H.264 frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS"
+                    saveMessage = "Exported ${stagedResult.framesWritten} H.264 frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}"
                 } catch (cancelled: CancellationException) {
                     saveMessage = "MP4 export cancelled"
                     throw cancelled
@@ -488,6 +508,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "MP4 export failed · ${failure.message ?: "render or codec error"}"
                 } finally {
                     session?.close()
+                    stagedMp4?.delete()
                     if (!outputCompleted) runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
                     mp4ExportInProgress = false
                     mp4ExportWritingOutput = false
@@ -594,10 +615,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // instead of silently disappearing.
     LaunchedEffect(Unit) {
         // A process kill can bypass the export coroutine's finally block. Remove
-        // only staging ZIPs older than the recovery window; never touch active exports.
+        // only staging ZIPs/MP4s older than the recovery window; never touch active exports.
+        // A removed staged MP4 means that export must be restarted: a MediaMuxer
+        // stream cannot resume after a kill, so recovery is reported, not hidden.
         runCatching {
             val cleanup = withContext(Dispatchers.IO) { StaleSequenceExportCleanup.cleanup(context.cacheDir) }
-            if (cleanup.removed > 0) saveMessage = "Recovered ${cleanup.removed} abandoned PNG sequence archive(s)"
+            val videoCleanup = withContext(Dispatchers.IO) { StaleVideoExportCleanup.cleanup(context.cacheDir) }
+            val recovered = buildList {
+                if (cleanup.removed > 0) add("${cleanup.removed} abandoned PNG sequence archive(s)")
+                if (videoCleanup.removed > 0) add("${videoCleanup.removed} abandoned MP4 export(s) — restart the export if needed")
+            }
+            if (recovered.isNotEmpty()) saveMessage = "Recovered " + recovered.joinToString(" and ")
         }
         runCatching {
             val cached = ecprojStore.load()
