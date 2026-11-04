@@ -74,14 +74,20 @@ class OfflineAssetStore(
                 if (size > maxLibraryBytes - indexedBytes) {
                     throw IOException("Offline media library exceeds ${maxLibraryBytes} byte total import limit")
                 }
+            } else if (existing.sizeBytes != size) {
+                // A digest collision is extraordinarily unlikely, but an index
+                // corruption must never silently bind different byte lengths.
+                throw IOException("Existing content-addressed asset has an inconsistent indexed size")
             }
             // A duplicate keeps the first asset's extension and metadata.
             val extension = existing?.extension ?: extensionFor(name)
             val payload = payloadFile(hash, extension)
             var createdPayload = false
             try {
-                if (payload.exists()) {
-                    if (payload.length() != size) throw IOException("Existing content-addressed asset has an inconsistent size")
+                // Re-import is also the repair path for a damaged offline
+                // library. Length alone is insufficient: same-size bit rot or
+                // an interrupted external write can leave a false SHA filename.
+                if (payload.exists() && payloadMatches(payload, hash, size)) {
                     temporary.delete()
                 } else {
                     moveReplacing(temporary, payload)
@@ -146,7 +152,11 @@ class OfflineAssetStore(
         val hash = sha256.decodeHash()
         val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: return false
         val payload = payloadFile(hash, asset.extension)
-        if (!payload.isFile() || payload.length() != asset.sizeBytes) return false
+        return payloadMatches(payload, hash, asset.sizeBytes)
+    }
+
+    private fun payloadMatches(payload: File, expectedHash: String, expectedSize: Long): Boolean {
+        if (!payload.isFile || payload.length() != expectedSize) return false
         val digest = MessageDigest.getInstance("SHA-256")
         payload.inputStream().buffered().use { input ->
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -156,7 +166,7 @@ class OfflineAssetStore(
                 if (read > 0) digest.update(buffer, 0, read)
             }
         }
-        return digest.digest().toHex() == hash
+        return digest.digest().toHex() == expectedHash
     }
 
     /** Indexed assets whose payload is missing, resized or digest-mismatched. */
