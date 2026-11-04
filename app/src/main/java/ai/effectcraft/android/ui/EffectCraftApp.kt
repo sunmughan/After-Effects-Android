@@ -86,6 +86,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val safRegistry = remember(context) { SafPermissionRegistry(File(context.filesDir, "saf-permissions.properties")) }
     var importedEcproj by remember { mutableStateOf(ecprojStore.load()) }
     var repositoryProjectId by remember { mutableStateOf<String?>(null) }
+    var repositoryProjects by remember { mutableStateOf(emptyList<CanonicalProjectRepository.Metadata>()) }
     var safGrants by remember(safRegistry) { mutableStateOf(safRegistry.grants()) }
     var manifestMissingCount by remember { mutableStateOf(0) }
     var pendingRelinkItemId by remember { mutableStateOf<Long?>(null) }
@@ -155,6 +156,34 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         manifestMissingCount = repositoryProjectId?.let { id ->
             runCatching { manifestStore.load(id).missingEntries().size }.getOrNull()
         } ?: 0
+    }
+
+    // Switches the working canonical project to a saved repository entry.
+    // The single-document cache is updated first so startup reconciliation
+    // keeps matching the cache to this entry, and the render session follows
+    // through the importedEcproj effect. Nothing is mutated when the entry
+    // cannot be loaded or the native bridge cannot validate it.
+    fun openRepositoryProject(id: String) {
+        runCatching {
+            val source = projectRepository.load(id) ?: error("Repository project not found")
+            val native = NativeProjectBridge.inspectEcproj(source)
+                ?: error("Native validation is unavailable on this ABI; project was not opened")
+            CanonicalProjectDocument.validateNativeEnvelope(native)
+            ecprojStore.save(source)
+            importedEcproj = source
+            repositoryProjectId = id
+            canonicalSelectedIds = emptySet()
+            playheadFrame = 0
+            isPlaying = false
+            refreshReferences()
+            saveMessage = "Opened ${projectRepository.metadata(id)?.displayName ?: "canonical project"}"
+        }.onFailure { error -> saveMessage = "Open failed · ${error.message ?: "storage error"}" }
+    }
+
+    // The repository list refreshes whenever the active entry changes, which
+    // covers startup reconciliation, imports, and picker switches with one rule.
+    LaunchedEffect(repositoryProjectId) {
+        repositoryProjects = runCatching { projectRepository.list() }.getOrDefault(emptyList())
     }
 
     fun applyProjectChange(next: ProjectDocument, message: String = "Unsaved changes") {
@@ -670,6 +699,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             isPlaying = isPlaying,
             saveMessage = saveMessage,
             savedProjects = savedProjects,
+            repositoryProjects = repositoryProjects,
+            activeRepositoryProjectId = repositoryProjectId,
+            onOpenRepositoryProject = { id -> openRepositoryProject(id) },
             offlineAssets = offlineAssets,
             referencedOfflineAssetIds = referencedOfflineAssetIds,
             canUndo = undoStack.isNotEmpty(),

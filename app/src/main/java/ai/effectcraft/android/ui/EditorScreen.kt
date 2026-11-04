@@ -1,5 +1,6 @@
 package ai.effectcraft.android.ui
 
+import ai.effectcraft.android.data.CanonicalProjectRepository
 import ai.effectcraft.android.data.OfflineAssetStore
 import ai.effectcraft.android.data.SafPermissionRegistry
 
@@ -126,6 +127,9 @@ fun EditorScreen(
     isPlaying: Boolean,
     saveMessage: String,
     savedProjects: List<ProjectDocument>,
+    repositoryProjects: List<CanonicalProjectRepository.Metadata> = emptyList(),
+    activeRepositoryProjectId: String? = null,
+    onOpenRepositoryProject: (String) -> Unit = {},
     offlineAssets: List<OfflineAssetStore.Asset>,
     referencedOfflineAssetIds: Set<String>,
     canUndo: Boolean,
@@ -211,6 +215,7 @@ fun EditorScreen(
         showPhoneInspector = false
     }
     var showProjectPicker by remember { mutableStateOf(false) }
+    var showRepositoryPicker by remember { mutableStateOf(false) }
     var showMediaLibrary by remember { mutableStateOf(false) }
     var assetPendingDelete by remember { mutableStateOf<OfflineAssetStore.Asset?>(null) }
     var showCompositionSettings by remember { mutableStateOf(false) }
@@ -380,6 +385,41 @@ fun EditorScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showProjectPicker = false }) { Text("Close") }
+                }
+            )
+        }
+
+        if (showRepositoryPicker) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showRepositoryPicker = false },
+                title = { Text("Open canonical project") },
+                text = {
+                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                        if (repositoryProjects.isEmpty()) {
+                            Text("No canonical projects saved yet. Import a .ecproj or .ecprojx to add one.", color = EditorPalette.muted)
+                        } else {
+                            repositoryProjects.forEach { entry ->
+                                TextButton(
+                                    onClick = {
+                                        showRepositoryPicker = false
+                                        onOpenRepositoryProject(entry.id)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Text(entry.displayName, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            "${entry.format} · schema v${entry.schemaVersion}" + if (entry.id == activeRepositoryProjectId) " · Current" else "",
+                                            color = EditorPalette.muted, fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showRepositoryPicker = false }) { Text("Close") }
                 }
             )
         }
@@ -820,6 +860,7 @@ private fun HeaderBar(
                 }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
                 TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = { showRepositoryPicker = true }) { Text("Projects", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
             }
         }
