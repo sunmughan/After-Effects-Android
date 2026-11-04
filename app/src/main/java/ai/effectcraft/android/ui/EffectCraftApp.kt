@@ -946,6 +946,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical $property keyframe added · frame $frame · saved locally"
                 )
             },
+            onSetCanonicalLayerTransformInterpolation = { compositionId, layerId, property, frame, preset ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerTransformKeyframeInterpolationEcproj(source, compositionId, layerId, property, frame.toLong(), preset),
+                    "Canonical $property interpolation set to $preset · frame $frame · saved locally"
+                )
+            },
             onRemoveCanonicalLayerTransformKeyframe = { compositionId, layerId, property, frame ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

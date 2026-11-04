@@ -4,6 +4,7 @@ use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
+use effectcraft_project::keyframe::{Ease, Interp};
 use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
 use effectcraft_render::{Accelerator, Backend, RenderOpts, Renderer};
@@ -1627,6 +1628,59 @@ fn set_layer_transform_keyframe(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Applies a real upstream temporal interpolation preset to a transform key at an exact frame.
+fn set_layer_transform_keyframe_interpolation(
+    source: &str, composition_id: u64, layer_id: u64, property_name: &str,
+    frame: i64, preset: &str,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !matches!(property_name, "position" | "scale" | "rotation") {
+        return Err("Only position, scale and rotation interpolation is supported".into());
+    }
+    if !matches!(preset, "linear" | "easy_ease" | "hold") {
+        return Err("Interpolation preset must be linear, easy_ease or hold".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let tick = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let transform = layer.props.sub_mut("transform")
+        .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let property = transform.prop_mut(property_name)
+        .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
+    let key = property.keys.iter_mut().find(|key| key.time == tick)
+        .ok_or_else(|| format!("No {property_name} keyframe exists at frame {frame}"))?;
+    match preset {
+        "linear" => {
+            key.in_interp = Interp::Linear;
+            key.out_interp = Interp::Linear;
+            key.in_ease.clear();
+            key.out_ease.clear();
+            key.auto_bezier = false;
+            key.continuous = false;
+        }
+        "easy_ease" => {
+            *key = key.clone().eased();
+            key.auto_bezier = false;
+            key.continuous = false;
+        }
+        "hold" => {
+            key.in_interp = Interp::Hold;
+            key.out_interp = Interp::Hold;
+            key.in_ease.clear();
+            key.out_ease.clear();
+            key.auto_bezier = false;
+            key.continuous = false;
+        }
+        _ => return Err("Unsupported interpolation preset".into()),
+    }
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Removes the canonical Transform/Opacity keyframe at `frame`.
 /// Returns `(project_json, removed)`; `removed` is false when no key existed
 /// at that frame and the project is returned unchanged. Removing the last key
@@ -1770,6 +1824,32 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
         Err("Composition, layer and frame must be non-negative".to_owned())
     } else {
         set_layer_transform_keyframe(&source, composition_id as u64, layer_id as u64, &property, frame, x as f64, y as f64, z as f64)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerTransformKeyframeInterpolationEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    property: JString, frame: jlong, preset: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let property: String = match env.get_string(&property) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let preset: String = match env.get_string(&preset) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_layer_transform_keyframe_interpolation(&source, composition_id as u64, layer_id as u64, &property, frame, &preset)
     };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
@@ -2752,6 +2832,30 @@ mod tests {
         assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "opacity", 2, 1.0, 0.0, 0.0).is_err());
         assert!(set_layer_transform_keyframe(&source, comp_id, 999, "position", 2, 1.0, 0.0, 0.0).is_err());
     }
+
+        let eased = set_layer_transform_keyframe_interpolation(&at_fifteen, comp_id, layer_id, "position", 15, "easy_ease").unwrap();
+        let eased_project: Project = serde_json::from_str(&eased).unwrap();
+        let eased_key = &eased_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
+        assert_eq!(eased_key.in_interp, Interp::Bezier);
+        assert_eq!(eased_key.out_interp, Interp::Bezier);
+        assert_eq!(eased_key.in_ease[0].influence, 1.0 / 3.0);
+        assert_eq!(eased_key.out_ease[0].influence, 1.0 / 3.0);
+
+        let held = set_layer_transform_keyframe_interpolation(&eased, comp_id, layer_id, "position", 15, "hold").unwrap();
+        let held_project: Project = serde_json::from_str(&held).unwrap();
+        let held_key = &held_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
+        assert_eq!(held_key.in_interp, Interp::Hold);
+        assert_eq!(held_key.out_interp, Interp::Hold);
+        assert!(held_key.in_ease.is_empty() && held_key.out_ease.is_empty());
+
+        let linear = set_layer_transform_keyframe_interpolation(&held, comp_id, layer_id, "position", 15, "linear").unwrap();
+        let linear_project: Project = serde_json::from_str(&linear).unwrap();
+        let linear_key = &linear_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
+        assert_eq!(linear_key.in_interp, Interp::Linear);
+        assert_eq!(linear_key.out_interp, Interp::Linear);
+        assert!(linear_key.in_ease.is_empty() && linear_key.out_ease.is_empty());
+        assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 14, "easy_ease").is_err());
+        assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 15, "unknown").is_err());
 
     #[test]
     fn canonical_transform_keyframe_remove_is_idempotent_and_restores_static_value() {

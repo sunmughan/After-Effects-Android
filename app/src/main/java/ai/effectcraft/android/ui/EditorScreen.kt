@@ -183,6 +183,7 @@ fun EditorScreen(
     onAddCanonicalLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onRemoveCanonicalLayerTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
+    onSetCanonicalLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
     onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -206,6 +207,7 @@ fun EditorScreen(
     onCollectUnusedOfflineAssets: () -> Unit
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
+    var interpolationProperty by remember { mutableStateOf("position") }
     var showPhoneInspector by remember { mutableStateOf(false) }
     // Deleting the inspected layer removes the inspector's subject, so on a
     // phone the inspector sheet must close and reveal the updated editor and
@@ -1437,6 +1439,30 @@ private fun CanonicalProjectEditor(
                         }
                     }
                 }
+                Text("Key interpolation · current frame", color = EditorPalette.text, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation").forEach { (property, label) ->
+                        FilterChip(
+                            selected = interpolationProperty == property,
+                            onClick = { interpolationProperty = property },
+                            enabled = editable,
+                            label = { Text(label, fontSize = 10.sp) }
+                        )
+                    }
+                }
+                val hasInterpolationKey = layer.transformKeyframes[interpolationProperty].orEmpty().contains(previewFrame)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("linear" to "Linear", "easy_ease" to "Easy Ease", "hold" to "Hold").forEach { (preset, label) ->
+                        TextButton(
+                            enabled = editable && hasInterpolationKey,
+                            onClick = {
+                                onSetCanonicalLayerTransformInterpolation(composition.id, layer.id, interpolationProperty, previewFrame, preset)
+                            },
+                            modifier = Modifier.semantics { contentDescription = "Set $interpolationProperty key to $label at frame $previewFrame" }
+                        ) { Text(label, color = if (preset == "easy_ease") EditorPalette.violet else EditorPalette.mint, fontSize = 10.sp) }
+                    }
+                }
+                Text("Interpolation applies to both sides of the selected native key.", color = EditorPalette.muted, fontSize = 10.sp)
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BasicTextField(

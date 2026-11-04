@@ -177,6 +177,13 @@ object NativeProjectBridge {
         return runCatching { removeLayerOpacityKeyframeEcprojNative(json, compositionId, layerId, frame) }.getOrNull()
     }
 
+    /** Applies Linear, Easy Ease or Hold to both sides of an existing transform key. */
+    fun setLayerTransformKeyframeInterpolationEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, preset: String): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation") || preset !in setOf("linear", "easy_ease", "hold")) return null
+        return runCatching { setLayerTransformKeyframeInterpolationEcprojNative(json, compositionId, layerId, property, frame, preset) }.getOrNull()
+    }
+
     /** Removes a native Position, Scale or Rotation key at [frame]; removal is idempotent. */
     fun removeLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String? {
         ensureLoaded()
@@ -277,6 +284,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerOpacityKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, opacityPercent: Double): String
+
+    @JvmStatic
+    private external fun setLayerTransformKeyframeInterpolationEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, preset: String): String
 
     @JvmStatic
     private external fun removeLayerTransformKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String
