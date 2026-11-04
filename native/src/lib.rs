@@ -1710,10 +1710,17 @@ fn set_layer_transform_keyframe(
         ("rotation" | "rotationX" | "rotationY", Value::Scalar(_)) => Value::Scalar(x),
         _ => return Err(format!("Layer {layer_id} Transform {property_name} has an incompatible value type")),
     };
+    // First keyframe must land at the authored frame, not at zero: seeding a
+    // zero key here would leave a phantom key the user never authored, so the
+    // authored key would sit at keys[1], timeline tracks would report [0, 15]
+    // instead of [15], and interpolation lookups by authored frame would miss
+    // the first key. Seeding at the authored tick makes set_value_at replace
+    // that seed with the authored value, leaving exactly one key.
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
     if property.keys.is_empty() {
-        property.set_animated(true, Tick::ZERO);
+        property.set_animated(true, tick);
     }
-    property.set_value_at(Tick::from_rational(frame, frame_rate.den, frame_rate.num), value);
+    property.set_value_at(tick, value);
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
