@@ -190,8 +190,12 @@ class CanonicalSelectionEditorTest {
         compose.onNodeWithContentDescription("Jump to Position keyframe").performScrollTo().performClick()
         assertEquals(15, workspaceFrame.intValue)
         compose.onNodeWithText("Frame 15 / 89").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("Set position key to Easy Ease at frame 15").performScrollTo().performClick()
-        assertEquals(listOf<Any>(10L, 2L, "position", 15, "easy_ease"), interpolationAction)
+        compose.onNodeWithContentDescription("Select incoming interpolation side").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Set position key to Easy Ease on incoming side at frame 15").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "position", 15, "incoming_easy_ease"), interpolationAction)
+        compose.onNodeWithContentDescription("Select outgoing interpolation side").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Set position key to Hold on outgoing side at frame 15").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "position", 15, "outgoing_hold"), interpolationAction)
 
         // Native transform keys are authored at the same workspace frame,
         // using the selected canonical layer's current inspector values.
