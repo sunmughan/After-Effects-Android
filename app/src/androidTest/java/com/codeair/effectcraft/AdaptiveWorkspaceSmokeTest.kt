@@ -239,6 +239,7 @@ class AdaptiveWorkspaceSmokeTest {
         var orientation: List<Any>? = null
         var transformKeyframe: List<Any>? = null
         var transformKeyframeRemoved: List<Any>? = null
+        var curveKey: List<Any>? = null
         var rotationX: List<Any>? = null
         var rotationY: List<Any>? = null
         var locked: List<Any>? = null
@@ -255,7 +256,8 @@ class AdaptiveWorkspaceSmokeTest {
         onMoveCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
         onRemoveCurveKey: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
         onAddTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
-        onRemoveTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> }
+        onRemoveTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
+        onAddCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> }
     ) {
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -315,6 +317,9 @@ class AdaptiveWorkspaceSmokeTest {
                     onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
                     onMoveCanonicalCurveKey = onMoveCurveKey,
                     onRemoveCanonicalCurveKey = onRemoveCurveKey,
+                    onAddCanonicalLayerTransformKeyframe = onAddTransformKeyframe,
+                    onRemoveCanonicalLayerTransformKeyframe = onRemoveTransformKeyframe,
+                    onAddCanonicalCurveKey = onAddCurveKey,
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
@@ -387,12 +392,23 @@ class AdaptiveWorkspaceSmokeTest {
             },
             onRemoveTransformKeyframe = { c, l, property, frame ->
                 captures.transformKeyframeRemoved = listOf(c, l, property, frame)
+            },
+            onAddCurveKey = { c, l, selector, frame, x, y, z ->
+                captures.curveKey = listOf(c, l, selector, frame, x, y, z)
             }
         )
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        // Bring the graph section into view through its header first: the
+        // chips live in a horizontally scrolling row nested inside the
+        // vertically scrolling sheet, so scroll the section itself into
+        // view before tapping a chip in it.
+        compose.onNodeWithText("Curve graph · Position X").performScrollTo()
         compose.onNodeWithText("Anchor X").performScrollTo().performClick()
-        compose.onNodeWithContentDescription("Add Anchor X keyframe at playhead").performScrollTo().performClick()
-        assertEquals(listOf<Any>(10L, 2L, "anchor", 0, 120.5, 80.25, 0.0), captures.transformKeyframe)
+        // The graph add button fires the curve callback with the selected
+        // track selector, not the transform callback, so it is located by
+        // its stable visible text and asserted through the curve capture.
+        compose.onNodeWithText("Add key at playhead").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "transform:anchor", 0, 120.5, 80.25, 0.0), captures.curveKey)
         compose.onNodeWithContentDescription("Add anchor keyframe").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, "anchor", 0, 120.5, 80.25, 0.0), captures.transformKeyframe)
         compose.onNodeWithContentDescription("Add orientation keyframe").performScrollTo().performClick()
