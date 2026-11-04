@@ -998,10 +998,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
                 else {
                     val edited = when {
-                        selector == "transform:position" -> NativeProjectBridge.setLayerTransformKeyframeEcproj(source, compositionId, layerId, "position", frame.toLong(), x, y, z)
-                        selector == "transform:scale" -> NativeProjectBridge.setLayerTransformKeyframeEcproj(source, compositionId, layerId, "scale", frame.toLong(), x, y, z)
-                        selector == "transform:rotation" -> NativeProjectBridge.setLayerTransformKeyframeEcproj(source, compositionId, layerId, "rotation", frame.toLong(), x, y, z)
                         selector == "transform:opacity" -> NativeProjectBridge.setLayerOpacityKeyframeEcproj(source, compositionId, layerId, frame.toLong(), x)
+                        selector.startsWith("transform:") -> NativeProjectBridge.setLayerTransformKeyframeEcproj(
+                            source, compositionId, layerId, selector.removePrefix("transform:"), frame.toLong(), x, y, z
+                        )
                         selector.startsWith("param:") -> {
                             val uid = selector.removePrefix("param:").toLongOrNull()
                             if (uid == null) null else NativeProjectBridge.setLayerParamKeyframeEcproj(source, compositionId, layerId, uid, frame.toLong(), x, y, z)
