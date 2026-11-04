@@ -136,3 +136,5 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - Commit 39635738ee64fc2fe68108567b3450601828bc18; exact-head CI #488 queued. CI #487 on older ca69f6a0 had completed dual-ABI native build/package checks and was running Rust tests at inspection. No test pass claimed for the new timeline row until #488 finishes.
 
 - Run 65 follow-up: timeline transform markers are tappable and scrub to the nearest native key; API 30 regression checks playhead/frame request. Commits 91795861 + b3872b8a; exact-head CI pending after successive pushes.
+
+- Marker regression placement follow-up (2fd99d5d): tap the workspace timeline before opening the canonical modal, then verify nearest-key seek; exact-head CI pending.
