@@ -29,7 +29,7 @@ class Yuv420BitmapConversionInstrumentedTest {
             val frame = Yuv420FrameConverter.fromBitmap(bitmap, 2, 2)
             assertEquals(2, frame.width)
             assertEquals(2, frame.height)
-            assertArrayEquals(byteArrayOf(235, 235, 235, 235, 128.toByte(), 128.toByte()), frame.i420)
+            assertArrayEquals(byteArrayOf(235.toByte(), 235.toByte(), 235.toByte(), 235.toByte(), 128.toByte(), 128.toByte()), frame.i420)
         } finally {
             bitmap.recycle()
         }
