@@ -285,7 +285,8 @@ fun EditorScreen(
                 sequenceExportProgress = sequenceExportProgress,
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
-                onOpenCanonicalEditor = { showCanonicalEditor = true }
+                onOpenCanonicalEditor = { showCanonicalEditor = true },
+                onOpenRepositoryPicker = { showRepositoryPicker = true }
             )
 
             if (isTabletLayout) {
@@ -634,6 +635,9 @@ fun EditorScreen(
                     onAddLayerOpacityKeyframe = onAddCanonicalLayerOpacityKeyframe,
                     onAddLayerTransformKeyframe = onAddCanonicalLayerTransformKeyframe,
                     onRemoveLayerTransformKeyframe = onRemoveCanonicalLayerTransformKeyframe,
+                    interpolationProperty = interpolationProperty,
+                    onInterpolationPropertyChange = { interpolationProperty = it },
+                    onSetLayerTransformInterpolation = onSetCanonicalLayerTransformInterpolation,
                     onRemoveLayerOpacityKeyframe = onRemoveCanonicalLayerOpacityKeyframe,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
                     onSetLayerScale = onSetCanonicalLayerScale,
@@ -701,7 +705,8 @@ private fun HeaderBar(
     sequenceExportProgress: Int,
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
-    onOpenCanonicalEditor: () -> Unit
+    onOpenCanonicalEditor: () -> Unit,
+    onOpenRepositoryPicker: () -> Unit = {}
 ) {
     BoxWithConstraints(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
@@ -862,7 +867,7 @@ private fun HeaderBar(
                 }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
                 TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
-                TextButton(onClick = { showRepositoryPicker = true }) { Text("Projects", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
+                TextButton(onClick = onOpenRepositoryPicker) { Text("Projects", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
             }
         }
@@ -1070,6 +1075,9 @@ private fun CanonicalProjectEditor(
     onAddLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit,
     onRemoveLayerTransformKeyframe: (Long, Long, String, Int) -> Unit,
+    interpolationProperty: String = "position",
+    onInterpolationPropertyChange: (String) -> Unit = {},
+    onSetLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
     onRemoveLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -1444,7 +1452,7 @@ private fun CanonicalProjectEditor(
                     listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation").forEach { (property, label) ->
                         FilterChip(
                             selected = interpolationProperty == property,
-                            onClick = { interpolationProperty = property },
+                            onClick = { onInterpolationPropertyChange(property) },
                             enabled = editable,
                             label = { Text(label, fontSize = 10.sp) }
                         )
@@ -1456,7 +1464,7 @@ private fun CanonicalProjectEditor(
                         TextButton(
                             enabled = editable && hasInterpolationKey,
                             onClick = {
-                                onSetCanonicalLayerTransformInterpolation(composition.id, layer.id, interpolationProperty, previewFrame, preset)
+                                onSetLayerTransformInterpolation(composition.id, layer.id, interpolationProperty, previewFrame, preset)
                             },
                             modifier = Modifier.semantics { contentDescription = "Set $interpolationProperty key to $label at frame $previewFrame" }
                         ) { Text(label, color = if (preset == "easy_ease") EditorPalette.violet else EditorPalette.mint, fontSize = 10.sp) }
