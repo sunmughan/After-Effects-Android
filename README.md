@@ -138,3 +138,5 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - Run 65 follow-up: timeline transform markers are tappable and scrub to the nearest native key; API 30 regression checks playhead/frame request. Commits 91795861 + b3872b8a; exact-head CI pending after successive pushes.
 
 - Marker regression placement follow-up (2fd99d5d): tap the workspace timeline before opening the canonical modal, then verify nearest-key seek; exact-head CI pending.
+
+- Canonical transform track now uses the selected imported composition's duration (not local draft duration) for marker position and tap seeking; test fixture covers 90-frame canonical duration (618553d4). Exact-head CI pending.
