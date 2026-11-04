@@ -1956,14 +1956,14 @@ private fun TimelinePanel(
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
             }
             if (canonicalTransformKeyframes.isNotEmpty()) {
-                CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, onScrub)
+                CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub)
             }
         }
     }
 }
 
 @Composable
-private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, onScrub: (Int) -> Unit) {
+private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, currentFrame: Int, onScrub: (Int) -> Unit) {
     val frames = keyframes.filter { it >= 0 }.distinct().sorted()
     Row(
         modifier = Modifier
@@ -1976,7 +1976,14 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, o
         Box(
             modifier = Modifier.weight(1f).height(17.dp)
                 .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
-                .semantics { contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}" }
+                .semantics {
+                    contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}"
+                    onClick("Seek to nearest transform keyframe") {
+                        val target = frames.minByOrNull { kotlin.math.abs(it - currentFrame) } ?: currentFrame
+                        onScrub(target.coerceIn(0, (durationFrames - 1).coerceAtLeast(0)))
+                        true
+                    }
+                }
                 .pointerInput(frames, durationFrames) {
                     detectTapGestures { tap ->
                         val frameRange = (durationFrames - 1).coerceAtLeast(1)
