@@ -3,7 +3,6 @@ package com.codeair.effectcraft
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -415,10 +414,10 @@ class AdaptiveWorkspaceSmokeTest {
             advanceEventTime(100)
             up(0)
         }
-        // Existence, not visibility: the header text proves the selection
+        // Existence, not visibility: fetching the node proves the selection
         // moved to Anchor X even when the sheet viewport leaves the header
-        // itself just out of view.
-        compose.onNodeWithText("Curve graph · Anchor X").assertExists()
+        // itself just out of view (fetch throws when no node matches).
+        compose.onNodeWithText("Curve graph · Anchor X").fetchSemanticsNode()
         // The graph add button fires the curve callback with the selected
         // track selector, not the transform callback, so it is located by
         // its stable visible text and asserted through the curve capture.
