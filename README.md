@@ -1,7 +1,6 @@
 # EffectCraft for Android
 
-**Run 96 progress (2026-11-05):** M5's MP4 inspector now correctly parses ISO-BMFF v1 `mvhd/mdhd` (32-bit timescale, 64-bit duration) with parent-box length checks; a 48 kHz/288,000-tick regression is committed (`fdbe468d` + `c6c7f652`). Latest branch-head CI #662 (HEAD `7d6accce`) is in progress at Gradle setup; #659/#661 were superseded by docs pushes. Prior CI #655 Assemble/test passed on code head `36b9e4c9` (Rust 42/42, API30 92/92, JVM task success), but its independent cold APK rebuild remains in progress and is not a reproducibility PASS. See PHASES.md Run 96.
-
+**Run 97 progress (2026-11-05):** M2 offline media integrity recovery is implemented: re-import repairs missing, truncated, and same-size SHA-mismatched payloads atomically while preserving first catalog metadata; indexed size mismatch is rejected. JVM regressions committed in `9689ff02` + `1ac0278b`. CI #669 (source 9689ff02) is pending; exact-head test result is not yet available. CI #667 (source 18fbd261) is still in `Test Rust bridge` after both native ABI builds and JNI packaging passed; no failure log is available while active. See PHASES.md Run 97. M2 and all release gates remain open.
 
 ### Run 90 — preserve standalone EditorScreen test/API compatibility
 - Follow-up review found that direct Compose test fixtures instantiate EditorScreen by named arguments and do not exercise the production MP4 callbacks. The newly added MP4-only parameters now have safe no-op/default values, preserving existing test fixtures and internal preview embedding while production EffectCraftApp supplies real callbacks. This is compatibility, not a fake encoder path: only the production app wires SAF/MediaCodec.
