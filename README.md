@@ -1,3 +1,7 @@
+### Run 73 — native 3D transform keyframes (2026-11-04)
+- Native key authoring/metadata/interpolation/removal now includes Anchor, Orientation XYZ, X/Y Rotation in addition to Position/Scale/Rotation. Inspector Add/Remove actions and curve selector options are wired; Rust serialization/interpolation/removal and API 30 callback regressions added. Commits cea771d3, 7215e073, 177e4d7b.
+- Exact-head CI #552 is pending; no pass claimed. M4 still needs full effect parity, spatial/roving interpolation, graph controls and gesture work; M0 owner acceptance, M2/M3 physical validation, M5 video/audio, M6 device matrix and M7 release gates remain open.
+
 ### Run 72 — native curve-key long-press deletion (2026-11-04)
 - Bezier graph supports pointer long-press deletion within the key hit radius, routed through canonical remove-key callback; drag editing remains separate. API 30 regression asserts frame-15 hit/callback on a 90-frame graph. Commits e9956366 (implementation), 5e8d541c (test).
 - CI #544 exposed an instrumentation compile issue (non-public SemanticsProperties.CustomActions); fixed using official performCustomAccessibilityActionWithLabel in d4fdd620. CI #545 on that correction passed native/Rust/JVM and 70/70 emulator tests; cold APK reproducibility was still in progress. New long-press test exact-head CI #547 is pending; no pass claimed.
