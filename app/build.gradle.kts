@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "ai.effectcraft.android"
+    namespace = "com.codeair.effectcraft"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ai.effectcraft.android"
+        applicationId = "com.codeair.effectcraft"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
