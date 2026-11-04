@@ -1,6 +1,6 @@
 # EffectCraft for Android
 
-**Run 95 progress (2026-11-05):** Exact-head CI #655 Assemble/test SUCCESS on `36b9e4c9`: ARM64+x86_64 JNI builds, Rust 42/42, JVM test task and API 30 instrumentation 92/92 (0 failures/skips). It includes the M5 staged MP4 worker, MediaExtractor/box validation, AAC passthrough handling and SAF copy/readback; #653's MediaMuxer `mdat` largesize/size=0 parser failure is fixed with JVM regressions. Cold APK rebuild/compare job in #655 is still running at ARM64 native rebuild; no full-workflow reproducibility pass claimed. M5 foreground durable export, physical codec/provider/audio sync and M0–M7 remaining gates are open. See PHASES.md Run 95.
+**Run 96 progress (2026-11-05):** M5's MP4 inspector now correctly parses ISO-BMFF v1 `mvhd/mdhd` (32-bit timescale, 64-bit duration) with parent-box length checks; a 48 kHz/288,000-tick regression is committed (`fdbe468d` + `c6c7f652`). Exact-head CI #659 is pending. Prior CI #655 Assemble/test passed on code head `36b9e4c9` (Rust 42/42, API30 92/92, JVM task success), but its independent cold APK rebuild is still running and not a reproducibility PASS. See PHASES.md Run 96.
 
 
 ### Run 90 — preserve standalone EditorScreen test/API compatibility
