@@ -1,6 +1,7 @@
 package com.codeair.effectcraft
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
 import com.codeair.effectcraft.data.CanonicalCurveKey
@@ -246,7 +248,8 @@ class AdaptiveWorkspaceSmokeTest {
     private fun setCanonicalEditorContent(
         canonical: CanonicalProjectInfo,
         captures: CanonicalCaptures,
-        onMoveCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> }
+        onMoveCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
+        onRemoveCurveKey: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> }
     ) {
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -305,6 +308,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
                     onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
                     onMoveCanonicalCurveKey = onMoveCurveKey,
+                    onRemoveCanonicalCurveKey = onRemoveCurveKey,
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
@@ -398,6 +402,37 @@ class AdaptiveWorkspaceSmokeTest {
         ).performScrollTo()
             .performCustomAccessibilityActionWithLabel("Move key at frame 15 to playhead frame 0")
         assertEquals(listOf<Any>(10L, 2L, "transform:position", 15, 0), moved)
+    }
+
+    @Test
+    fun curveGraphLongPressDeletesNearestKeyThroughCanonicalCallback() {
+        var removed: List<Any>? = null
+        val base = canonicalM4Layer(locked = false)
+        val composition = base.compositions.single()
+        val headline = composition.layers.first().copy(
+            transformCurves = mapOf(
+                "position" to listOf(
+                    CanonicalCurveKey(frame = 0, value = 100.0),
+                    CanonicalCurveKey(frame = 15, value = 320.0),
+                    CanonicalCurveKey(frame = 30, value = 500.0)
+                )
+            )
+        )
+        val canonical = base.copy(
+            compositions = listOf(composition.copy(layers = listOf(headline, composition.layers[1])))
+        )
+        setCanonicalEditorContent(canonical, CanonicalCaptures(), onRemoveCurveKey = { c, l, selector, frame ->
+            removed = listOf(c, l, selector, frame)
+        })
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        val graph = compose.onNodeWithContentDescription(
+            "Curve graph for Position X with keys 0: 100.0, 15: 320.0, 30: 500.0"
+        ).performScrollTo()
+        val size = graph.fetchSemanticsNode().size
+        graph.performTouchInput {
+            longClick(Offset(size.width * 15f / 90f, size.height / 2f))
+        }
+        assertEquals(listOf<Any>(10L, 2L, "transform:position", 15), removed)
     }
 
     @Test
