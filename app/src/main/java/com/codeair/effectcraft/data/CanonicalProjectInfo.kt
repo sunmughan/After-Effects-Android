@@ -70,7 +70,7 @@ data class CanonicalLayerInfo(
     val opacityKeys: List<PropertyKeyframe> = emptyList(),
     /** Full opacity curve keys (frame, value, per-side interpolation and ease). */
     val opacityCurves: List<CanonicalCurveKey> = emptyList(),
-    /** Native Position/Scale/Rotation keyframe frame indices, sorted and unique. */
+    /** Native 2D/3D Transform keyframe frame indices, sorted and unique. */
     val transformKeyframes: Map<String, List<Int>> = emptyMap(),
     /** Full Transform curve keys per property, including opacity. */
     val transformCurves: Map<String, List<CanonicalCurveKey>> = emptyMap(),
@@ -147,7 +147,7 @@ data class CanonicalProjectInfo(
                     }
                     val transformKeysJson = layer.optJSONObject("transformKeys")
                     val transformKeyframes = buildMap {
-                        for (property in listOf("position", "scale", "rotation")) {
+                        for (property in listOf("position", "scale", "rotation", "anchor", "orientation", "rotationX", "rotationY")) {
                             val framesJson = transformKeysJson?.optJSONArray(property) ?: continue
                             val frames = (0 until framesJson.length())
                                 .map { framesJson.getInt(it) }
@@ -159,7 +159,7 @@ data class CanonicalProjectInfo(
                     }
                     val transformCurvesJson = layer.optJSONObject("transformCurves")
                     val transformCurves = buildMap {
-                        for (property in listOf("position", "scale", "rotation", "opacity")) {
+                        for (property in listOf("position", "scale", "rotation", "opacity", "anchor", "orientation", "rotationX", "rotationY")) {
                             val curveJson = transformCurvesJson?.optJSONArray(property) ?: continue
                             val keys = parseCurveKeys(curveJson)
                             if (keys.isNotEmpty()) put(property, keys)

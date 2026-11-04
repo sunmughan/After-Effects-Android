@@ -57,6 +57,20 @@ class CanonicalProjectInfoTest {
     }
 
     @Test
+    fun parsesNativeThreeDimensionalTransformKeysAndCurves() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Layer","source":"Text","visible":true,"opacityPercent":100.0,"transformKeys":{"anchor":[0],"orientation":[15,30],"rotationX":[0],"rotationY":[15]},"transformCurves":{"anchor":[{"frame":0,"value":[12.0,34.0,0.0],"inInterp":"Linear","outInterp":"Linear","inEase":[],"outEase":[]}],"orientation":[{"frame":15,"value":[10.0,20.0,30.0],"inInterp":"Bezier","outInterp":"Linear","inEase":[{"speed":2.0,"influence":0.3}],"outEase":[]}],"rotationX":[{"frame":0,"value":45.0,"inInterp":"Linear","outInterp":"Linear","inEase":[],"outEase":[]}],"rotationY":[{"frame":15,"value":-30.0,"inInterp":"Linear","outInterp":"Linear","inEase":[],"outEase":[]}]}}]}"""
+        val layer = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single()
+        assertEquals(listOf(0), layer.transformKeyframes["anchor"])
+        assertEquals(listOf(15, 30), layer.transformKeyframes["orientation"])
+        assertEquals(listOf(0), layer.transformKeyframes["rotationX"])
+        assertEquals(listOf(15), layer.transformKeyframes["rotationY"])
+        assertEquals(12.0, layer.transformCurves["anchor"]!!.single().value, 0.001)
+        assertEquals(10.0, layer.transformCurves["orientation"]!!.single().value, 0.001)
+        assertEquals(45.0, layer.transformCurves["rotationX"]!!.single().value, 0.001)
+        assertEquals(-30.0, layer.transformCurves["rotationY"]!!.single().value, 0.001)
+    }
+
+    @Test
     fun opacityKeysDefaultToEmptyWhenMetadataCarriesNone() {
         val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0}]}]}"""
 

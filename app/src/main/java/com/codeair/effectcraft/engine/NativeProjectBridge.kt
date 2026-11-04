@@ -7,6 +7,12 @@ package com.codeair.effectcraft.engine
 internal fun isSupportedTransformKeyframeProperty(property: String): Boolean =
     property in setOf("position", "scale", "rotation", "anchor", "orientation", "rotationX", "rotationY")
 
+internal fun isSupportedCurveSelector(selector: String): Boolean =
+    selector in setOf(
+        "transform:position", "transform:scale", "transform:rotation", "transform:opacity",
+        "transform:anchor", "transform:orientation", "transform:rotationX", "transform:rotationY"
+    ) || (selector.startsWith("param:") && selector.removePrefix("param:").toLongOrNull()?.let { it >= 0 } == true)
+
 /**
  * Thin JNI boundary to the pinned upstream EffectCraft project model.
  *
@@ -203,9 +209,7 @@ object NativeProjectBridge {
      */
     fun setLayerKeyframeBezierEcproj(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long, side: String, speed: Double, influence: Double): String? {
         ensureLoaded()
-        val selectorValid = selector in setOf("transform:position", "transform:scale", "transform:rotation", "transform:opacity") ||
-            (selector.startsWith("param:") && selector.removePrefix("param:").toLongOrNull()?.let { it >= 0 } == true)
-        if (!available || frame < 0 || side !in setOf("incoming", "outgoing", "both") || !speed.isFinite() || influence !in 0.0..1.0 || !selectorValid) return null
+        if (!available || frame < 0 || side !in setOf("incoming", "outgoing", "both") || !speed.isFinite() || influence !in 0.0..1.0 || !isSupportedCurveSelector(selector)) return null
         return runCatching { setLayerKeyframeBezierEcprojNative(json, compositionId, layerId, selector, frame, side, speed, influence) }.getOrNull()
     }
 
@@ -217,9 +221,7 @@ object NativeProjectBridge {
      */
     fun moveLayerKeyframeEcproj(json: String, compositionId: Long, layerId: Long, selector: String, fromFrame: Long, toFrame: Long): String? {
         ensureLoaded()
-        val selectorValid = selector in setOf("transform:position", "transform:scale", "transform:rotation", "transform:opacity") ||
-            (selector.startsWith("param:") && selector.removePrefix("param:").toLongOrNull()?.let { it >= 0 } == true)
-        if (!available || fromFrame < 0 || toFrame < 0 || !selectorValid) return null
+        if (!available || fromFrame < 0 || toFrame < 0 || !isSupportedCurveSelector(selector)) return null
         return runCatching { moveLayerKeyframeEcprojNative(json, compositionId, layerId, selector, fromFrame, toFrame) }.getOrNull()
     }
 
@@ -245,7 +247,7 @@ object NativeProjectBridge {
     /** Removes a native key from any curve selector (Transform or param UID); idempotent. */
     fun removeLayerCurveKeyframeEcproj(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long): String? {
         ensureLoaded()
-        if (!available || frame < 0 || !selector.matches(Regex("transform:(position|scale|rotation|opacity)|param:[0-9]+"))) return null
+        if (!available || frame < 0 || !isSupportedCurveSelector(selector)) return null
         return runCatching { removeLayerCurveKeyframeEcprojNative(json, compositionId, layerId, selector, frame) }.getOrNull()
     }
 

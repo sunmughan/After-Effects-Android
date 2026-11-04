@@ -3268,6 +3268,15 @@ mod tests {
         assert_eq!(rotation_y_keys.len(), 1, "first authored key must not leave a frame-zero seed");
         assert_eq!(rotation_y_keys[0].time, Tick::from_rational(15, 1, 30));
         assert_eq!(rotation_y_keys[0].value, Value::Scalar(-30.0));
+        // The 3D vector property uses the same curve/drag bridge as Position.
+        let anchor_bezier = set_keyframe_bezier(&eased, comp_id, layer_id, "transform:anchor", 0, "incoming", 8.0, 0.4).unwrap();
+        let anchor_moved = move_keyframe(&anchor_bezier, comp_id, layer_id, "transform:anchor", 0, 5).unwrap();
+        let anchor_curve_project: Project = serde_json::from_str(&anchor_moved).unwrap();
+        let anchor_curve = &find_property_ref(anchor_curve_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap(), "anchor").unwrap().keys[0];
+        assert_eq!(anchor_curve.time, Tick::from_rational(5, 1, 30));
+        assert_eq!(anchor_curve.in_interp, Interp::Bezier);
+        assert_eq!(anchor_curve.in_ease[0].influence, 0.4);
+
         let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&eased).unwrap()).unwrap();
         let tracks = &metadata["compositions"][0]["layers"][0]["transformKeys"];
         assert_eq!(tracks["anchor"], json!([0]));

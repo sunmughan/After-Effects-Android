@@ -2518,6 +2518,14 @@ private fun curveTrackFor(layer: CanonicalLayerInfo, selector: String): CurveTra
             ?: layer.transformKeyframes["scale"].orEmpty().map { CurveKey(it, layer.scaleX) }
         "transform:rotation" -> layer.transformCurves["rotation"]?.let { fromCurves(it) }
             ?: layer.transformKeyframes["rotation"].orEmpty().map { CurveKey(it, layer.rotationDegrees) }
+        "transform:anchor" -> layer.transformCurves["anchor"]?.let { fromCurves(it) }
+            ?: layer.transformKeyframes["anchor"].orEmpty().map { CurveKey(it, layer.anchorX) }
+        "transform:orientation" -> layer.transformCurves["orientation"]?.let { fromCurves(it) }
+            ?: layer.transformKeyframes["orientation"].orEmpty().map { CurveKey(it, layer.orientationX) }
+        "transform:rotationX" -> layer.transformCurves["rotationX"]?.let { fromCurves(it) }
+            ?: layer.transformKeyframes["rotationX"].orEmpty().map { CurveKey(it, layer.rotationXDegrees) }
+        "transform:rotationY" -> layer.transformCurves["rotationY"]?.let { fromCurves(it) }
+            ?: layer.transformKeyframes["rotationY"].orEmpty().map { CurveKey(it, layer.rotationYDegrees) }
         "transform:opacity" -> if (layer.opacityCurves.isNotEmpty()) fromCurves(layer.opacityCurves)
             else layer.opacityKeys.map { CurveKey(it.frame, it.value.toDouble()) }
         else -> {
