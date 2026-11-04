@@ -1646,9 +1646,9 @@ fn set_layer_transform_keyframe_interpolation(
     }
     // Legacy names continue to edit both sides; side-qualified names preserve
     // the opposite tangent/interpolation when editing one side in the inspector.
-    // Directional presets only ever touch their own side: ease_in the outgoing
-    // side, ease_out the incoming side, so a side qualifier can only narrow
-    // them further, never redirect them.
+    // Directional presets ignore the qualifier: their direction IS their side
+    // (ease_in the outgoing side, ease_out the incoming side), so a qualifier
+    // can neither redirect nor silence them.
     let (incoming, outgoing, preset) = if let Some(preset) = preset.strip_prefix("incoming_") {
         (true, false, preset)
     } else if let Some(preset) = preset.strip_prefix("outgoing_") {
@@ -1686,10 +1686,12 @@ fn set_layer_transform_keyframe_interpolation(
             if outgoing { key.out_interp = eased.out_interp; key.out_ease = eased.out_ease; }
         }
         "ease_in" => {
-            if outgoing { key.out_interp = Interp::Bezier; key.out_ease = vec![Ease::EASY; dims]; }
+            key.out_interp = Interp::Bezier;
+            key.out_ease = vec![Ease::EASY; dims];
         }
         "ease_out" => {
-            if incoming { key.in_interp = Interp::Bezier; key.in_ease = vec![Ease::EASY; dims]; }
+            key.in_interp = Interp::Bezier;
+            key.in_ease = vec![Ease::EASY; dims];
         }
         "bezier" => {
             if incoming { key.in_interp = Interp::Bezier; key.in_ease = vec![Ease { speed: 0.0, influence: 0.25 }; dims]; }
