@@ -45,8 +45,12 @@ import ai.effectcraft.android.data.PngSequenceZipExporter
 import ai.effectcraft.android.data.PngSequenceZipValidator
 import ai.effectcraft.android.data.RenderQueuePlan
 import ai.effectcraft.android.data.RenderQueueSettings
+import ai.effectcraft.android.data.RenderOutputFormat
+import ai.effectcraft.android.data.Mp4ExportRequirements
+import ai.effectcraft.android.data.Mp4ExportWorker
 import ai.effectcraft.android.data.SafDocumentWriter
 import ai.effectcraft.android.data.StaleSequenceExportCleanup
+import ai.effectcraft.android.data.StaleVideoExportCleanup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -77,6 +81,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var sequenceExportProgress by remember { mutableIntStateOf(0) }
     var pendingSequenceSettings by remember { mutableStateOf<RenderQueueSettings?>(null) }
     var pendingSequenceCompositionId by remember { mutableStateOf<Long?>(null) }
+    var videoExportJob by remember { mutableStateOf<Job?>(null) }
+    var videoExportInProgress by remember { mutableStateOf(false) }
+    var videoExportWritingOutput by remember { mutableStateOf(false) }
+    var videoExportProgress by remember { mutableIntStateOf(0) }
+    var pendingVideoSettings by remember { mutableStateOf<RenderQueueSettings?>(null) }
+    var pendingVideoCompositionId by remember { mutableStateOf<Long?>(null) }
     val ecprojStore = remember(context) { EcprojDocumentStore(context) }
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
@@ -385,6 +395,81 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    val exportMp4Launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { uri: Uri? ->
+        val settings = pendingVideoSettings
+        val compositionId = pendingVideoCompositionId
+        pendingVideoSettings = null
+        pendingVideoCompositionId = null
+        if (uri == null) {
+            saveMessage = "MP4 export cancelled"
+        } else if (settings == null || compositionId == null || importedEcproj == null) {
+            saveMessage = "Import a canonical composition before exporting MP4 video"
+        } else if (frameExportInProgress || sequenceExportInProgress) {
+            saveMessage = "Finish or cancel the running export before starting MP4 video"
+        } else {
+            val source = importedEcproj!!
+            videoExportInProgress = true
+            videoExportWritingOutput = false
+            videoExportProgress = 0
+            videoExportJob = exportScope.launch {
+                val stagedMp4 = File(context.cacheDir, "effectcraft-video-${System.nanoTime()}.mp4")
+                val exportJob = currentCoroutineContext()[Job]
+                try {
+                    val composition = canonicalProjectInfo?.compositions
+                        ?.firstOrNull { it.id == compositionId }
+                        ?: error("Canonical composition is no longer available")
+                    val mp4Settings = settings.copy(outputFormat = RenderOutputFormat.MP4_H264)
+                    val plan = RenderQueuePlan.create(mp4Settings, composition.durationFrames)
+                    Mp4ExportRequirements.checkPlan(plan)
+                    val audio = Mp4ExportWorker.resolveAudio(
+                        canonicalProjectInfo?.items ?: emptyList()
+                    ) { hash -> offlineAssetStore.fileFor(hash) }
+                    saveMessage = "Encoding MP4 · 0/${plan.frameCount} (0%)"
+                    val staged = withContext(Dispatchers.IO) {
+                        Mp4ExportWorker.exportToStaged(
+                            plan = plan,
+                            projectJson = source,
+                            compositionId = compositionId,
+                            audioFile = audio.file,
+                            hasAudioItems = audio.hasAudioItems,
+                            stagedFile = stagedMp4,
+                            compositionFrameRateNum = composition.frameRateNum,
+                            compositionFrameRateDen = composition.frameRateDen,
+                            isCancelled = { exportJob?.isActive != true },
+                            onProgress = { completed, percent ->
+                                videoExportProgress = percent
+                                saveMessage = "Encoding MP4 · $completed/${plan.frameCount} ($percent%)"
+                            }
+                        )
+                    }
+                    currentCoroutineContext().ensureActive()
+                    videoExportWritingOutput = true
+                    saveMessage = "Copying validated MP4 to selected destination…"
+                    withContext(Dispatchers.IO) {
+                        SafDocumentWriter.copyFileToDocument(
+                            context = context,
+                            sourceFile = stagedMp4,
+                            destination = uri,
+                            ensureActive = { exportJob?.ensureActive() }
+                        )
+                    }
+                    videoExportProgress = 100
+                    saveMessage = "Exported MP4 · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS · ${plan.frameCount} frames · ${staged.audioStatus.describe()}"
+                } catch (cancelled: CancellationException) {
+                    saveMessage = "MP4 export cancelled"
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    saveMessage = "MP4 export failed · ${failure.message ?: "render or write error"}"
+                } finally {
+                    stagedMp4.delete()
+                    videoExportInProgress = false
+                    videoExportWritingOutput = false
+                    videoExportJob = null
+                }
+            }
+        }
+    }
+
     val exportEcprojxLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/xml")) { uri: Uri? ->
         if (uri != null) {
             runCatching {
@@ -482,10 +567,18 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // instead of silently disappearing.
     LaunchedEffect(Unit) {
         // A process kill can bypass the export coroutine's finally block. Remove
-        // only staging ZIPs older than the recovery window; never touch active exports.
+        // only staging ZIPs and MP4s older than the recovery window; never touch
+        // active exports. A removed MP4 staging file means a video export was
+        // interrupted by the kill: it cannot be resumed (MediaMuxer output is
+        // not appendable), so recovery is discard + report, and the user restarts.
         runCatching {
-            val cleanup = withContext(Dispatchers.IO) { StaleSequenceExportCleanup.cleanup(context.cacheDir) }
-            if (cleanup.removed > 0) saveMessage = "Recovered ${cleanup.removed} abandoned PNG sequence archive(s)"
+            val sequenceCleanup = withContext(Dispatchers.IO) { StaleSequenceExportCleanup.cleanup(context.cacheDir) }
+            val videoCleanup = withContext(Dispatchers.IO) { StaleVideoExportCleanup.cleanup(context.cacheDir) }
+            val notes = buildList {
+                if (sequenceCleanup.removed > 0) add("${sequenceCleanup.removed} abandoned PNG sequence archive(s)")
+                if (videoCleanup.removed > 0) add("${videoCleanup.removed} interrupted video export(s) — staged MP4 discarded, restart the export")
+            }
+            if (notes.isNotEmpty()) saveMessage = "Recovered ${notes.joinToString("; ")}"
         }
         runCatching {
             val cached = ecprojStore.load()
@@ -806,6 +899,33 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onCancelSequenceExport = { sequenceExportJob?.cancel() },
             sequenceExportProgress = sequenceExportProgress,
+            isExportingVideo = videoExportInProgress,
+            isVideoExportWritingOutput = videoExportWritingOutput,
+            videoExportProgress = videoExportProgress,
+            onExportMp4Video = { width, height, fps, startFrame, endFrame ->
+                val composition = canonicalProjectInfo?.compositions?.firstOrNull()
+                if (importedEcproj == null || composition == null) {
+                    saveMessage = "Import a canonical composition before exporting MP4 video"
+                } else if (videoExportInProgress) {
+                    saveMessage = "An MP4 export is already running"
+                } else if (sequenceExportInProgress || frameExportInProgress) {
+                    saveMessage = "Finish or cancel the running export before starting MP4 video"
+                } else {
+                    runCatching {
+                        val settings = RenderQueueSettings(width, height, fps, startFrame, endFrame, RenderOutputFormat.MP4_H264)
+                        val plan = RenderQueuePlan.create(settings, composition.durationFrames)
+                        Mp4ExportRequirements.checkPlan(plan)
+                        pendingVideoSettings = settings
+                        pendingVideoCompositionId = composition.id
+                        exportMp4Launcher.launch("EffectCraft.mp4")
+                    }.onFailure { failure ->
+                        pendingVideoSettings = null
+                        pendingVideoCompositionId = null
+                        saveMessage = "MP4 plan rejected · ${failure.message ?: "unsupported composition"}"
+                    }
+                }
+            },
+            onCancelVideoExport = { videoExportJob?.cancel() },
             onSave = {
                 runCatching { projectStore.save(project) }
                     .onSuccess {

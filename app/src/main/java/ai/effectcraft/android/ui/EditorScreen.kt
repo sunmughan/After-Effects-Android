@@ -95,6 +95,8 @@ import ai.effectcraft.android.data.ProjectDocument
 import ai.effectcraft.android.data.PropertyKeyframe
 import ai.effectcraft.android.data.RenderQueuePlan
 import ai.effectcraft.android.data.RenderQueueSettings
+import ai.effectcraft.android.data.RenderOutputFormat
+import ai.effectcraft.android.data.Mp4ExportRequirements
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -150,6 +152,11 @@ fun EditorScreen(
     onExportPngSequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int) -> Unit,
     onCancelSequenceExport: () -> Unit,
     sequenceExportProgress: Int,
+    isExportingVideo: Boolean = false,
+    isVideoExportWritingOutput: Boolean = false,
+    videoExportProgress: Int = 0,
+    onExportMp4Video: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int) -> Unit = { _, _, _, _, _ -> },
+    onCancelVideoExport: () -> Unit = {},
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
@@ -559,28 +566,64 @@ fun EditorScreen(
                                 singleLine = true, modifier = Modifier.weight(1f)
                             )
                         }
-                        Text("PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track.", color = EditorPalette.muted, fontSize = 11.sp)
+                        Text("ZIP holds PNG frames only, no video/audio track. MP4 uses H.264; audio is included only when a compatible AAC track is found, otherwise the export is video-only.", color = EditorPalette.muted, fontSize = 11.sp)
+                        if (isExportingVideo) {
+                            Text(
+                                if (isVideoExportWritingOutput) "MP4 export writing to destination…" else "MP4 export running · $videoExportProgress%",
+                                color = EditorPalette.amber, fontSize = 12.sp
+                            )
+                        }
                         sequenceSettingsError?.let { Text(it, color = EditorPalette.amber, fontSize = 12.sp) }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
-                        val width = sequenceWidthText.toIntOrNull()
-                        val height = sequenceHeightText.toIntOrNull()
-                        val fps = sequenceFpsText.toIntOrNull()
-                        val start = sequenceStartText.toIntOrNull()
-                        val end = sequenceEndText.toIntOrNull()
-                        if (width == null || height == null || fps == null || start == null || end == null) {
-                            sequenceSettingsError = "Enter valid numeric settings"
-                        } else {
-                            runCatching { RenderQueuePlan.create(RenderQueueSettings(width, height, fps, start, end)) }
-                                .onSuccess {
-                                    showSequenceSettings = false
-                                    onExportPngSequence(width, height, fps, start, end)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            val width = sequenceWidthText.toIntOrNull()
+                            val height = sequenceHeightText.toIntOrNull()
+                            val fps = sequenceFpsText.toIntOrNull()
+                            val start = sequenceStartText.toIntOrNull()
+                            val end = sequenceEndText.toIntOrNull()
+                            if (width == null || height == null || fps == null || start == null || end == null) {
+                                sequenceSettingsError = "Enter valid numeric settings"
+                            } else {
+                                runCatching { RenderQueuePlan.create(RenderQueueSettings(width, height, fps, start, end)) }
+                                    .onSuccess {
+                                        showSequenceSettings = false
+                                        onExportPngSequence(width, height, fps, start, end)
+                                    }
+                                    .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
+                            }
+                        }) { Text("Render ZIP") }
+                        TextButton(onClick = {
+                            val width = sequenceWidthText.toIntOrNull()
+                            val height = sequenceHeightText.toIntOrNull()
+                            val fps = sequenceFpsText.toIntOrNull()
+                            val start = sequenceStartText.toIntOrNull()
+                            val end = sequenceEndText.toIntOrNull()
+                            if (width == null || height == null || fps == null || start == null || end == null) {
+                                sequenceSettingsError = "Enter valid numeric settings"
+                            } else {
+                                runCatching {
+                                    val plan = RenderQueuePlan.create(
+                                        RenderQueueSettings(width, height, fps, start, end, RenderOutputFormat.MP4_H264)
+                                    )
+                                    Mp4ExportRequirements.checkPlan(plan)
                                 }
-                                .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
+                                    .onSuccess {
+                                        showSequenceSettings = false
+                                        onExportMp4Video(width, height, fps, start, end)
+                                    }
+                                    .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
+                            }
+                        }, enabled = !isExportingVideo) { Text("Render MP4") }
+                        if (isExportingVideo && !isVideoExportWritingOutput) {
+                            TextButton(onClick = {
+                                onCancelVideoExport()
+                                showSequenceSettings = false
+                            }) { Text("Cancel MP4") }
                         }
-                    }) { Text("Render ZIP") }
+                    }
                 },
                 dismissButton = {
                     TextButton(onClick = { showSequenceSettings = false }) { Text("Cancel") }
