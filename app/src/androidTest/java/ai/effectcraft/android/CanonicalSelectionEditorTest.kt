@@ -54,7 +54,7 @@ class CanonicalSelectionEditorTest {
             id = 10, name = "Main", width = 1920, height = 1080,
             frameRateNum = 30, frameRateDen = 1, durationSeconds = 3.0,
             layers = listOf(
-                layer(2, "Background", 10.0, 20.0),
+                layer(2, "Background", 10.0, 20.0).copy(transformKeyframes = mapOf("position" to listOf(0, 15, 30), "scale" to listOf(0), "rotation" to listOf(30))),
                 layer(3, "Title", 30.0, 40.0),
                 layer(4, "Locked", 50.0, 60.0, locked = true)
             )
@@ -169,6 +169,14 @@ class CanonicalSelectionEditorTest {
         // directions; scrubbing the main playhead requests that real frame.
         workspaceFrame.intValue = 15
         compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(15L) }
+        compose.onNodeWithText("Frame 15 / 89").assertIsDisplayed()
+
+        // Native transform metadata exposes key markers; tapping the inspector
+        // jump action updates the shared playhead and requests that preview.
+        workspaceFrame.intValue = 20
+        compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(20L) }
+        compose.onNodeWithContentDescription("Jump to Position keyframe").performScrollTo().performClick()
+        assertEquals(15, workspaceFrame.intValue)
         compose.onNodeWithText("Frame 15 / 89").assertIsDisplayed()
 
         // Native transform keys are authored at the same workspace frame,
