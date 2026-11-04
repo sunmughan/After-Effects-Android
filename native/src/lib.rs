@@ -783,6 +783,26 @@ fn layer_opacity_keys(layer: &effectcraft_project::Layer, frame_rate: effectcraf
     keys
 }
 
+/// Transform keyframe frame indices exposed to the Android timeline. Frames use
+/// the same rational Tick conversion as the renderer, and each property is
+/// sorted/deduplicated so UI markers remain stable after same-frame upserts.
+fn layer_transform_keyframes(layer: &effectcraft_project::Layer, frame_rate: effectcraft_time::FrameRate) -> serde_json::Value {
+    let mut tracks = serde_json::Map::new();
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        for property_name in ["position", "scale", "rotation"] {
+            if let Some(property) = transform.prop(property_name) {
+                let mut frames = property.keys.iter()
+                    .map(|key| key.time.to_rational_floor(frame_rate.den, frame_rate.num))
+                    .collect::<Vec<_>>();
+                frames.sort_unstable();
+                frames.dedup();
+                tracks.insert(property_name.to_owned(), json!(frames));
+            }
+        }
+    }
+    serde_json::Value::Object(tracks)
+}
+
 fn inspect_project(source: &str) -> Result<String, String> {
     let project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -797,6 +817,7 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "visible": layer.switches.video,
                 "opacityPercent": layer_opacity_percent(layer),
                 "opacityKeys": layer_opacity_keys(layer, comp.frame_rate),
+                "transformKeys": layer_transform_keyframes(layer, comp.frame_rate),
                 "position": layer_position(layer),
                 "scale": layer_scale(layer),
                 "rotationDegrees": layer_rotation(layer),
@@ -2722,6 +2743,11 @@ mod tests {
         assert_eq!(position.keys[1].value, Value::Vec3([100.0, 200.0, 0.0]));
         assert_eq!(transform.prop("scale").unwrap().keys.len(), 1);
         assert_eq!(transform.prop("rotation").unwrap().keys.len(), 1);
+        let metadata = serde_json::from_str::<serde_json::Value>(&inspect_project(&rotated).unwrap()).unwrap();
+        let tracks = &metadata["compositions"][0]["layers"][0]["transformKeys"];
+        assert_eq!(tracks["position"], json!([0, 15]));
+        assert_eq!(tracks["scale"], json!([0]));
+        assert_eq!(tracks["rotation"], json!([0]));
         assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 2, f64::NAN, 0.0, 0.0).is_err());
         assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "opacity", 2, 1.0, 0.0, 0.0).is_err());
         assert!(set_layer_transform_keyframe(&source, comp_id, 999, "position", 2, 1.0, 0.0, 0.0).is_err());

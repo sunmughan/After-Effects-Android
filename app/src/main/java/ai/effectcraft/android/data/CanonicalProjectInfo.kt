@@ -49,6 +49,8 @@ data class CanonicalLayerInfo(
     val rotationDegrees: Double,
     /** Canonical opacity keys, sorted by frame; empty when the layer is not keyframed. */
     val opacityKeys: List<PropertyKeyframe> = emptyList(),
+    /** Native Position/Scale/Rotation keyframe frame indices, sorted and unique. */
+    val transformKeyframes: Map<String, List<Int>> = emptyMap(),
     val anchorX: Double = 0.0,
     val anchorY: Double = 0.0,
     val orientationX: Double = 0.0,
@@ -120,6 +122,18 @@ data class CanonicalProjectInfo(
                             key.getDouble("value").toFloat()
                         )
                     }
+                    val transformKeysJson = layer.optJSONObject("transformKeys")
+                    val transformKeyframes = buildMap {
+                        for (property in listOf("position", "scale", "rotation")) {
+                            val framesJson = transformKeysJson?.optJSONArray(property) ?: continue
+                            val frames = (0 until framesJson.length())
+                                .map { framesJson.getInt(it) }
+                                .filter { it >= 0 }
+                                .distinct()
+                                .sorted()
+                            if (frames.isNotEmpty()) put(property, frames)
+                        }
+                    }
                     val anchor = layer.optJSONArray("anchor")
                     val orientation = layer.optJSONArray("orientation")
                     val textJson = layer.optJSONObject("text")
@@ -135,6 +149,7 @@ data class CanonicalProjectInfo(
                         scaleY = scale?.optDouble(1) ?: 100.0,
                         rotationDegrees = layer.optDouble("rotationDegrees", 0.0),
                         opacityKeys = opacityTrack.keyframes,
+                        transformKeyframes = transformKeyframes,
                         anchorX = anchor?.optDouble(0) ?: 0.0,
                         anchorY = anchor?.optDouble(1) ?: 0.0,
                         orientationX = orientation?.optDouble(0) ?: 0.0,

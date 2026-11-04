@@ -45,6 +45,18 @@ class CanonicalProjectInfoTest {
     }
 
     @Test
+    fun parsesNativeTransformKeyframesSortedAndDeduplicated() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0,"transformKeys":{"position":[15,0,15],"scale":[0],"rotation":[30,10,30]}}]}]}"""
+
+        val layer = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single()
+
+        assertEquals(listOf(0, 15), layer.transformKeyframes["position"])
+        assertEquals(listOf(0), layer.transformKeyframes["scale"])
+        assertEquals(listOf(10, 30), layer.transformKeyframes["rotation"])
+        assertEquals(emptyList<Int>(), layer.transformKeyframes["anchor"])
+    }
+
+    @Test
     fun opacityKeysDefaultToEmptyWhenMetadataCarriesNone() {
         val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0}]}]}"""
 

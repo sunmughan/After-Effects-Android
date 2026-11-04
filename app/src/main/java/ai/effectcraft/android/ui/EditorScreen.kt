@@ -93,6 +93,7 @@ import ai.effectcraft.android.data.PropertyKeyframe
 import ai.effectcraft.android.data.RenderQueuePlan
 import ai.effectcraft.android.data.RenderQueueSettings
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -1368,6 +1369,27 @@ private fun CanonicalProjectEditor(
                     }
                 }
                 Text("Transform keys are native and evaluated by the composition renderer.", color = EditorPalette.muted, fontSize = 10.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation").forEach { (property, label) ->
+                        val frames = layer.transformKeyframes[property].orEmpty()
+                        TextButton(
+                            enabled = frames.isNotEmpty(),
+                            onClick = {
+                                frames.minByOrNull { frame -> abs(frame - previewFrame) }?.let { target ->
+                                    previewFrame = target
+                                    onPreviewFrameChange(target)
+                                }
+                            },
+                            modifier = Modifier.semantics { contentDescription = "Jump to $label keyframe" }
+                        ) {
+                            Text(
+                                "$label keys · ${if (frames.isEmpty()) "—" else frames.joinToString(", ")}",
+                                color = if (frames.isEmpty()) EditorPalette.muted else EditorPalette.mint,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BasicTextField(
