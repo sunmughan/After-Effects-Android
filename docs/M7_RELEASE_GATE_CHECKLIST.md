@@ -1,0 +1,122 @@
+# M7 — Release-gate checklist
+
+> For the coordinator only. A box may be ticked ONLY on the evidence
+> named in its own row, attached to the specific artifact and commit
+> being gated. "Code exists", "debug CI passed", "an older run passed",
+> and "someone said it works" are not evidence for any row. If a row
+> cannot be evidenced, leave it unticked, write the blocker in the
+> Evidence column, and do not call the release complete.
+>
+> M7 final exit (PHASES.md): real supported projects can open, edit,
+> preview/render and export on Android offline; all evidence reviewed.
+> Do not mark complete on shell-only CI.
+>
+> Fill in once per release candidate:
+>
+> - Branch / commit: ______________________
+> - Release workflow run: ______________________
+> - APK SHA-256: ______________________
+> - AAB SHA-256: ______________________
+
+## A. Phase and CI gates (all must pass before any install is called a release)
+
+- [ ] **A1. All phase exit gates reviewed.** Evidence: PHASES.md
+      status for M0–M6 read for this commit; every still-open gate
+      listed in §D below, not silently dropped. Owner acceptance (M0
+      #13) and the unselected Android license are recorded as open
+      until the owner closes them.
+- [ ] **A2. Current-head debug CI green on the exact commit being
+      released.** Evidence: `android-ci` run URL on this commit with
+      both jobs green, including Rust, JVM unit, and emulator
+      instrumentation counts read from that run's test XMLs — not
+      from an older commit's run.
+- [ ] **A3. Release workflow green on the same commit.**
+      Evidence: `android-release` (workflow_dispatch) run URL, all
+      steps green, including the signature verification step.
+- [ ] **A4. Artifact identity verified.** Evidence: SHA-256 in the
+      release log == `release-artifact-sha256.txt` ==
+      `sha256sum` of the downloaded APK and AAB, recorded above.
+- [ ] **A5. R8 release variant proven, not assumed.** Evidence: the
+      installed build in §B is the R8 release APK (not a debug APK),
+      and it launches; a debug green run is not evidence for this row.
+- [ ] **A6. Release license inventory reviewed for this artifact.**
+      Evidence: the release run's own `build/audit-release/` opened;
+      no `MISSING THIRD-PARTY LICENSE` entry; required third-party
+      notices confirmed present; media/codec or patent-sensitive
+      items flagged for review if any. An older run's inventory does
+      not satisfy this row.
+
+## B. Physical ARM64 install / run / smoke (all must pass on one device)
+
+Record for the run: device model __________, Android build __________,
+ABI `arm64-v8a` (confirm from the device, not from the APK name),
+tester __________, date __________.
+
+- [ ] **B1. Cold offline launch.** Evidence: app launches with no
+      network and no account, to the workspace, with no crash.
+- [ ] **B2. Open a real supported project.** Evidence: a canonical
+      `.ecproj`/`.ecprojx` project opens via the repository picker;
+      project name, format, and composition metadata shown match the
+      file. (`.aep`/`.efkproj` files are not test inputs here — they
+      are unsupported by design.)
+- [ ] **B3. Edit.** Evidence: a layer edit, an opacity change, and a
+      Position/Scale/Rotation keyframe edit each take effect and
+      survive a save/reload.
+- [ ] **B4. Preview/render.** Evidence: a canonical composition frame
+      renders through the preview (actual rendered frame, not a
+      placeholder); scrubbing/playhead moves update the frame.
+- [ ] **B5. Export.** Evidence: a PNG-sequence ZIP export completes
+      via SAF, the ZIP passes integrity validation, and its manifest
+      matches the exported range/FPS/dimensions.
+- [ ] **B6. Recovery.** Evidence: force-stop and reopen restores the
+      project and playhead without losing the last saved state;
+      a failed save does not destroy the previous valid file (test
+      only if safely reproducible on the device).
+- [ ] **B7. Resize/rotate.** Evidence: rotate and (where applicable)
+      phone/tablet window resize keep the selected project and
+      playhead; no crash, no lost selection.
+- [ ] **B8. JNI bridge alive in the release build.** Evidence: B2–B5
+      all passed on the release APK (they all go through the native
+      bridge); if any of them failed with "native unavailable", this
+      row fails and the R8 keep rules must be investigated before
+      any release claim.
+
+## C. Release paperwork (all must be filled from this run, not copied)
+
+- [ ] **C1. Release notes completed** from
+      `docs/M7_RELEASE_NOTES_TEMPLATE.md` for this artifact, with
+      every field filled or marked NOT VERIFIED, and no notes copied
+      from a previous release.
+- [ ] **C2. Support matrix + known limitations re-checked** against
+      this run: anything newly observed added to
+      `docs/M7_SUPPORT_MATRIX.md` §4; nothing removed to make the
+      release look better.
+- [ ] **C3. Artifact retention secured.** Evidence: release artifact
+      (APK, AAB, mapping.txt, audit inventory, hashes) downloaded and
+      archived outside CI, or a dated plan to do so before the
+      90-day CI retention expires. The R8 mapping must be kept with
+      the APK it belongs to.
+- [ ] **C4. No forbidden side effect.** Evidence: no PR merged, no
+      Play release, no visibility change, no license file added, no
+      secret committed — confirmed from the run and from `git log` /
+      `git status` for the release branch.
+
+## D. Open gates / blockers (anything unticked above lands here)
+
+| Gate | Blocker / evidence gap | Owner |
+|---|---|---|
+| | | |
+| | | |
+| | | |
+
+## E. Sign-off (only when A + B + C are fully ticked, or explicitly waived)
+
+- Coordinator sign-off: ______________________ Date: __________
+- Owner sign-off (M0 #13 acceptance, if this release is presented as
+  accepted): ______________________ Date: __________
+- Waivers, if any (gate, reason, who waived it — a waived gate is
+  still listed, never silently ticked):
+  - ______________________
+
+**Status of this candidate (circle one, on evidence, not on hope):
+NOT READY / READY FOR OWNER DEVICE TESTING / ACCEPTED.**
