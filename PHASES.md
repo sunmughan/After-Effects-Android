@@ -729,3 +729,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Evidence labelling: green run on the exact head 6cc1806, emulator CI only, no physical-device proof, no .aep claim, current tip 07debae NOT covered by this green run.
 - Decision: M4 bullet #9 (Verify every edit updates engine preview and canonical project data) is flipped to PASS on this exact-head green evidence.
 - Scope limits preserved: M0 is NOT COMPLETE (licensing #12 and owner acceptance #13 remain open user decisions). No M5 or M6 completion is claimed. M4 #7 (already PASS), #4 (already PASS), and #8 (already PASS) bullets are untouched. The tip after this docs push is not claimed green unless a CI run on that tip proves it.
+
+
+### Run 68 — independent incoming/outgoing transform interpolation (2026-11-04)
+- M4: native canonical transform interpolation now edits incoming and outgoing sides independently. Legacy Linear/Easy Ease/Hold still applies to both; side-qualified operations preserve the opposite interpolation and ease arrays. Easy Ease copies the upstream eased tangent only for the selected side.
+- Inspector exposes Both / Incoming / Outgoing selection with accessible labels and current-frame key gating. Rust regression covers incoming Easy Ease preservation, outgoing Hold preservation, and legacy Both reset. Compose instrumentation verifies incoming Easy Ease and outgoing Hold callback payloads.
+- Source/test/tracker commits are being created in this run. CI #523 remains in progress on predecessor HEAD 805cc032 at SDK/NDK setup; exact-head CI triggered by this feature must pass ARM64+x86_64, Rust, JVM, API 30 emulator and cold APK reproducibility. No pass claimed yet.
+- M4 remains IN PROGRESS (curve graph/ease influence UI and remaining effect/property parity); M0 owner acceptance, M2 physical SAF/media, M3 GPU/Surface, M5 video/audio, M6 device/performance/accessibility and M7 release gates remain open. Adobe .aep compatibility is not claimed.
