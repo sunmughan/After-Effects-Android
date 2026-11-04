@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
@@ -398,30 +399,19 @@ class AdaptiveWorkspaceSmokeTest {
             }
         )
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
-        // Bring the graph section into view through its header first: the
-        // chips live in a horizontally scrolling row nested inside the
-        // vertically scrolling sheet, so scroll the section itself into
-        // view before tapping a chip in it.
+        // The selector chips are horizontally scrollable inside the
+        // vertically scrolling inspector. Bring the row into view, swipe
+        // its own viewport until Anchor X is displayed, then invoke the chip's
+        // semantics click (not a coordinate tap on a clipped child).
         compose.onNodeWithText("Curve graph · Position X").performScrollTo()
-        // Tap the chip with a real touch event, not the semantics click
-        // action: performClick on this chip left the selection on Position
-        // X (the next add fired transform:position), and a single touch
-        // tap lands only intermittently across runs, so tap until the
-        // header proves the selection moved.
-        val anchorChip = compose.onNodeWithText("Anchor X").performScrollTo()
-        val chipSize = anchorChip.fetchSemanticsNode().size
-        for (attempt in 0 until 5) {
-            if (runCatching { compose.onNodeWithText("Curve graph · Anchor X").fetchSemanticsNode() }.isSuccess) break
-            anchorChip.performTouchInput {
-                down(0, Offset(chipSize.width / 2f, chipSize.height / 2f))
-                advanceEventTime(100)
-                up(0)
-            }
+        val selectorRow = compose.onNodeWithTag("curve-selector-row").performScrollTo()
+        val anchorSelector = compose.onNodeWithTag("curve-selector-transform-anchor")
+        for (attempt in 0 until 4) {
+            if (runCatching { anchorSelector.assertIsDisplayed() }.isSuccess) break
+            selectorRow.performTouchInput { swipeLeft() }
         }
-        // Existence, not visibility: fetching the node proves the selection
-        // moved to Anchor X even when the sheet viewport leaves the header
-        // itself just out of view (fetch throws when no node matches).
-        compose.onNodeWithText("Curve graph · Anchor X").fetchSemanticsNode()
+        anchorSelector.assertIsDisplayed().performClick()
+        compose.onNodeWithText("Curve graph · Anchor X").assertIsDisplayed()
         // The graph add button fires the curve callback with the selected
         // track selector, not the transform callback, so it is located by
         // its stable visible text and asserted through the curve capture.

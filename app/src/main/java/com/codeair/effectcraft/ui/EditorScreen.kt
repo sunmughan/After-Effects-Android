@@ -85,6 +85,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -2260,7 +2261,7 @@ private fun CurveGraphSection(
 
     Text("Curve graph · $label", color = EditorPalette.text, fontSize = 12.sp)
     Row(
-        Modifier.horizontalScroll(rememberScrollState()),
+        Modifier.horizontalScroll(rememberScrollState()).testTag("curve-selector-row"),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         options.forEach { (optionSelector, optionLabel) ->
@@ -2268,6 +2269,9 @@ private fun CurveGraphSection(
                 selected = selector == optionSelector,
                 onClick = { selectedSelector = optionSelector },
                 enabled = editable,
+                modifier = Modifier
+                    .testTag("curve-selector-${optionSelector.replace(':', '-')}")
+                    .semantics { contentDescription = "Curve selector $optionLabel" },
                 label = { Text(optionLabel, fontSize = 10.sp) }
             )
         }

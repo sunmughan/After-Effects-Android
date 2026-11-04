@@ -1,6 +1,13 @@
 package com.codeair.effectcraft.engine
 
 /**
+ * Canonical upstream Transform properties with editable native keyframe tracks.
+ * Keep this whitelist aligned with the Rust bridge's recursive Transform lookup.
+ */
+internal fun isSupportedTransformKeyframeProperty(property: String): Boolean =
+    property in setOf("position", "scale", "rotation", "anchor", "orientation", "rotationX", "rotationY")
+
+/**
  * Thin JNI boundary to the pinned upstream EffectCraft project model.
  *
  * The library is loaded lazily so the Compose shell remains launchable in development
@@ -55,10 +62,10 @@ object NativeProjectBridge {
         return runCatching { setLayerPositionEcprojNative(json, compositionId, layerId, x, y) }.getOrNull()
     }
 
-    /** Authors a native Position, Scale or Rotation keyframe at a composition frame. */
+    /** Authors a native Transform keyframe at a composition frame. */
     fun setLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, x: Double, y: Double, z: Double): String? {
         ensureLoaded()
-        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation")) return null
+        if (!available || frame < 0 || !isSupportedTransformKeyframeProperty(property)) return null
         return runCatching { setLayerTransformKeyframeEcprojNative(json, compositionId, layerId, property, frame, x, y, z) }.getOrNull()
     }
 
@@ -177,11 +184,11 @@ object NativeProjectBridge {
         return runCatching { removeLayerOpacityKeyframeEcprojNative(json, compositionId, layerId, frame) }.getOrNull()
     }
 
-    /** Applies Linear, Easy Ease or Hold to both or one side of an existing transform key. */
+    /** Applies Linear, Easy Ease or Hold to both or one side of an existing Transform key. */
     fun setLayerTransformKeyframeInterpolationEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, preset: String): String? {
         ensureLoaded()
         val presets = setOf("linear", "easy_ease", "hold", "incoming_linear", "incoming_easy_ease", "incoming_hold", "outgoing_linear", "outgoing_easy_ease", "outgoing_hold")
-        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation") || preset !in presets) return null
+        if (!available || frame < 0 || !isSupportedTransformKeyframeProperty(property) || preset !in presets) return null
         return runCatching { setLayerTransformKeyframeInterpolationEcprojNative(json, compositionId, layerId, property, frame, preset) }.getOrNull()
     }
 
@@ -228,10 +235,10 @@ object NativeProjectBridge {
         return runCatching { setLayerParamKeyframeEcprojNative(json, compositionId, layerId, uid, frame, x, y, z) }.getOrNull()
     }
 
-    /** Removes a native Position, Scale or Rotation key at [frame]; removal is idempotent. */
+    /** Removes a native Transform key at [frame]; removal is idempotent. */
     fun removeLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String? {
         ensureLoaded()
-        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation")) return null
+        if (!available || frame < 0 || !isSupportedTransformKeyframeProperty(property)) return null
         return runCatching { removeLayerTransformKeyframeEcprojNative(json, compositionId, layerId, property, frame) }.getOrNull()
     }
 
