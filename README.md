@@ -1,3 +1,7 @@
+### Run 74 — 3D transform graph wiring
+- Fixed nested Anchor property lookup in native transform keyframe authoring/interpolation/removal/metadata. Curve graph Add-at-playhead now supports all transform selectors and seeds values for Anchor, Orientation, X/Y Rotation; added API 30 regression for graph + inspector add/remove. Commits 1ede3dfc, 6a0ef932, b5f08a7a, b0600faf.
+- Exact-head CI after combined changes is pending; no pass claimed. M4 easing/roving/effect parity remains open, as do M0 owner acceptance, M2/M3 physical validation, M5 video/audio, M6 device matrix and M7 release.
+
 ### Run 73 — native 3D transform keyframes (2026-11-04)
 - Native key authoring/metadata/interpolation/removal now includes Anchor, Orientation XYZ, X/Y Rotation in addition to Position/Scale/Rotation. Inspector Add/Remove actions and curve selector options are wired; Rust serialization/interpolation/removal and API 30 callback regressions added. Commits cea771d3, 7215e073, 177e4d7b.
 - Exact-head CI #552 is pending; no pass claimed. M4 still needs full effect parity, spatial/roving interpolation, graph controls and gesture work; M0 owner acceptance, M2/M3 physical validation, M5 video/audio, M6 device matrix and M7 release gates remain open.
