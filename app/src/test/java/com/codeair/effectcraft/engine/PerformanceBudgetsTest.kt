@@ -49,7 +49,13 @@ class PerformanceBudgetsTest {
     }
 
     @Test fun pacingFailsOnExcessJankEvenWithPassingMean() {
-        val slow = List(10) { 100.0 }
+        // Mean must genuinely pass for this scenario: 10 slow frames at
+        // 90 ms plus 20 fast frames at 1 ms average 30.67 ms, inside the
+        // 33.33 ms budget, while the 10/30 jank share (0.333) exceeds 0.20.
+        // (At 100 ms the mean would be 34.0 ms and would fail on mean, not
+        // on jank, so the scenario as written could never pass its own
+        // first assertion.)
+        val slow = List(10) { 90.0 }
         val fast = List(20) { 1.0 }
         val report = evaluateFramePacing(slow + fast)
         assertTrue(report.meanMs <= PerformanceBudgets.FRAME_BUDGET_MS)
@@ -58,7 +64,10 @@ class PerformanceBudgetsTest {
     }
 
     @Test fun pacingP95UsesThe95thPercentileSample() {
-        val samples = List(19) { 5.0 } + listOf(200.0)
+        // Nearest-rank p95 of 20 samples is the 19th ordered value, so the
+        // tail value is the p95 only when at least two samples sit in the
+        // tail; with a single 200 ms sample the 19th value is still 5.0.
+        val samples = List(18) { 5.0 } + listOf(200.0, 200.0)
         val report = evaluateFramePacing(samples)
         assertEquals(200.0, report.p95Ms, 0.001)
         assertFalse(report.withinBudget)
