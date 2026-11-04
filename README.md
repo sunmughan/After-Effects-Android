@@ -1,3 +1,8 @@
+### Run 83 — CI evidence and M0 gate correction
+- CI #582 Assemble/test passed (39 Rust, 72/72 emulator, JVM task success); full workflow was cancelled before cold APK reproducibility verdict. #587 queued for current docs head d65dae3f.
+- Owner's personal-only/no-open-license intent is settled; M0 remains incomplete for reproducibility + owner acceptance #13.
+- Bezier precise speed/influence controls committed; tests await #587.
+
 ### Run 82 — Bezier preview-state correction
 - Fixed speed/influence sliders to compose against the current local graph preview instead of stale canonical values; bounded speed to 1e6 before Float conversion. Commit de61d322.
 - CI #585 was superseded; exact-head #586 pending. No test pass claimed for the UI yet.
@@ -54,11 +59,11 @@ The Android manifest intentionally does not request the `INTERNET` permission. T
 
 ## Development status
 
-- **M0 foundation: NOT COMPLETE** — technical build/test and cold reproducibility passed at CI #346 (13 Rust, 36 JVM, 19/19 emulator; 129/129 APK entries and packaged native ABIs match), but license decision and owner acceptance remain explicit open gates.
+- **M0 foundation: NOT COMPLETE** — CI #582 Assemble/test on source 33af117d passed dual ABI/JNI, Rust 39/39, Gradle/JVM tasks and API 30 emulator 72/72; its cold APK comparison was cancelled before verdict. Current exact head d65dae3f is queued in #587. Owner has resolved license intent as personal-only/no open license (Run 64); owner acceptance #13 and current-head reproducibility remain open.
 - **M1 editor foundation: COMPLETE (scoped)** — CI #346 passes 19/19 emulator tests including named native parser invocation, delete/reorder/Undo/Redo, offline project open/save, XML round trip, media-library empty state and adaptive workspace.
 - **M2: IN PROGRESS.** EffectCraft `.ecproj` JSON and `.ecprojx` XML import/export, native validation and format guardrails are present. OfflineAssetStore, SAF relinking, persistent project manifests, sequence import, grant recovery and reference-aware GC/replace are implemented (cluster commit `4a75700c`); #349 exposed a missing `java.io.File` import in its sequence test, fixed in `a9879121`. Exact-head JVM/emulator verification pending. Effekseer `.efkproj` has no parser/converter; Adobe `.aep` is proprietary with no licensed parser. `.efx-draft` uses offline Open, not canonical import.
 - M3 uses the actual upstream CPU compositor through JNI for canonical frames. Exact-head CI #369 (`d696c56`) verifies shared native session/viewer lifecycle, cancellation, resize and teardown (Rust 21/21, JVM 61/61, emulator 22/22; cold APK content/native ABI reproducibility PASS). GPU backend status/device-loss recovery exists, but physical ARM64 GPU/Surface path and interruptible CPU rendering remain open.
-- **M4 IN PROGRESS:** canonical opacity and Position/Scale/Rotation keyframes serialize through the upstream model and affect actual rendered frames; transform key add/remove, metadata, inspector nearest-key jump and interactive timeline markers are implemented. Latest additions expose a screen-reader semantic click on the transform lane; exact-head accessibility CI #507+ pending. Ease/Bezier graph, drag-key editing and remaining animatable property parity remain.
+- **M4 IN PROGRESS:** canonical opacity and 2D/3D transform keyframes serialize through upstream model and update actual CPU preview. Curve graph supports key move/reorder/delete, per-side Bezier handles and precise Speed/Influence sliders with local preview + canonical commit-on-release (f148ad82, preview-coherence fix de61d322). JVM/API30 regressions are committed; exact-head CI #587 queued. Roving/spatial paths and broader property parity remain open.
 - **M5 PARTIAL:** actual native frame→PNG and configurable PNG-sequence ZIP (dimensions, FPS/range, resampling, manifest, staged ZIP integrity) export via SAF. Bounded SAF copy has rollback callback/best-effort provider deletion; provider behavior varies. Video codecs/audio, background render service, interruption recovery and physical memory/thermal acceptance remain.
 - **M6 IN PROGRESS:** durable fsync-before-promotion, interrupted draft/keyframe recovery, stale staging cleanup, asset quotas/rollback and accessibility semantics implemented; exact latest-head tests plus physical device/API/performance/TalkBack matrix remain. **M7 NOT STARTED:** signed configurable APK/AAB, release notes/license review and install/run evidence remain.
 
