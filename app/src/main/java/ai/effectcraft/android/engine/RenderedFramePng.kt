@@ -90,6 +90,44 @@ object RenderedFramePng {
         output.flush()
     }
 
+    /**
+     * Decodes a native RGBA envelope, resamples it to the requested output
+     * dimensions, and returns raw RGBA bytes for the MP4 encoder path. The
+     * video exporter converts these bytes to YUV420 directly, without an
+     * intermediate PNG, so a long export never pays PNG-encode cost per
+     * frame. Output dimensions obey the same pixel budget as [writeScaled].
+     */
+    fun toRgbaPixels(frame: ByteArray, targetWidth: Int, targetHeight: Int): ByteArray {
+        require(targetWidth in 1..MAX_SIDE && targetHeight in 1..MAX_SIDE) {
+            "Requested video dimensions are outside the supported range"
+        }
+        require(targetWidth.toLong() * targetHeight.toLong() <= MAX_PIXELS) {
+            "Requested video frame exceeds the pixel budget"
+        }
+        val source = decode(frame)
+        val scaled = if (source.width == targetWidth && source.height == targetHeight) {
+            source
+        } else {
+            Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true)
+        }
+        try {
+            val pixels = IntArray(targetWidth * targetHeight)
+            scaled.getPixels(pixels, 0, targetWidth, 0, 0, targetWidth, targetHeight)
+            val rgba = ByteArray(pixels.size * 4)
+            for (index in pixels.indices) {
+                val pixel = pixels[index]
+                rgba[index * 4] = ((pixel shr 16) and 0xff).toByte()
+                rgba[index * 4 + 1] = ((pixel shr 8) and 0xff).toByte()
+                rgba[index * 4 + 2] = (pixel and 0xff).toByte()
+                rgba[index * 4 + 3] = ((pixel ushr 24) and 0xff).toByte()
+            }
+            return rgba
+        } finally {
+            if (scaled !== source) scaled.recycle()
+            source.recycle()
+        }
+    }
+
     private fun readInt(bytes: ByteArray, offset: Int): Int =
         ((bytes[offset].toInt() and 0xff) shl 24) or
             ((bytes[offset + 1].toInt() and 0xff) shl 16) or
