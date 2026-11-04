@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Intentionally no INTERNET permission: the starter app is offline-first. -->
+    <!-- INTERNET is used only for FCM token/message transport; all editor
+         features stay offline-first, and the app runs fully without a
+         Firebase config (see FirebaseInit). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required to request the Android 13+ runtime notification permission. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -19,5 +24,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- FCM: non-exported; only Firebase may deliver to it. Auto-init
+             stays off until FirebaseInit confirms a real FirebaseApp
+             exists, so a build without google-services.json never
+             initializes Firebase. -->
+        <service
+            android:name=".push.EffectCraftMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
     </application>
 </manifest>

@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "ai.effectcraft.android"
+    namespace = "com.codeair.effectcraft"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ai.effectcraft.android"
+        applicationId = "com.codeair.effectcraft"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -42,6 +42,14 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    // Explicit (not transitive-only): the FCM service posts via NotificationCompat.
+    implementation("androidx.core:core-ktx:1.17.0")
+
+    // FCM push. No google-services plugin and no google-services.json yet:
+    // the BoM pins versions only, and FirebaseInit guards all runtime use,
+    // so the app builds and runs fully offline until registration lands.
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

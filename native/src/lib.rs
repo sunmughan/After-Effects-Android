@@ -449,7 +449,7 @@ fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u3
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_renderEcprojFrameNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_renderEcprojFrameNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, frame: jlong, max_side: jlong,
 ) -> jni::sys::jbyteArray {
     let source: String = match env.get_string(&source) {
@@ -476,7 +476,7 @@ fn session_handle(id: jlong) -> Result<u64, String> {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_createSessionNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_createSessionNative(
     mut env: JNIEnv, _class: JClass, source: JString, max_side: jlong,
 ) -> jlong {
     let source: String = match env.get_string(&source) {
@@ -490,7 +490,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_createSe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_renderSessionFrameNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_renderSessionFrameNative(
     env: JNIEnv, _class: JClass, handle: jlong, composition_id: jlong, frame: jlong,
 ) -> jni::sys::jbyteArray {
     let result = session_handle(handle)
@@ -509,7 +509,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_renderSe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_updateSessionProjectNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_updateSessionProjectNative(
     mut env: JNIEnv, _class: JClass, handle: jlong, source: JString,
 ) -> jboolean {
     let source: String = match env.get_string(&source) {
@@ -524,7 +524,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_updateSe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_resizeSessionNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_resizeSessionNative(
     _env: JNIEnv, _class: JClass, handle: jlong, max_side: jlong,
 ) -> jboolean {
     let ok = session_handle(handle)
@@ -541,7 +541,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_resizeSe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_cancelSessionNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_cancelSessionNative(
     _env: JNIEnv, _class: JClass, handle: jlong,
 ) {
     if let Ok(session) = session_handle(handle).and_then(lookup_session) {
@@ -550,7 +550,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_cancelSe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_closeSessionNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_closeSessionNative(
     _env: JNIEnv, _class: JClass, handle: jlong,
 ) -> jboolean {
     // close_session itself cancels, so a render holding the Arc past close
@@ -562,7 +562,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_closeSes
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_backendStatusSessionNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_backendStatusSessionNative(
     env: JNIEnv, _class: JClass, handle: jlong,
 ) -> jstring {
     let result = session_handle(handle)
@@ -575,7 +575,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_backendS
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_recoverGpuSessionNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_recoverGpuSessionNative(
     _env: JNIEnv, _class: JClass, handle: jlong,
 ) -> jboolean {
     session_handle(handle)
@@ -585,7 +585,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_recoverG
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeSession_simulateGpuLossSessionNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeSession_simulateGpuLossSessionNative(
     _env: JNIEnv, _class: JClass, handle: jlong,
 ) {
     if let Ok(session) = session_handle(handle).and_then(lookup_session) {
@@ -881,7 +881,7 @@ fn inspect_project(source: &str) -> Result<String, String> {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_inspectEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_inspectEcprojNative(
     mut env: JNIEnv,
     _class: JClass,
     source: JString,
@@ -919,7 +919,7 @@ fn rename_layer(source: &str, composition_id: u64, layer_id: u64, name: &str) ->
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_renameLayerEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_renameLayerEcprojNative(
     mut env: JNIEnv,
     _class: JClass,
     source: JString,
@@ -966,7 +966,7 @@ fn add_text_layer(source: &str, composition_id: u64, name: &str) -> Result<Strin
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_addTextLayerEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addTextLayerEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1332,7 +1332,7 @@ fn set_layer_vec_property(source: &str, composition_id: u64, layer_id: u64, uid:
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerScaleEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerScaleEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1346,7 +1346,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerRotationEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerRotationEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, degrees: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1360,7 +1360,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerAnchorEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerAnchorEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1374,7 +1374,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerOrientationEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerOrientationEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble, z: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1388,7 +1388,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerRotationXEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerRotationXEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, degrees: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1402,7 +1402,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerRotationYEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerRotationYEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, degrees: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1416,7 +1416,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerLockedEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerLockedEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, locked: jni::sys::jboolean,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1430,7 +1430,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setTextLayerTextEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerTextEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, text: JString,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1448,7 +1448,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setTextLayerSizeEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerSizeEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, size: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1462,7 +1462,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setTextLayerTrackingEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerTrackingEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, tracking: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1476,7 +1476,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerScalarPropertyEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerScalarPropertyEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, value: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1490,7 +1490,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerVecPropertyEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerVecPropertyEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble, z: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1504,7 +1504,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerPositionEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerPositionEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1755,7 +1755,7 @@ fn delete_layer(source: &str, composition_id: u64, layer_id: u64) -> Result<Stri
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerVisibilityEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerVisibilityEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, visible: jni::sys::jboolean,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1769,7 +1769,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_moveLayerEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_moveLayerEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, offset: jlong,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1783,7 +1783,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_mo
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerOpacityEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerOpacityEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, opacity: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1797,7 +1797,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerOpacityKeyframeEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerOpacityKeyframeEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong, opacity: jni::sys::jdouble,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1811,7 +1811,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerTransformKeyframeEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerTransformKeyframeEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
     property: JString, frame: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble, z: jni::sys::jdouble,
 ) -> jstring {
@@ -1833,7 +1833,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_setLayerTransformKeyframeInterpolationEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerTransformKeyframeInterpolationEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
     property: JString, frame: jlong, preset: JString,
 ) -> jstring {
@@ -1859,7 +1859,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_se
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_removeLayerTransformKeyframeEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_removeLayerTransformKeyframeEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
     property: JString, frame: jlong,
 ) -> jstring {
@@ -1884,7 +1884,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_re
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_removeLayerOpacityKeyframeEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_removeLayerOpacityKeyframeEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1898,7 +1898,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_re
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_relinkFootageEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_relinkFootageEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, item_id: jlong, path: JString,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
@@ -1916,7 +1916,7 @@ pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_re
 }
 
 #[no_mangle]
-pub extern "system" fn Java_ai_effectcraft_android_engine_NativeProjectBridge_deleteLayerEcprojNative(
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_deleteLayerEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
 ) -> jstring {
     let source: String = match env.get_string(&source) {
