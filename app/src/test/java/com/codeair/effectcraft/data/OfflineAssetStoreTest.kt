@@ -53,6 +53,48 @@ class OfflineAssetStoreTest {
     }
 
     @Test
+    fun reimportRepairsSameSizeCorruptedContentAndKeepsFirstMetadata() {
+        val root = Files.createTempDirectory("effectcraft-assets-repair-same-size").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val original = byteArrayOf(11, 22, 33, 44, 55)
+            val asset = store.import(ByteArrayInputStream(original), "original.bin", "application/octet-stream")
+            val payload = File(root, "${asset.sha256}.${asset.extension}")
+            assertTrue(store.verify(asset.sha256))
+
+            // Simulate same-length bit rot: a size-only check would accept it.
+            payload.writeBytes(byteArrayOf(1, 2, 3, 4, 5))
+            assertFalse(store.verify(asset.sha256))
+
+            val repaired = store.import(ByteArrayInputStream(original), "renamed.mov", "video/quicktime")
+            assertEquals("Duplicate imports preserve the first catalog metadata", asset, repaired)
+            assertTrue("Reimport must restore the indexed SHA-256 payload", store.verify(asset.sha256))
+            store.open(asset.sha256).use { assertTrue(original.contentEquals(it.readBytes())) }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun reimportRepairsTruncatedContentAddressedPayload() {
+        val root = Files.createTempDirectory("effectcraft-assets-repair-truncated").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val original = ByteArray(128) { it.toByte() }
+            val asset = store.import(ByteArrayInputStream(original), "original.dat")
+            File(root, "${asset.sha256}.${asset.extension}").writeBytes(original.copyOfRange(0, 17))
+            assertFalse(store.verify(asset.sha256))
+
+            store.import(ByteArrayInputStream(original), "recovered.dat")
+            assertTrue(store.verify(asset.sha256))
+            store.open(asset.sha256).use { assertTrue(original.contentEquals(it.readBytes())) }
+            assertFalse(root.listFiles()!!.any { it.name.startsWith(".import-") })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun catalogSurvivesStoreRecreationAndSortsByDisplayName() {
         val root = Files.createTempDirectory("effectcraft-assets-reopen").toFile()
         try {
