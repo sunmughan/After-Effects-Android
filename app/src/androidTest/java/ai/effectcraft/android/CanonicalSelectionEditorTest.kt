@@ -71,6 +71,7 @@ class CanonicalSelectionEditorTest {
         var gestureEdit: QuadGestureEdit? = null
         var transformKeyframe: List<Any>? = null
         var removedTransformKeyframe: List<Any>? = null
+        var interpolationAction: List<Any>? = null
         var deleteCalls = 0
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -139,6 +140,7 @@ class CanonicalSelectionEditorTest {
                     onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
                     onAddCanonicalLayerTransformKeyframe = { c, l, property, frame, x, y, z -> transformKeyframe = listOf(c, l, property, frame, x, y, z) },
                     onRemoveCanonicalLayerTransformKeyframe = { c, l, property, frame -> removedTransformKeyframe = listOf(c, l, property, frame) },
+                    onSetCanonicalLayerTransformInterpolation = { c, l, property, frame, preset -> interpolationAction = listOf(c, l, property, frame, preset) },
                     onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
@@ -188,6 +190,8 @@ class CanonicalSelectionEditorTest {
         compose.onNodeWithContentDescription("Jump to Position keyframe").performScrollTo().performClick()
         assertEquals(15, workspaceFrame.intValue)
         compose.onNodeWithText("Frame 15 / 89").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Set position key to Easy Ease at frame 15").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "position", 15, "easy_ease"), interpolationAction)
 
         // Native transform keys are authored at the same workspace frame,
         // using the selected canonical layer's current inspector values.
