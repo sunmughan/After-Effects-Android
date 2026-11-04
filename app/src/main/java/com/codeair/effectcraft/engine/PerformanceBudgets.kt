@@ -66,6 +66,9 @@ data class FramePacingReport(
 /** Pure frame-pacing evaluation: mean, p95, and jank share against the proposed budgets. */
 fun evaluateFramePacing(frameTimesMs: List<Double>): FramePacingReport {
     require(frameTimesMs.isNotEmpty()) { "Frame pacing needs at least one sample" }
+    require(frameTimesMs.all { it.isFinite() && it >= 0.0 }) {
+        "Frame times must be finite and non-negative"
+    }
     val sorted = frameTimesMs.sorted()
     val mean = frameTimesMs.sum() / frameTimesMs.size
     val p95Index = (ceil(0.95 * sorted.size).toInt() - 1).coerceIn(0, sorted.size - 1)

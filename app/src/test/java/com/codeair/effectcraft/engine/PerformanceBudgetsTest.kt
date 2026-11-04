@@ -57,6 +57,21 @@ class PerformanceBudgetsTest {
         assertFalse(report.withinBudget)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun pacingRejectsNegativeFrameTime() {
+        evaluateFramePacing(listOf(10.0, -0.1, 11.0))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun pacingRejectsNaNFrameTime() {
+        evaluateFramePacing(listOf(10.0, Double.NaN, 11.0))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun pacingRejectsInfiniteFrameTime() {
+        evaluateFramePacing(listOf(10.0, Double.POSITIVE_INFINITY, 11.0))
+    }
+
     @Test fun pacingP95UsesThe95thPercentileSample() {
         val samples = List(19) { 5.0 } + listOf(200.0)
         val report = evaluateFramePacing(samples)
