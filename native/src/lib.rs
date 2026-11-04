@@ -798,7 +798,7 @@ fn layer_opacity_keys(layer: &effectcraft_project::Layer, frame_rate: effectcraf
 fn layer_transform_keyframes(layer: &effectcraft_project::Layer, frame_rate: effectcraft_time::FrameRate) -> serde_json::Value {
     let mut tracks = serde_json::Map::new();
     if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
-        for property_name in ["position", "scale", "rotation"] {
+        for property_name in ["position", "scale", "rotation", "anchor", "orientation", "rotationX", "rotationY"] {
             if let Some(property) = transform.prop(property_name) {
                 let mut frames = property.keys.iter()
                     .map(|key| key.time.to_rational_floor(frame_rate.den, frame_rate.num))
@@ -869,7 +869,7 @@ fn layer_transform_curves(
 ) -> serde_json::Value {
     let mut tracks = serde_json::Map::new();
     if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
-        for property_name in ["position", "scale", "rotation", "opacity"] {
+        for property_name in ["position", "scale", "rotation", "opacity", "anchor", "orientation", "rotationX", "rotationY"] {
             if let Some(property) = find_property_ref(transform, property_name) {
                 tracks.insert(property_name.to_owned(), curve_keys_json(property, frame_rate));
             }
@@ -1106,8 +1106,8 @@ fn remove_layer_transform_keyframe(
     source: &str, composition_id: u64, layer_id: u64, property_name: &str, frame: i64,
 ) -> Result<(String, bool), String> {
     if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
-    if !matches!(property_name, "position" | "scale" | "rotation") {
-        return Err("Only position, scale and rotation keyframes are supported".into());
+    if !matches!(property_name, "position" | "scale" | "rotation" | "anchor" | "orientation" | "rotationX" | "rotationY") {
+        return Err("Unsupported Transform keyframe removal property".into());
     }
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -1122,7 +1122,7 @@ fn remove_layer_transform_keyframe(
     let property = transform.prop_mut(property_name)
         .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
     match (property_name, &property.value) {
-        ("position" | "scale", Value::Vec3(_)) | ("rotation", Value::Scalar(_)) => {},
+        ("position" | "scale" | "anchor" | "orientation", Value::Vec3(_)) | ("rotation" | "rotationX" | "rotationY", Value::Scalar(_)) => {},
         _ => return Err(format!("Layer {layer_id} Transform {property_name} has an incompatible value type")),
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
@@ -1685,10 +1685,11 @@ fn set_layer_transform_keyframe(
     if !x.is_finite() || !y.is_finite() || !z.is_finite() {
         return Err("Transform keyframe values must be finite".into());
     }
-    let valid_property = matches!(property_name, "position" | "scale" | "rotation");
-    if !valid_property { return Err("Only position, scale and rotation keyframes are supported".into()); }
-    let limit = match property_name { "position" => 1_000_000.0, "scale" => 100_000.0, _ => 360_000.0 };
-    if x.abs() > limit || (property_name != "rotation" && y.abs() > limit) {
+    let valid_property = matches!(property_name, "position" | "scale" | "rotation" | "anchor" | "orientation" | "rotationX" | "rotationY");
+    if !valid_property { return Err("Unsupported Transform keyframe property".into()); }
+    let limit = match property_name { "position" | "anchor" => 1_000_000.0, "scale" => 100_000.0, _ => 360_000.0 };
+    if x.abs() > limit || (matches!(property_name, "position" | "scale" | "anchor") && y.abs() > limit) ||
+        (property_name == "orientation" && (y.abs() > limit || z.abs() > limit)) {
         return Err("Transform keyframe value exceeds its property limit".into());
     }
     let mut project: Project = serde_json::from_str(source)
@@ -1704,9 +1705,9 @@ fn set_layer_transform_keyframe(
     let property = transform.prop_mut(property_name)
         .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
     let value = match (property_name, &property.value) {
-        ("position", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
-        ("scale", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
-        ("rotation", Value::Scalar(_)) => Value::Scalar(x),
+        ("position" | "scale" | "anchor", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
+        ("orientation", Value::Vec3(_)) => Value::Vec3([x, y, z]),
+        ("rotation" | "rotationX" | "rotationY", Value::Scalar(_)) => Value::Scalar(x),
         _ => return Err(format!("Layer {layer_id} Transform {property_name} has an incompatible value type")),
     };
     if property.keys.is_empty() {
@@ -1722,8 +1723,8 @@ fn set_layer_transform_keyframe_interpolation(
     frame: i64, preset: &str,
 ) -> Result<String, String> {
     if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
-    if !matches!(property_name, "position" | "scale" | "rotation") {
-        return Err("Only position, scale and rotation interpolation is supported".into());
+    if !matches!(property_name, "position" | "scale" | "rotation" | "anchor" | "orientation" | "rotationX" | "rotationY") {
+        return Err("Unsupported Transform keyframe interpolation property".into());
     }
     // Legacy names continue to edit both sides; side-qualified names preserve
     // the opposite tangent/interpolation when editing one side in the inspector.
@@ -1782,7 +1783,7 @@ fn resolve_curve_property_mut<'a>(
     selector: &str,
 ) -> Result<&'a mut effectcraft_project::props::Property, String> {
     if let Some(name) = selector.strip_prefix("transform:") {
-        if !matches!(name, "position" | "scale" | "rotation" | "opacity") {
+        if !matches!(name, "position" | "scale" | "rotation" | "opacity" | "anchor" | "orientation" | "rotationX" | "rotationY") {
             return Err(format!("Unsupported transform curve property: {name}"));
         }
         let transform = layer.props.sub_mut("transform")
@@ -3219,6 +3220,39 @@ mod tests {
         assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 2, f64::NAN, 0.0, 0.0).is_err());
         assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "opacity", 2, 1.0, 0.0, 0.0).is_err());
         assert!(set_layer_transform_keyframe(&source, comp_id, 999, "position", 2, 1.0, 0.0, 0.0).is_err());
+    }
+
+    #[test]
+    fn canonical_3d_transform_keyframes_author_interpolate_and_remove() {
+        use effectcraft_project::Value;
+        let (source, comp_id, layer_id) = text_layer_project();
+        let anchor = set_layer_transform_keyframe(&source, comp_id, layer_id, "anchor", 0, 12.0, 34.0, 0.0).unwrap();
+        let orientation = set_layer_transform_keyframe(&anchor, comp_id, layer_id, "orientation", 15, 10.0, 20.0, 30.0).unwrap();
+        let rotation_x = set_layer_transform_keyframe(&orientation, comp_id, layer_id, "rotationX", 0, 45.0, 0.0, 0.0).unwrap();
+        let rotation_y = set_layer_transform_keyframe(&rotation_x, comp_id, layer_id, "rotationY", 15, -30.0, 0.0, 0.0).unwrap();
+        let eased = set_layer_transform_keyframe_interpolation(&rotation_y, comp_id, layer_id, "orientation", 15, "easy_ease").unwrap();
+        let project: Project = serde_json::from_str(&eased).unwrap();
+        let transform = project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap();
+        let anchor_key = &transform.prop("anchor").unwrap().keys[0];
+        assert!(matches!(&anchor_key.value, Value::Vec3(v) if v[0] == 12.0 && v[1] == 34.0));
+        let orientation_key = &transform.prop("orientation").unwrap().keys[0];
+        assert_eq!(orientation_key.value, Value::Vec3([10.0, 20.0, 30.0]));
+        assert_eq!(orientation_key.in_interp, Interp::Bezier);
+        assert_eq!(orientation_key.out_interp, Interp::Bezier);
+        assert_eq!(transform.prop("rotationX").unwrap().keys[0].value, Value::Scalar(45.0));
+        assert_eq!(transform.prop("rotationY").unwrap().keys[0].value, Value::Scalar(-30.0));
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&eased).unwrap()).unwrap();
+        let tracks = &metadata["compositions"][0]["layers"][0]["transformKeys"];
+        assert_eq!(tracks["anchor"], json!([0]));
+        assert_eq!(tracks["orientation"], json!([15]));
+        assert_eq!(tracks["rotationX"], json!([0]));
+        assert_eq!(tracks["rotationY"], json!([15]));
+        let (without_anchor, removed) = remove_layer_transform_keyframe(&eased, comp_id, layer_id, "anchor", 0).unwrap();
+        assert!(removed);
+        let after: Project = serde_json::from_str(&without_anchor).unwrap();
+        assert!(after.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("anchor").unwrap().keys.is_empty());
+        assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "anchor", 0, f64::NAN, 0.0, 0.0).is_err());
+        assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "orientation", 0, 0.0, 0.0, f64::INFINITY).is_err());
     }
 
     #[test]
