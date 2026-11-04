@@ -96,6 +96,8 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerOpacity = { _, _, _ -> },
                     onAddCanonicalLayerOpacityKeyframe = { _, _, _, _ -> },
                     onRemoveCanonicalLayerOpacityKeyframe = { _, _, _ -> },
+                    onAddCanonicalLayerTransformKeyframe = onAddTransformKeyframe,
+                    onRemoveCanonicalLayerTransformKeyframe = onRemoveTransformKeyframe,
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
@@ -235,6 +237,8 @@ class AdaptiveWorkspaceSmokeTest {
     private class CanonicalCaptures {
         var anchor: List<Any>? = null
         var orientation: List<Any>? = null
+        var transformKeyframe: List<Any>? = null
+        var transformKeyframeRemoved: List<Any>? = null
         var rotationX: List<Any>? = null
         var rotationY: List<Any>? = null
         var locked: List<Any>? = null
@@ -249,7 +253,9 @@ class AdaptiveWorkspaceSmokeTest {
         canonical: CanonicalProjectInfo,
         captures: CanonicalCaptures,
         onMoveCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
-        onRemoveCurveKey: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> }
+        onRemoveCurveKey: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
+        onAddTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+        onRemoveTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> }
     ) {
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -369,6 +375,31 @@ class AdaptiveWorkspaceSmokeTest {
             layers = listOf(layer, other)
         )
         return CanonicalProjectInfo(compositions = listOf(composition))
+    }
+
+    @Test
+    fun canonical3dTransformKeyframeControlsTargetSelectedLayerAndCurrentFrame() {
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(
+            canonicalM4Layer(locked = false), captures,
+            onAddTransformKeyframe = { c, l, property, frame, x, y, z ->
+                captures.transformKeyframe = listOf(c, l, property, frame, x, y, z)
+            },
+            onRemoveTransformKeyframe = { c, l, property, frame ->
+                captures.transformKeyframeRemoved = listOf(c, l, property, frame)
+            }
+        )
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Add anchor keyframe").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "anchor", 0, 120.5, 80.25, 0.0), captures.transformKeyframe)
+        compose.onNodeWithContentDescription("Add orientation keyframe").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "orientation", 0, 10.0, 20.0, 30.0), captures.transformKeyframe)
+        compose.onNodeWithContentDescription("Add X rotation keyframe").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "rotationX", 0, 45.0, 0.0, 0.0), captures.transformKeyframe)
+        compose.onNodeWithContentDescription("Add Y rotation keyframe").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "rotationY", 0, -30.0, 0.0, 0.0), captures.transformKeyframe)
+        compose.onNodeWithContentDescription("Remove anchor keyframe").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "anchor", 0), captures.transformKeyframeRemoved)
     }
 
     @OptIn(ExperimentalTestApi::class)
