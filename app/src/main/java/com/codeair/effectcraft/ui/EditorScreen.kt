@@ -183,6 +183,8 @@ fun EditorScreen(
     onAddCanonicalLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onRemoveCanonicalLayerTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
+    onMoveCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
+    onMoveCanonicalTransformKeyframe: (Int, Int) -> Unit = { _, _ -> },
     onSetCanonicalLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
     onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
@@ -350,6 +352,7 @@ fun EditorScreen(
                 isPlaying = isPlaying,
                 onSelectLayer = onSelectLayer,
                 onScrub = onScrub,
+                onMoveCanonicalTransformKeyframe = onMoveCanonicalTransformKeyframe,
                 onAddOpacityKeyframe = onAddOpacityKeyframe,
                 onRemoveOpacityKeyframe = onRemoveOpacityKeyframe,
                 onTogglePlayback = onTogglePlayback,
@@ -636,6 +639,7 @@ fun EditorScreen(
                     onAddLayerOpacityKeyframe = onAddCanonicalLayerOpacityKeyframe,
                     onAddLayerTransformKeyframe = onAddCanonicalLayerTransformKeyframe,
                     onRemoveLayerTransformKeyframe = onRemoveCanonicalLayerTransformKeyframe,
+                    onMoveLayerTransformKeyframe = onMoveCanonicalLayerTransformKeyframe,
                     interpolationProperty = interpolationProperty,
                     onInterpolationPropertyChange = { interpolationProperty = it },
                     interpolationSide = interpolationSide,
@@ -1078,6 +1082,7 @@ private fun CanonicalProjectEditor(
     onAddLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit,
     onRemoveLayerTransformKeyframe: (Long, Long, String, Int) -> Unit,
+    onMoveLayerTransformKeyframe: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
     interpolationProperty: String = "position",
     onInterpolationPropertyChange: (String) -> Unit = {},
     interpolationSide: String = "both",
@@ -1422,7 +1427,14 @@ private fun CanonicalProjectEditor(
                     ) { Text("Key Rotation", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("position", "scale", "rotation").forEach { property ->
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "anchor", previewFrame, layer.anchorX, layer.anchorY, 0.0) },
+                        modifier = Modifier.semantics { contentDescription = "Add anchor keyframe" }
+                    ) { Text("Key Anchor", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("position", "scale", "rotation", "anchor").forEach { property ->
                         TextButton(
                             enabled = editable,
                             onClick = { onRemoveLayerTransformKeyframe(composition.id, layer.id, property, previewFrame) },
@@ -1432,7 +1444,7 @@ private fun CanonicalProjectEditor(
                 }
                 Text("Transform keys are native and evaluated by the composition renderer.", color = EditorPalette.muted, fontSize = 10.sp)
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation").forEach { (property, label) ->
+                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation", "anchor" to "Anchor").forEach { (property, label) ->
                         val frames = layer.transformKeyframes[property].orEmpty()
                         TextButton(
                             enabled = frames.isNotEmpty(),
@@ -1454,7 +1466,7 @@ private fun CanonicalProjectEditor(
                 }
                 Text("Key interpolation · current frame", color = EditorPalette.text, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation").forEach { (property, label) ->
+                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation", "anchor" to "Anchor", "opacity" to "Opacity").forEach { (property, label) ->
                         FilterChip(
                             selected = interpolationProperty == property,
                             onClick = { onInterpolationPropertyChange(property) },
@@ -1463,7 +1475,11 @@ private fun CanonicalProjectEditor(
                         )
                     }
                 }
-                val hasInterpolationKey = layer.transformKeyframes[interpolationProperty].orEmpty().contains(previewFrame)
+                val hasInterpolationKey = if (interpolationProperty == "opacity") {
+                    layer.opacityKeys.any { it.frame == previewFrame }
+                } else {
+                    layer.transformKeyframes[interpolationProperty].orEmpty().contains(previewFrame)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("both" to "Both", "incoming" to "Incoming", "outgoing" to "Outgoing").forEach { (side, label) ->
                         FilterChip(
@@ -1476,7 +1492,7 @@ private fun CanonicalProjectEditor(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("linear" to "Linear", "easy_ease" to "Easy Ease", "hold" to "Hold").forEach { (preset, label) ->
+                    listOf("linear" to "Linear", "ease_in" to "Ease In", "ease_out" to "Ease Out", "ease_in_out" to "Ease In Out", "easy_ease" to "Easy Ease", "bezier" to "Bezier", "hold" to "Hold").forEach { (preset, label) ->
                         TextButton(
                             enabled = editable && hasInterpolationKey,
                             onClick = {
@@ -1487,7 +1503,25 @@ private fun CanonicalProjectEditor(
                         ) { Text(label, color = if (preset == "easy_ease") EditorPalette.violet else EditorPalette.mint, fontSize = 10.sp) }
                     }
                 }
-                Text("Both edits both tangents; Incoming/Outgoing preserves the opposite side.", color = EditorPalette.muted, fontSize = 10.sp)
+                Text("Both edits both tangents; Incoming/Outgoing preserves the opposite side. Ease In slows the segment after this key; Ease Out slows the segment before it; Bezier is an asymmetric custom curve. The renderer evaluates the ease.", color = EditorPalette.muted, fontSize = 10.sp)
+                var moveTargetDraft by remember(composition?.id, layer?.id, previewFrame) { mutableStateOf(previewFrame.toString()) }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Move key · to frame", color = EditorPalette.text, fontSize = 12.sp)
+                    BasicTextField(
+                        value = moveTargetDraft,
+                        onValueChange = { moveTargetDraft = it.take(16) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Move key target frame" },
+                        decorationBox = { inner -> Box { if (moveTargetDraft.isEmpty()) Text("Frame", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = editable && hasInterpolationKey && moveTargetDraft.toIntOrNull()?.let { it >= 0 } == true,
+                        onClick = { onMoveLayerTransformKeyframe(composition.id, layer.id, interpolationProperty, previewFrame, moveTargetDraft.toInt()) },
+                        modifier = Modifier.semantics { contentDescription = "Move $interpolationProperty keyframe to frame ${moveTargetDraft}" }
+                    ) { Text("Move", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Text("Dragging a marker on the TRANSFORM timeline lane moves the same key; a target already holding a key is refused, never merged.", color = EditorPalette.muted, fontSize = 10.sp)
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BasicTextField(
@@ -1963,6 +1997,7 @@ private fun TimelinePanel(
     onAddOpacityKeyframe: () -> Unit,
     onRemoveOpacityKeyframe: () -> Unit,
     onTogglePlayback: () -> Unit,
+    onMoveCanonicalTransformKeyframe: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -2049,14 +2084,14 @@ private fun TimelinePanel(
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
             }
             if (canonicalTransformKeyframes.isNotEmpty()) {
-                CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub)
+                CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub, onMoveCanonicalTransformKeyframe)
             }
         }
     }
 }
 
 @Composable
-private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, currentFrame: Int, onScrub: (Int) -> Unit) {
+private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, currentFrame: Int, onScrub: (Int) -> Unit, onMoveKeyframe: (Int, Int) -> Unit = { _, _ -> }) {
     val frames = keyframes.filter { it >= 0 }.distinct().sorted()
     Row(
         modifier = Modifier
@@ -2070,7 +2105,7 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, c
             modifier = Modifier.weight(1f).height(17.dp)
                 .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
                 .semantics {
-                    contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}"
+                    contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}; drag a marker to move its key"
                     onClick("Seek to nearest transform keyframe") {
                         val target = frames.minByOrNull { kotlin.math.abs(it - currentFrame) } ?: currentFrame
                         onScrub(target.coerceIn(0, (durationFrames - 1).coerceAtLeast(0)))
@@ -2084,6 +2119,35 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, c
                         val nearestKey = frames.minByOrNull { kotlin.math.abs(it - tappedFrame) } ?: tappedFrame
                         onScrub(nearestKey.coerceIn(0, (durationFrames - 1).coerceAtLeast(0)))
                     }
+                }
+                .pointerInput(frames, durationFrames) {
+                    // Dragging a marker moves that key on release; a tap is
+                    // left to the tap detector above, and a drag that starts
+                    // away from every marker grabs nothing.
+                    var grabbedFrame: Int? = null
+                    var lastX = 0f
+                    detectDragGestures(
+                        onDragStart = { start ->
+                            grabbedFrame = com.codeair.effectcraft.data.CanonicalKeyframeDrag.grabsKey(
+                                frames, start.x, size.width.toFloat(), durationFrames
+                            )
+                            lastX = start.x
+                        },
+                        onDragEnd = {
+                            val source = grabbedFrame
+                            grabbedFrame = null
+                            if (source != null) {
+                                val target = com.codeair.effectcraft.data.CanonicalKeyframeDrag.frameFromX(
+                                    lastX, size.width.toFloat(), durationFrames
+                                )
+                                if (target != source) onMoveKeyframe(source, target)
+                            }
+                        },
+                        onDragCancel = { grabbedFrame = null },
+                        onDrag = { change, _ ->
+                            lastX = change.position.x
+                        }
+                    )
                 }
         ) {
             Canvas(Modifier.fillMaxSize()) {

@@ -49,7 +49,7 @@ data class CanonicalLayerInfo(
     val rotationDegrees: Double,
     /** Canonical opacity keys, sorted by frame; empty when the layer is not keyframed. */
     val opacityKeys: List<PropertyKeyframe> = emptyList(),
-    /** Native Position/Scale/Rotation keyframe frame indices, sorted and unique. */
+    /** Native Position/Scale/Rotation/Anchor keyframe frame indices, sorted and unique. */
     val transformKeyframes: Map<String, List<Int>> = emptyMap(),
     val anchorX: Double = 0.0,
     val anchorY: Double = 0.0,
@@ -124,7 +124,7 @@ data class CanonicalProjectInfo(
                     }
                     val transformKeysJson = layer.optJSONObject("transformKeys")
                     val transformKeyframes = buildMap {
-                        for (property in listOf("position", "scale", "rotation")) {
+                        for (property in listOf("position", "scale", "rotation", "anchor")) {
                             val framesJson = transformKeysJson?.optJSONArray(property) ?: continue
                             val frames = (0 until framesJson.length())
                                 .map { framesJson.getInt(it) }

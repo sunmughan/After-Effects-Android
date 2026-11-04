@@ -55,10 +55,10 @@ object NativeProjectBridge {
         return runCatching { setLayerPositionEcprojNative(json, compositionId, layerId, x, y) }.getOrNull()
     }
 
-    /** Authors a native Position, Scale or Rotation keyframe at a composition frame. */
+    /** Authors a native Position, Scale, Rotation or Anchor keyframe at a composition frame. */
     fun setLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, x: Double, y: Double, z: Double): String? {
         ensureLoaded()
-        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation")) return null
+        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation", "anchor")) return null
         return runCatching { setLayerTransformKeyframeEcprojNative(json, compositionId, layerId, property, frame, x, y, z) }.getOrNull()
     }
 
@@ -177,18 +177,52 @@ object NativeProjectBridge {
         return runCatching { removeLayerOpacityKeyframeEcprojNative(json, compositionId, layerId, frame) }.getOrNull()
     }
 
-    /** Applies Linear, Easy Ease or Hold to both or one side of an existing transform key. */
+    /**
+     * Applies an interpolation preset to an existing key. Ease-in Bezier-eases
+     * the key's outgoing side (the segment after the key starts slow), ease-out
+     * its incoming side (the segment before the key ends slow), ease-in-out /
+     * easy-ease both sides, and bezier an asymmetric custom curve; linear and
+     * hold clear both sides. An incoming_/outgoing_ prefix narrows the
+     * symmetric presets to one side; directional presets keep their own side.
+     * The native renderer evaluates the result.
+     */
     fun setLayerTransformKeyframeInterpolationEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, preset: String): String? {
         ensureLoaded()
-        val presets = setOf("linear", "easy_ease", "hold", "incoming_linear", "incoming_easy_ease", "incoming_hold", "outgoing_linear", "outgoing_easy_ease", "outgoing_hold")
-        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation") || preset !in presets) return null
+        val base = setOf("linear", "easy_ease", "ease_in", "ease_out", "ease_in_out", "bezier", "hold")
+        val presets = base + base.map { "incoming_$it" } + base.map { "outgoing_$it" }
+        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation", "anchor", "opacity") || preset !in presets) return null
         return runCatching { setLayerTransformKeyframeInterpolationEcprojNative(json, compositionId, layerId, property, frame, preset) }.getOrNull()
     }
 
-    /** Removes a native Position, Scale or Rotation key at [frame]; removal is idempotent. */
+    /**
+     * Applies an explicit Bezier curve to both sides of an existing key:
+     * speeds in value units per second (>= 0) and influences as a fraction of
+     * the adjacent segment duration (0..1), the Keyframe Velocity form.
+     */
+    fun setLayerKeyframeBezierEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, outSpeed: Double, outInfluence: Double, inSpeed: Double, inInfluence: Double): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation", "anchor", "opacity")) return null
+        if (!outSpeed.isFinite() || !inSpeed.isFinite() || outSpeed < 0.0 || inSpeed < 0.0) return null
+        if (!outInfluence.isFinite() || !inInfluence.isFinite() || outInfluence !in 0.0..1.0 || inInfluence !in 0.0..1.0) return null
+        return runCatching { setLayerKeyframeBezierEcprojNative(json, compositionId, layerId, property, frame, outSpeed, outInfluence, inSpeed, inInfluence) }.getOrNull()
+    }
+
+    /**
+     * Drags the key at [fromFrame] to [toFrame] for one property. The native
+     * layer clamps the target to the composition range, reports `moved: false`
+     * for a same-frame drag, and rejects an occupied target, so a drag can
+     * never duplicate or merge keys.
+     */
+    fun moveLayerKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, fromFrame: Long, toFrame: Long): String? {
+        ensureLoaded()
+        if (!available || fromFrame < 0 || property !in setOf("position", "scale", "rotation", "anchor", "opacity")) return null
+        return runCatching { moveLayerKeyframeEcprojNative(json, compositionId, layerId, property, fromFrame, toFrame) }.getOrNull()
+    }
+
+    /** Removes a native Position, Scale, Rotation or Anchor key at [frame]; removal is idempotent. */
     fun removeLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String? {
         ensureLoaded()
-        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation")) return null
+        if (!available || frame < 0 || property !in setOf("position", "scale", "rotation", "anchor")) return null
         return runCatching { removeLayerTransformKeyframeEcprojNative(json, compositionId, layerId, property, frame) }.getOrNull()
     }
 
@@ -288,6 +322,12 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerTransformKeyframeInterpolationEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, preset: String): String
+
+    @JvmStatic
+    private external fun setLayerKeyframeBezierEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, outSpeed: Double, outInfluence: Double, inSpeed: Double, inInfluence: Double): String
+
+    @JvmStatic
+    private external fun moveLayerKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, fromFrame: Long, toFrame: Long): String
 
     @JvmStatic
     private external fun removeLayerTransformKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String

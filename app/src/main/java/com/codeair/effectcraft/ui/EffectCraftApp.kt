@@ -968,6 +968,54 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                 }
             },
+            onMoveCanonicalLayerTransformKeyframe = { compositionId, layerId, property, fromFrame, toFrame ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val envelope = NativeProjectBridge.moveLayerKeyframeEcproj(source, compositionId, layerId, property, fromFrame.toLong(), toFrame.toLong())
+                    val moved = runCatching { JSONObject(envelope ?: "").optBoolean("moved", true) }.getOrDefault(true)
+                    val valid = runCatching { JSONObject(envelope ?: "").optBoolean("valid") }.getOrDefault(false)
+                    val target = runCatching { JSONObject(envelope ?: "").optInt("targetFrame", toFrame) }.getOrDefault(toFrame)
+                    if (valid && !moved) {
+                        saveMessage = "Canonical $property keyframe already at frame $target"
+                    } else {
+                        applyCanonicalEdit(envelope, "Canonical $property keyframe moved · frame $fromFrame → $target · saved locally")
+                    }
+                }
+            },
+            onMoveCanonicalTransformKeyframe = { fromFrame, toFrame ->
+                val source = importedEcproj
+                val composition = canonicalProjectInfo?.compositions?.firstOrNull { comp -> comp.layers.any { it.id in canonicalSelectedIds } }
+                if (source == null || composition == null) {
+                    saveMessage = "Import a canonical .ecproj first"
+                } else {
+                    // The TRANSFORM lane aggregates every selected layer and
+                    // property, so a drag only moves when exactly one key
+                    // owns the grabbed frame; otherwise the inspector's
+                    // per-property Move control disambiguates.
+                    val candidates = composition.layers.filter { it.id in canonicalSelectedIds }.flatMap { layer ->
+                        val transformOwners = layer.transformKeyframes
+                            .filter { (_, frames) -> fromFrame in frames }
+                            .map { (property, _) -> layer.id to property }
+                        val opacityOwner = if (layer.opacityKeys.any { it.frame == fromFrame }) listOf(layer.id to "opacity") else emptyList()
+                        transformOwners + opacityOwner
+                    }
+                    val owner = com.codeair.effectcraft.data.CanonicalKeyframeDrag.resolveMove(candidates)
+                    if (owner == null) {
+                        saveMessage = "Dragged frame $fromFrame has no unique key · use the inspector Move control"
+                    } else {
+                        val envelope = NativeProjectBridge.moveLayerKeyframeEcproj(source, composition.id, owner.first, owner.second, fromFrame.toLong(), toFrame.toLong())
+                        val moved = runCatching { JSONObject(envelope ?: "").optBoolean("moved", true) }.getOrDefault(true)
+                        val valid = runCatching { JSONObject(envelope ?: "").optBoolean("valid") }.getOrDefault(false)
+                        val target = runCatching { JSONObject(envelope ?: "").optInt("targetFrame", toFrame) }.getOrDefault(toFrame)
+                        if (valid && !moved) {
+                            saveMessage = "Canonical ${owner.second} keyframe already at frame $target"
+                        } else {
+                            applyCanonicalEdit(envelope, "Canonical ${owner.second} keyframe moved · frame $fromFrame → $target · saved locally")
+                        }
+                    }
+                }
+            },
             onRemoveCanonicalLayerOpacityKeyframe = { compositionId, layerId, frame ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
