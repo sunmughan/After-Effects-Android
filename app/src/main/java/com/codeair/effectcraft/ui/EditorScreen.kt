@@ -1634,16 +1634,24 @@ private fun CanonicalProjectEditor(
                         )
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("linear" to "Linear", "ease_in" to "Ease In", "ease_out" to "Ease Out", "ease_in_out" to "Ease In Out", "easy_ease" to "Easy Ease", "bezier" to "Bezier", "hold" to "Hold").forEach { (preset, label) ->
-                        TextButton(
-                            enabled = editable && hasInterpolationKey,
-                            onClick = {
-                                val nativePreset = if (interpolationSide == "both") preset else "${interpolationSide}_${preset}"
-                                onSetLayerTransformInterpolation(composition.id, layer.id, interpolationProperty, previewFrame, nativePreset)
-                            },
-                            modifier = Modifier.semantics { contentDescription = "Set $interpolationProperty key to $label on $interpolationSide side at frame $previewFrame" }
-                        ) { Text(label, color = if (preset == "easy_ease") EditorPalette.violet else EditorPalette.mint, fontSize = 10.sp) }
+                // Two short rows so every preset stays on screen on phone
+                // widths; one long row pushed the trailing Hold button past
+                // the visible edge, where its tap was swallowed.
+                listOf(
+                    listOf("linear" to "Linear", "ease_in" to "Ease In", "ease_out" to "Ease Out", "ease_in_out" to "Ease In Out"),
+                    listOf("easy_ease" to "Easy Ease", "bezier" to "Bezier", "hold" to "Hold")
+                ).forEach { rowPresets ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        rowPresets.forEach { (preset, label) ->
+                            TextButton(
+                                enabled = editable && hasInterpolationKey,
+                                onClick = {
+                                    val nativePreset = if (interpolationSide == "both") preset else "${interpolationSide}_${preset}"
+                                    onSetLayerTransformInterpolation(composition.id, layer.id, interpolationProperty, previewFrame, nativePreset)
+                                },
+                                modifier = Modifier.semantics { contentDescription = "Set $interpolationProperty key to $label on $interpolationSide side at frame $previewFrame" }
+                            ) { Text(label, color = if (preset == "easy_ease") EditorPalette.violet else EditorPalette.mint, fontSize = 10.sp) }
+                        }
                     }
                 }
                 Text("Both edits both tangents; Incoming/Outgoing preserves the opposite side. Ease In slows the segment after this key; Ease Out slows the segment before it; Bezier is an asymmetric custom curve. The renderer evaluates the ease.", color = EditorPalette.muted, fontSize = 10.sp)
