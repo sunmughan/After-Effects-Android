@@ -29,12 +29,23 @@ data class MediaPoolStats(
             if (json.isEmpty()) return null
             return runCatching {
                 val obj = JSONObject(json)
+                val frames = obj.getInt("frames")
+                val bytes = obj.getLong("bytes")
+                val budget = obj.getLong("budget")
+                val hits = obj.getLong("hits")
+                val misses = obj.getLong("misses")
+                // Treat native accounting as untrusted at the JNI boundary:
+                // negative counters and a budget drift (e.g. upstream's 1 GiB
+                // default) must not make an invalid pool look within-budget.
+                if (frames < 0 || bytes < 0 || budget != ANDROID_BUDGET_BYTES ||
+                    hits < 0 || misses < 0
+                ) return null
                 MediaPoolStats(
-                    frames = obj.getInt("frames"),
-                    bytes = obj.getLong("bytes"),
-                    budgetBytes = obj.getLong("budget"),
-                    hits = obj.getLong("hits"),
-                    misses = obj.getLong("misses"),
+                    frames = frames,
+                    bytes = bytes,
+                    budgetBytes = budget,
+                    hits = hits,
+                    misses = misses,
                 )
             }.getOrNull()
         }
