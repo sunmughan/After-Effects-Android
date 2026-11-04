@@ -8,7 +8,8 @@ package ai.effectcraft.android.data
  * allocating a frame list or retaining decoded bitmaps.
  */
 enum class RenderOutputFormat {
-    PNG_SEQUENCE_ZIP
+    PNG_SEQUENCE_ZIP,
+    MP4_H264
 }
 
 data class RenderQueueSettings(
