@@ -7,7 +7,7 @@ use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
 use effectcraft_project::keyframe::{Ease, Interp};
 use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
-use effectcraft_render::{Accelerator, Backend, RenderOpts, Renderer};
+use effectcraft_render::{Accelerator, Backend, LayerCache, RenderOpts, Renderer};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
@@ -24,6 +24,9 @@ static MEDIA_POOL: OnceLock<MediaPool> = OnceLock::new();
 /// keeping the newest frame; oversized single frames are still decoded
 /// (they are needed for the current frame) but are not retained past it.
 const ANDROID_MEDIA_POOL_BUDGET_BYTES: usize = 256 * 1024 * 1024;
+/// Persistent processed-layer cache shared across preview frames in one session.
+/// Content-hashed entries are invalidated naturally when evaluated layer inputs change.
+const ANDROID_LAYER_CACHE_BUDGET_BYTES: usize = 64 * 1024 * 1024;
 
 /// One native render session: the parsed project, its own MediaPool, the
 /// preview size, and a cancellation flag, owned by the registry below.
@@ -44,6 +47,7 @@ const ANDROID_MEDIA_POOL_BUDGET_BYTES: usize = 256 * 1024 * 1024;
 struct NativeSession {
     project: RwLock<Project>,
     footage: MediaPool,
+    layer_cache: LayerCache,
     render_lock: Mutex<()>,
     cancelled: AtomicBool,
     max_side: RwLock<u32>,
@@ -71,6 +75,7 @@ fn create_session(source: &str, max_side: u32) -> Result<u64, String> {
     let session = Arc::new(NativeSession {
         project: RwLock::new(project),
         footage: MediaPool::with_budget(ANDROID_MEDIA_POOL_BUDGET_BYTES),
+        layer_cache: LayerCache::new(ANDROID_LAYER_CACHE_BUDGET_BYTES),
         render_lock: Mutex::new(()),
         cancelled: AtomicBool::new(false),
         max_side: RwLock::new(max_side),
@@ -351,6 +356,7 @@ fn session_backend_status(session: &NativeSession) -> String {
 /// budget value here is the live one, not a documented guess.
 fn session_media_pool_stats(session: &NativeSession) -> String {
     let stats = session.footage.stats();
+    let layer_cache = session.layer_cache.stats();
     json!({
         "frames": stats.frames,
         "bytes": stats.bytes,
@@ -358,6 +364,11 @@ fn session_media_pool_stats(session: &NativeSession) -> String {
         "hits": stats.hits,
         "misses": stats.misses,
         "opened": stats.opened,
+        "layerCacheEntries": layer_cache.entries,
+        "layerCacheBytes": layer_cache.bytes,
+        "layerCacheHits": layer_cache.hits,
+        "layerCacheMisses": layer_cache.misses,
+        "layerCacheBudget": ANDROID_LAYER_CACHE_BUDGET_BYTES,
     })
     .to_string()
 }
@@ -433,6 +444,7 @@ fn render_session_frame(
         frame,
         max_side,
         gpu.as_ref().map(|device| device as &dyn Accelerator),
+        Some(&session.layer_cache),
     )?;
     // A device that died during this render already fell back to the CPU
     // upstream for these pixels; retire the handle so the next render does
@@ -448,7 +460,7 @@ fn render_session_frame(
     Ok(bytes)
 }
 
-fn render_parsed_frame(project: &Project, footage: &MediaPool, composition_id: u64, frame: i64, max_side: u32, accel: Option<&dyn Accelerator>) -> Result<Vec<u8>, String> {
+fn render_parsed_frame(project: &Project, footage: &MediaPool, composition_id: u64, frame: i64, max_side: u32, accel: Option<&dyn Accelerator>, layer_cache: Option<&LayerCache>) -> Result<Vec<u8>, String> {
     if frame < 0 { return Err("Frame must be non-negative".into()); }
     let comp = project.comp(ItemId(composition_id))
         .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
@@ -456,8 +468,9 @@ fn render_parsed_frame(project: &Project, footage: &MediaPool, composition_id: u
     let scale = if max_side == 0 { 1.0 } else { (max_side as f64 / long).min(1.0) };
     let time = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
     let (backend, accel) = choose_backend(accel);
-    let renderer = Renderer::new(project, footage, RenderOpts { scale, backend, ..Default::default() })
+    let mut renderer = Renderer::new(project, footage, RenderOpts { scale, backend, ..Default::default() })
         .with_accel(accel);
+    renderer.cache = layer_cache;
     let image = renderer.comp_frame(ItemId(composition_id), time);
     let rgba = image.to_rgba8_over(comp.background);
     let mut output = Vec::with_capacity(8 + rgba.len());
@@ -472,7 +485,7 @@ fn render_frame_rgba(source: &str, composition_id: u64, frame: i64, max_side: u3
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
     let footage = MEDIA_POOL.get_or_init(|| MediaPool::with_budget(ANDROID_MEDIA_POOL_BUDGET_BYTES));
     let gpu = resolve_shared_gpu();
-    render_parsed_frame(&project, footage, composition_id, frame, max_side, gpu.as_ref().map(|device| device as &dyn Accelerator))
+    render_parsed_frame(&project, footage, composition_id, frame, max_side, gpu.as_ref().map(|device| device as &dyn Accelerator), None)
 }
 
 #[no_mangle]

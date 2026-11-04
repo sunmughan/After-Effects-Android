@@ -14,6 +14,11 @@ data class MediaPoolStats(
     val budgetBytes: Long,
     val hits: Long,
     val misses: Long,
+    val layerCacheEntries: Int,
+    val layerCacheBytes: Long,
+    val layerCacheHits: Long,
+    val layerCacheMisses: Long,
+    val layerCacheBudgetBytes: Long,
 ) {
     val withinBudget: Boolean get() = bytes <= budgetBytes
 
@@ -24,6 +29,7 @@ data class MediaPoolStats(
 
     companion object {
         const val ANDROID_BUDGET_BYTES: Long = 256L * 1024 * 1024
+        const val LAYER_CACHE_BUDGET_BYTES: Long = 64L * 1024 * 1024
 
         fun parse(json: String): MediaPoolStats? {
             if (json.isEmpty()) return null
@@ -34,11 +40,17 @@ data class MediaPoolStats(
                 val budget = obj.getLong("budget")
                 val hits = obj.getLong("hits")
                 val misses = obj.getLong("misses")
+                val layerCacheEntries = obj.getInt("layerCacheEntries")
+                val layerCacheBytes = obj.getLong("layerCacheBytes")
+                val layerCacheHits = obj.getLong("layerCacheHits")
+                val layerCacheMisses = obj.getLong("layerCacheMisses")
+                val layerCacheBudget = obj.getLong("layerCacheBudget")
                 // Treat native accounting as untrusted at the JNI boundary:
                 // negative counters and a budget drift (e.g. upstream's 1 GiB
                 // default) must not make an invalid pool look within-budget.
                 if (frames < 0 || bytes < 0 || budget != ANDROID_BUDGET_BYTES ||
-                    hits < 0 || misses < 0
+                    hits < 0 || misses < 0 || layerCacheEntries < 0 || layerCacheBytes < 0 ||
+                    layerCacheHits < 0 || layerCacheMisses < 0 || layerCacheBudget != LAYER_CACHE_BUDGET_BYTES
                 ) return null
                 MediaPoolStats(
                     frames = frames,
@@ -46,6 +58,11 @@ data class MediaPoolStats(
                     budgetBytes = budget,
                     hits = hits,
                     misses = misses,
+                    layerCacheEntries = layerCacheEntries,
+                    layerCacheBytes = layerCacheBytes,
+                    layerCacheHits = layerCacheHits,
+                    layerCacheMisses = layerCacheMisses,
+                    layerCacheBudgetBytes = layerCacheBudget,
                 )
             }.getOrNull()
         }

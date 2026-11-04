@@ -162,7 +162,13 @@ class LargeProjectBenchmarkInstrumentedTest {
                 renderTimed(session, frame.toLong())
             }
             val report = evaluateFramePacing(times)
-            Log.i("EffectCraftBenchmark", "M6-L3 pacing: ${report.reportLine()}")
+            val cache = session.mediaPoolStats()
+                ?: throw AssertionError("Native cache stats must be available after preview frames")
+            Log.i("EffectCraftBenchmark", "M6-L3 pacing: ${report.reportLine()} layerCacheEntries=${cache.layerCacheEntries} " +
+                "layerCacheBytes=${cache.layerCacheBytes} layerCacheHits=${cache.layerCacheHits} " +
+                "layerCacheMisses=${cache.layerCacheMisses} layerCacheBudget=${cache.layerCacheBudgetBytes}")
+            assertTrue("Static layer pixels must be reused across frame renders", cache.layerCacheHits > 0)
+            assertTrue("Processed-layer cache must stay within its 64 MiB budget", cache.layerCacheBytes <= cache.layerCacheBudgetBytes)
             assertTrue(
                 "Mean frame time must meet the proposed budget: ${report.reportLine()}",
                 report.meanMs <= PerformanceBudgets.FRAME_BUDGET_MS,
