@@ -1659,7 +1659,6 @@ fn set_layer_transform_keyframe_interpolation(
     if !matches!(preset, "linear" | "easy_ease" | "ease_in" | "ease_out" | "ease_in_out" | "bezier" | "hold") {
         return Err("Interpolation preset must be linear, easy_ease, ease_in, ease_out, ease_in_out, bezier or hold (optionally incoming_/outgoing_)".into());
     }
-    }
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
     let comp = project.comp_mut(ItemId(composition_id))
