@@ -4,7 +4,7 @@ use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
-use effectcraft_project::keyframe::Interp;
+use effectcraft_project::keyframe::{Ease, Interp};
 use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
 use effectcraft_render::{Accelerator, Backend, RenderOpts, Renderer};
@@ -790,7 +790,7 @@ fn layer_opacity_keys(layer: &effectcraft_project::Layer, frame_rate: effectcraf
 fn layer_transform_keyframes(layer: &effectcraft_project::Layer, frame_rate: effectcraft_time::FrameRate) -> serde_json::Value {
     let mut tracks = serde_json::Map::new();
     if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
-        for property_name in ["position", "scale", "rotation"] {
+        for property_name in ["position", "scale", "rotation", "anchor"] {
             if let Some(property) = transform.prop(property_name) {
                 let mut frames = property.keys.iter()
                     .map(|key| key.time.to_rational_floor(frame_rate.den, frame_rate.num))
@@ -1018,8 +1018,8 @@ fn remove_layer_transform_keyframe(
     source: &str, composition_id: u64, layer_id: u64, property_name: &str, frame: i64,
 ) -> Result<(String, bool), String> {
     if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
-    if !matches!(property_name, "position" | "scale" | "rotation") {
-        return Err("Only position, scale and rotation keyframes are supported".into());
+    if !matches!(property_name, "position" | "scale" | "rotation" | "anchor") {
+        return Err("Only position, scale, rotation and anchor keyframes are supported".into());
     }
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -1034,7 +1034,7 @@ fn remove_layer_transform_keyframe(
     let property = transform.prop_mut(property_name)
         .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
     match (property_name, &property.value) {
-        ("position" | "scale", Value::Vec3(_)) | ("rotation", Value::Scalar(_)) => {},
+        ("position" | "scale" | "anchor", Value::Vec3(_)) | ("rotation", Value::Scalar(_)) => {},
         _ => return Err(format!("Layer {layer_id} Transform {property_name} has an incompatible value type")),
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
@@ -1597,9 +1597,9 @@ fn set_layer_transform_keyframe(
     if !x.is_finite() || !y.is_finite() || !z.is_finite() {
         return Err("Transform keyframe values must be finite".into());
     }
-    let valid_property = matches!(property_name, "position" | "scale" | "rotation");
-    if !valid_property { return Err("Only position, scale and rotation keyframes are supported".into()); }
-    let limit = match property_name { "position" => 1_000_000.0, "scale" => 100_000.0, _ => 360_000.0 };
+    let valid_property = matches!(property_name, "position" | "scale" | "rotation" | "anchor");
+    if !valid_property { return Err("Only position, scale, rotation and anchor keyframes are supported".into()); }
+    let limit = match property_name { "position" | "anchor" => 1_000_000.0, "scale" => 100_000.0, _ => 360_000.0 };
     if x.abs() > limit || (property_name != "rotation" && y.abs() > limit) {
         return Err("Transform keyframe value exceeds its property limit".into());
     }
@@ -1616,7 +1616,7 @@ fn set_layer_transform_keyframe(
     let property = transform.prop_mut(property_name)
         .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
     let value = match (property_name, &property.value) {
-        ("position", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
+        ("position" | "anchor", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
         ("scale", Value::Vec3(current)) => Value::Vec3([x, y, current[2]]),
         ("rotation", Value::Scalar(_)) => Value::Scalar(x),
         _ => return Err(format!("Layer {layer_id} Transform {property_name} has an incompatible value type")),
@@ -1629,16 +1629,26 @@ fn set_layer_transform_keyframe(
 }
 
 /// Applies a real upstream interpolation preset to one or both sides of a transform key.
+/// Preset semantics are per key side, so a segment is shaped by the keys that
+/// bound it: `ease_in` Bezier-eases the key's OUTGOING side (the segment after
+/// the key starts slow), `ease_out` Bezier-eases its INCOMING side (the segment
+/// before the key ends slow), `ease_in_out`/`easy_ease` ease both sides, and
+/// `bezier` is an asymmetric custom curve (out influence 75 %, in 25 %, zero
+/// speeds). `linear` and `hold` clear both sides. The upstream renderer
+/// evaluates these eases; they are not UI-only metadata.
 fn set_layer_transform_keyframe_interpolation(
     source: &str, composition_id: u64, layer_id: u64, property_name: &str,
     frame: i64, preset: &str,
 ) -> Result<String, String> {
     if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
-    if !matches!(property_name, "position" | "scale" | "rotation") {
-        return Err("Only position, scale and rotation interpolation is supported".into());
+    if !matches!(property_name, "position" | "scale" | "rotation" | "anchor" | "opacity") {
+        return Err("Only position, scale, rotation, anchor and opacity interpolation is supported".into());
     }
     // Legacy names continue to edit both sides; side-qualified names preserve
     // the opposite tangent/interpolation when editing one side in the inspector.
+    // Directional presets only ever touch their own side: ease_in the outgoing
+    // side, ease_out the incoming side, so a side qualifier can only narrow
+    // them further, never redirect them.
     let (incoming, outgoing, preset) = if let Some(preset) = preset.strip_prefix("incoming_") {
         (true, false, preset)
     } else if let Some(preset) = preset.strip_prefix("outgoing_") {
@@ -1646,8 +1656,9 @@ fn set_layer_transform_keyframe_interpolation(
     } else {
         (true, true, preset)
     };
-    if !matches!(preset, "linear" | "easy_ease" | "hold") {
-        return Err("Interpolation preset must be linear, easy_ease or hold (optionally incoming_/outgoing_)".into());
+    if !matches!(preset, "linear" | "easy_ease" | "ease_in" | "ease_out" | "ease_in_out" | "bezier" | "hold") {
+        return Err("Interpolation preset must be linear, easy_ease, ease_in, ease_out, ease_in_out, bezier or hold (optionally incoming_/outgoing_)".into());
+    }
     }
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -1663,15 +1674,26 @@ fn set_layer_transform_keyframe_interpolation(
         .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
     let key = property.keys.iter_mut().find(|key| key.time == tick)
         .ok_or_else(|| format!("No {property_name} keyframe exists at frame {frame}"))?;
+    let dims = key.value.dims().max(1);
     match preset {
         "linear" => {
             if incoming { key.in_interp = Interp::Linear; key.in_ease.clear(); }
             if outgoing { key.out_interp = Interp::Linear; key.out_ease.clear(); }
         }
-        "easy_ease" => {
+        "easy_ease" | "ease_in_out" => {
             let eased = key.clone().eased();
             if incoming { key.in_interp = eased.in_interp; key.in_ease = eased.in_ease; }
             if outgoing { key.out_interp = eased.out_interp; key.out_ease = eased.out_ease; }
+        }
+        "ease_in" => {
+            if outgoing { key.out_interp = Interp::Bezier; key.out_ease = vec![Ease::EASY; dims]; }
+        }
+        "ease_out" => {
+            if incoming { key.in_interp = Interp::Bezier; key.in_ease = vec![Ease::EASY; dims]; }
+        }
+        "bezier" => {
+            if incoming { key.in_interp = Interp::Bezier; key.in_ease = vec![Ease { speed: 0.0, influence: 0.25 }; dims]; }
+            if outgoing { key.out_interp = Interp::Bezier; key.out_ease = vec![Ease { speed: 0.0, influence: 0.75 }; dims]; }
         }
         "hold" => {
             if incoming { key.in_interp = Interp::Hold; key.in_ease.clear(); }
@@ -1682,6 +1704,103 @@ fn set_layer_transform_keyframe_interpolation(
     key.auto_bezier = false;
     key.continuous = false;
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Applies an explicit Bezier curve to both sides of a key at an exact frame.
+/// Speeds are value units per second (>= 0, finite) and influences are the
+/// fraction of the adjacent segment duration (0..=1), the same speed/influence
+/// form the upstream Keyframe Velocity dialog uses. The renderer evaluates
+/// the resulting Bezier segment.
+#[allow(clippy::too_many_arguments)]
+fn set_layer_keyframe_bezier(
+    source: &str, composition_id: u64, layer_id: u64, property_name: &str,
+    frame: i64, out_speed: f64, out_influence: f64, in_speed: f64, in_influence: f64,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !matches!(property_name, "position" | "scale" | "rotation" | "anchor" | "opacity") {
+        return Err("Only position, scale, rotation, anchor and opacity Bezier curves are supported".into());
+    }
+    for (label, value) in [("out speed", out_speed), ("in speed", in_speed)] {
+        if !value.is_finite() || value < 0.0 {
+            return Err(format!("Bezier {label} must be finite and non-negative"));
+        }
+    }
+    for (label, value) in [("out influence", out_influence), ("in influence", in_influence)] {
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return Err(format!("Bezier {label} must be between 0 and 1"));
+        }
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let tick = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let transform = layer.props.sub_mut("transform")
+        .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let property = transform.prop_mut(property_name)
+        .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
+    let key = property.keys.iter_mut().find(|key| key.time == tick)
+        .ok_or_else(|| format!("No {property_name} keyframe exists at frame {frame}"))?;
+    let dims = key.value.dims().max(1);
+    key.in_interp = Interp::Bezier;
+    key.out_interp = Interp::Bezier;
+    key.out_ease = vec![Ease { speed: out_speed, influence: out_influence }; dims];
+    key.in_ease = vec![Ease { speed: in_speed, influence: in_influence }; dims];
+    key.auto_bezier = false;
+    key.continuous = false;
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Drags the key at `from_frame` to `to_frame` for one property, returning
+/// `(project_json, moved, target_frame)`. The whole key moves — value,
+/// interpolation and eases travel with it — and the track is re-sorted, so
+/// the renderer keeps evaluating a well-ordered track. `to_frame` clamps to
+/// [0, composition duration frames]; landing on the source frame is a no-op
+/// (`moved=false`, project unchanged); landing on an occupied frame is an
+/// error, never a merge or duplicate; a missing source key and locked layers
+/// are errors.
+fn move_layer_keyframe(
+    source: &str, composition_id: u64, layer_id: u64, property_name: &str,
+    from_frame: i64, to_frame: i64,
+) -> Result<(String, bool, i64), String> {
+    if from_frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !matches!(property_name, "position" | "scale" | "rotation" | "anchor" | "opacity") {
+        return Err("Only position, scale, rotation, anchor and opacity keys can be dragged".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let duration_frames = comp.duration.to_rational_floor(frame_rate.den, frame_rate.num);
+    let target_frame = to_frame.clamp(0, duration_frames.max(0));
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let transform = layer.props.sub_mut("transform")
+        .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
+    let property = transform.prop_mut(property_name)
+        .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
+    let from_tick = Tick::from_rational(from_frame, frame_rate.den, frame_rate.num);
+    let target_tick = Tick::from_rational(target_frame, frame_rate.den, frame_rate.num);
+    if from_tick == target_tick {
+        let json = project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))?;
+        return Ok((json, false, target_frame));
+    }
+    let index = property.keys.iter().position(|key| key.time == from_tick)
+        .ok_or_else(|| format!("No {property_name} keyframe exists at frame {from_frame}"))?;
+    if property.keys.iter().any(|key| key.time == target_tick) {
+        return Err(format!("A {property_name} keyframe already exists at frame {target_frame}"));
+    }
+    let mut key = property.keys.remove(index);
+    key.time = target_tick;
+    property.keys.push(key);
+    property.keys.sort_by_key(|key| key.time);
+    let json = project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))?;
+    Ok((json, true, target_frame))
 }
 
 /// Removes the canonical Transform/Opacity keyframe at `frame`.
@@ -1855,6 +1974,53 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
         set_layer_transform_keyframe_interpolation(&source, composition_id as u64, layer_id as u64, &property, frame, &preset)
     };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerKeyframeBezierEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    property: JString, frame: jlong, out_speed: f64, out_influence: f64, in_speed: f64, in_influence: f64,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let property: String = match env.get_string(&property) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_layer_keyframe_bezier(&source, composition_id as u64, layer_id as u64, &property, frame, out_speed, out_influence, in_speed, in_influence)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_moveLayerKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    property: JString, from_frame: jlong, to_frame: jlong,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let property: String = match env.get_string(&property) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || from_frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        move_layer_keyframe(&source, composition_id as u64, layer_id as u64, &property, from_frame, to_frame)
+    };
+    let output = match result {
+        Ok((project_json, moved, target_frame)) => json!({"valid": true, "project": project_json, "moved": moved, "targetFrame": target_frame}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
@@ -2224,6 +2390,206 @@ mod tests {
         assert!(set_layer_opacity_keyframe(&source, comp_id, 999, 30, 50.0).is_err());
         assert!(set_layer_opacity_keyframe(&source, 999, layer_id, 30, 50.0).is_err());
         assert!(remove_layer_opacity_keyframe(&source, comp_id, 999, 0).is_err());
+    }
+
+    fn transform_property<'a>(project: &'a Project, comp_id: u64, layer_id: u64, name: &str) -> &'a effectcraft_project::Property {
+        let layer = project.comp(ItemId(comp_id)).unwrap().layers.iter().find(|l| l.id.0 == layer_id).unwrap();
+        layer.props.sub("transform").unwrap().prop(name).unwrap()
+    }
+
+    fn scalar_value_at(property: &effectcraft_project::Property, frame: i64) -> f64 {
+        use effectcraft_project::Value;
+        use effectcraft_time::Tick;
+        match property.value_at(Tick::from_rational(frame, 1, 30)) {
+            Value::Scalar(value) => value,
+            other => panic!("expected scalar value, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ease_presets_shape_evaluated_opacity_differently_from_linear() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        let linear: Project = serde_json::from_str(&keyed).unwrap();
+        assert!((scalar_value_at(opacity_property(&linear, comp_id, layer_id), 15) - 50.0).abs() < 1e-9);
+
+        // Ease-in shapes the segment LEAVING the key: it starts slow, so the
+        // fading opacity stays above the linear value early and at midpoint.
+        let eased_in = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 0, "ease_in").unwrap();
+        let eased_in_project: Project = serde_json::from_str(&eased_in).unwrap();
+        let in_property = opacity_property(&eased_in_project, comp_id, layer_id);
+        assert!(scalar_value_at(in_property, 15) > 50.0, "ease-in midpoint must stay above linear 50");
+        assert!(scalar_value_at(in_property, 7) > 100.0 - 100.0 * 7.0 / 30.0, "ease-in must lag linear early");
+
+        // Ease-out shapes the segment ARRIVING at the key: it ends slow, so
+        // the value is already ahead of linear at the midpoint.
+        let eased_out = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 30, "ease_out").unwrap();
+        let eased_out_project: Project = serde_json::from_str(&eased_out).unwrap();
+        assert!(scalar_value_at(opacity_property(&eased_out_project, comp_id, layer_id), 15) < 50.0, "ease-out midpoint must lead linear 50");
+
+        // Ease-in-out (and its easy_ease alias) slow both ends: above linear
+        // early, below linear late, and symmetric at the midpoint.
+        let mut both = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 0, "ease_in_out").unwrap();
+        both = set_layer_transform_keyframe_interpolation(&both, comp_id, layer_id, "opacity", 30, "ease_in_out").unwrap();
+        let both_project: Project = serde_json::from_str(&both).unwrap();
+        let both_property = opacity_property(&both_project, comp_id, layer_id);
+        assert!(scalar_value_at(both_property, 7) > 100.0 - 100.0 * 7.0 / 30.0);
+        assert!(scalar_value_at(both_property, 23) < 100.0 - 100.0 * 23.0 / 30.0);
+        let aliased = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 0, "easy_ease").unwrap();
+        let aliased_project: Project = serde_json::from_str(&aliased).unwrap();
+        assert_eq!(
+            aliased_project.comp(ItemId(comp_id)).unwrap().layers[0]
+                .props.sub("transform").unwrap().prop("opacity").unwrap().keys[0].out_interp,
+            Interp::Bezier
+        );
+
+        // The asymmetric Bezier preset must also move the midpoint off linear.
+        let bezier = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 0, "bezier").unwrap();
+        let bezier_project: Project = serde_json::from_str(&bezier).unwrap();
+        assert!((scalar_value_at(opacity_property(&bezier_project, comp_id, layer_id), 15) - 50.0).abs() > 1e-6);
+
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 0, "bogus").is_err());
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 10, "ease_in").is_err());
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "nope", 0, "ease_in").is_err());
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, 999, "opacity", 0, "ease_in").is_err());
+    }
+
+    #[test]
+    fn custom_bezier_curve_shapes_evaluated_opacity() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        // Long outgoing influence with zero speed: a very slow start.
+        let curved = set_layer_keyframe_bezier(&keyed, comp_id, layer_id, "opacity", 0, 0.0, 0.9, 0.0, 0.1).unwrap();
+        let curved_project: Project = serde_json::from_str(&curved).unwrap();
+        let property = opacity_property(&curved_project, comp_id, layer_id);
+        assert!(scalar_value_at(property, 15) > 50.0, "custom slow-start Bezier must stay above linear at midpoint");
+        assert_eq!(property.keys[0].out_interp, Interp::Bezier);
+        assert_eq!(property.keys[0].in_interp, Interp::Bezier);
+
+        assert!(set_layer_keyframe_bezier(&keyed, comp_id, layer_id, "opacity", 0, 0.0, 1.5, 0.0, 0.1).is_err());
+        assert!(set_layer_keyframe_bezier(&keyed, comp_id, layer_id, "opacity", 0, -1.0, 0.5, 0.0, 0.1).is_err());
+        assert!(set_layer_keyframe_bezier(&keyed, comp_id, layer_id, "opacity", 0, f64::NAN, 0.5, 0.0, 0.1).is_err());
+        assert!(set_layer_keyframe_bezier(&keyed, comp_id, layer_id, "opacity", 10, 0.0, 0.5, 0.0, 0.1).is_err());
+    }
+
+    #[test]
+    fn anchor_keyframes_author_remove_and_expose_metadata() {
+        use effectcraft_project::Value;
+        use effectcraft_time::Tick;
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "anchor", 30, 10.0, 20.0, 0.0).unwrap();
+        let updated: Project = serde_json::from_str(&keyed).unwrap();
+        let property = transform_property(&updated, comp_id, layer_id, "anchor");
+        assert_eq!(property.keys.len(), 2);
+        assert_eq!(property.keys[0].time, Tick::ZERO);
+        let seed_z = match property.keys[0].value {
+            Value::Vec3(value) => value[2],
+            _ => panic!("anchor key must be Vec3"),
+        };
+        assert_eq!(property.keys[1].value, Value::Vec3([10.0, 20.0, seed_z]));
+        let mid = match property.value_at(Tick::from_rational(15, 1, 30)) {
+            Value::Vec3(value) => value,
+            other => panic!("anchor midpoint must be Vec3, got {other:?}"),
+        };
+        let seed_xy = match property.keys[0].value {
+            Value::Vec3(value) => [value[0], value[1]],
+            _ => panic!("anchor seed must be Vec3"),
+        };
+        assert!((mid[0] - (seed_xy[0] + 10.0) / 2.0).abs() < 1e-9);
+        assert!((mid[1] - (seed_xy[1] + 20.0) / 2.0).abs() < 1e-9);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&keyed).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["layers"][0]["transformKeys"]["anchor"], json!([0, 30]));
+
+        let (removed, was_removed) = remove_layer_transform_keyframe(&keyed, comp_id, layer_id, "anchor", 30).unwrap();
+        assert!(was_removed);
+        let after: Project = serde_json::from_str(&removed).unwrap();
+        assert_eq!(transform_property(&after, comp_id, layer_id, "anchor").keys.len(), 1);
+
+        assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "anchor", 30, 2_000_000.0, 20.0, 0.0).is_err());
+        assert!(set_layer_transform_keyframe(&source, comp_id, 999, "anchor", 30, 10.0, 20.0, 0.0).is_err());
+    }
+
+    #[test]
+    fn keyframe_drag_moves_key_clamps_and_rejects_occupied() {
+        use effectcraft_project::Value;
+        use effectcraft_time::Tick;
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+
+        let (moved_json, moved, target) = move_layer_keyframe(&keyed, comp_id, layer_id, "opacity", 30, 15).unwrap();
+        assert!(moved);
+        assert_eq!(target, 15);
+        let moved_project: Project = serde_json::from_str(&moved_json).unwrap();
+        let property = opacity_property(&moved_project, comp_id, layer_id);
+        assert_eq!(property.keys.len(), 2, "drag must not duplicate or drop keys");
+        assert_eq!(property.keys[1].time, Tick::from_rational(15, 1, 30));
+        assert_eq!(property.keys[1].value, Value::Scalar(0.0));
+        assert_eq!(scalar_value_at(property, 15), 0.0);
+        assert_eq!(scalar_value_at(property, 30), 0.0, "endpoint hold past the dragged key");
+
+        // Dragging onto an occupied frame is rejected, never merged or duplicated.
+        assert!(move_layer_keyframe(&moved_json, comp_id, layer_id, "opacity", 15, 0).is_err());
+        assert!(move_layer_keyframe(&moved_json, comp_id, layer_id, "opacity", 20, 25).is_err());
+        // Dragging a key to its own frame is a no-op, not a duplicate.
+        let (same_json, moved_same, target_same) = move_layer_keyframe(&moved_json, comp_id, layer_id, "opacity", 15, 15).unwrap();
+        assert!(!moved_same);
+        assert_eq!(target_same, 15);
+        let same_project: Project = serde_json::from_str(&same_json).unwrap();
+        assert_eq!(opacity_property(&same_project, comp_id, layer_id).keys.len(), 2);
+
+        // The 3-second composition at 30fps ends at frame 90: a drag past the
+        // end clamps there instead of creating an out-of-range key.
+        let (clamped_json, moved_clamped, target_clamped) = move_layer_keyframe(&moved_json, comp_id, layer_id, "opacity", 15, 999).unwrap();
+        assert!(moved_clamped);
+        assert_eq!(target_clamped, 90);
+        let clamped_project: Project = serde_json::from_str(&clamped_json).unwrap();
+        assert_eq!(opacity_property(&clamped_project, comp_id, layer_id).keys[1].time, Tick::from_rational(90, 1, 30));
+        // A further drag past the end lands on the same clamped frame: no-op.
+        let (_, moved_again, _) = move_layer_keyframe(&clamped_json, comp_id, layer_id, "opacity", 90, 500).unwrap();
+        assert!(!moved_again);
+
+        // A locked layer rejects the drag.
+        let locked = set_layer_locked(&moved_json, comp_id, layer_id, true).unwrap();
+        assert!(move_layer_keyframe(&locked, comp_id, layer_id, "opacity", 15, 20).is_err());
+
+        // Transform position drags move the value with the key.
+        let positioned = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 30, 100.0, 200.0, 0.0).unwrap();
+        let (dragged_json, moved_position, _) = move_layer_keyframe(&positioned, comp_id, layer_id, "position", 30, 10).unwrap();
+        assert!(moved_position);
+        let dragged_project: Project = serde_json::from_str(&dragged_json).unwrap();
+        let position = transform_property(&dragged_project, comp_id, layer_id, "position");
+        assert_eq!(position.keys.len(), 2);
+        assert_eq!(position.keys[1].time, Tick::from_rational(10, 1, 30));
+        assert_eq!(position.keys[1].value, Value::Vec3([100.0, 200.0, 0.0]));
+    }
+
+    #[test]
+    fn keyframe_drag_preserves_easing() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        let eased = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 30, "ease_out").unwrap();
+        let (dragged_json, moved, _) = move_layer_keyframe(&eased, comp_id, layer_id, "opacity", 30, 20).unwrap();
+        assert!(moved);
+        let dragged_project: Project = serde_json::from_str(&dragged_json).unwrap();
+        let property = opacity_property(&dragged_project, comp_id, layer_id);
+        assert_eq!(property.keys[1].in_interp, Interp::Bezier, "drag must carry the key's ease with it");
+        // The dragged segment still ends slow: ahead of linear at its midpoint.
+        assert!(scalar_value_at(property, 10) < 50.0);
+    }
+
+    #[test]
+    fn eased_opacity_changes_rendered_frame() {
+        let (source, comp_id, path) = red_pixel_footage_project();
+        let layer_id = {
+            let project: Project = serde_json::from_str(&source).unwrap();
+            project.comp(ItemId(comp_id)).unwrap().layers[0].id.0
+        };
+        let keyed = set_layer_opacity_keyframe(&source, comp_id, layer_id, 30, 0.0).unwrap();
+        let linear_frame = render_frame_rgba(&keyed, comp_id, 7, 32).unwrap();
+        let eased = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "opacity", 0, "ease_in").unwrap();
+        let eased_frame = render_frame_rgba(&eased, comp_id, 7, 32).unwrap();
+        assert_ne!(linear_frame, eased_frame, "the native renderer must evaluate the ease, not just store it");
+        std::fs::remove_file(path).unwrap();
     }
 
     fn red_pixel_footage_project() -> (String, u64, String) {
