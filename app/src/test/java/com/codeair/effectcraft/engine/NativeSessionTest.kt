@@ -1,6 +1,8 @@
 package com.codeair.effectcraft.engine
 
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import java.lang.reflect.Modifier
 import org.junit.Test
 
 /**
@@ -11,6 +13,17 @@ import org.junit.Test
  * instrumentation test, which run against the real .so.
  */
 class NativeSessionTest {
+
+    @Test
+    fun renderDoesNotHoldSessionMonitorAcrossJniCall() {
+        val render = NativeSession::class.java.getDeclaredMethod(
+            "render", java.lang.Long.TYPE, java.lang.Long.TYPE
+        )
+        assertFalse(
+            "render must not be synchronized: cancel needs to signal native work while a frame is in flight",
+            Modifier.isSynchronized(render.modifiers)
+        )
+    }
 
     @Test
     fun openReturnsNullWithoutNativeLibrary() {
