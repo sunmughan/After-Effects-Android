@@ -173,6 +173,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             importedEcproj = source
             repositoryProjectId = id
             canonicalSelectedIds = emptySet()
+            // A switch must not leave the previous project's history
+            // reachable: Canonical Undo commits its snapshot into the
+            // active repository entry, so a stale stack would overwrite
+            // this project with the previous project's document.
+            canonicalUndoStack = emptyList()
+            canonicalRedoStack = emptyList()
             playheadFrame = 0
             isPlaying = false
             refreshReferences()
