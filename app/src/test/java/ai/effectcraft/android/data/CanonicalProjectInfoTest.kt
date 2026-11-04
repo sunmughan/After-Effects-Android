@@ -53,7 +53,7 @@ class CanonicalProjectInfoTest {
         assertEquals(listOf(0, 15), layer.transformKeyframes["position"])
         assertEquals(listOf(0), layer.transformKeyframes["scale"])
         assertEquals(listOf(10, 30), layer.transformKeyframes["rotation"])
-        assertEquals(emptyList<Int>(), layer.transformKeyframes["anchor"])
+        assertFalse(layer.transformKeyframes.containsKey("anchor"))
     }
 
     @Test
