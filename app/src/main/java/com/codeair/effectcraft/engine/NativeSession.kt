@@ -33,9 +33,9 @@ import org.json.JSONObject
  * rendered" label instead of a faked frame.
  */
 class NativeSession private constructor(
-    private var handle: Long,
-    private var projectJson: String,
-    private var maxSide: Int,
+    @Volatile private var handle: Long,
+    @Volatile private var projectJson: String,
+    @Volatile private var maxSide: Int,
 ) : AutoCloseable {
 
     companion object {
@@ -105,15 +105,19 @@ class NativeSession private constructor(
     fun currentMaxSide(): Int = maxSide
 
     /** Renders a frame through the session, or null when unavailable/cancelled/closed. */
-    @Synchronized
+    // Deliberately not synchronized: native render may take seconds. Holding the
+    // Kotlin monitor across JNI would prevent cancel() from setting the native
+    // cancellation flag until the frame had already completed.
     fun render(compositionId: Long, frame: Long): ByteArray? {
         val sessionHandle = handle
         if (sessionHandle == 0L || cancelled || compositionId < 0 || frame < 0) return null
         val key = RenderedFrameCache.key(projectJson, compositionId, frame, maxSide)
-        return RenderedFrameCache.getOrRender(key) {
+        val rendered = RenderedFrameCache.getOrRender(key) {
             runCatching { renderSessionFrameNative(sessionHandle, compositionId, frame) }
                 .getOrNull()?.takeIf { it.size >= 8 }
         }
+        // A cancellation racing a cache hit/render must not publish a stale frame.
+        return rendered?.takeUnless { cancelled }
     }
 
     /**
