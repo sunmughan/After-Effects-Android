@@ -1192,6 +1192,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }.onFailure { failure ->
                     if (failure is BudgetViolationException) {
                         saveMessage = "Preview blocked by render budget · ${failure.message}"
+                    } else {
+                        throw failure
                     }
                 }.getOrNull()
             },
