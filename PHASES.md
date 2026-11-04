@@ -675,3 +675,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 ### Run 65 test placement correction — exercise workspace timeline before canonical modal
 - The transform-marker seek assertion is placed before opening the canonical bottom sheet so it targets the actual workspace lane rather than an obscured underlying node. It taps the accessible marker lane and asserts the shared playhead selects frame 30 (nearest to the lane's midpoint); the later canonical-sheet section still verifies native preview frame 15 on inspector key jump.
 - Test-only commit [2fd99d5d](https://github.com/sunmughan/After-Effects-Android/commit/2fd99d5d5bf76ff7b7e06e3f00d9925bb04a297a). The full marker interaction + instrumentation needs a fresh exact-head run; no pass claimed.
+
+
+### Run 65 correctness follow-up — transform marker scale uses canonical composition duration
+- The marker track previously normalized frame X against the bootstrap workspace draft duration. It now resolves the canonical composition containing the selected native layer IDs, aggregates only those selected layers' transform keys, and uses that canonical composition's durationFrames for marker geometry and tap-to-nearest-key mapping. This avoids frame-marker drift when the imported composition duration differs from the local starter draft. The fixture explicitly uses a 90-frame canonical composition.
+- Commit [618553d4](https://github.com/sunmughan/After-Effects-Android/commit/618553d494ff03ad3ef97b17af1b6ef70a5a3ec1). CI #496 on previous test head was queued; new exact-head workflow must cover this correction. No local Android SDK/emulator available.
