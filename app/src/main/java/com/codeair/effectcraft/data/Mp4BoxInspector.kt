@@ -85,9 +85,16 @@ object Mp4BoxInspector {
         val version = bytes[box.bodyOffset].toInt() and 0xff
         require(version == 0 || version == 1) { "Unsupported mvhd/mdhd version $version" }
         return if (version == 0) {
+            // mvhd/mdhd v0: full-box (4) + creation/modification (8) +
+            // timescale (4) + duration (4) = 20 bytes.
+            require(box.bodyOffset + 20 <= box.end) { "Truncated v0 mvhd/mdhd" }
             readU32(bytes, box.bodyOffset + 12) to readU32(bytes, box.bodyOffset + 16)
         } else {
-            readU64(bytes, box.bodyOffset + 20) to readU64(bytes, box.bodyOffset + 28)
+            // v1 widens creation/modification and duration, NOT timescale:
+            // full-box (4) + creation (8) + modification (8) + timescale
+            // (4) + duration (8) = 32 bytes.
+            require(box.bodyOffset + 32 <= box.end) { "Truncated v1 mvhd/mdhd" }
+            readU32(bytes, box.bodyOffset + 20) to readU64(bytes, box.bodyOffset + 24)
         }
     }
 
