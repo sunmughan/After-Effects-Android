@@ -4,7 +4,7 @@ use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
-use effectcraft_project::keyframe::{Ease, Interp};
+use effectcraft_project::keyframe::Interp;
 use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
 use effectcraft_render::{Accelerator, Backend, RenderOpts, Renderer};
