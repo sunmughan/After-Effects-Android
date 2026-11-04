@@ -4,6 +4,8 @@
 
 **Run 99 progress (2026-11-05):** CI #679 (run 41920303396) had two API30 failures: rotation test expected stale `Background` after New → Layer (fixed in commit `8cd508da`), and 48-layer/288-key preview measured 36.431ms mean / 46.7% jank against agent-proposed budgets. Native preview now owns an upstream content-keyed `LayerCache` (64 MiB cap) across frames (`b4e2e1f9`); JNI exposes cache counters and the benchmark asserts reuse/budget (`ea713959`). CI #682/#683 were superseded; latest exact-head CI pending. No benchmark improvement/pass claimed until JUnit is inspected. See PHASES.md Run 99.
 
+**Run 100 CI follow-up:** #686 (c0656d28) was cancelled by subsequent docs pushes before Rust tests; #688 (HEAD `0b1e881`) is pending. Cancellation is supersession, not test evidence. Run 100's exact compile error and fix are in PHASES.md. Latest documentation commit will trigger a new exact-head run; no pass claimed.
+
 ### Run 90 — preserve standalone EditorScreen test/API compatibility
 - Follow-up review found that direct Compose test fixtures instantiate EditorScreen by named arguments and do not exercise the production MP4 callbacks. The newly added MP4-only parameters now have safe no-op/default values, preserving existing test fixtures and internal preview embedding while production EffectCraftApp supplies real callbacks. This is compatibility, not a fake encoder path: only the production app wires SAF/MediaCodec.
 - Commit changes the parameter defaults only; exact-head CI #625 is pending for eb229b7a and will be superseded by this commit. Continue to inspect #626 and add a direct MP4 settings interaction test once the current compile is verified.
