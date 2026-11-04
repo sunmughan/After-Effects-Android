@@ -403,7 +403,18 @@ class AdaptiveWorkspaceSmokeTest {
         // vertically scrolling sheet, so scroll the section itself into
         // view before tapping a chip in it.
         compose.onNodeWithText("Curve graph · Position X").performScrollTo()
-        compose.onNodeWithText("Anchor X").performScrollTo().performClick()
+        // Tap the chip with a real touch event, not the semantics click
+        // action: performClick on this chip left the selection on Position
+        // X (the next add fired transform:position), while the raw
+        // down/up path is the proven gesture route in this file.
+        val anchorChip = compose.onNodeWithText("Anchor X").performScrollTo()
+        val chipSize = anchorChip.fetchSemanticsNode().size
+        anchorChip.performTouchInput {
+            down(0, Offset(chipSize.width / 2f, chipSize.height / 2f))
+            advanceEventTime(100)
+            up(0)
+        }
+        compose.onNodeWithText("Curve graph · Anchor X").assertIsDisplayed()
         // The graph add button fires the curve callback with the selected
         // track selector, not the transform callback, so it is located by
         // its stable visible text and asserted through the curve capture.
