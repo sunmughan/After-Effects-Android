@@ -1119,6 +1119,34 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical $selector keyframe moved $fromFrame to $toFrame · saved locally"
                 )
             },
+            onMoveCanonicalTransformKeyframe = { fromFrame, toFrame ->
+                val source = importedEcproj
+                val composition = canonicalProjectInfo?.compositions?.firstOrNull { comp -> comp.layers.any { it.id in canonicalSelectedIds } }
+                if (source == null || composition == null) {
+                    saveMessage = "Import a canonical .ecproj first"
+                } else {
+                    // The TRANSFORM lane aggregates every selected layer and
+                    // property, so a drag only moves when exactly one key
+                    // owns the grabbed frame; otherwise the inspector's
+                    // per-property Move control or the curve graph disambiguates.
+                    val candidates = composition.layers.filter { it.id in canonicalSelectedIds }.flatMap { layer ->
+                        layer.transformKeyframes
+                            .filter { (_, frames) -> fromFrame in frames }
+                            .map { (property, _) -> layer.id to "transform:$property" }
+                    }
+                    val owner = com.codeair.effectcraft.data.CanonicalKeyframeDrag.resolveMove(candidates)
+                    if (owner == null) {
+                        saveMessage = "Dragged frame $fromFrame has no unique key · use the inspector Move control or curve graph"
+                    } else if (fromFrame == toFrame) {
+                        saveMessage = "Canonical ${owner.second} keyframe already at frame $toFrame"
+                    } else {
+                        applyCanonicalEdit(
+                            NativeProjectBridge.moveLayerKeyframeEcproj(source, composition.id, owner.first, owner.second, fromFrame.toLong(), toFrame.toLong()),
+                            "Canonical ${owner.second} keyframe moved $fromFrame to $toFrame · saved locally"
+                        )
+                    }
+                }
+            },
             onRemoveCanonicalCurveKey = { compositionId, layerId, selector, frame ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

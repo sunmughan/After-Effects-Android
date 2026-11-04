@@ -190,10 +190,11 @@ object NativeProjectBridge {
         return runCatching { removeLayerOpacityKeyframeEcprojNative(json, compositionId, layerId, frame) }.getOrNull()
     }
 
-    /** Applies Linear, Easy Ease or Hold to both or one side of an existing Transform key. */
+    /** Applies Linear, Easy Ease, directional Ease In/Out/In-Out, asymmetric Bezier or Hold to both or one side of an existing Transform key. Directional presets keep their own side regardless of any incoming_/outgoing_ qualifier. */
     fun setLayerTransformKeyframeInterpolationEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, preset: String): String? {
         ensureLoaded()
-        val presets = setOf("linear", "easy_ease", "hold", "incoming_linear", "incoming_easy_ease", "incoming_hold", "outgoing_linear", "outgoing_easy_ease", "outgoing_hold")
+        val base = setOf("linear", "easy_ease", "ease_in", "ease_out", "ease_in_out", "bezier", "hold")
+        val presets = base + base.map { "incoming_$it" } + base.map { "outgoing_$it" }
         if (!available || frame < 0 || !isSupportedTransformKeyframeProperty(property) || preset !in presets) return null
         return runCatching { setLayerTransformKeyframeInterpolationEcprojNative(json, compositionId, layerId, property, frame, preset) }.getOrNull()
     }

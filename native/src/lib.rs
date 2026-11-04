@@ -1784,6 +1784,9 @@ fn set_layer_transform_keyframe_interpolation(
     }
     // Legacy names continue to edit both sides; side-qualified names preserve
     // the opposite tangent/interpolation when editing one side in the inspector.
+    // Directional presets ignore the qualifier: their direction IS their side
+    // (ease_in eases the outgoing side, ease_out the incoming side), so a
+    // qualifier can neither redirect nor silence them.
     let (incoming, outgoing, preset) = if let Some(preset) = preset.strip_prefix("incoming_") {
         (true, false, preset)
     } else if let Some(preset) = preset.strip_prefix("outgoing_") {
@@ -1791,8 +1794,8 @@ fn set_layer_transform_keyframe_interpolation(
     } else {
         (true, true, preset)
     };
-    if !matches!(preset, "linear" | "easy_ease" | "hold") {
-        return Err("Interpolation preset must be linear, easy_ease or hold (optionally incoming_/outgoing_)".into());
+    if !matches!(preset, "linear" | "easy_ease" | "ease_in" | "ease_out" | "ease_in_out" | "bezier" | "hold") {
+        return Err("Interpolation preset must be linear, easy_ease, ease_in, ease_out, ease_in_out, bezier or hold (optionally incoming_/outgoing_)".into());
     }
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -1808,15 +1811,28 @@ fn set_layer_transform_keyframe_interpolation(
         .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
     let key = property.keys.iter_mut().find(|key| key.time == tick)
         .ok_or_else(|| format!("No {property_name} keyframe exists at frame {frame}"))?;
+    let dims = key.value.dims().max(1);
     match preset {
         "linear" => {
             if incoming { key.in_interp = Interp::Linear; key.in_ease.clear(); }
             if outgoing { key.out_interp = Interp::Linear; key.out_ease.clear(); }
         }
-        "easy_ease" => {
+        "easy_ease" | "ease_in_out" => {
             let eased = key.clone().eased();
             if incoming { key.in_interp = eased.in_interp; key.in_ease = eased.in_ease; }
             if outgoing { key.out_interp = eased.out_interp; key.out_ease = eased.out_ease; }
+        }
+        "ease_in" => {
+            key.out_interp = Interp::Bezier;
+            key.out_ease = vec![Ease::EASY; dims];
+        }
+        "ease_out" => {
+            key.in_interp = Interp::Bezier;
+            key.in_ease = vec![Ease::EASY; dims];
+        }
+        "bezier" => {
+            if incoming { key.in_interp = Interp::Bezier; key.in_ease = vec![Ease { speed: 0.0, influence: 0.25 }; dims]; }
+            if outgoing { key.out_interp = Interp::Bezier; key.out_ease = vec![Ease { speed: 0.0, influence: 0.75 }; dims]; }
         }
         "hold" => {
             if incoming { key.in_interp = Interp::Hold; key.in_ease.clear(); }
@@ -3429,6 +3445,78 @@ mod tests {
         assert!(linear_key.in_ease.is_empty() && linear_key.out_ease.is_empty());
         assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 14, "easy_ease").is_err());
         assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 15, "unknown").is_err());
+    }
+
+    #[test]
+    fn directional_ease_presets_shape_evaluated_rotation() {
+        use effectcraft_project::Value;
+        use effectcraft_time::Tick;
+        fn rotation_at(project: &Project, comp_id: u64, layer_id: u64, frame: i64) -> f64 {
+            let layer = project.comp(ItemId(comp_id)).unwrap().layers.iter().find(|l| l.id.0 == layer_id).unwrap();
+            match layer.props.sub("transform").unwrap().prop("rotation").unwrap().value_at(Tick::from_rational(frame, 1, 30)) {
+                Value::Scalar(value) => value,
+                other => panic!("expected scalar rotation, got {other:?}"),
+            }
+        }
+        fn rotation_key<'a>(project: &'a Project, comp_id: u64, layer_id: u64, index: usize) -> &'a effectcraft_project::keyframe::Keyframe {
+            let layer = project.comp(ItemId(comp_id)).unwrap().layers.iter().find(|l| l.id.0 == layer_id).unwrap();
+            &layer.props.sub("transform").unwrap().prop("rotation").unwrap().keys[index]
+        }
+        let (source, comp_id, layer_id) = text_layer_project();
+        let at_zero = set_layer_transform_keyframe(&source, comp_id, layer_id, "rotation", 0, 100.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&at_zero, comp_id, layer_id, "rotation", 30, 0.0, 0.0, 0.0).unwrap();
+        let linear: Project = serde_json::from_str(&keyed).unwrap();
+        assert!((rotation_at(&linear, comp_id, layer_id, 15) - 50.0).abs() < 1e-9);
+
+        // Ease-in shapes the segment LEAVING the key: it starts slow, so the
+        // falling rotation stays above the linear value early and at midpoint.
+        let eased_in = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 0, "ease_in").unwrap();
+        let in_project: Project = serde_json::from_str(&eased_in).unwrap();
+        assert!(rotation_at(&in_project, comp_id, layer_id, 15) > 50.0, "ease-in midpoint must stay above linear 50");
+        assert!(rotation_at(&in_project, comp_id, layer_id, 7) > 100.0 - 100.0 * 7.0 / 30.0, "ease-in must lag linear early");
+        assert_eq!(rotation_key(&in_project, comp_id, layer_id, 0).out_interp, Interp::Bezier);
+        assert_eq!(rotation_key(&in_project, comp_id, layer_id, 0).in_interp, Interp::Linear, "ease-in must not touch the incoming side");
+
+        // Ease-out shapes the segment ARRIVING at the key: it ends slow, so
+        // the value is already ahead of linear at the midpoint.
+        let eased_out = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 30, "ease_out").unwrap();
+        let out_project: Project = serde_json::from_str(&eased_out).unwrap();
+        assert!(rotation_at(&out_project, comp_id, layer_id, 15) < 50.0, "ease-out midpoint must lead linear 50");
+        assert_eq!(rotation_key(&out_project, comp_id, layer_id, 1).in_interp, Interp::Bezier);
+        assert_eq!(rotation_key(&out_project, comp_id, layer_id, 1).out_interp, Interp::Linear, "ease-out must not touch the outgoing side");
+
+        // Ease-in-out (and its easy_ease alias) slow both ends: above linear
+        // early, below linear late.
+        let mut both = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 0, "ease_in_out").unwrap();
+        both = set_layer_transform_keyframe_interpolation(&both, comp_id, layer_id, "rotation", 30, "ease_in_out").unwrap();
+        let both_project: Project = serde_json::from_str(&both).unwrap();
+        assert!(rotation_at(&both_project, comp_id, layer_id, 7) > 100.0 - 100.0 * 7.0 / 30.0);
+        assert!(rotation_at(&both_project, comp_id, layer_id, 23) < 100.0 - 100.0 * 23.0 / 30.0);
+        let aliased = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 0, "easy_ease").unwrap();
+        let aliased_project: Project = serde_json::from_str(&aliased).unwrap();
+        assert_eq!(rotation_key(&aliased_project, comp_id, layer_id, 0).out_interp, Interp::Bezier);
+
+        // Directional presets ignore the qualifier: their direction IS their side.
+        let qualified_in = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 0, "incoming_ease_in").unwrap();
+        let qualified_project: Project = serde_json::from_str(&qualified_in).unwrap();
+        assert_eq!(rotation_key(&qualified_project, comp_id, layer_id, 0).out_interp, Interp::Bezier);
+        assert_eq!(rotation_key(&qualified_project, comp_id, layer_id, 0).in_interp, Interp::Linear);
+
+        // The asymmetric Bezier preset must also move the midpoint off linear,
+        // with 25 % incoming / 75 % outgoing influence at zero speed.
+        let bezier = set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 0, "bezier").unwrap();
+        let bezier_project: Project = serde_json::from_str(&bezier).unwrap();
+        assert!((rotation_at(&bezier_project, comp_id, layer_id, 15) - 50.0).abs() > 1e-6);
+        let bezier_key = rotation_key(&bezier_project, comp_id, layer_id, 0);
+        assert_eq!(bezier_key.in_ease[0].influence, 0.25);
+        assert_eq!(bezier_key.out_ease[0].influence, 0.75);
+        assert_eq!(bezier_key.in_ease[0].speed, 0.0);
+        assert_eq!(bezier_key.out_ease[0].speed, 0.0);
+
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 0, "bogus").is_err());
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 10, "ease_in").is_err());
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "nope", 0, "ease_in").is_err());
+        assert!(set_layer_transform_keyframe_interpolation(&keyed, comp_id, layer_id, "rotation", 0, "ease_in").is_ok());
     }
 
     #[test]
