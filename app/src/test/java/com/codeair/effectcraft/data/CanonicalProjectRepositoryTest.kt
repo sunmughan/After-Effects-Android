@@ -109,6 +109,47 @@ class CanonicalProjectRepositoryTest {
     }
 
     @Test
+    fun tamperedCanonicalDocumentIsRejectedByRepositoryIntegrityCheck() {
+        val root = Files.createTempDirectory("effectcraft-repo-integrity").toFile()
+        try {
+            val repo = CanonicalProjectRepository(root)
+            val created = repo.create("Integrity", document, "ecproj")
+            // Simulate external modification/corruption after the atomic import.
+            File(root, "${created.id}.ecproj").writeText(updated, Charsets.UTF_8)
+
+            assertNull("tampered document must not load", repo.load(created.id))
+            assertNull("tampered sidecar/document pair must not be trusted", repo.metadata(created.id))
+            assertFalse("corrupt entry must not appear in the picker", repo.list().any { it.id == created.id })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun legacySidecarWithoutDigestBackfillsDigestDuringMigration() {
+        val root = Files.createTempDirectory("effectcraft-repo-integrity-legacy").toFile()
+        try {
+            val repo = CanonicalProjectRepository(root)
+            val created = repo.create("Legacy digest", document, "ecproj")
+            val sidecar = File(root, "${created.id}.json")
+            val legacy = JSONObject(sidecar.readText(Charsets.UTF_8)).apply {
+                remove("version")
+                remove("documentSha256")
+            }
+            sidecar.writeText(legacy.toString(), Charsets.UTF_8)
+
+            val result = repo.migrateAll().single()
+            assertNull(result.error)
+            assertEquals(0, result.fromVersion)
+            assertNotNull(repo.metadata(created.id)?.documentSha256?.takeIf { it.matches(Regex("[a-f0-9]{64}")) })
+            assertEquals(document, repo.load(created.id))
+            assertTrue(JSONObject(sidecar.readText(Charsets.UTF_8)).has("documentSha256"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun legacySingleDocumentImportsAsRepositoryEntry() {
         val root = Files.createTempDirectory("effectcraft-repo-legacy").toFile()
         try {

@@ -100,10 +100,17 @@ class CanonicalProjectRepository(private val root: File) {
     }
 
     @Synchronized
+    @Throws(IOException::class)
     fun load(id: String): String? {
-        val metadata = metadata(validateId(id)) ?: return null
+        val checkedId = validateId(id)
+        val metadata = metadata(checkedId) ?: return null
         val file = documentFile(metadata.id, metadata.format)
-        return file.takeIf(File::isFile)?.let { runCatching { it.readText(Charsets.UTF_8) }.getOrNull() }
+        if (!file.isFile) return null
+        val document = file.readText(Charsets.UTF_8)
+        if (document.sha256() != metadata.documentSha256) {
+            throw IOException("Canonical project document integrity check failed")
+        }
+        return document
     }
 
     @Synchronized
@@ -186,17 +193,28 @@ class CanonicalProjectRepository(private val root: File) {
         require(raw.optString("format") == SIDECAR_FORMAT) { "Unsupported project metadata format" }
         val version = if (raw.has("version")) raw.getInt("version") else 0
         val id = validateId(raw.getString("id"))
-        val documentHash = raw.optString("documentSha256")
-        val documentFile = raw.optString("projectFormat").takeIf { it.isNotBlank() }?.let { format ->
-            documentFile(id, validateFormat(format))
+        val format = raw.optString("projectFormat").takeIf { it.isNotBlank() }
+            ?.let(::validateFormat) ?: FORMAT_ECPROJ
+        val declaredHash = raw.optString("documentSha256")
+        require(declaredHash.isEmpty() || declaredHash.matches(Regex("[a-f0-9]{64}"))) {
+            "Canonical project metadata contains an invalid SHA-256"
         }
-        val recomputed = documentFile?.takeIf(File::isFile)?.let { it.readText(Charsets.UTF_8).sha256() }
+        val documentFile = documentFile(id, format)
+        val actualHash = documentFile.takeIf(File::isFile)
+            ?.let { it.readText(Charsets.UTF_8).sha256() }
+        // A sidecar is an integrity record, not a cache hint. Never replace a
+        // declared digest with the digest of possibly tampered document bytes.
+        if (declaredHash.isNotEmpty() && actualHash != null && declaredHash != actualHash) {
+            throw IllegalArgumentException("Canonical project document SHA-256 mismatch")
+        }
         return Metadata(
             id = id,
             displayName = raw.optString("displayName").takeIf { it.isNotBlank() } ?: "Imported project",
-            format = raw.optString("projectFormat").takeIf { it.isNotBlank() }?.let(::validateFormat) ?: FORMAT_ECPROJ,
+            format = format,
             schemaVersion = if (version == 0) CURRENT_SCHEMA_VERSION else version,
-            documentSha256 = recomputed ?: documentHash,
+            // Legacy v0 sidecars had no digest; safely derive one only when the
+            // existing document is present. migrateAll() will persist it.
+            documentSha256 = declaredHash.ifEmpty { actualHash.orEmpty() },
             updatedAtMillis = raw.optLong("updatedAtMillis", 0L),
             sourceName = raw.optString("sourceName").takeIf { it.isNotEmpty() }
         )
