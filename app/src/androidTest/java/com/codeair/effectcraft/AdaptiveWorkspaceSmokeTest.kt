@@ -405,14 +405,18 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithText("Curve graph · Position X").performScrollTo()
         // Tap the chip with a real touch event, not the semantics click
         // action: performClick on this chip left the selection on Position
-        // X (the next add fired transform:position), while the raw
-        // down/up path is the proven gesture route in this file.
+        // X (the next add fired transform:position), and a single touch
+        // tap lands only intermittently across runs, so tap until the
+        // header proves the selection moved.
         val anchorChip = compose.onNodeWithText("Anchor X").performScrollTo()
         val chipSize = anchorChip.fetchSemanticsNode().size
-        anchorChip.performTouchInput {
-            down(0, Offset(chipSize.width / 2f, chipSize.height / 2f))
-            advanceEventTime(100)
-            up(0)
+        for (attempt in 0 until 5) {
+            if (runCatching { compose.onNodeWithText("Curve graph · Anchor X").fetchSemanticsNode() }.isSuccess) break
+            anchorChip.performTouchInput {
+                down(0, Offset(chipSize.width / 2f, chipSize.height / 2f))
+                advanceEventTime(100)
+                up(0)
+            }
         }
         // Existence, not visibility: fetching the node proves the selection
         // moved to Anchor X even when the sheet viewport leaves the header
