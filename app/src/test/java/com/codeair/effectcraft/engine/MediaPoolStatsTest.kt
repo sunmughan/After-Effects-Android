@@ -44,6 +44,15 @@ class MediaPoolStatsTest {
         assertNull(MediaPoolStats.parse("not json"))
     }
 
+    @Test fun rejectsNegativeCountersAndBudgetDriftAtNativeBoundary() {
+        val budget = MediaPoolStats.ANDROID_BUDGET_BYTES
+        assertNull(MediaPoolStats.parse("""{"frames":-1,"bytes":0,"budget":${budget},"hits":0,"misses":0}"""))
+        assertNull(MediaPoolStats.parse("""{"frames":0,"bytes":-1,"budget":${budget},"hits":0,"misses":0}"""))
+        assertNull(MediaPoolStats.parse("""{"frames":0,"bytes":0,"budget":${budget * 4},"hits":0,"misses":0}"""))
+        assertNull(MediaPoolStats.parse("""{"frames":0,"bytes":0,"budget":${budget},"hits":-1,"misses":0}"""))
+        assertNull(MediaPoolStats.parse("""{"frames":0,"bytes":0,"budget":${budget},"hits":0,"misses":-1}"""))
+    }
+
     @Test fun displayTextNamesFramesBytesAndBudget() {
         val stats = MediaPoolStats.parse(
             """{"frames":2,"bytes":1024,"budget":268435456,"hits":1,"misses":1,"opened":1}"""
