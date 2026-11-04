@@ -311,6 +311,14 @@ fun EditorScreen(
                 onExportPngSequence = { openSequenceSettings(RenderOutputFormat.PNG_SEQUENCE_ZIP) },
                 onCancelSequenceExport = onCancelSequenceExport,
                 sequenceExportProgress = sequenceExportProgress,
+                isExportingMp4 = isExportingMp4,
+                isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+                onExportMp4Sequence = {
+                    openSequenceSettings(RenderOutputFormat.MP4_H264)
+                    onOpenMp4Settings()
+                },
+                onCancelMp4Sequence = onCancelMp4Sequence,
+                mp4ExportProgress = mp4ExportProgress,
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
                 onOpenCanonicalEditor = { showCanonicalEditor = true },
@@ -762,6 +770,11 @@ private fun HeaderBar(
     onExportPngSequence: () -> Unit,
     onCancelSequenceExport: () -> Unit,
     sequenceExportProgress: Int,
+    isExportingMp4: Boolean = false,
+    isMp4ExportWritingOutput: Boolean = false,
+    onExportMp4Sequence: () -> Unit = {},
+    onCancelMp4Sequence: () -> Unit = {},
+    mp4ExportProgress: Int = 0,
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit,
@@ -926,10 +939,7 @@ private fun HeaderBar(
                 }
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
                 IconButton(
-                    onClick = if (isExportingMp4 && !isMp4ExportWritingOutput) onCancelMp4Sequence else {
-                        openSequenceSettings(RenderOutputFormat.MP4_H264)
-                        onOpenMp4Settings()
-                    },
+                    onClick = if (isExportingMp4 && !isMp4ExportWritingOutput) onCancelMp4Sequence else onExportMp4Sequence,
                     enabled = if (isExportingMp4) !isMp4ExportWritingOutput else hasCanonicalProject && !isExportingFrame && !isExportingSequence
                 ) {
                     Icon(
