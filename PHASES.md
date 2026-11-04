@@ -644,3 +644,11 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Evidence labelling: this is a green run on the exact #8 tip 71414e3, emulator CI only, no physical-device proof, no .aep claim, pinch/twist mapping-only.
 - Decision: M4 bullet #8 (Undo/redo, gestures, multi-selection and selection persistence) is flipped to PASS on this exact-head green evidence.
 - Scope limits preserved: M0 is NOT COMPLETE (licensing #12 and owner acceptance #13 remain open user decisions). No M5 or M6 completion is claimed. M4 #7 (already PASS), #4 (already PASS), and #9 bullets are untouched. The tip after this docs push is not claimed green unless a CI run on that tip proves it.
+
+
+### Run 64 — native transform keyframe timeline navigation (2026-11-04)
+- M4: native inspection metadata now exposes sorted/deduplicated Position, Scale and Rotation keyframe frame indices using the renderer's Tick→composition-frame conversion. Android parses those tracks and adds inspector jump actions that move the canonical preview/workspace playhead to the nearest existing transform key. This is a real native keyframe navigation path, not editor-only mock markers.
+- Added Rust assertions for native metadata frame indices and JVM parser regression for sorting/deduplication. UI actions are accessibility-labelled and call the shared preview frame callback.
+- Implementation commit [a37275a5](https://github.com/sunmughan/After-Effects-Android/commit/a37275a5606bcfd2206d03677136cafade50e781).
+- CI #475 on 7251dbd4 failed at Android test compilation in CanonicalEditPreviewSyncTest: JUnit fail() returns Unit, widening Elvis fallback bridge values to Any and causing cascading unresolved JSONObject/NativeSession/ByteArray references. Fixed in [c618641e](https://github.com/sunmughan/After-Effects-Android/commit/c618641ede58fd40fd8af6f281c4ad07e77c6f4e) by throwing AssertionError (Nothing) instead; no assertions changed. CI #476 is running on c618641e; new exact-head CI #477 is required for a37275a5.
+- No M4 completion claim: new metadata/navigation JVM and Rust assertions and emulator tests await CI; canonical keyframe editing/rendering still has property parity gaps. M0 owner/license gates and physical-device validation remain open.
