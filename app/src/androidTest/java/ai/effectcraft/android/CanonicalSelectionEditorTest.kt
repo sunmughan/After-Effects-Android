@@ -201,10 +201,17 @@ class CanonicalSelectionEditorTest {
         assertEquals(listOf<Any>(10L, 2L, "position", 15), removedTransformKeyframe)
 
         // Tap selects one layer; long-press adds a second layer to the set.
-        compose.onNodeWithContentDescription("Canonical layer row Title").performClick()
+        // The keyframe steps above scrolled the sheet down to the inspector,
+        // so the layer rows are out of the visible viewport: a click injected
+        // at their off-screen position is swallowed and leaves the selection
+        // on Background (line-205 failure: expected [3] but was [2]).
+        // Scroll each row back into view first, as the indicator and preview
+        // steps below already do.
+        compose.onNodeWithContentDescription("Canonical layer row Title").performScrollTo().performClick()
         assertEquals(setOf(3L), selectionState.value)
         compose.onNodeWithText("● Title", substring = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Canonical layer row Background")
+            .performScrollTo()
             .performSemanticsAction(SemanticsActions.OnLongClick)
         assertEquals(setOf(3L, 2L), selectionState.value)
         // The keyframe step above scrolled the sheet down to the inspector,
