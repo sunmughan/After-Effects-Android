@@ -316,7 +316,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Verify ARM64 native frame on physical phone/tablet; record device, ABI, SHA and pixel evidence.
 
 ## M4 — Editing/effects/timeline parity
-**Status: IN PROGRESS — canonical opacity keyframes serialize/evaluate in upstream rendering; latest transform/effect and full timeline parity remain open. Current head `6de686c`; CI #395 pending for the accumulated changes**
+**Status: IN PROGRESS — canonical opacity + Position/Scale/Rotation keyframe authoring/removal/navigation and transform timeline markers are implemented; current accessibility interaction awaits exact-head CI #507+; easing/graph and remaining property parity open**
 - [x] Canonical Transform/Opacity is now a real upstream `Property` mutation (0–100, key-aware at frame zero), exposed by JNI, reflected in metadata and edited with a commit-on-release slider; each change reserializes the `.ecproj` and refreshes CPU preview (`9a0af7d`, `340e601`, `7997036`, `1166a2c`, `71509df`). Rust tests cover property mutation/range/ID; Kotlin parser test covers opacity metadata (`e049130`). CI/device validation pending.
 - [x] Canonical Transform/Position X/Y edits preserve Z and key-aware set at frame zero; native model test verifies exact vector and rejects non-finite coordinates/unknown IDs (`b2422dc`); JNI/Kotlin bridge and inspector numeric controls Apply into project cache (`a8a94c2`, `764c311`, `21f4a80`). Parser tests cover X/Y metadata (`0a96985`). CI/device validation pending.
 - [x] Canonical Transform Scale X/Y and Z Rotation editing: Rust mutations preserve Scale Z and set key-aware frame-zero values, bounded finite input validation, JNI/Kotlin APIs, metadata parsing, inspector Apply controls and CPU preview refresh; Rust round-trip/error tests and Kotlin metadata test added (`6b1b45f`). Current-head CI validation pending.
@@ -324,7 +324,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Draft scalar `PropertyTrackEditor` and project-scoped `ProjectKeyframeStore` remain available for offline draft timeline K+/K− authoring; their data is isolated from canonical project state.
 - [x] Canonical opacity keyframe controls in the imported-project editor sheet persist through canonical JSON/XML save paths; native upstream property interpolation updates actual render frames. Commit `9f945729`; 4 Rust + 4 Kotlin JVM + 1 Compose tests added, exact-head CI #382 pending.
 - [x] Canonical key metadata is sorted and exposed in inspector; add/remove at preview frame is idempotent and preserves static opacity when last key removed. PASS - containing-head evidence: CI run 41688924382 completed success on head 7ca5ef3, which contains fix 00fbe74 plus later recovery commits; NOT exact-head evidence for 9f94572, 2ff34c8, or 17d6d79 alone.
-- [ ] Extend canonical keyframe editing to transforms and other properties; keyframe graph/Bezier/ease/drag parity.
+- [x] Canonical Position/Scale/Rotation keyframes are authored/upserted/removed in the upstream model, inspected as frame metadata, navigated from inspector and represented by a tappable TRANSFORM timeline lane (commits `ac7a279f`, `aef523c0`, `a37275a5`, `618553d4`, `39635738`, `91795861`, `b3872b8a`, `2fd99d5d`). Exact-head test acceptance for latest marker/accessibility changes pending CI #507+.
+- [ ] Extend remaining keyframe parity to Bezier/ease/curve graph, key dragging and other animatable property families.
 - [x] Undo/redo, gestures, multi-selection and selection persistence. PASS - exact-head evidence: CI run 41742331068 completed success on head 71414e3, which contains the ten #8 commits listed in Run 63.
 - [ ] Verify every edit updates engine preview and canonical project data.
 
@@ -335,7 +336,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] `sequence.json` records schema/format, width/height/FPS, inclusive frame range and frame count; validator checks manifest CRC/size and plan equality before SAF copy (Run 42, latest CI pending).
 - [x] Android SAF `CreateDocument(application/zip)` action runs full canonical composition range via native `NativeSession`, PNG-encodes each frame, stages under cache, copies only completed archive to user destination and cleans temp file; progress/cancel action. Commit `b9e3d4b5`; Compose callback test added; exact-head CI #383 pending.
 - [x] User-controlled PNG-sequence width/height, integer FPS and inclusive frame range with RenderQueuePlan validation; defaults use composition dimensions/FPS/full range (commit `58d796df`, Compose assertion added). Width/height now resample actual native pixels through `RenderedFramePng.writeScaled` with a bounded source side (`65b3675` + `58d796df` + follow-up). Emulator scaling test added; latest CI pending. Codec/container templates remain open.
-- [ ] ZIP integrity/manifest verification and robust cancellation/failure during final SAF copy; output provider may retain a partial document if copy itself fails.
+- [x] Staged ZIP manifest/frame/CRC validation before SAF copy and bounded SAF writer rollback on cancellation/error (Run 39/52; commits `e29b1356`, `deef8110`, `68346260`, `d4ac0db2`, `81656806`, `7fd56189`). Provider deletion is best-effort; some SAF providers may retain partial documents.
+- [ ] Process-death recovery during final SAF provider copy (provider-side partials cannot be universally rolled back).
 - [ ] Progress/cancel foreground service, process interruption/recovery, audio/media synchronization and video codecs.
 - [ ] Physical 720p/1080p and memory/thermal budget tests; 4K only on capable tiers.
 - [ ] Tested 720p/1080p; 4K only on device tiers meeting measured budgets.
@@ -346,7 +348,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [x] Roll back a newly staged media payload when atomic index publication fails; fault-injection regression added (Run 46, commit `6de686c`). Exact-head CI #395 pending.
 - [ ] Memory/frame pacing/thermal budgets and large-project benchmarks.
 - [ ] Crash recovery, atomic save, process death and lifecycle/rotation.
-- [ ] API 26+ phone/tablet/foldable matrix; accessibility and input polish.
+- [x] Transform timeline marker lane exposes pointer and screen-reader semantic click; accessible activation seeks nearest key to current playhead (implementation `8e17934c`, connected regression `e77da4ea`; exact-head CI pending).
+- [ ] API 26+ phone/tablet/foldable matrix, TalkBack/manual accessibility audit and remaining input polish.
 - [ ] Offline acceptance including local media and no account/network requirement.
 
 ## M7 — Release readiness
