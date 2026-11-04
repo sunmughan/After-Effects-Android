@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -1952,14 +1953,14 @@ private fun TimelinePanel(
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
             }
             if (canonicalTransformKeyframes.isNotEmpty()) {
-                CanonicalTransformTrack(canonicalTransformKeyframes, project.durationFrames)
+                CanonicalTransformTrack(canonicalTransformKeyframes, project.durationFrames, onScrub)
             }
         }
     }
 }
 
 @Composable
-private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int) {
+private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, onScrub: (Int) -> Unit) {
     val frames = keyframes.filter { it >= 0 }.distinct().sorted()
     Row(
         modifier = Modifier
@@ -1973,6 +1974,15 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int) {
         Box(
             modifier = Modifier.weight(1f).height(17.dp)
                 .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
+                .semantics { contentDescription = "Canonical transform keyframes: ${frames.joinToString(\", \")}" }
+                .pointerInput(frames, durationFrames) {
+                    detectTapGestures { tap ->
+                        val frameRange = (durationFrames - 1).coerceAtLeast(1)
+                        val tappedFrame = (tap.x / size.width.coerceAtLeast(1) * frameRange).roundToInt()
+                        val nearestKey = frames.minByOrNull { kotlin.math.abs(it - tappedFrame) } ?: tappedFrame
+                        onScrub(nearestKey.coerceIn(0, (durationFrames - 1).coerceAtLeast(0)))
+                    }
+                }
         ) {
             Canvas(Modifier.fillMaxSize()) {
                 val frameRange = (durationFrames - 1).coerceAtLeast(1).toFloat()

@@ -189,6 +189,13 @@ class CanonicalSelectionEditorTest {
         compose.onNodeWithContentDescription("Remove position keyframe").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, "position", 15), removedTransformKeyframe)
 
+        // Timeline markers are interactive: tapping near frame 30 chooses
+        // the nearest canonical key and updates the shared preview/playhead.
+        compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
+            .performScrollTo().performTouchInput { click(center) }
+        assertEquals(30, workspaceFrame.intValue)
+        compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(30L) }
+
         // Tap selects one layer; long-press adds a second layer to the set.
         compose.onNodeWithContentDescription("Canonical layer row Title").performClick()
         assertEquals(setOf(3L), selectionState.value)
