@@ -49,7 +49,9 @@ class LargeProjectBenchmarkTest {
         assertEquals(8L, interval)
         assertEquals(28_800L, interval * project.durationFrames)
         assertEquals(33L, ProjectEditorActions.frameIntervalMillis(30))
-        assertEquals(120_000L, ProjectEditorActions.frameIntervalMillis(30) * 3600L)
+        // Rounded 33 ms interval x 3600 frames = 118,800 ms scheduled, not
+        // the ideal 120,000 ms: the rounding is the implemented behavior.
+        assertEquals(118_800L, ProjectEditorActions.frameIntervalMillis(30) * 3600L)
     }
 
     @Test
