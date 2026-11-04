@@ -131,6 +131,13 @@ class ProjectKeyframeStore(private val root: File) {
     @Throws(IOException::class)
     fun clear(projectId: String): Boolean {
         val file = fileFor(validateProjectId(projectId))
+        val temporary = File(root, "${file.name}.tmp")
+        // Delete the interrupted-write temp FIRST: deleting the committed
+        // file first and then crashing would let the next load promote the
+        // stale temp and resurrect the cleared tracks. Temp-first means a
+        // crash mid-clear leaves the committed file intact, never a
+        // resurrection.
+        if (temporary.exists()) temporary.delete()
         if (!file.exists()) return false
         if (!file.delete()) throw IOException("Unable to remove project keyframes")
         return true

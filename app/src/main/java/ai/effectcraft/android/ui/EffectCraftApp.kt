@@ -35,6 +35,7 @@ import ai.effectcraft.android.data.ProjectAssetManifestStore
 import ai.effectcraft.android.data.SafPermissionRegistry
 import ai.effectcraft.android.engine.NativeProjectBridge
 import ai.effectcraft.android.engine.NativeSession
+import ai.effectcraft.android.engine.BudgetViolationException
 import ai.effectcraft.android.engine.RenderedFramePng
 import ai.effectcraft.android.data.LayerDocument
 import ai.effectcraft.android.data.ProjectEditorActions
@@ -1182,8 +1183,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 // size live natively for the whole workspace lifetime. When
                 // no session is open (no canonical project, or native
                 // unavailable) this returns null and the viewer keeps its
-                // honest "not rendered / unavailable" label.
-                renderSessionHolder.session?.render(compositionId, frame)
+                // honest "not rendered / unavailable" label. A render-budget
+                // violation is different from unavailability: it must surface
+                // as editor status, never crash the preview coroutine and
+                // never silently drop the frame.
+                runCatching {
+                    renderSessionHolder.session?.render(compositionId, frame)
+                }.onFailure { failure ->
+                    if (failure is BudgetViolationException) {
+                        saveMessage = "Preview blocked by render budget · ${failure.message}"
+                    }
+                }.getOrNull()
             },
             safGrants = safGrants,
             missingManifestEntries = manifestMissingCount,
