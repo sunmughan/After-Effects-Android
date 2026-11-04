@@ -799,7 +799,7 @@ fn layer_transform_keyframes(layer: &effectcraft_project::Layer, frame_rate: eff
     let mut tracks = serde_json::Map::new();
     if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
         for property_name in ["position", "scale", "rotation", "anchor", "orientation", "rotationX", "rotationY"] {
-            if let Some(property) = transform.prop(property_name) {
+            if let Some(property) = find_property_ref(transform, property_name) {
                 let mut frames = property.keys.iter()
                     .map(|key| key.time.to_rational_floor(frame_rate.den, frame_rate.num))
                     .collect::<Vec<_>>();
@@ -1119,7 +1119,7 @@ fn remove_layer_transform_keyframe(
     require_layer_unlocked(layer)?;
     let transform = layer.props.sub_mut("transform")
         .ok_or_else(|| format!("Layer {layer_id} has no Transform group"))?;
-    let property = transform.prop_mut(property_name)
+    let property = find_property_recursive_mut(transform, property_name)
         .ok_or_else(|| format!("Layer {layer_id} has no {property_name} property"))?;
     match (property_name, &property.value) {
         ("position" | "scale" | "anchor" | "orientation", Value::Vec3(_)) | ("rotation" | "rotationX" | "rotationY", Value::Scalar(_)) => {},
@@ -3233,7 +3233,7 @@ mod tests {
         let eased = set_layer_transform_keyframe_interpolation(&rotation_y, comp_id, layer_id, "orientation", 15, "easy_ease").unwrap();
         let project: Project = serde_json::from_str(&eased).unwrap();
         let transform = project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap();
-        let anchor_key = &transform.prop("anchor").unwrap().keys[0];
+        let anchor_key = &find_property_ref(transform, "anchor").unwrap().keys[0];
         assert!(matches!(&anchor_key.value, Value::Vec3(v) if v[0] == 12.0 && v[1] == 34.0));
         let orientation_key = &transform.prop("orientation").unwrap().keys[0];
         assert_eq!(orientation_key.value, Value::Vec3([10.0, 20.0, 30.0]));
@@ -3250,7 +3250,7 @@ mod tests {
         let (without_anchor, removed) = remove_layer_transform_keyframe(&eased, comp_id, layer_id, "anchor", 0).unwrap();
         assert!(removed);
         let after: Project = serde_json::from_str(&without_anchor).unwrap();
-        assert!(after.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("anchor").unwrap().keys.is_empty());
+        assert!(find_property_ref(after.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap(), "anchor").unwrap().keys.is_empty());
         assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "anchor", 0, f64::NAN, 0.0, 0.0).is_err());
         assert!(set_layer_transform_keyframe(&source, comp_id, layer_id, "orientation", 0, 0.0, 0.0, f64::INFINITY).is_err());
     }
