@@ -1,5 +1,7 @@
 # EffectCraft for Android
 
+**Run 100 progress (2026-11-05):** exact CI #685 (run 41925868774) built ARM64+x86_64 native/JNI successfully but Rust tests failed to compile: three cache-lifecycle fixtures still called the new 7-argument render_parsed_frame with six args (E0061). Fixed by passing explicit None cache in uncached CPU/live/retired fixtures (`c0656d28`); assertions and production paths unchanged. Fresh exact-head CI is pending; no pass claimed. See PHASES.md Run 100.
+
 **Run 99 progress (2026-11-05):** CI #679 (run 41920303396) had two API30 failures: rotation test expected stale `Background` after New → Layer (fixed in commit `8cd508da`), and 48-layer/288-key preview measured 36.431ms mean / 46.7% jank against agent-proposed budgets. Native preview now owns an upstream content-keyed `LayerCache` (64 MiB cap) across frames (`b4e2e1f9`); JNI exposes cache counters and the benchmark asserts reuse/budget (`ea713959`). CI #682/#683 were superseded; latest exact-head CI pending. No benchmark improvement/pass claimed until JUnit is inspected. See PHASES.md Run 99.
 
 ### Run 90 — preserve standalone EditorScreen test/API compatibility
