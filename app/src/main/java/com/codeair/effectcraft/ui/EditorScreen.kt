@@ -1,6 +1,13 @@
 package com.codeair.effectcraft.ui
 
+import com.codeair.effectcraft.data.BezierCurveEditor
+import com.codeair.effectcraft.data.CanonicalCompositionInfo
+import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalProjectRepository
+import com.codeair.effectcraft.data.CurveHandle
+import com.codeair.effectcraft.data.CurveInterp
+import com.codeair.effectcraft.data.CurveKey
+import com.codeair.effectcraft.data.CurveTrack
 import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.SafPermissionRegistry
 
@@ -184,6 +191,9 @@ fun EditorScreen(
     onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onRemoveCanonicalLayerTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
+    onMoveCanonicalCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
+    onSetCanonicalCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+    onAddCanonicalCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onRemoveCanonicalLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetCanonicalLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetCanonicalLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -641,6 +651,9 @@ fun EditorScreen(
                     interpolationSide = interpolationSide,
                     onInterpolationSideChange = { interpolationSide = it },
                     onSetLayerTransformInterpolation = onSetCanonicalLayerTransformInterpolation,
+                    onMoveCanonicalCurveKey = onMoveCanonicalCurveKey,
+                    onSetCanonicalCurveHandle = onSetCanonicalCurveHandle,
+                    onAddCanonicalCurveKey = onAddCanonicalCurveKey,
                     onRemoveLayerOpacityKeyframe = onRemoveCanonicalLayerOpacityKeyframe,
                     onSetLayerPosition = onSetCanonicalLayerPosition,
                     onSetLayerScale = onSetCanonicalLayerScale,
@@ -1083,6 +1096,9 @@ private fun CanonicalProjectEditor(
     interpolationSide: String = "both",
     onInterpolationSideChange: (String) -> Unit = {},
     onSetLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
+    onMoveCanonicalCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
+    onSetCanonicalCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+    onAddCanonicalCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onRemoveLayerOpacityKeyframe: (Long, Long, Int) -> Unit,
     onSetLayerPosition: (Long, Long, Double, Double) -> Unit,
     onSetLayerScale: (Long, Long, Double, Double) -> Unit,
@@ -1488,6 +1504,17 @@ private fun CanonicalProjectEditor(
                     }
                 }
                 Text("Both edits both tangents; Incoming/Outgoing preserves the opposite side.", color = EditorPalette.muted, fontSize = 10.sp)
+                if (composition != null) {
+                    CurveGraphSection(
+                        layer = layer,
+                        composition = composition,
+                        previewFrame = previewFrame,
+                        editable = editable,
+                        onMoveCurveKey = onMoveCanonicalCurveKey,
+                        onSetCurveHandle = onSetCanonicalCurveHandle,
+                        onAddCurveKey = onAddCanonicalCurveKey
+                    )
+                }
                 Text("Anchor Point · X / Y", color = EditorPalette.text, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BasicTextField(
@@ -2097,6 +2124,351 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, c
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Curve graph editor for one canonical property track. Vector properties
+ * plot their first component. Keys are drawn as dots, Bezier handles as
+ * smaller dots joined to their key; dragging a key dot moves the key in
+ * time, dragging a handle dot reshapes that side's Bezier ease. Commits go
+ * through the native curve bridge, so the graph, the metadata and the
+ * renderer always agree. This section never touches the timeline marker
+ * lane, whose tap-to-seek behaviour is unchanged.
+ */
+@Composable
+private fun CurveGraphSection(
+    layer: CanonicalLayerInfo,
+    composition: CanonicalCompositionInfo,
+    previewFrame: Int,
+    editable: Boolean,
+    onMoveCurveKey: (Long, Long, String, Int, Int) -> Unit,
+    onSetCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit,
+    onAddCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit
+) {
+    var selectedSelector by remember(layer.id) { mutableStateOf("transform:position") }
+    val paramOptions = (layer.shapeItems + layer.effects).flatMap { group ->
+        group.scalars.map { "param:${it.uid}" to "${group.name} · ${it.name}" } +
+            group.vecs.map { "param:${it.uid}" to "${group.name} · ${it.name}" }
+    }
+    val options = listOf(
+        "transform:position" to "Position X",
+        "transform:scale" to "Scale X",
+        "transform:rotation" to "Rotation",
+        "transform:opacity" to "Opacity"
+    ) + paramOptions
+    val selector = if (options.any { it.first == selectedSelector }) selectedSelector else options.first().first
+    val label = options.firstOrNull { it.first == selector }?.second ?: selector
+    val track = remember(layer, selector) { curveTrackFor(layer, selector) }
+    val fps = (composition.frameRateNum.toDouble() / composition.frameRateDen.coerceAtLeast(1).toDouble())
+        .takeIf { it > 0.0 && it.isFinite() } ?: 30.0
+    val durationFrames = composition.durationFrames.coerceAtLeast(1)
+    var graphWidth by remember { mutableFloatStateOf(0f) }
+    var graphHeight by remember { mutableFloatStateOf(0f) }
+    var dragPreview by remember(layer, selector) { mutableStateOf<CurveTrack?>(null) }
+    var dragKeyFrame by remember(layer, selector) { mutableStateOf<Int?>(null) }
+    var dragHandleFrame by remember(layer, selector) { mutableStateOf<Int?>(null) }
+    var dragHandleSide by remember(layer, selector) { mutableStateOf<String?>(null) }
+    var dragTargetFrame by remember(layer, selector) { mutableStateOf<Int?>(null) }
+    var dragHandle by remember(layer, selector) { mutableStateOf<CurveHandle?>(null) }
+    val displayTrack = dragPreview ?: track
+
+    val values = displayTrack.keys.map { it.value }
+    val minValue = values.minOrNull() ?: 0.0
+    val maxValue = values.maxOrNull() ?: 0.0
+    val span = (maxValue - minValue).let { if (it == 0.0) maxOf(1.0, abs(maxValue) * 0.2) else it }
+    val lowValue = minValue - span * 0.15
+    val highValue = maxValue + span * 0.15
+    fun frameToX(frame: Double): Float {
+        if (graphWidth <= 0f) return 0f
+        return (frame / durationFrames.toDouble()).toFloat() * graphWidth
+    }
+    fun valueToY(value: Double): Float {
+        if (graphHeight <= 0f) return 0f
+        return (1.0 - (value - lowValue) / (highValue - lowValue)).toFloat() * graphHeight
+    }
+    fun xToFrame(x: Float): Int {
+        if (graphWidth <= 0f) return 0
+        return (x / graphWidth * durationFrames).toInt().coerceIn(0, durationFrames - 1)
+    }
+    fun yToValue(y: Float): Double {
+        if (graphHeight <= 0f) return lowValue
+        return highValue - (y / graphHeight) * (highValue - lowValue)
+    }
+    fun handlePoint(key: CurveKey, neighbor: CurveKey, handle: CurveHandle, side: String): Offset {
+        val segmentFrames = abs(neighbor.frame - key.frame).toDouble()
+        val segmentSeconds = segmentFrames / fps
+        return if (side == "outgoing") {
+            Offset(
+                frameToX(key.frame + handle.influence * segmentFrames),
+                valueToY(key.value + handle.speed * segmentSeconds * handle.influence)
+            )
+        } else {
+            Offset(
+                frameToX(key.frame - handle.influence * segmentFrames),
+                valueToY(key.value - handle.speed * segmentSeconds * handle.influence)
+            )
+        }
+    }
+
+    Text("Curve graph · $label", color = EditorPalette.text, fontSize = 12.sp)
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        options.forEach { (optionSelector, optionLabel) ->
+            FilterChip(
+                selected = selector == optionSelector,
+                onClick = { selectedSelector = optionSelector },
+                enabled = editable,
+                label = { Text(optionLabel, fontSize = 10.sp) }
+            )
+        }
+    }
+    if (displayTrack.keys.isEmpty()) {
+        Text("No keys on this track yet. Add one at the playhead.", color = EditorPalette.muted, fontSize = 10.sp)
+    } else {
+        val sampled = remember(displayTrack, fps) {
+            BezierCurveEditor.sample(displayTrack, samplesPerSegment = 24, framesPerSecond = fps)
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF202633))
+                .onSizeChanged { size ->
+                    graphWidth = size.width.toFloat()
+                    graphHeight = size.height.toFloat()
+                }
+                .semantics {
+                    contentDescription = "Curve graph for $label with keys " +
+                        displayTrack.keys.joinToString(", ") { "${it.frame}: ${it.value}" }
+                }
+                .pointerInput(track, graphWidth, graphHeight) {
+                    detectDragGestures(
+                        onDragStart = { start ->
+                            if (!editable) return@detectDragGestures
+                            var bestKey: CurveKey? = null
+                            var bestKeyDistance = 28f
+                            track.keys.forEach { key ->
+                                val point = Offset(frameToX(key.frame.toDouble()), valueToY(key.value))
+                                val distance = (point - start).getDistance()
+                                if (distance < bestKeyDistance) {
+                                    bestKeyDistance = distance
+                                    bestKey = key
+                                }
+                            }
+                            if (bestKey != null) {
+                                dragKeyFrame = bestKey!!.frame
+                                dragTargetFrame = bestKey!!.frame
+                                return@detectDragGestures
+                            }
+                            var bestHandle: CurveHandle? = null
+                            var bestHandleFrame: Int? = null
+                            var bestHandleSide: String? = null
+                            var bestHandleDistance = 28f
+                            track.keys.forEachIndexed { index, key ->
+                                val outgoing = key.outHandle ?: if (key.outInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+                                if (outgoing != null && index < track.keys.lastIndex) {
+                                    val point = handlePoint(key, track.keys[index + 1], outgoing, "outgoing")
+                                    val distance = (point - start).getDistance()
+                                    if (distance < bestHandleDistance) {
+                                        bestHandleDistance = distance
+                                        bestHandle = outgoing
+                                        bestHandleFrame = key.frame
+                                        bestHandleSide = "outgoing"
+                                    }
+                                }
+                                val incoming = key.inHandle ?: if (key.inInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+                                if (incoming != null && index > 0) {
+                                    val point = handlePoint(key, track.keys[index - 1], incoming, "incoming")
+                                    val distance = (point - start).getDistance()
+                                    if (distance < bestHandleDistance) {
+                                        bestHandleDistance = distance
+                                        bestHandle = incoming
+                                        bestHandleFrame = key.frame
+                                        bestHandleSide = "incoming"
+                                    }
+                                }
+                            }
+                            dragHandle = bestHandle
+                            dragHandleFrame = bestHandleFrame
+                            dragHandleSide = bestHandleSide
+                        },
+                        onDragEnd = {
+                            val keyFrame = dragKeyFrame
+                            val target = dragTargetFrame
+                            if (keyFrame != null && target != null && target != keyFrame) {
+                                onMoveCurveKey(composition.id, layer.id, selector, keyFrame, target)
+                            }
+                            val handleFrame = dragHandleFrame
+                            val handleSide = dragHandleSide
+                            val handle = dragHandle
+                            if (handleFrame != null && handleSide != null && handle != null) {
+                                onSetCurveHandle(composition.id, layer.id, selector, handleFrame, handleSide, handle.speed, handle.influence)
+                            }
+                            dragPreview = null
+                            dragKeyFrame = null
+                            dragHandleFrame = null
+                            dragHandleSide = null
+                            dragTargetFrame = null
+                            dragHandle = null
+                        },
+                        onDrag = { change, _ ->
+                            val keyFrame = dragKeyFrame
+                            if (keyFrame != null) {
+                                val target = xToFrame(change.position.x)
+                                dragTargetFrame = target
+                                dragPreview = runCatching { BezierCurveEditor.move(track, keyFrame, target) }.getOrNull()
+                                return@detectDragGestures
+                            }
+                            val handleFrame = dragHandleFrame
+                            val handleSide = dragHandleSide
+                            if (handleFrame != null && handleSide != null) {
+                                val key = track.keys.firstOrNull { it.frame == handleFrame } ?: return@detectDragGestures
+                                val index = track.keys.indexOf(key)
+                                val neighbor = if (handleSide == "outgoing") {
+                                    track.keys.getOrNull(index + 1)
+                                } else {
+                                    track.keys.getOrNull(index - 1)
+                                } ?: return@detectDragGestures
+                                val next = BezierCurveEditor.handleFromPointer(
+                                    keyFrame = key.frame,
+                                    keyValue = key.value,
+                                    neighborFrame = neighbor.frame,
+                                    neighborValue = neighbor.value,
+                                    pointerFrame = xToFrame(change.position.x).toDouble(),
+                                    pointerValue = yToValue(change.position.y),
+                                    framesPerSecond = fps,
+                                    side = handleSide
+                                )
+                                dragHandle = next
+                                dragPreview = runCatching {
+                                    BezierCurveEditor.withHandle(track, handleFrame, handleSide, next)
+                                }.getOrNull()
+                            }
+                        }
+                    )
+                }
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                for (index in 0 until sampled.lastIndex) {
+                    val from = sampled[index]
+                    val to = sampled[index + 1]
+                    drawLine(
+                        color = EditorPalette.mint,
+                        start = Offset(frameToX(from.frame), valueToY(from.value)),
+                        end = Offset(frameToX(to.frame), valueToY(to.value)),
+                        strokeWidth = 2f
+                    )
+                }
+                displayTrack.keys.forEachIndexed { index, key ->
+                    val center = Offset(frameToX(key.frame.toDouble()), valueToY(key.value))
+                    val outgoing = key.outHandle ?: if (key.outInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+                    if (outgoing != null && index < displayTrack.keys.lastIndex) {
+                        val point = handlePoint(key, displayTrack.keys[index + 1], outgoing, "outgoing")
+                        drawLine(color = EditorPalette.violet, start = center, end = point, strokeWidth = 1.5f)
+                        drawCircle(color = EditorPalette.violet, radius = 5f, center = point)
+                    }
+                    val incoming = key.inHandle ?: if (key.inInterp == CurveInterp.BEZIER) BezierCurveEditor.defaultHandle else null
+                    if (incoming != null && index > 0) {
+                        val point = handlePoint(key, displayTrack.keys[index - 1], incoming, "incoming")
+                        drawLine(color = EditorPalette.amber, start = center, end = point, strokeWidth = 1.5f)
+                        drawCircle(color = EditorPalette.amber, radius = 5f, center = point)
+                    }
+                    drawCircle(color = EditorPalette.mint, radius = 6f, center = center)
+                }
+            }
+        }
+        Text(
+            "Keys · ${displayTrack.keys.joinToString(", ") { "${it.frame}: ${it.value}" }}",
+            color = EditorPalette.muted,
+            fontSize = 10.sp
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        TextButton(
+            enabled = editable,
+            onClick = {
+                val current = curveCurrentValue(layer, selector)
+                onAddCurveKey(composition.id, layer.id, selector, previewFrame, current.first, current.second, current.third)
+            },
+            modifier = Modifier.semantics { contentDescription = "Add $label keyframe at playhead" }
+        ) { Text("Add key at playhead", color = EditorPalette.violet, fontSize = 10.sp) }
+        Text(
+            "Drag a key dot to move it in time; drag a handle dot to reshape its Bezier ease. Vector tracks plot the first component.",
+            color = EditorPalette.muted,
+            fontSize = 10.sp
+        )
+    }
+}
+
+private fun curveTrackFor(layer: CanonicalLayerInfo, selector: String): CurveTrack {
+    fun fromCurves(curves: List<com.codeair.effectcraft.data.CanonicalCurveKey>): List<CurveKey> {
+        return curves.map { key ->
+            CurveKey(
+                frame = key.frame,
+                value = key.value,
+                inHandle = if (key.inInterp == "Bezier") CurveHandle(key.inSpeed, key.inInfluence.coerceIn(0.0, 1.0)) else null,
+                outHandle = if (key.outInterp == "Bezier") CurveHandle(key.outSpeed, key.outInfluence.coerceIn(0.0, 1.0)) else null,
+                inInterp = when (key.inInterp) {
+                    "Bezier" -> CurveInterp.BEZIER
+                    "Hold" -> CurveInterp.HOLD
+                    else -> CurveInterp.LINEAR
+                },
+                outInterp = when (key.outInterp) {
+                    "Bezier" -> CurveInterp.BEZIER
+                    "Hold" -> CurveInterp.HOLD
+                    else -> CurveInterp.LINEAR
+                }
+            )
+        }.sortedBy { it.frame }
+    }
+    val keys = when (selector) {
+        "transform:position" -> layer.transformCurves["position"]?.let { fromCurves(it) }
+            ?: layer.transformKeyframes["position"].orEmpty().map { CurveKey(it, layer.positionX) }
+        "transform:scale" -> layer.transformCurves["scale"]?.let { fromCurves(it) }
+            ?: layer.transformKeyframes["scale"].orEmpty().map { CurveKey(it, layer.scaleX) }
+        "transform:rotation" -> layer.transformCurves["rotation"]?.let { fromCurves(it) }
+            ?: layer.transformKeyframes["rotation"].orEmpty().map { CurveKey(it, layer.rotationDegrees) }
+        "transform:opacity" -> if (layer.opacityCurves.isNotEmpty()) fromCurves(layer.opacityCurves)
+            else layer.opacityKeys.map { CurveKey(it.frame, it.value.toDouble()) }
+        else -> {
+            val uid = selector.removePrefix("param:").toLongOrNull()
+            val scalar = (layer.shapeItems + layer.effects).flatMap { it.scalars }.firstOrNull { it.uid == uid }
+            val vec = if (scalar == null) {
+                (layer.shapeItems + layer.effects).flatMap { it.vecs }.firstOrNull { it.uid == uid }
+            } else null
+            when {
+                scalar != null -> fromCurves(scalar.keys)
+                vec != null -> fromCurves(vec.keys)
+                else -> emptyList()
+            }
+        }
+    }
+    return CurveTrack(selector, keys)
+}
+
+private fun curveCurrentValue(layer: CanonicalLayerInfo, selector: String): Triple<Double, Double, Double> {
+    return when (selector) {
+        "transform:position" -> Triple(layer.positionX, layer.positionY, 0.0)
+        "transform:scale" -> Triple(layer.scaleX, layer.scaleY, 0.0)
+        "transform:rotation" -> Triple(layer.rotationDegrees, 0.0, 0.0)
+        "transform:opacity" -> Triple(layer.opacityPercent, 0.0, 0.0)
+        else -> {
+            val uid = selector.removePrefix("param:").toLongOrNull()
+            val scalar = (layer.shapeItems + layer.effects).flatMap { it.scalars }.firstOrNull { it.uid == uid }
+            if (scalar != null) return Triple(scalar.value, 0.0, 0.0)
+            val vec = (layer.shapeItems + layer.effects).flatMap { it.vecs }.firstOrNull { it.uid == uid }
+            if (vec != null) {
+                Triple(
+                    vec.components.getOrElse(0) { 0.0 },
+                    vec.components.getOrElse(1) { 0.0 },
+                    vec.components.getOrElse(2) { 0.0 }
+                )
+            } else Triple(0.0, 0.0, 0.0)
         }
     }
 }

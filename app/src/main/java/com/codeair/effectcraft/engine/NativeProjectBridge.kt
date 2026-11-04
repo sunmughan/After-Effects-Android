@@ -185,6 +185,49 @@ object NativeProjectBridge {
         return runCatching { setLayerTransformKeyframeInterpolationEcprojNative(json, compositionId, layerId, property, frame, preset) }.getOrNull()
     }
 
+    /**
+     * Applies one custom Bezier handle to a curve key. [selector] is
+     * "transform:position", "transform:scale", "transform:rotation",
+     * "transform:opacity", or "param:<uid>" for a shape-item or effect
+     * parameter. [side] is "incoming", "outgoing" or "both"; [speed] is in
+     * value units per second and [influence] is a 0..1 fraction of the
+     * adjacent segment. Returns the edited-project envelope, or null when
+     * native is unavailable or any argument is invalid.
+     */
+    fun setLayerKeyframeBezierEcproj(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long, side: String, speed: Double, influence: Double): String? {
+        ensureLoaded()
+        val selectorValid = selector in setOf("transform:position", "transform:scale", "transform:rotation", "transform:opacity") ||
+            (selector.startsWith("param:") && selector.removePrefix("param:").toLongOrNull()?.let { it >= 0 } == true)
+        if (!available || frame < 0 || side !in setOf("incoming", "outgoing", "both") || !speed.isFinite() || influence !in 0.0..1.0 || !selectorValid) return null
+        return runCatching { setLayerKeyframeBezierEcprojNative(json, compositionId, layerId, selector, frame, side, speed, influence) }.getOrNull()
+    }
+
+    /**
+     * Drags a curve key from [fromFrame] to [toFrame], keeping its value and
+     * Bezier sides. Dragging past a neighbour reorders the track; dragging
+     * exactly onto a neighbour replaces it. Returns the edited-project
+     * envelope, or null when native is unavailable or any argument is invalid.
+     */
+    fun moveLayerKeyframeEcproj(json: String, compositionId: Long, layerId: Long, selector: String, fromFrame: Long, toFrame: Long): String? {
+        ensureLoaded()
+        val selectorValid = selector in setOf("transform:position", "transform:scale", "transform:rotation", "transform:opacity") ||
+            (selector.startsWith("param:") && selector.removePrefix("param:").toLongOrNull()?.let { it >= 0 } == true)
+        if (!available || fromFrame < 0 || toFrame < 0 || !selectorValid) return null
+        return runCatching { moveLayerKeyframeEcprojNative(json, compositionId, layerId, selector, fromFrame, toFrame) }.getOrNull()
+    }
+
+    /**
+     * Authors one shape-item or effect scalar/vector parameter keyframe at
+     * [frame], addressed by its native uid. The first key seeds frame 0 with
+     * the parameter's current value. Returns the edited-project envelope,
+     * or null when native is unavailable or any argument is invalid.
+     */
+    fun setLayerParamKeyframeEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, x: Double, y: Double, z: Double): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || frame < 0 || !x.isFinite() || !y.isFinite() || !z.isFinite()) return null
+        return runCatching { setLayerParamKeyframeEcprojNative(json, compositionId, layerId, uid, frame, x, y, z) }.getOrNull()
+    }
+
     /** Removes a native Position, Scale or Rotation key at [frame]; removal is idempotent. */
     fun removeLayerTransformKeyframeEcproj(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String? {
         ensureLoaded()
@@ -288,6 +331,15 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerTransformKeyframeInterpolationEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long, preset: String): String
+
+    @JvmStatic
+    private external fun setLayerKeyframeBezierEcprojNative(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long, side: String, speed: Double, influence: Double): String
+
+    @JvmStatic
+    private external fun moveLayerKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, selector: String, fromFrame: Long, toFrame: Long): String
+
+    @JvmStatic
+    private external fun setLayerParamKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, x: Double, y: Double, z: Double): String
 
     @JvmStatic
     private external fun removeLayerTransformKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, property: String, frame: Long): String

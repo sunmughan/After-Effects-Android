@@ -2,18 +2,37 @@ package com.codeair.effectcraft.data
 
 import org.json.JSONObject
 
+/**
+ * One curve-graph key as exposed by native metadata: frame, first-component
+ * value (vector properties plot their first component), per-side
+ * interpolation labels ("Linear", "Bezier" or "Hold") and the first ease
+ * entry per side (speed in value units per second, influence 0..1).
+ */
+data class CanonicalCurveKey(
+    val frame: Int,
+    val value: Double,
+    val inInterp: String = "Linear",
+    val outInterp: String = "Linear",
+    val inSpeed: Double = 0.0,
+    val inInfluence: Double = 0.0,
+    val outSpeed: Double = 0.0,
+    val outInfluence: Double = 0.0
+)
+
 /** One editable scalar parameter of a shape item or effect, addressed by its stable native uid. */
 data class CanonicalScalarParam(
     val uid: Long,
     val name: String,
-    val value: Double
+    val value: Double,
+    val keys: List<CanonicalCurveKey> = emptyList()
 )
 
 /** One editable vector parameter; components has 2 entries for a Vec2 and 3 for a Vec3. */
 data class CanonicalVecParam(
     val uid: Long,
     val name: String,
-    val components: List<Double>
+    val components: List<Double>,
+    val keys: List<CanonicalCurveKey> = emptyList()
 )
 
 /** Text layer source parameters; null on layers that carry no Source Text property. */
@@ -49,8 +68,12 @@ data class CanonicalLayerInfo(
     val rotationDegrees: Double,
     /** Canonical opacity keys, sorted by frame; empty when the layer is not keyframed. */
     val opacityKeys: List<PropertyKeyframe> = emptyList(),
+    /** Full opacity curve keys (frame, value, per-side interpolation and ease). */
+    val opacityCurves: List<CanonicalCurveKey> = emptyList(),
     /** Native Position/Scale/Rotation keyframe frame indices, sorted and unique. */
     val transformKeyframes: Map<String, List<Int>> = emptyMap(),
+    /** Full Transform curve keys per property, including opacity. */
+    val transformCurves: Map<String, List<CanonicalCurveKey>> = emptyMap(),
     val anchorX: Double = 0.0,
     val anchorY: Double = 0.0,
     val orientationX: Double = 0.0,
@@ -134,6 +157,15 @@ data class CanonicalProjectInfo(
                             if (frames.isNotEmpty()) put(property, frames)
                         }
                     }
+                    val transformCurvesJson = layer.optJSONObject("transformCurves")
+                    val transformCurves = buildMap {
+                        for (property in listOf("position", "scale", "rotation", "opacity")) {
+                            val curveJson = transformCurvesJson?.optJSONArray(property) ?: continue
+                            val keys = parseCurveKeys(curveJson)
+                            if (keys.isNotEmpty()) put(property, keys)
+                        }
+                    }
+                    val opacityCurves = parseCurveKeys(layer.optJSONArray("opacityCurves"))
                     val anchor = layer.optJSONArray("anchor")
                     val orientation = layer.optJSONArray("orientation")
                     val textJson = layer.optJSONObject("text")
@@ -149,7 +181,9 @@ data class CanonicalProjectInfo(
                         scaleY = scale?.optDouble(1) ?: 100.0,
                         rotationDegrees = layer.optDouble("rotationDegrees", 0.0),
                         opacityKeys = opacityTrack.keyframes,
+                        opacityCurves = opacityCurves,
                         transformKeyframes = transformKeyframes,
+                        transformCurves = transformCurves,
                         anchorX = anchor?.optDouble(0) ?: 0.0,
                         anchorY = anchor?.optDouble(1) ?: 0.0,
                         orientationX = orientation?.optDouble(0) ?: 0.0,
@@ -205,6 +239,37 @@ data class CanonicalProjectInfo(
             return CanonicalProjectInfo(compositions, items)
         }
 
+        private fun parseCurveKeys(array: org.json.JSONArray?): List<CanonicalCurveKey> {
+            return (0 until (array?.length() ?: 0)).mapNotNull { index ->
+                val key = array!!.optJSONObject(index) ?: return@mapNotNull null
+                val frame = key.optInt("frame", -1)
+                if (frame < 0) return@mapNotNull null
+                val rawValue = key.opt("value")
+                val value = when (rawValue) {
+                    is Number -> rawValue.toDouble()
+                    is org.json.JSONArray -> if (rawValue.length() > 0) rawValue.optDouble(0, 0.0) else 0.0
+                    else -> 0.0
+                }
+                fun ease(side: String): Pair<Double, Double> {
+                    val easeArray = key.optJSONArray(side)
+                    val entry = if (easeArray != null && easeArray.length() > 0) easeArray.optJSONObject(0) else null
+                    return Pair(entry?.optDouble("speed", 0.0) ?: 0.0, entry?.optDouble("influence", 0.0) ?: 0.0)
+                }
+                val inEase = ease("inEase")
+                val outEase = ease("outEase")
+                CanonicalCurveKey(
+                    frame = frame,
+                    value = value,
+                    inInterp = key.optString("inInterp", "Linear"),
+                    outInterp = key.optString("outInterp", "Linear"),
+                    inSpeed = inEase.first,
+                    inInfluence = inEase.second,
+                    outSpeed = outEase.first,
+                    outInfluence = outEase.second
+                )
+            }.sortedBy { it.frame }
+        }
+
         private fun parseParamGroups(array: org.json.JSONArray?): List<CanonicalParamGroup> {
             val groups = mutableListOf<CanonicalParamGroup>()
             for (index in 0 until (array?.length() ?: 0)) {
@@ -215,7 +280,8 @@ data class CanonicalProjectInfo(
                     CanonicalScalarParam(
                         uid = param.getLong("uid"),
                         name = param.optString("name", "Parameter"),
-                        value = param.optDouble("value", 0.0)
+                        value = param.optDouble("value", 0.0),
+                        keys = parseCurveKeys(param.optJSONArray("keys"))
                     )
                 }
                 val vecArray = group.optJSONArray("vecs")
@@ -226,7 +292,8 @@ data class CanonicalProjectInfo(
                     CanonicalVecParam(
                         uid = param.getLong("uid"),
                         name = param.optString("name", "Parameter"),
-                        components = components
+                        components = components,
+                        keys = parseCurveKeys(param.optJSONArray("keys"))
                     )
                 }
                 groups.add(

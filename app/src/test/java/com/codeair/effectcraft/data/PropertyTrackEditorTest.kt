@@ -39,6 +39,26 @@ class PropertyTrackEditorTest {
     }
 
     @Test
+    fun dragPastNeighborReordersAndDragOntoNeighborReplaces() {
+        val track = PropertyTrack("opacity", listOf(
+            PropertyKeyframe(0, 0f), PropertyKeyframe(10, 50f), PropertyKeyframe(20, 100f)
+        ))
+        val past = PropertyTrackEditor.move(track, 10, 25)
+        assertEquals(listOf(0, 20, 25), past.keyframes.map { it.frame })
+        assertEquals(50f, past.keyframes.last().value, 0f)
+        val onto = PropertyTrackEditor.move(track, 10, 20)
+        assertEquals(listOf(0, 20), onto.keyframes.map { it.frame })
+        assertEquals(50f, onto.keyframes.last().value, 0f)
+    }
+
+    @Test
+    fun dragRejectsNegativeTargetAndMissingKey() {
+        val track = PropertyTrack("opacity", listOf(PropertyKeyframe(10, 50f)))
+        assertThrows(IllegalArgumentException::class.java) { PropertyTrackEditor.move(track, 10, -1) }
+        assertThrows(IllegalArgumentException::class.java) { PropertyTrackEditor.move(track, 5, 12) }
+    }
+
+    @Test
     fun rejectsInvalidKeyframeInputs() {
         val track = PropertyTrack("opacity", emptyList())
         assertThrows(IllegalArgumentException::class.java) { PropertyTrackEditor.upsert(track, -1, 1f) }

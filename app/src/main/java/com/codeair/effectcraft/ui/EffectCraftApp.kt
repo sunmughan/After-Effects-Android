@@ -960,6 +960,40 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical $property interpolation set to $preset · frame $frame · saved locally"
                 )
             },
+            onMoveCanonicalCurveKey = { compositionId, layerId, selector, fromFrame, toFrame ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.moveLayerKeyframeEcproj(source, compositionId, layerId, selector, fromFrame.toLong(), toFrame.toLong()),
+                    "Canonical $selector keyframe moved $fromFrame to $toFrame · saved locally"
+                )
+            },
+            onSetCanonicalCurveHandle = { compositionId, layerId, selector, frame, side, speed, influence ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerKeyframeBezierEcproj(source, compositionId, layerId, selector, frame.toLong(), side, speed, influence),
+                    "Canonical $selector Bezier $side handle set · frame $frame · saved locally"
+                )
+            },
+            onAddCanonicalCurveKey = { compositionId, layerId, selector, frame, x, y, z ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val edited = when {
+                        selector == "transform:position" -> NativeProjectBridge.setLayerTransformKeyframeEcproj(source, compositionId, layerId, "position", frame.toLong(), x, y, z)
+                        selector == "transform:scale" -> NativeProjectBridge.setLayerTransformKeyframeEcproj(source, compositionId, layerId, "scale", frame.toLong(), x, y, z)
+                        selector == "transform:rotation" -> NativeProjectBridge.setLayerTransformKeyframeEcproj(source, compositionId, layerId, "rotation", frame.toLong(), x, y, z)
+                        selector == "transform:opacity" -> NativeProjectBridge.setLayerOpacityKeyframeEcproj(source, compositionId, layerId, frame.toLong(), x)
+                        selector.startsWith("param:") -> {
+                            val uid = selector.removePrefix("param:").toLongOrNull()
+                            if (uid == null) null else NativeProjectBridge.setLayerParamKeyframeEcproj(source, compositionId, layerId, uid, frame.toLong(), x, y, z)
+                        }
+                        else -> null
+                    }
+                    applyCanonicalEdit(edited, "Canonical $selector keyframe added · frame $frame · saved locally")
+                }
+            },
             onRemoveCanonicalLayerTransformKeyframe = { compositionId, layerId, property, frame ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

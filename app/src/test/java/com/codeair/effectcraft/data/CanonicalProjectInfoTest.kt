@@ -65,6 +65,27 @@ class CanonicalProjectInfoTest {
         assertEquals(emptyList<PropertyKeyframe>(), layer.opacityKeys)
     }
 
+    @Test
+    fun parsesCurveKeysWithPerSideEaseAndParamKeys() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0,"transformCurves":{"position":[{"frame":30,"value":[100.0,200.0,0.0],"inInterp":"Bezier","outInterp":"Linear","inEase":[{"speed":20.0,"influence":0.25}],"outEase":[]},{"frame":0,"value":[10.0,20.0,0.0],"inInterp":"Linear","outInterp":"Bezier","inEase":[],"outEase":[{"speed":0.0,"influence":0.5}]}]},"opacityCurves":[{"frame":0,"value":100.0,"inInterp":"Linear","outInterp":"Linear","inEase":[],"outEase":[]}],"shapeItems":[{"name":"Rectangle","kind":"rect","scalars":[{"uid":77,"name":"Roundness","value":24.0,"keys":[{"frame":15,"value":24.0,"inInterp":"Bezier","outInterp":"Bezier","inEase":[{"speed":8.0,"influence":0.6}],"outEase":[]}]}],"vecs":[]}]}]}]}"""
+
+        val layer = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single()
+
+        val position = layer.transformCurves["position"]!!
+        assertEquals(listOf(0, 30), position.map { it.frame })
+        assertEquals(10.0, position[0].value, 0.001)
+        assertEquals("Bezier", position[1].inInterp)
+        assertEquals(20.0, position[1].inSpeed, 0.001)
+        assertEquals(0.25, position[1].inInfluence, 0.001)
+        assertEquals(0.5, position[0].outInfluence, 0.001)
+        assertEquals(listOf(0), layer.opacityCurves.map { it.frame })
+        val roundness = layer.shapeItems.single().scalars.single()
+        assertEquals(77L, roundness.uid)
+        assertEquals(listOf(15), roundness.keys.map { it.frame })
+        assertEquals(8.0, roundness.keys.single().inSpeed, 0.001)
+        assertEquals(0.6, roundness.keys.single().inInfluence, 0.001)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsInvalidNativeMetadataEnvelope() {
         CanonicalProjectInfo.parse("""{"valid":false,"error":"invalid project"}""")

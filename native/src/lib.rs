@@ -4,7 +4,7 @@ use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
-use effectcraft_project::keyframe::Interp;
+use effectcraft_project::keyframe::{Ease, Interp};
 use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
 use effectcraft_render::{Accelerator, Backend, RenderOpts, Renderer};
@@ -673,6 +673,7 @@ fn collect_param_items(
     group: &effectcraft_project::PropGroup,
     prefix: &str,
     out: &mut Vec<serde_json::Value>,
+    frame_rate: effectcraft_time::FrameRate,
 ) {
     for child in &group.children {
         let Node::Group(child_group) = child else { continue };
@@ -689,17 +690,20 @@ fn collect_param_items(
                 Value::Scalar(value) => scalars.push(json!({
                     "uid": property.uid,
                     "name": property.name,
-                    "value": value
+                    "value": value,
+                    "keys": curve_keys_json(property, frame_rate)
                 })),
                 Value::Vec2(value) => vecs.push(json!({
                     "uid": property.uid,
                     "name": property.name,
-                    "components": value
+                    "components": value,
+                    "keys": curve_keys_json(property, frame_rate)
                 })),
                 Value::Vec3(value) => vecs.push(json!({
                     "uid": property.uid,
                     "name": property.name,
-                    "components": value
+                    "components": value,
+                    "keys": curve_keys_json(property, frame_rate)
                 })),
                 _ => {}
             }
@@ -712,14 +716,18 @@ fn collect_param_items(
                 "vecs": vecs
             }));
         }
-        collect_param_items(child_group, &name, out);
+        collect_param_items(child_group, &name, out, frame_rate);
     }
 }
 
-fn layer_param_items(layer: &effectcraft_project::Layer, group_match_id: &str) -> Vec<serde_json::Value> {
+fn layer_param_items(
+    layer: &effectcraft_project::Layer,
+    group_match_id: &str,
+    frame_rate: effectcraft_time::FrameRate,
+) -> Vec<serde_json::Value> {
     let mut items = Vec::new();
     if let Some(group) = layer.props.sub(group_match_id) {
-        collect_param_items(group, "", &mut items);
+        collect_param_items(group, "", &mut items, frame_rate);
     }
     items
 }
@@ -804,6 +812,84 @@ fn layer_transform_keyframes(layer: &effectcraft_project::Layer, frame_rate: eff
     serde_json::Value::Object(tracks)
 }
 
+/// Full curve data for one property: frame, first-component value, per-side
+/// interpolation labels and per-dimension ease entries, sorted by frame.
+/// The Kotlin graph plots the first component for vector properties.
+fn curve_keys_json(
+    property: &effectcraft_project::props::Property,
+    frame_rate: effectcraft_time::FrameRate,
+) -> serde_json::Value {
+    let mut keys = Vec::new();
+    for key in &property.keys {
+        let value = match &key.value {
+            Value::Scalar(value) => json!(value),
+            Value::Vec2(value) => json!(value),
+            Value::Vec3(value) => json!(value),
+            _ => continue,
+        };
+        let ease_json = |ease: &Vec<Ease>| ease.iter()
+            .map(|entry| json!({"speed": entry.speed, "influence": entry.influence}))
+            .collect::<Vec<_>>();
+        keys.push(json!({
+            "frame": key.time.to_rational_floor(frame_rate.den, frame_rate.num),
+            "value": value,
+            "inInterp": key.in_interp.label(),
+            "outInterp": key.out_interp.label(),
+            "inEase": ease_json(&key.in_ease),
+            "outEase": ease_json(&key.out_ease),
+        }));
+    }
+    keys.sort_by_key(|key| key["frame"].as_i64().unwrap_or(0));
+    json!(keys)
+}
+
+fn find_property_ref<'a>(
+    group: &'a effectcraft_project::props::PropGroup,
+    match_id: &str,
+) -> Option<&'a effectcraft_project::props::Property> {
+    for child in &group.children {
+        match child {
+            Node::Prop(property) if property.match_id == match_id => return Some(property),
+            Node::Group(child_group) => {
+                if let Some(found) = find_property_ref(child_group, match_id) {
+                    return Some(found);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Curve data for every Transform property, including opacity, keyed by
+/// property name. The frame-only transformKeys field is unchanged.
+fn layer_transform_curves(
+    layer: &effectcraft_project::Layer,
+    frame_rate: effectcraft_time::FrameRate,
+) -> serde_json::Value {
+    let mut tracks = serde_json::Map::new();
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        for property_name in ["position", "scale", "rotation", "opacity"] {
+            if let Some(property) = find_property_ref(transform, property_name) {
+                tracks.insert(property_name.to_owned(), curve_keys_json(property, frame_rate));
+            }
+        }
+    }
+    serde_json::Value::Object(tracks)
+}
+
+fn layer_opacity_curves(
+    layer: &effectcraft_project::Layer,
+    frame_rate: effectcraft_time::FrameRate,
+) -> serde_json::Value {
+    if let Some(Node::Group(transform)) = layer.props.children.iter().find(|node| node.match_id() == "transform") {
+        if let Some(property) = find_property_ref(transform, "opacity") {
+            return curve_keys_json(property, frame_rate);
+        }
+    }
+    json!([])
+}
+
 fn inspect_project(source: &str) -> Result<String, String> {
     let project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -818,7 +904,9 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "visible": layer.switches.video,
                 "opacityPercent": layer_opacity_percent(layer),
                 "opacityKeys": layer_opacity_keys(layer, comp.frame_rate),
+                "opacityCurves": layer_opacity_curves(layer, comp.frame_rate),
                 "transformKeys": layer_transform_keyframes(layer, comp.frame_rate),
+                "transformCurves": layer_transform_curves(layer, comp.frame_rate),
                 "position": layer_position(layer),
                 "scale": layer_scale(layer),
                 "rotationDegrees": layer_rotation(layer),
@@ -829,8 +917,8 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "locked": layer.switches.locked,
                 "threeD": layer.switches.three_d,
                 "text": layer_text_params(layer),
-                "shapeItems": layer_param_items(layer, "contents"),
-                "effects": layer_param_items(layer, "effects")
+                "shapeItems": layer_param_items(layer, "contents", comp.frame_rate),
+                "effects": layer_param_items(layer, "effects", comp.frame_rate)
             })).collect();
             json!({
                 "id": id.0,
@@ -1684,6 +1772,181 @@ fn set_layer_transform_keyframe_interpolation(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Resolves a curve-graph property for Bezier and drag edits. Selectors are
+/// "transform:position", "transform:scale", "transform:rotation",
+/// "transform:opacity", or "param:<uid>" for a shape-item or effect scalar or
+/// vector parameter. Transform properties are found recursively inside the
+/// Transform group, matching the walk used by the opacity editor.
+fn resolve_curve_property_mut<'a>(
+    layer: &'a mut effectcraft_project::Layer,
+    selector: &str,
+) -> Result<&'a mut effectcraft_project::props::Property, String> {
+    if let Some(name) = selector.strip_prefix("transform:") {
+        if !matches!(name, "position" | "scale" | "rotation" | "opacity") {
+            return Err(format!("Unsupported transform curve property: {name}"));
+        }
+        let transform = layer.props.sub_mut("transform")
+            .ok_or_else(|| format!("Layer {} has no Transform group", layer.id.0))?;
+        return find_property_recursive_mut(transform, name)
+            .ok_or_else(|| format!("Layer {} has no Transform {name} property", layer.id.0));
+    }
+    if let Some(uid_text) = selector.strip_prefix("param:") {
+        let uid: u64 = uid_text.parse()
+            .map_err(|_| format!("Invalid parameter curve selector: {selector}"))?;
+        return layer.props.prop_mut(&format!("@{uid}"))
+            .ok_or_else(|| format!("Layer {} has no parameter with uid {uid}", layer.id.0));
+    }
+    Err(format!("Invalid curve property selector: {selector}"))
+}
+
+fn find_property_recursive_mut<'a>(
+    group: &'a mut effectcraft_project::props::PropGroup,
+    match_id: &str,
+) -> Option<&'a mut effectcraft_project::props::Property> {
+    for child in &mut group.children {
+        match child {
+            Node::Prop(property) if property.match_id == match_id => return Some(property),
+            Node::Group(child_group) => {
+                if let Some(found) = find_property_recursive_mut(child_group, match_id) {
+                    return Some(found);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Applies one custom Bezier handle (speed in value units per second,
+/// influence as a 0..1 fraction of the adjacent segment) to one or both
+/// sides of an existing curve key. The opposite side is preserved, unlike
+/// the preset setter which rewrites both sides for an unqualified preset.
+/// Speed may be negative on a falling segment; influence outside 0..1,
+/// a missing key, a hold-only property or a non-animatable value rejects.
+fn set_keyframe_bezier(
+    source: &str, composition_id: u64, layer_id: u64, selector: &str,
+    frame: i64, side: &str, speed: f64, influence: f64,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !matches!(side, "incoming" | "outgoing" | "both") {
+        return Err("Curve handle side must be incoming, outgoing or both".into());
+    }
+    if !speed.is_finite() { return Err("Curve handle speed must be finite".into()); }
+    if !(0.0..=1.0).contains(&influence) {
+        return Err("Curve handle influence must be between 0 and 1".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = resolve_curve_property_mut(layer, selector)?;
+    match &property.value {
+        Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) => {},
+        _ => return Err(format!("Curve property {selector} is not animatable")),
+    }
+    if property.static_only {
+        return Err(format!("Curve property {selector} cannot be keyframed"));
+    }
+    if property.hold_only {
+        return Err(format!("Curve property {selector} only holds keyframes"));
+    }
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    let key = property.keys.iter_mut().find(|key| key.time == tick)
+        .ok_or_else(|| format!("No curve keyframe exists at frame {frame} for {selector}"))?;
+    let dims = key.value.dims().max(1);
+    let ease = Ease { speed, influence };
+    if side != "outgoing" {
+        key.in_interp = Interp::Bezier;
+        key.in_ease = vec![ease; dims];
+    }
+    if side != "incoming" {
+        key.out_interp = Interp::Bezier;
+        key.out_ease = vec![ease; dims];
+    }
+    key.auto_bezier = false;
+    key.continuous = false;
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Drags a curve key from one frame to another, keeping its value and both
+/// Bezier sides intact. Dragging past a neighbour reorders the track;
+/// dragging exactly onto a neighbour replaces that neighbour, matching
+/// same-frame upsert semantics. The moved key is inserted directly rather
+/// than through the upstream set-key helper, which would overwrite the
+/// moved key's interpolation with the replaced neighbour's.
+fn move_keyframe(
+    source: &str, composition_id: u64, layer_id: u64, selector: &str,
+    from_frame: i64, to_frame: i64,
+) -> Result<String, String> {
+    if from_frame < 0 || to_frame < 0 {
+        return Err("Keyframe frames must be non-negative".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = resolve_curve_property_mut(layer, selector)?;
+    let from_tick = Tick::from_rational(from_frame, frame_rate.den, frame_rate.num);
+    let to_tick = Tick::from_rational(to_frame, frame_rate.den, frame_rate.num);
+    let index = property.keys.iter().position(|key| key.time == from_tick)
+        .ok_or_else(|| format!("No curve keyframe exists at frame {from_frame} for {selector}"))?;
+    if from_frame == to_frame {
+        return project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"));
+    }
+    let mut moved = property.keys.remove(index);
+    moved.time = to_tick;
+    property.keys.retain(|key| key.time != to_tick);
+    property.keys.push(moved);
+    property.keys.sort_by_key(|key| key.time);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Authors one shape-item or effect scalar/vector parameter keyframe at
+/// `frame`, addressed by its native uid. The first key seeds frame 0 with
+/// the parameter's current value, so a key authored mid-timeline never
+/// rewrites earlier frames, matching the Transform keyframe setters.
+fn set_layer_param_keyframe(
+    source: &str, composition_id: u64, layer_id: u64, uid: u64,
+    frame: i64, x: f64, y: f64, z: f64,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !x.is_finite() || !y.is_finite() || !z.is_finite() {
+        return Err("Parameter keyframe values must be finite".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = layer.props.prop_mut(&format!("@{uid}"))
+        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))?;
+    if property.static_only {
+        return Err(format!("Parameter {uid} cannot be keyframed"));
+    }
+    let value = match &property.value {
+        Value::Scalar(_) => Value::Scalar(x),
+        Value::Vec2(_) => Value::Vec2([x, y]),
+        Value::Vec3(_) => Value::Vec3([x, y, z]),
+        _ => return Err(format!("Parameter {uid} is not animatable")),
+    };
+    if property.keys.is_empty() {
+        property.set_animated(true, Tick::ZERO);
+    }
+    property.set_value_at(Tick::from_rational(frame, frame_rate.den, frame_rate.num), value);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Removes the canonical Transform/Opacity keyframe at `frame`.
 /// Returns `(project_json, removed)`; `removed` is false when no key existed
 /// at that frame and the project is returned unchanged. Removing the last key
@@ -1880,6 +2143,72 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_r
         Ok((project_json, removed)) => json!({"valid": true, "project": project_json, "removed": removed}).to_string(),
         Err(error) => json!({"valid": false, "error": error}).to_string(),
     };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerKeyframeBezierEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    selector: JString, frame: jlong, side: JString, speed: jni::sys::jdouble, influence: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let selector: String = match env.get_string(&selector) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let side: String = match env.get_string(&side) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_keyframe_bezier(&source, composition_id as u64, layer_id as u64, &selector, frame, &side, speed as f64, influence as f64)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_moveLayerKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    selector: JString, from_frame: jlong, to_frame: jlong,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let selector: String = match env.get_string(&selector) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || from_frame < 0 || to_frame < 0 {
+        Err("Composition, layer and frames must be non-negative".to_owned())
+    } else {
+        move_keyframe(&source, composition_id as u64, layer_id as u64, &selector, from_frame, to_frame)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerParamKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    uid: jlong, frame: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble, z: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || frame < 0 {
+        Err("Composition, layer, parameter and frame must be non-negative".to_owned())
+    } else {
+        set_layer_param_keyframe(&source, composition_id as u64, layer_id as u64, uid as u64, frame, x as f64, y as f64, z as f64)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
@@ -2872,6 +3201,132 @@ mod tests {
         assert!(linear_key.in_ease.is_empty() && linear_key.out_ease.is_empty());
         assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 14, "easy_ease").is_err());
         assert!(set_layer_transform_keyframe_interpolation(&linear, comp_id, layer_id, "position", 15, "unknown").is_err());
+    }
+
+    #[test]
+    fn canonical_curve_bezier_handles_transform_and_opacity() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let at_zero = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 10.0, 20.0, 0.0).unwrap();
+        let at_fifteen = set_layer_transform_keyframe(&at_zero, comp_id, layer_id, "position", 15, 100.0, 200.0, 0.0).unwrap();
+        let bezier = set_keyframe_bezier(&at_fifteen, comp_id, layer_id, "transform:position", 15, "incoming", 20.0, 0.25).unwrap();
+        let project: Project = serde_json::from_str(&bezier).unwrap();
+        let key = &project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[1];
+        assert_eq!(key.in_interp, Interp::Bezier);
+        assert_eq!(key.in_ease[0].speed, 20.0);
+        assert_eq!(key.in_ease[0].influence, 0.25);
+        assert_eq!(key.out_interp, Interp::Linear, "incoming edit must preserve outgoing interpolation");
+        assert_eq!(key.in_ease.len(), 3, "Vec3 position carries one ease entry per dimension");
+
+        let both = set_keyframe_bezier(&bezier, comp_id, layer_id, "transform:position", 0, "both", 0.0, 0.5).unwrap();
+        let both_project: Project = serde_json::from_str(&both).unwrap();
+        let first = &both_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap().keys[0];
+        assert_eq!(first.in_interp, Interp::Bezier);
+        assert_eq!(first.out_interp, Interp::Bezier);
+        assert_eq!(first.out_ease[0].influence, 0.5);
+
+        assert!(set_keyframe_bezier(&both, comp_id, layer_id, "transform:position", 15, "incoming", 1.0, 1.5).is_err());
+        assert!(set_keyframe_bezier(&both, comp_id, layer_id, "transform:position", 14, "incoming", 1.0, 0.5).is_err());
+        assert!(set_keyframe_bezier(&both, comp_id, layer_id, "transform:anchor", 15, "incoming", 1.0, 0.5).is_err());
+        assert!(set_keyframe_bezier(&both, comp_id, layer_id, "param:abc", 15, "incoming", 1.0, 0.5).is_err());
+
+        let opacity_zero = set_layer_opacity_keyframe(&source, comp_id, layer_id, 0, 100.0).unwrap();
+        let opacity_fifteen = set_layer_opacity_keyframe(&opacity_zero, comp_id, layer_id, 15, 50.0).unwrap();
+        let opacity_bezier = set_keyframe_bezier(&opacity_fifteen, comp_id, layer_id, "transform:opacity", 15, "outgoing", 30.0, 0.4).unwrap();
+        let opacity_project: Project = serde_json::from_str(&opacity_bezier).unwrap();
+        let opacity_key = opacity_property(&opacity_project, comp_id, layer_id).keys.iter().find(|k| k.time == effectcraft_time::Tick::from_rational(15, 1, 30)).unwrap();
+        assert_eq!(opacity_key.out_interp, Interp::Bezier);
+        assert_eq!(opacity_key.out_ease.len(), 1);
+        assert_eq!(opacity_key.out_ease[0].speed, 30.0);
+        assert_eq!(opacity_key.out_ease[0].influence, 0.4);
+        let metadata = serde_json::from_str::<serde_json::Value>(&inspect_project(&opacity_bezier).unwrap()).unwrap();
+        let curve = &metadata["compositions"][0]["layers"][0]["opacityCurves"];
+        assert_eq!(curve[1]["outInterp"], "Bezier");
+        assert_eq!(curve[1]["outEase"][0]["speed"], 30.0);
+    }
+
+    #[test]
+    fn canonical_curve_key_drag_moves_reorders_and_preserves_bezier() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 10.0, 20.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 10, 50.0, 60.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 20, 100.0, 200.0, 0.0).unwrap();
+        let keyed = set_keyframe_bezier(&keyed, comp_id, layer_id, "transform:position", 10, "both", 12.0, 0.3).unwrap();
+        let past = move_keyframe(&keyed, comp_id, layer_id, "transform:position", 10, 25).unwrap();
+        let past_project: Project = serde_json::from_str(&past).unwrap();
+        let position = past_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap();
+        let frames: Vec<i64> = position.keys.iter().map(|k| k.time.to_rational_floor(1, 30)).collect();
+        assert_eq!(frames, vec![0, 20, 25]);
+        let dragged = &position.keys[2];
+        assert_eq!(dragged.value, Value::Vec3([50.0, 60.0, 0.0]));
+        assert_eq!(dragged.in_interp, Interp::Bezier, "drag must preserve the moved key Bezier sides");
+        assert_eq!(dragged.in_ease[0].speed, 12.0);
+        assert_eq!(dragged.out_ease[0].influence, 0.3);
+        let onto = move_keyframe(&keyed, comp_id, layer_id, "transform:position", 10, 20).unwrap();
+        let onto_project: Project = serde_json::from_str(&onto).unwrap();
+        let onto_position = onto_project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap().prop("position").unwrap();
+        assert_eq!(onto_position.keys.len(), 2);
+        assert_eq!(onto_position.keys[1].value, Value::Vec3([50.0, 60.0, 0.0]));
+        assert!(move_keyframe(&keyed, comp_id, layer_id, "transform:position", 12, 18).is_err());
+        assert!(move_keyframe(&keyed, comp_id, layer_id, "transform:position", 10, -1).is_err());
+        let same = move_keyframe(&keyed, comp_id, layer_id, "transform:position", 10, 10).unwrap();
+        assert_eq!(same, keyed);
+    }
+
+    #[test]
+    fn canonical_param_keyframes_bezier_and_drag() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Value};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let mut shape_layer = build::layer(&mut project, &comp, "Shape", LayerSource::Shape, (640, 360), None);
+        let shape_id = shape_layer.id.0;
+        let mut next_id = 10_000u64;
+        let mut ids = build::Ids(&mut next_id);
+        let rect = build::shape_rect(&mut ids, [200.0, 100.0], [0.0, 0.0], 0.0);
+        shape_layer.props.sub_mut("contents").unwrap().children.push(rect.into());
+        project.comp_mut(comp_id).unwrap().layers.push(shape_layer);
+        let mut null_layer = build::layer(&mut project, &comp, "Null", LayerSource::Null, (640, 360), None);
+        let null_id = null_layer.id.0;
+        let mut effect = ids.group("gaussianBlur", "Gaussian Blur");
+        effect = effect.with(ids.prop("blurriness", "Blurriness", Value::Scalar(0.0)));
+        null_layer.props.sub_mut("effects").unwrap().children.push(effect.into());
+        project.comp_mut(comp_id).unwrap().layers.push(null_layer);
+        let source = project.to_file_json().unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&source).unwrap()).unwrap();
+        let blur_uid = metadata["compositions"][0]["layers"][1]["effects"].as_array().unwrap().iter()
+            .find(|item| item["name"] == "Gaussian Blur").unwrap()["scalars"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Blurriness").unwrap()["uid"].as_u64().unwrap();
+
+        let seeded = set_layer_param_keyframe(&source, comp_id.0, null_id, blur_uid, 15, 12.0, 0.0, 0.0).unwrap();
+        let seeded_project: Project = serde_json::from_str(&seeded).unwrap();
+        let blur = seeded_project.comp(comp_id).unwrap().layers[1].props.prop(&format!("@{blur_uid}")).unwrap();
+        assert_eq!(blur.keys.len(), 2, "first param key seeds frame 0 from the static value");
+        assert_eq!(blur.keys[0].time, Tick::ZERO);
+        assert_eq!(blur.keys[0].value, Value::Scalar(0.0));
+        assert_eq!(blur.keys[1].value, Value::Scalar(12.0));
+        let selector = format!("param:{blur_uid}");
+        let bezier = set_keyframe_bezier(&seeded, comp_id.0, null_id, &selector, 15, "incoming", 8.0, 0.6).unwrap();
+        let bezier_project: Project = serde_json::from_str(&bezier).unwrap();
+        let bezier_blur = bezier_project.comp(comp_id).unwrap().layers[1].props.prop(&format!("@{blur_uid}")).unwrap();
+        assert_eq!(bezier_blur.keys[1].in_interp, Interp::Bezier);
+        assert_eq!(bezier_blur.keys[1].in_ease[0].speed, 8.0);
+        assert_eq!(bezier_blur.keys[1].in_ease[0].influence, 0.6);
+        let dragged = move_keyframe(&bezier, comp_id.0, null_id, &selector, 15, 24).unwrap();
+        let dragged_project: Project = serde_json::from_str(&dragged).unwrap();
+        let dragged_blur = dragged_project.comp(comp_id).unwrap().layers[1].props.prop(&format!("@{blur_uid}")).unwrap();
+        assert_eq!(dragged_blur.keys.len(), 2);
+        assert_eq!(dragged_blur.keys[1].time, Tick::from_rational(24, 1, 30));
+        assert_eq!(dragged_blur.keys[1].value, Value::Scalar(12.0));
+        assert_eq!(dragged_blur.keys[1].in_interp, Interp::Bezier);
+        let dragged_meta = serde_json::from_str::<serde_json::Value>(&inspect_project(&dragged).unwrap()).unwrap();
+        let param_keys = &dragged_meta["compositions"][0]["layers"][1]["effects"][0]["scalars"][0]["keys"];
+        assert_eq!(param_keys[1]["frame"], 24);
+        assert_eq!(param_keys[1]["inInterp"], "Bezier");
+        assert!(set_layer_param_keyframe(&source, comp_id.0, null_id, 999_999, 15, 1.0, 0.0, 0.0).is_err());
+        assert!(move_keyframe(&bezier, comp_id.0, null_id, &selector, 15, -1).is_err());
     }
 
     #[test]
