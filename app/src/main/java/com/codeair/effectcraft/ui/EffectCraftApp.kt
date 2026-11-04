@@ -46,6 +46,7 @@ import com.codeair.effectcraft.data.ProjectKeyframeStore
 import com.codeair.effectcraft.data.PngSequenceZipExporter
 import com.codeair.effectcraft.data.PngSequenceZipValidator
 import com.codeair.effectcraft.data.Mp4ExportWorker
+import com.codeair.effectcraft.data.Mp4OutputValidator
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
@@ -498,9 +499,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         )
                     }
                     currentCoroutineContext().ensureActive()
+                    val verified = withContext(Dispatchers.IO) {
+                        Mp4OutputValidator.validate(context, uri, plan)
+                    }
+                    // The destination is a byte copy of the staged file, so its
+                    // validator report must agree with the staged result exactly;
+                    // any disagreement deletes the destination (see finally).
+                    check(verified.frameCount == stagedResult.framesWritten) {
+                        "MP4 validation frame count differs from staged export"
+                    }
+                    check(verified.durationUs == stagedResult.durationUs) {
+                        "MP4 validation duration differs from staged export"
+                    }
+                    currentCoroutineContext().ensureActive()
                     outputCompleted = true
                     mp4ExportProgress = 100
-                    saveMessage = "Exported ${stagedResult.framesWritten} H.264 frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}"
+                    saveMessage = "Exported & verified ${verified.frameCount} H.264 frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}"
                 } catch (cancelled: CancellationException) {
                     saveMessage = "MP4 export cancelled"
                     throw cancelled

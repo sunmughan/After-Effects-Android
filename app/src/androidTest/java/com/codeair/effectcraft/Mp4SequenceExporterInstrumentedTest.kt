@@ -7,6 +7,7 @@ import android.media.MediaFormat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.codeair.effectcraft.data.Mp4SequenceExporter
+import com.codeair.effectcraft.data.Mp4OutputValidator
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
@@ -47,6 +48,12 @@ class Mp4SequenceExporterInstrumentedTest {
             assertEquals(2, result.framesEncoded)
             assertEquals(66_666L, result.durationUs)
             assertTrue(output.length() > 0L)
+            val validated = Mp4OutputValidator.validateFile(output, plan)
+            assertEquals(64, validated.width)
+            assertEquals(64, validated.height)
+            assertEquals(2, validated.frameCount)
+            assertEquals(result.durationUs, validated.durationUs)
+            assertEquals(Mp4SequenceExporter.MIME, validated.mime)
 
             val extractor = MediaExtractor()
             try {

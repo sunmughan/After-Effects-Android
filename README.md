@@ -1,6 +1,7 @@
 # EffectCraft for Android
 
-**Run 93 progress (2026-11-04):** M6 emulator performance/large-project benchmark and invalid-timing input validation are committed in [3683f89d](https://github.com/sunmughan/After-Effects-Android/commit/3683f89d78071ff6e03d3a1020bde63334912a6b). CI #641's phone-width preset tap failure was diagnosed and corrected in 11672413; #644 was superseded. Exact-head CI #646 is running on 3683f89d; no current-head test pass is claimed.
+**Run 94 progress (2026-11-05):** CI #649 Assemble and test passed on exact source HEAD `3ae559ad`: Rust 42/42, JVM 200/200, API 30 instrumentation 89/89 (0 failures/skips), including large-project benchmark, SAF import/relink/export round-trip and real H.264 MP4 encode/demux. Its independent cold APK rebuild is still running. M5 now adds finalized MP4 MediaExtractor validation (track MIME/dimensions, strictly increasing PTS, exact frame count and duration) before SAF export can report success; validator and regression are committed, awaiting exact-head CI. See PHASES.md Run 94.
+
 
 ### Run 90 — preserve standalone EditorScreen test/API compatibility
 - Follow-up review found that direct Compose test fixtures instantiate EditorScreen by named arguments and do not exercise the production MP4 callbacks. The newly added MP4-only parameters now have safe no-op/default values, preserving existing test fixtures and internal preview embedding while production EffectCraftApp supplies real callbacks. This is compatibility, not a fake encoder path: only the production app wires SAF/MediaCodec.
