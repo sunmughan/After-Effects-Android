@@ -1717,10 +1717,19 @@ fn set_layer_transform_keyframe(
     // the first key. Seeding at the authored tick makes set_value_at replace
     // that seed with the authored value, leaving exactly one key.
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
-    if property.keys.is_empty() {
-        property.set_animated(true, tick);
+    let was_static = property.keys.is_empty();
+    if was_static {
+        // Upstream set_animated seeds the static value at the requested tick.
+        // Seed at zero so set_value_at can create the authored key at any
+        // frame, then remove only that synthetic seed when the authored key
+        // is later than zero. This preserves exactly the key the user asked
+        // for and avoids a phantom frame-zero marker/value.
+        property.set_animated(true, Tick::ZERO);
     }
     property.set_value_at(tick, value);
+    if was_static && tick != Tick::ZERO {
+        property.keys.retain(|key| key.time != Tick::ZERO);
+    }
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
@@ -3242,12 +3251,20 @@ mod tests {
         let transform = project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("transform").unwrap();
         let anchor_key = &find_property_ref(transform, "anchor").unwrap().keys[0];
         assert!(matches!(&anchor_key.value, Value::Vec3(v) if v[0] == 12.0 && v[1] == 34.0));
-        let orientation_key = &transform.prop("orientation").unwrap().keys[0];
-        assert_eq!(orientation_key.value, Value::Vec3([10.0, 20.0, 30.0]));
-        assert_eq!(orientation_key.in_interp, Interp::Bezier);
-        assert_eq!(orientation_key.out_interp, Interp::Bezier);
-        assert_eq!(transform.prop("rotationX").unwrap().keys[0].value, Value::Scalar(45.0));
-        assert_eq!(transform.prop("rotationY").unwrap().keys[0].value, Value::Scalar(-30.0));
+        let orientation_keys = &transform.prop("orientation").unwrap().keys;
+        assert_eq!(orientation_keys.len(), 1, "first authored key must not leave a frame-zero seed");
+        assert_eq!(orientation_keys[0].time, Tick::from_rational(15, 1, 30));
+        assert_eq!(orientation_keys[0].value, Value::Vec3([10.0, 20.0, 30.0]));
+        assert_eq!(orientation_keys[0].in_interp, Interp::Bezier);
+        assert_eq!(orientation_keys[0].out_interp, Interp::Bezier);
+        let rotation_x_keys = &transform.prop("rotationX").unwrap().keys;
+        assert_eq!(rotation_x_keys.len(), 1);
+        assert_eq!(rotation_x_keys[0].time, Tick::ZERO);
+        assert_eq!(rotation_x_keys[0].value, Value::Scalar(45.0));
+        let rotation_y_keys = &transform.prop("rotationY").unwrap().keys;
+        assert_eq!(rotation_y_keys.len(), 1, "first authored key must not leave a frame-zero seed");
+        assert_eq!(rotation_y_keys[0].time, Tick::from_rational(15, 1, 30));
+        assert_eq!(rotation_y_keys[0].value, Value::Scalar(-30.0));
         let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&eased).unwrap()).unwrap();
         let tracks = &metadata["compositions"][0]["layers"][0]["transformKeys"];
         assert_eq!(tracks["anchor"], json!([0]));
