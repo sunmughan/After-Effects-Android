@@ -166,3 +166,8 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - Curve graph keys expose TalkBack custom actions to move a selected key to the shared playhead; pointer dragging remains unchanged. Connected regression asserts callback values for Position frame 15→0. Implementation/test commit `fd8a5791853cbaad809a769e0bd63e3a18e9720a`.
 - CI #537 on the immediately preceding curve graph commit `7ec85e56` passed its Assemble/test job: Rust 38/38, JVM 146/146 and API 30 emulator 68/68, all zero failures/errors/skips; test XMLs inspected. Cold APK reproducibility job was still in progress. Exact-head CI #538 queued for the accessibility commit; no new regression pass claimed.
 - M4 Bezier graph supports per-side handle editing and key move/reorder for transform, opacity and native UID parameter tracks; broader effect UI parity remains. M6 TalkBack/manual/device matrix and all M0/M2/M3/M5/M7 gates remain open. No `.aep`/`.efkproj` compatibility claim.
+
+
+### Run 71 — native curve-key deletion (2026-11-04)
+- Native canonical curve-key removal now covers transform and param UID tracks, last-key static restoration, and idempotent missing-key behavior. TalkBack exposes Delete key actions and commits through the normal edit/history/save/preview path. Rust + API 30 regression coverage is committed; exact-head CI #541 is pending.
+- Run #539's Kotlin failure (missing `customActions` import) was diagnosed from the exact log; #540 adds the import and is running. See [PHASES.md](PHASES.md) Run 71 for evidence and blockers.
