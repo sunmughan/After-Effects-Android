@@ -127,3 +127,5 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - CI #475 failed test compilation because JUnit fail() in Elvis fallback widened bridge values to Any; corrected with throw AssertionError in c618641e, no test weakening. #476 is running on that fix; exact-head #477 for the timeline feature is pending. No pass claimed.
 
 - Transform-key metadata JVM fixture corrected to assert absent empty tracks (commit e051cec1); latest-head CI pending.
+
+- Added API 30 instrumentation for native transform keyframe navigation: scrub to frame 20, jump to nearest Position key at 15 and assert shared playhead (commit c020ac86); exact-head CI pending.
