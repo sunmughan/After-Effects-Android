@@ -30,6 +30,7 @@ import com.codeair.effectcraft.data.CanonicalProjectDocument
 import com.codeair.effectcraft.data.CanonicalProjectRepository
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.EcprojDocumentStore
+import com.codeair.effectcraft.data.EditorRecoveryJournal
 import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.OfflineAssetReferences
 import com.codeair.effectcraft.data.ProjectAssetManifestStore
@@ -132,8 +133,30 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             renderSessionHolder.session = NativeSession.open(source)
         }
     }
+    // Crash recovery: the autosave journal holds edits that never reached
+    // an explicit save. A journal for the latest committed project wins when
+    // it is newer; otherwise the newest journal overall wins when it is newer
+    // than the latest committed draft, which is how a never-saved project
+    // survives process death. Torn and stale journals are deleted by recovery.
+    val recoveryJournal = remember(context) { EditorRecoveryJournal(File(context.filesDir, "recovery-journal")) }
+    val committedDraft = projectStore.loadLatest()
+    val recoveredDraft = runCatching {
+        val forCommitted = committedDraft?.let { recoveryJournal.recover(it.id, it) }
+        if (forCommitted != null) {
+            forCommitted
+        } else {
+            val newest = recoveryJournal.recoverNewest()
+            if (committedDraft != null && newest != null &&
+                newest.updatedAtEpochMillis <= committedDraft.updatedAtEpochMillis
+            ) {
+                null
+            } else {
+                newest
+            }
+        }
+    }.getOrNull()
     var project by remember {
-        mutableStateOf(projectStore.loadLatest() ?: ProjectDocument.starter())
+        mutableStateOf(recoveredDraft ?: committedDraft ?: ProjectDocument.starter())
     }
     var savedProjects by remember { mutableStateOf(projectStore.listSavedProjects()) }
     var offlineAssets by remember(offlineAssetStore) { mutableStateOf(offlineAssetStore.list()) }
@@ -143,7 +166,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
     var playheadFrame by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
-    var saveMessage by remember { mutableStateOf("Stored on this device") }
+    var saveMessage by remember {
+        mutableStateOf(if (recoveredDraft != null) "Recovered unsaved changes" else "Stored on this device")
+    }
     var undoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
     var redoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
     var projectKeyframeTracks by remember { mutableStateOf(projectKeyframeStore.load(project.id)) }
@@ -600,6 +625,20 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             .getOrElse { failure -> saveMessage = "Keyframe load failed · ${failure.message ?: "storage error"}"; emptyList() }
     }
 
+    // Autosave journal: every working-project change is journaled off the UI
+    // thread before the user can be interrupted by a crash, rotation, or
+    // process death. A journal failure must never break editing, so it is
+    // swallowed here; the committed draft remains the fallback. Journals for
+    // abandoned projects are pruned so they can never resurrect later.
+    LaunchedEffect(project) {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                recoveryJournal.write(project)
+                recoveryJournal.discardAllExcept(project.id)
+            }
+        }
+    }
+
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose {
             renderSessionHolder.session?.close()
@@ -924,6 +963,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onSave = {
                 runCatching { projectStore.save(project) }
                     .onSuccess {
+                        // The edits are committed now, so the journal for this
+                        // project must go: keeping it would resurrect old edits.
+                        runCatching { recoveryJournal.discard(project.id) }
                         savedProjects = projectStore.listSavedProjects()
                         saveMessage = "Saved locally · ${project.name}"
                     }
