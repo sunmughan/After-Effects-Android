@@ -1,6 +1,6 @@
 # EffectCraft for Android
 
-**Run 96 progress (2026-11-05):** M5's MP4 inspector now correctly parses ISO-BMFF v1 `mvhd/mdhd` (32-bit timescale, 64-bit duration) with parent-box length checks; a 48 kHz/288,000-tick regression is committed (`fdbe468d` + `c6c7f652`). Exact-head CI #659 is pending. Prior CI #655 Assemble/test passed on code head `36b9e4c9` (Rust 42/42, API30 92/92, JVM task success), but its independent cold APK rebuild is still running and not a reproducibility PASS. See PHASES.md Run 96.
+**Run 96 progress (2026-11-05):** M5's MP4 inspector now correctly parses ISO-BMFF v1 `mvhd/mdhd` (32-bit timescale, 64-bit duration) with parent-box length checks; a 48 kHz/288,000-tick regression is committed (`fdbe468d` + `c6c7f652`). Latest branch-head CI #662 (HEAD `7d6accce`) is in progress at Gradle setup; #659/#661 were superseded by docs pushes. Prior CI #655 Assemble/test passed on code head `36b9e4c9` (Rust 42/42, API30 92/92, JVM task success), but its independent cold APK rebuild remains in progress and is not a reproducibility PASS. See PHASES.md Run 96.
 
 
 ### Run 90 — preserve standalone EditorScreen test/API compatibility
