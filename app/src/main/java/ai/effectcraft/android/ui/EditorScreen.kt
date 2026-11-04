@@ -1966,7 +1966,6 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, o
         modifier = Modifier
             .fillMaxWidth()
             .height(27.dp)
-            .semantics { contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}" }
             .padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1974,7 +1973,7 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, o
         Box(
             modifier = Modifier.weight(1f).height(17.dp)
                 .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
-                .semantics { contentDescription = "Canonical transform keyframes: ${frames.joinToString(\", \")}" }
+                .semantics { contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}" }
                 .pointerInput(frames, durationFrames) {
                     detectTapGestures { tap ->
                         val frameRange = (durationFrames - 1).coerceAtLeast(1)
