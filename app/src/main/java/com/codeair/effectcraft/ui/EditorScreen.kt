@@ -1068,7 +1068,7 @@ private fun InspectorPanel(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Layer name" },
                     decorationBox = { innerTextField ->
                         Box {
                             if (layerNameDraft.isEmpty()) {
@@ -1369,7 +1369,7 @@ private fun CanonicalProjectEditor(
                     onValueChange = { newTextName = it.take(120) },
                     singleLine = true,
                     textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 13.sp),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "New text layer name" },
                     decorationBox = { inner ->
                         Box {
                             if (newTextName.isEmpty()) Text("New text layer name", color = EditorPalette.muted)
@@ -1908,7 +1908,7 @@ private fun CanonicalProjectEditor(
                         onValueChange = { nameDraft = it.take(120) },
                         singleLine = true,
                         textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 14.sp),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Layer name" },
                         decorationBox = { inner ->
                             Box {
                                 if (nameDraft.isEmpty()) Text("Layer name", color = EditorPalette.muted)

@@ -45,6 +45,10 @@ class NativeSession private constructor(
         fun open(projectJson: String, maxSide: Int = DEFAULT_MAX_SIDE): NativeSession? {
             if (!NativeProjectBridge.isAvailable()) return null
             if (maxSide !in 0..4096) return null
+            // Defense in depth: a session must never start in an over-budget
+            // preview configuration, even if a caller passes a side the range
+            // check alone would allow (2897..4096 exceed the pixel budget).
+            if (runCatching { RenderBudget.checkPreviewMaxSide(maxSide) }.isFailure) return null
             val handle = runCatching { createSessionNative(projectJson, maxSide.toLong()) }.getOrNull()
                 ?: return null
             if (handle <= 0L) return null
@@ -126,13 +130,22 @@ class NativeSession private constructor(
     @Synchronized
     fun currentMaxSide(): Int = maxSide
 
-    /** Renders a frame through the session, or null when unavailable/cancelled/closed. */
+    /** Renders a frame through the session, or null when unavailable/cancelled/closed.
+     *
+     * Throws [BudgetViolationException] when the session's preview size is
+     * over the render budget: a budget failure must surface visibly (editor
+     * status text in the export flows, a blocked-preview status in the
+     * viewer) instead of silently returning a degraded frame or nothing.
+     * Sessions opened/resized through this class can never be over budget;
+     * this check is defense in depth for any handle that reaches render
+     * another way. */
     // Deliberately not synchronized: native render may take seconds. Holding the
     // Kotlin monitor across JNI would prevent cancel() from setting the native
     // cancellation flag until the frame had already completed.
     fun render(compositionId: Long, frame: Long): ByteArray? {
         val sessionHandle = handle
         if (sessionHandle == 0L || cancelled || compositionId < 0 || frame < 0) return null
+        RenderBudget.checkPreviewMaxSide(maxSide)
         val key = RenderedFrameCache.key(projectJson, compositionId, frame, maxSide)
         val rendered = RenderedFrameCache.getOrRender(key) {
             runCatching { renderSessionFrameNative(sessionHandle, compositionId, frame) }
@@ -157,11 +170,15 @@ class NativeSession private constructor(
         return accepted
     }
 
-    /** Changes the preview size for subsequent frames; 0 means full scale. */
+    /** Changes the preview size for subsequent frames; 0 means full scale.
+     * Returns false when closed, cancelled, out of range, rejected by the
+     * native side, or over the render budget; the session keeps its previous
+     * in-budget size instead of entering an over-budget configuration. */
     @Synchronized
     fun resize(newMaxSide: Int): Boolean {
         val sessionHandle = handle
         if (sessionHandle == 0L || cancelled || newMaxSide !in 0..4096) return false
+        if (runCatching { RenderBudget.checkPreviewMaxSide(newMaxSide) }.isFailure) return false
         val accepted = runCatching { resizeSessionNative(sessionHandle, newMaxSide.toLong()) }.getOrDefault(false)
         if (accepted) maxSide = newMaxSide
         return accepted

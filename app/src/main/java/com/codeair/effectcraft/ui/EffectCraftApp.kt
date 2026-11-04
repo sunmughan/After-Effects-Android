@@ -35,6 +35,7 @@ import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.OfflineAssetReferences
 import com.codeair.effectcraft.data.ProjectAssetManifestStore
 import com.codeair.effectcraft.data.SafPermissionRegistry
+import com.codeair.effectcraft.engine.BudgetViolationException
 import com.codeair.effectcraft.engine.NativeProjectBridge
 import com.codeair.effectcraft.engine.NativeSession
 import com.codeair.effectcraft.engine.RenderedFramePng
@@ -1460,8 +1461,19 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 // size live natively for the whole workspace lifetime. When
                 // no session is open (no canonical project, or native
                 // unavailable) this returns null and the viewer keeps its
-                // honest "not rendered / unavailable" label.
-                renderSessionHolder.session?.render(compositionId, frame)
+                // honest "not rendered / unavailable" label. A render-budget
+                // violation is different from unavailability: it must surface
+                // as editor status, never crash the preview coroutine and
+                // never silently drop the frame.
+                runCatching {
+                    renderSessionHolder.session?.render(compositionId, frame)
+                }.onFailure { failure ->
+                    if (failure is BudgetViolationException) {
+                        saveMessage = "Preview blocked by render budget · ${failure.message}"
+                    } else {
+                        throw failure
+                    }
+                }.getOrNull()
             },
             onQueryBackendStatus = {
                 renderSessionHolder.session?.backendStatus()?.displayText()

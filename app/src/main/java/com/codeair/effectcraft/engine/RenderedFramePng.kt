@@ -13,7 +13,8 @@ object RenderedFramePng {
     data class Dimensions(val width: Int, val height: Int)
 
     const val MAX_SIDE = 8192
-    const val MAX_PIXELS = 8_388_608L
+    /** Single authority for this value is RenderBudget; kept here so call sites do not diverge. */
+    const val MAX_PIXELS = RenderBudget.MAX_PIXELS_PER_FRAME
     /** Square native render cap below MAX_PIXELS; output may be scaled up within its own budget. */
     const val MAX_NATIVE_RENDER_SIDE = 2896
 
