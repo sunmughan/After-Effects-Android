@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Required to request the Android 13+ runtime notification permission. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- PNG sequence export runs as a foreground service so progress stays
+         visible and user cancel stays reachable while rendering. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="false"
@@ -28,6 +32,10 @@
              stays off until FirebaseInit confirms a real FirebaseApp
              exists, so a build without google-services.json never
              initializes Firebase. -->
+        <service
+            android:name=".export.PngSequenceExportService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <service
             android:name=".push.EffectCraftMessagingService"
             android:exported="false">

@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -20,7 +21,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import java.io.File
-import java.io.ByteArrayOutputStream
 import java.io.FileOutputStream
 import com.codeair.effectcraft.data.CanonicalEditHistory
 import com.codeair.effectcraft.data.CanonicalEditSnapshot
@@ -44,9 +44,9 @@ import com.codeair.effectcraft.data.ProjectEditorActions
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.ProjectFileFormats
 import com.codeair.effectcraft.data.ProjectKeyframeStore
-import com.codeair.effectcraft.data.PngSequenceZipExporter
-import com.codeair.effectcraft.data.PngSequenceZipValidator
+import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.Mp4ExportWorker
+import com.codeair.effectcraft.export.PngSequenceExportService
 import com.codeair.effectcraft.data.Mp4OutputValidator
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
@@ -79,6 +79,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var frameExportInProgress by remember { mutableStateOf(false) }
     var pendingFrameExport by remember { mutableIntStateOf(0) }
     var sequenceExportJob by remember { mutableStateOf<Job?>(null) }
+    var serviceSequenceExportActive by remember { mutableStateOf(PngSequenceExportService.isRunning) }
     var sequenceExportInProgress by remember { mutableStateOf(false) }
     var sequenceExportWritingOutput by remember { mutableStateOf(false) }
     var sequenceExportProgress by remember { mutableIntStateOf(0) }
@@ -356,75 +357,64 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         } else if (frameExportInProgress) {
             saveMessage = "Cancel the frame export before starting a sequence"
         } else {
-            val source = importedEcproj!!
-            sequenceExportInProgress = true
-            sequenceExportWritingOutput = false
-            sequenceExportProgress = 0
-            sequenceExportJob = exportScope.launch {
-                val tempArchive = File(context.cacheDir, "effectcraft-sequence-${System.nanoTime()}.zip")
-                val exportJob = currentCoroutineContext()[Job]
-                var session: NativeSession? = null
-                try {
-                    val compositionFrames = canonicalProjectInfo?.compositions
-                        ?.firstOrNull { it.id == compositionId }?.durationFrames
-                        ?: error("Canonical composition is no longer available")
-                    val plan = RenderQueuePlan.create(settings, compositionFrames)
-                    saveMessage = "Rendering PNG sequence · 0/${plan.frameCount} (0%)"
-                    withContext(Dispatchers.IO) {
-                        val nativeRenderSide = minOf(
-                            maxOf(settings.width, settings.height),
-                            RenderedFramePng.MAX_NATIVE_RENDER_SIDE
+            // PNG sequence export now runs in the foreground service, not
+            // in this composable's coroutine scope, so rendering survives
+            // the user leaving the editor and shows a cancellable
+            // notification. The service reports through its status holder,
+            // which the polling effect below mirrors into editor state.
+            val compositionFrames = canonicalProjectInfo?.compositions
+                ?.firstOrNull { it.id == compositionId }?.durationFrames
+            if (compositionFrames == null) {
+                saveMessage = "Canonical composition is no longer available"
+            } else {
+                runCatching {
+                    RenderQueuePlan.create(settings, compositionFrames)
+                    sequenceExportInProgress = true
+                    sequenceExportWritingOutput = false
+                    sequenceExportProgress = 0
+                    saveMessage = "Rendering PNG sequence via foreground service"
+                    serviceSequenceExportActive = true
+                    ContextCompat.startForegroundService(
+                        context,
+                        PngSequenceExportService.startIntent(
+                            context, uri, compositionId, settings, compositionFrames
                         )
-                        session = NativeSession.open(source, nativeRenderSide)
-                            ?: error("Native renderer unavailable for this project")
-                        FileOutputStream(tempArchive).use { archiveOutput ->
-                            PngSequenceZipExporter.export(
-                                plan = plan,
-                                output = archiveOutput,
-                                renderPng = { frame ->
-                                    if (exportJob?.isActive != true) throw CancellationException("PNG sequence export cancelled")
-                                    val rgba = session?.render(compositionId, frame.toLong())
-                                        ?: error("Native renderer returned no frame at $frame")
-                                    ByteArrayOutputStream().use { pngOutput ->
-                                        RenderedFramePng.writeScaled(rgba, pngOutput, settings.width, settings.height)
-                                        pngOutput.toByteArray()
-                                    }
-                                },
-                                isCancelled = { exportJob?.isActive != true },
-                                onProgress = { completed, percent ->
-                                    sequenceExportProgress = percent
-                                    saveMessage = "Rendering PNG sequence · $completed/${plan.frameCount} ($percent%)"
-                                }
-                            )
-                        }
-                        PngSequenceZipValidator.validate(tempArchive, plan)
-                    }
-                    currentCoroutineContext().ensureActive()
-                    sequenceExportWritingOutput = true
-                    saveMessage = "Copying completed ZIP to selected destination…"
-                    withContext(Dispatchers.IO) {
-                        SafDocumentWriter.copyFileToDocument(
-                            context = context,
-                            sourceFile = tempArchive,
-                            destination = uri,
-                            ensureActive = { exportJob?.ensureActive() }
-                        )
-                    }
-                    sequenceExportProgress = 100
-                    saveMessage = "Exported ${plan.frameCount} PNG frames · ${settings.width}×${settings.height} @ ${settings.frameRate} FPS"
-                } catch (cancelled: CancellationException) {
-                    saveMessage = "PNG sequence export cancelled"
-                    throw cancelled
-                } catch (failure: Throwable) {
-                    saveMessage = "PNG sequence export failed · ${failure.message ?: "render or write error"}"
-                } finally {
-                    session?.close()
-                    tempArchive.delete()
+                    )
+                }.onFailure { failure ->
+                    serviceSequenceExportActive = false
                     sequenceExportInProgress = false
                     sequenceExportWritingOutput = false
-                    sequenceExportJob = null
+                    saveMessage = "PNG sequence export failed · ${failure.message ?: "service could not start"}"
                 }
             }
+        }
+    }
+
+    // Mirrors foreground-service export status into editor state. A
+    // finished status is only honoured after an unfinished status has
+    // been seen for this run, so a stale finished status from a previous
+    // export cannot clear the new run before the service reports.
+    LaunchedEffect(serviceSequenceExportActive) {
+        if (!serviceSequenceExportActive) return@LaunchedEffect
+        var seenActive = false
+        while (serviceSequenceExportActive) {
+            val current = PngSequenceExportService.status
+            if (current != null) {
+                if (!current.finished) {
+                    seenActive = true
+                    sequenceExportProgress = current.percent
+                    sequenceExportWritingOutput =
+                        current.phase == ForegroundPngSequenceExport.Phase.COPYING
+                    saveMessage = current.message
+                } else if (seenActive) {
+                    sequenceExportProgress = current.percent
+                    sequenceExportWritingOutput = false
+                    saveMessage = current.message
+                    sequenceExportInProgress = false
+                    serviceSequenceExportActive = false
+                }
+            }
+            if (serviceSequenceExportActive) delay(200)
         }
     }
 
@@ -636,9 +626,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         runCatching {
             val cleanup = withContext(Dispatchers.IO) { StaleSequenceExportCleanup.cleanup(context.cacheDir) }
             val videoCleanup = withContext(Dispatchers.IO) { StaleVideoExportCleanup.cleanup(context.cacheDir) }
+            val exportRecovery = withContext(Dispatchers.IO) { ForegroundPngSequenceExport.recover(context.cacheDir) }
             val recovered = buildList {
                 if (cleanup.removed > 0) add("${cleanup.removed} abandoned PNG sequence archive(s)")
                 if (videoCleanup.removed > 0) add("${videoCleanup.removed} abandoned MP4 export(s) — restart the export if needed")
+                if (exportRecovery.cleaned > 0) add("${exportRecovery.cleaned} interrupted PNG sequence export(s) cleaned, restart the export if needed")
+                if (exportRecovery.orphanMarkersRemoved > 0) add("${exportRecovery.orphanMarkersRemoved} orphan export marker(s) removed")
             }
             if (recovered.isNotEmpty()) saveMessage = "Recovered " + recovered.joinToString(" and ")
         }
@@ -973,7 +966,13 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                 }
             },
-            onCancelSequenceExport = { sequenceExportJob?.cancel() },
+            onCancelSequenceExport = {
+                if (serviceSequenceExportActive) {
+                    context.startService(PngSequenceExportService.cancelIntent(context))
+                } else {
+                    sequenceExportJob?.cancel()
+                }
+            },
             sequenceExportProgress = sequenceExportProgress,
             isExportingMp4 = mp4ExportInProgress,
             isMp4ExportWritingOutput = mp4ExportWritingOutput,
