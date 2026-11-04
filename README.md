@@ -1,3 +1,7 @@
+### Run 75 — roadmap evidence consolidated
+- Phase summaries now reflect CI #545's completed Assemble/test job (Rust 38/38, JVM task success, emulator 70/70) while correctly leaving the cancelled cold APK comparison unaccepted. M0 owner acceptance remains open; M1 scoped foundation accepted; M2/M3/M4/M5/M6/M7 remain at their documented partial/in-progress states.
+- M4 includes native Anchor/Orientation/Rotation X/Y keyframes and graph Add-at-playhead; recursive Anchor lookup fix and connected test committed. Exact combined-head CI #560 is pending; no pass claimed for Runs 73–74.
+
 ### Run 74 — 3D transform graph wiring
 - Fixed nested Anchor property lookup in native transform keyframe authoring/interpolation/removal/metadata. Curve graph Add-at-playhead now supports all transform selectors and seeds values for Anchor, Orientation, X/Y Rotation; added API 30 regression for graph + inspector add/remove. Commits 1ede3dfc, 6a0ef932, b5f08a7a, b0600faf.
 - Exact-head CI after combined changes is pending; no pass claimed. M4 easing/roving/effect parity remains open, as do M0 owner acceptance, M2/M3 physical validation, M5 video/audio, M6 device matrix and M7 release.

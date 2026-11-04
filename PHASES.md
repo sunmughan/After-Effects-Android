@@ -1,3 +1,8 @@
+### Run 75 — phase evidence consolidation after 3D transform expansion (2026-11-04)
+- Consolidated phase summaries with latest trustworthy CI evidence: CI #545 exact source `d4fdd620` Assemble/test job passed 38 Rust, JVM task and 70/70 API 30 emulator tests; run was later cancelled during the independent cold APK comparison, so M0 reproducibility is not green on this head. #545 is prior to Run 72–74 code.
+- M4 code is committed for Anchor/Orientation/Rotation X/Y native keyframes, recursive nested-Anchor lookup, graph add-at-playhead, curve selector metadata/interpolation/move/remove, and pointer long-press delete. New Rust + Android tests are present; current full combined head [CI #560](https://github.com/sunmughan/After-Effects-Android/actions/runs/41808678572) is queued/pending. Do not count cancelled #550–#558 as test evidence.
+- M0 remains NOT COMPLETE (owner acceptance open; reproducibility needs completed report); M1 scoped foundation COMPLETE; M2 IN PROGRESS (physical SAF/media acceptance); M3 PARTIAL (CPU renderer/session, physical GPU/device-loss); M4 IN PROGRESS; M5 PARTIAL (PNG/ZIP only, no video/audio); M6 IN PROGRESS (manual TalkBack/physical performance/device matrix); M7 NOT STARTED. Adobe .aep and Effekseer .efkproj support is not claimed.
+
 ### Run 74 — 3D transform curve graph and key insertion wired end-to-end (2026-11-04)
 - Follow-up to Run 73: Anchor is nested in the upstream Transform tree, so native frame metadata/set/interpolation/remove paths now use recursive property lookup rather than direct group lookup. Commit [1ede3dfc](https://github.com/sunmughan/After-Effects-Android/commit/1ede3dfcbea13a11123f8622892b83816b9c5d6e).
 - Curve graph Add-at-playhead now dispatches every transform selector generically (opacity remains its dedicated path), and current-value seed includes Anchor XY, Orientation XYZ and Rotation X/Y. Commits [6a0ef932](https://github.com/sunmughan/After-Effects-Android/commit/6a0ef932f1e3f6c84572080b465806bd65c0265d) and [b5f08a7a](https://github.com/sunmughan/After-Effects-Android/commit/b5f08a7ae9ab3466974cbf7cdb2cd1e233ef8976).
@@ -287,7 +292,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Next: inspect #243 job/step logs and emulator result; fix failures, then verify the full M1 suite at exact HEAD. M0 remains INCOMPLETE pending green current-head dual-ABI/JNI/emulator CI; M1 acceptance stays pending.
 
 ## M0 — Foundation, toolchain and CI
-**Status: NOT COMPLETE — technical CI green; legal/owner gates remain open** · latest exact-head evidence: commit `f7d0ba3ab2246c120f50ff9a898cb09c826fd279`, [run 41650672565](https://github.com/sunmughan/After-Effects-Android/actions/runs/41650672565) (success; both jobs green; test-results artifact inspected: unit 17 suites/68 cases, 68 passed; connected 3 suites/25 cases, 25 passed; total 20 suites/93 cases, 93 passed, 0 failures/errors/skips).
+**Status: NOT COMPLETE — technical build/test gates pass; reproducibility and legal/owner gates remain open** · latest exact tested source HEAD: `d4fdd620`, CI [#545](https://github.com/sunmughan/After-Effects-Android/actions/runs/41803888015) Assemble/test job SUCCESS (dual ABI/JNI, Rust 38/38, JVM task SUCCESS, API 30 emulator 70/70); independent rebuild/compare APK job was cancelled by subsequent pushes before verdict, so cold reproducibility is not accepted.
 - **Open user gates blocking M0 completion:** (a) licensing — gate #12: no root LICENSE file and the GitHub license API returns 404; no license is chosen by this correction. (b) owner acceptance — gate #13: PR #1 is still draft and conflicting with zero reviews; no owner acceptance is recorded by this correction.
 - **Superseded claim:** the prior header claimed COMPLETE on stale CI #286 (commit `bd274c7879cdd596d767303ace8791012543f199`, 18/18 instrumentation). That claim is withdrawn: under the tracker rule that a phase is complete only when its code, tests, and evidence meet every required gate, M0 cannot be marked complete while these gates remain open.
 - [x] Native Android/Compose project and offline manifest; no INTERNET permission.
@@ -303,7 +308,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **Exit gate: NOT SATISFIED — licensing (gate #12) and owner acceptance (gate #13) remain open user gates.**
 
 ## M1 — Professional native editor foundation
-**Status: COMPLETE — scoped editor acceptance passed and re-verified on the newest green exact-head run** · evidence: [CI #346](https://github.com/sunmughan/After-Effects-Android/actions/runs/41615158115), commit `6d34c056d59d84c3245c13c1fc9f3b9665952b35`, Android instrumentation **19/19 passed** (18 EditorSmokeTest + 1 adaptive workspace) with named JUnit XML evidence (0 skipped/failed); JVM 36/36, Rust 13/13.
+**Status: COMPLETE — scoped editor foundation accepted; current containing-head regression remains green** · original named acceptance [CI #346](https://github.com/sunmughan/After-Effects-Android/actions/runs/41615158115) (19/19 emulator, JVM 36/36, Rust 13/13); latest containing-head CI #545 also passed API 30 instrumentation 70/70 with 0 skips/failures (broader M4 tests included).
 - [x] Adaptive Jetpack Compose phone/tablet workspace; 1080dp wide-window instrumentation verifies side-by-side properties and composition viewer.
 - [x] Offline starter project, app-private draft persistence, saved-project catalog, stable-ID save/upsert/deduplication and open/reload of latest revision.
 - [x] Layer select/add/delete/reorder/rename, visibility and opacity; selection continuity and last-layer invariant.
@@ -366,7 +371,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Verify ARM64 native frame on physical phone/tablet; record device, ABI, SHA and pixel evidence.
 
 ## M4 — Editing/effects/timeline parity
-**Status: IN PROGRESS — canonical opacity + Position/Scale/Rotation keyframe authoring/removal/navigation and transform timeline markers are implemented; current accessibility interaction awaits exact-head CI #507+; easing/graph and remaining property parity open**
+**Status: IN PROGRESS — native keyframe editing now covers Position/Scale/Rotation plus Anchor/Orientation/Rotation X/Y, transform timeline markers, interpolation and curve graph; long-press deletion and 3D graph-key add tests await exact-head CI #560**
 - [x] Canonical Transform/Opacity is now a real upstream `Property` mutation (0–100, key-aware at frame zero), exposed by JNI, reflected in metadata and edited with a commit-on-release slider; each change reserializes the `.ecproj` and refreshes CPU preview (`9a0af7d`, `340e601`, `7997036`, `1166a2c`, `71509df`). Rust tests cover property mutation/range/ID; Kotlin parser test covers opacity metadata (`e049130`). CI/device validation pending.
 - [x] Canonical Transform/Position X/Y edits preserve Z and key-aware set at frame zero; native model test verifies exact vector and rejects non-finite coordinates/unknown IDs (`b2422dc`); JNI/Kotlin bridge and inspector numeric controls Apply into project cache (`a8a94c2`, `764c311`, `21f4a80`). Parser tests cover X/Y metadata (`0a96985`). CI/device validation pending.
 - [x] Canonical Transform Scale X/Y and Z Rotation editing: Rust mutations preserve Scale Z and set key-aware frame-zero values, bounded finite input validation, JNI/Kotlin APIs, metadata parsing, inspector Apply controls and CPU preview refresh; Rust round-trip/error tests and Kotlin metadata test added (`6b1b45f`). Current-head CI validation pending.
@@ -393,7 +398,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [ ] Tested 720p/1080p; 4K only on device tiers meeting measured budgets.
 
 ## M6 — Performance, reliability and UX
-**Status: IN PROGRESS — first offline-storage guardrails implemented; performance, recovery, device matrix and accessibility remain open**
+**Status: IN PROGRESS — offline-storage guardrails and accessible curve/timeline actions implemented; performance, recovery, physical device/TalkBack matrix remain open**
 - [x] Per-asset streaming cap (512 MiB default) plus configurable 2 GiB aggregate offline media quota; content-addressed duplicates count once; quota rejection publishes no asset (Run 44, commit `7843f3e`).
 - [x] Roll back a newly staged media payload when atomic index publication fails; fault-injection regression added (Run 46, commit `6de686c`). Exact-head CI #395 pending.
 - [ ] Memory/frame pacing/thermal budgets and large-project benchmarks.
