@@ -1293,8 +1293,10 @@ private fun CanonicalProjectEditor(
             if (backendStatusText != null) {
                 Text("Render backend · $backendStatusText", color = EditorPalette.muted, fontSize = 11.sp)
             }
-            if (mediaCacheStatusText != null) {
-                Text(mediaCacheStatusText, color = EditorPalette.muted, fontSize = 11.sp)
+            // let-bound: a delegated `by remember` state value cannot be
+            // smart-cast after a null check, so bind it to a local first.
+            mediaCacheStatusText?.let {
+                Text(it, color = EditorPalette.muted, fontSize = 11.sp)
             }
             Text("SURFACE PREVIEW", color = EditorPalette.violet, fontSize = 10.sp, letterSpacing = 1.1.sp)
             // The same native frame, presented on a TextureView Surface:
