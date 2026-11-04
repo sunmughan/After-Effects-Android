@@ -1443,7 +1443,38 @@ private fun CanonicalProjectEditor(
                     ) { Text("Key Rotation", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("position", "scale", "rotation").forEach { property ->
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "anchor", previewFrame, layer.anchorX, layer.anchorY, 0.0) },
+                        modifier = Modifier.semantics { contentDescription = "Add anchor keyframe" }
+                    ) { Text("Key Anchor", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "orientation", previewFrame, layer.orientationX, layer.orientationY, layer.orientationZ) },
+                        modifier = Modifier.semantics { contentDescription = "Add orientation keyframe" }
+                    ) { Text("Key Orientation", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "rotationX", previewFrame, layer.rotationXDegrees, 0.0, 0.0) },
+                        modifier = Modifier.semantics { contentDescription = "Add X rotation keyframe" }
+                    ) { Text("Key X", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable,
+                        onClick = { onAddLayerTransformKeyframe(composition.id, layer.id, "rotationY", previewFrame, layer.rotationYDegrees, 0.0, 0.0) },
+                        modifier = Modifier.semantics { contentDescription = "Add Y rotation keyframe" }
+                    ) { Text("Key Y", color = EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("position", "scale", "rotation", "anchor").forEach { property ->
+                        TextButton(
+                            enabled = editable,
+                            onClick = { onRemoveLayerTransformKeyframe(composition.id, layer.id, property, previewFrame) },
+                            modifier = Modifier.semantics { contentDescription = "Remove ${property} keyframe" }
+                        ) { Text("− ${property.replaceFirstChar { it.uppercase() }}", color = EditorPalette.amber, fontSize = 10.sp) }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("orientation", "rotationX", "rotationY").forEach { property ->
                         TextButton(
                             enabled = editable,
                             onClick = { onRemoveLayerTransformKeyframe(composition.id, layer.id, property, previewFrame) },
@@ -1453,7 +1484,11 @@ private fun CanonicalProjectEditor(
                 }
                 Text("Transform keys are native and evaluated by the composition renderer.", color = EditorPalette.muted, fontSize = 10.sp)
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation").forEach { (property, label) ->
+                    listOf(
+                        "position" to "Position", "scale" to "Scale", "rotation" to "Rotation",
+                        "anchor" to "Anchor", "orientation" to "Orientation",
+                        "rotationX" to "X Rotation", "rotationY" to "Y Rotation"
+                    ).forEach { (property, label) ->
                         val frames = layer.transformKeyframes[property].orEmpty()
                         TextButton(
                             enabled = frames.isNotEmpty(),
@@ -2163,6 +2198,10 @@ private fun CurveGraphSection(
         "transform:position" to "Position X",
         "transform:scale" to "Scale X",
         "transform:rotation" to "Rotation",
+        "transform:anchor" to "Anchor X",
+        "transform:orientation" to "Orientation X",
+        "transform:rotationX" to "X Rotation",
+        "transform:rotationY" to "Y Rotation",
         "transform:opacity" to "Opacity"
     ) + paramOptions
     val selector = if (options.any { it.first == selectedSelector }) selectedSelector else options.first().first
