@@ -2,6 +2,7 @@ package com.codeair.effectcraft.data
 
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -229,7 +230,7 @@ class CanonicalProjectRepository(private val root: File) {
         ensureDirectory()
         val target = documentFile(id, format)
         val temporary = File(root, "${target.name}.tmp")
-        temporary.writeText(document, Charsets.UTF_8)
+        writeDurably(temporary, document)
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } catch (_: Exception) {
@@ -251,11 +252,20 @@ class CanonicalProjectRepository(private val root: File) {
             put("updatedAtMillis", metadata.updatedAtMillis)
             if (metadata.sourceName != null) put("sourceName", metadata.sourceName)
         }
-        temporary.writeText(document.toString(), Charsets.UTF_8)
+        writeDurably(temporary, document.toString())
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } catch (_: Exception) {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    /** Stable-storage write used before atomic document/sidecar promotion. */
+    private fun writeDurably(file: File, content: String) {
+        FileOutputStream(file).use { output ->
+            output.write(content.toByteArray(Charsets.UTF_8))
+            output.flush()
+            output.fd.sync()
         }
     }
 
