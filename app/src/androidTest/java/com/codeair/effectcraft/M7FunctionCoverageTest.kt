@@ -25,12 +25,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.and
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -686,10 +682,7 @@ class M7FunctionCoverageTest {
         // text, which also contains "30". Blanking the FPS field must
         // block the export with the dialog's own validation message,
         // not call back. Same field, same assertion — no weakening.
-        compose.onNode(
-            hasSetTextAction() and hasText("30", substring = true),
-            useUnmergedTree = true,
-        ).performTextClearance()
+        compose.onNodeWithText("30", useUnmergedTree = true).performTextClearance()
         compose.onNodeWithText("Render ZIP").performClick()
         compose.onNodeWithText("Enter valid numeric settings").assertIsDisplayed()
         assertEquals(0, exported)
