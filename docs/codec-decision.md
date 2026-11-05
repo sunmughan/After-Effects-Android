@@ -95,11 +95,7 @@ gap remains. Missing means no code exists.
   FLAC, Opus) cannot be converted into the export; it exports
   video-only with the unsupported reason. No resampling, no mixing, no
   multi-track audio, and no synthesized audio exist.
-- No audio/video sync measurement exists. The validator checks video
-  sample count and video duration, and only checks that an expected
-  audio track has at least one sample. It does not check audio start
-  offset, audio duration against video duration, or any lip-sync
-  tolerance. There is no drift detection and no drift correction.
+- AAC timing diagnostics are now measured by the staged validator (Automation run 11): first/last audio sample PTS and MediaExtractor's audio track duration are surfaced in the staged result and export status. This is measurement only. The validator still does not enforce audio start/end against video, any lip-sync tolerance, drift detection, or drift correction; no threshold or reject/trim policy has been approved.
 - No crop or letterbox option exists in code, in the plan, or in the
   export dialog.
 - No foreground-service execution for MP4 exists. MP4 runs as a UI-held
@@ -185,12 +181,14 @@ Licensing and patent notes, limited to what can be verified here:
 
 ### Sync models
 
-- Current model (what the code does today): video presentation times
-  come from the export frame index and export FPS. Audio timestamps
-  are shifted by the composition-FPS range start, so a sub-range
-  export starts audio at zero. There is no measurement of audio start
-  offset, audio end offset, or drift, and no correction beyond shift
-  and range trimming.
+- Current model: video presentation times come from the export frame
+  index and export FPS. Audio timestamps are shifted by the
+  composition-FPS range start, and samples outside the selected
+  composition range are trimmed. The staged validator now reports
+  first/last AAC PTS and track duration (Automation run 11), but does
+  not compare them with video duration or apply a sync threshold.
+  There is no drift detection or correction beyond shift and range
+  trimming.
 - Proposed first-delivery model (proposal, not approved): keep shift
   plus range trimming, and add measurement: first audio presentation
   time after shifting, last audio presentation time, audio duration,

@@ -18,7 +18,13 @@ object Mp4ExportValidator {
     data class Result(
         val videoSamples: Long,
         val durationUs: Long,
-        val audioSamples: Long
+        val audioSamples: Long,
+        /** First muxed AAC sample PTS; null when the output has no audio track. */
+        val audioFirstPtsUs: Long? = null,
+        /** Last muxed AAC sample PTS; null when the output has no audio track. */
+        val audioLastPtsUs: Long? = null,
+        /** MediaExtractor's AAC track duration, when the container exposes it. */
+        val audioTrackDurationUs: Long? = null
     )
 
     fun validate(file: File, plan: RenderQueuePlan, expectAudio: Boolean): Result {
@@ -30,6 +36,7 @@ object Mp4ExportValidator {
             var videoTrack = -1
             var audioTrack = -1
             var videoDurationUs: Long? = null
+            var audioTrackDurationUs: Long? = null
             for (index in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(index)
                 val mime = format.getString(MediaFormat.KEY_MIME)
@@ -39,7 +46,11 @@ object Mp4ExportValidator {
                         videoDurationUs = format.getLong(MediaFormat.KEY_DURATION)
                     }
                 }
-                if (mime == "audio/mp4a-latm" && audioTrack < 0) audioTrack = index
+                if (mime == "audio/mp4a-latm" && audioTrack < 0) {
+                    audioTrack = index
+                    audioTrackDurationUs = format.takeIf { it.containsKey(MediaFormat.KEY_DURATION) }
+                        ?.getLong(MediaFormat.KEY_DURATION)
+                }
             }
             require(videoTrack >= 0) { "MP4 is missing its H.264 video track" }
             if (expectAudio) {
@@ -58,16 +69,39 @@ object Mp4ExportValidator {
                 "MP4 duration ${durationUs}us does not match plan duration ${expectedUs}us"
             }
             var audioSamples = 0L
+            var audioFirstPtsUs: Long? = null
+            var audioLastPtsUs: Long? = null
             if (audioTrack >= 0) {
                 audioSamples = countSamples(extractor, audioTrack, unselectFirst = videoTrack, bufferBytes = 256 * 1024)
                 if (expectAudio) {
                     require(audioSamples > 0L) { "MP4 AAC audio track contains no samples" }
                 }
+                if (audioSamples > 0L) {
+                    val timing = sampleWindow(extractor, bufferBytes = 256 * 1024)
+                    audioFirstPtsUs = timing.first
+                    audioLastPtsUs = timing.second
+                }
             }
-            return Result(videoSamples, durationUs, audioSamples)
+            return Result(videoSamples, durationUs, audioSamples, audioFirstPtsUs, audioLastPtsUs, audioTrackDurationUs)
         } finally {
             runCatching { extractor.release() }
         }
+    }
+
+    /** Rewinds the currently selected AAC track and captures its PTS window. */
+    private fun sampleWindow(extractor: MediaExtractor, bufferBytes: Int): Pair<Long?, Long?> {
+        extractor.seekTo(0, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        val buffer = ByteBuffer.allocate(bufferBytes)
+        var first: Long? = null
+        var last: Long? = null
+        while (true) {
+            if (extractor.readSampleData(buffer, 0) < 0) break
+            val pts = extractor.sampleTime
+            if (first == null) first = pts
+            last = pts
+            extractor.advance()
+        }
+        return first to last
     }
 
     private fun lastVideoPts(extractor: MediaExtractor, track: Int): Long {

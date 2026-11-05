@@ -519,7 +519,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     currentCoroutineContext().ensureActive()
                     outputCompleted = true
                     mp4ExportProgress = 100
-                    saveMessage = "Exported & verified ${verified.frameCount} H.264 frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}"
+                    val audioTiming = if (stagedResult.audioStatus == AudioStatus.INCLUDED &&
+                        stagedResult.audioFirstPtsUs != null && stagedResult.audioLastPtsUs != null) {
+                        " · AAC PTS ${stagedResult.audioFirstPtsUs / 1_000}–${stagedResult.audioLastPtsUs / 1_000} ms"
+                    } else ""
+                    saveMessage = "Exported & verified ${verified.frameCount} H.264 frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}$audioTiming"
                 } catch (cancelled: CancellationException) {
                     saveMessage = "MP4 export cancelled"
                     throw cancelled

@@ -22,6 +22,7 @@ import com.codeair.effectcraft.data.SafDocumentWriter
 import java.io.File
 import java.nio.ByteBuffer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -177,6 +178,20 @@ class Mp4ExportWorkerInstrumentedTest {
             assertEquals(2L, result.videoSamples)
             val validated = Mp4ExportValidator.validate(staged, plan(), expectAudio = true)
             assertTrue(validated.audioSamples > 0L)
+            assertNotNull("AAC first sample PTS must be measured", validated.audioFirstPtsUs)
+            assertNotNull("AAC last sample PTS must be measured", validated.audioLastPtsUs)
+            assertTrue("AAC presentation window must be ordered",
+                validated.audioLastPtsUs!! >= validated.audioFirstPtsUs!!)
+            assertTrue("Muxed AAC starts on or after export time zero",
+                validated.audioFirstPtsUs!! >= 0L)
+            assertTrue("Last AAC sample must precede the video end",
+                validated.audioLastPtsUs!! < validated.durationUs)
+            assertNotNull("Container should expose AAC track duration", validated.audioTrackDurationUs)
+            assertTrue("AAC track duration must be positive", validated.audioTrackDurationUs!! > 0L)
+            assertEquals("Staged result must carry the measured AAC start",
+                validated.audioFirstPtsUs, result.audioFirstPtsUs)
+            assertEquals("Staged result must carry the measured AAC end",
+                validated.audioLastPtsUs, result.audioLastPtsUs)
         } finally {
             fixture.delete()
             staged.delete()

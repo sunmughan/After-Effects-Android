@@ -48,7 +48,10 @@ object Mp4ExportWorker {
         val audioStatus: AudioStatus,
         val videoSamples: Long,
         val durationUs: Long,
-        val audioSamplesWritten: Long
+        val audioSamplesWritten: Long,
+        val audioFirstPtsUs: Long? = null,
+        val audioLastPtsUs: Long? = null,
+        val audioTrackDurationUs: Long? = null
     )
 
     data class AudioResolution(
@@ -152,7 +155,10 @@ object Mp4ExportWorker {
                             audioStatus = audioStatus,
                             videoSamples = remuxedValidated.videoSamples,
                             durationUs = remuxedValidated.durationUs,
-                            audioSamplesWritten = audioSamples
+                            audioSamplesWritten = audioSamples,
+                            audioFirstPtsUs = remuxedValidated.audioFirstPtsUs,
+                            audioLastPtsUs = remuxedValidated.audioLastPtsUs,
+                            audioTrackDurationUs = remuxedValidated.audioTrackDurationUs
                         )
                     } else {
                         audioStatus = AudioStatus.AUDIO_TRACK_UNSUPPORTED
