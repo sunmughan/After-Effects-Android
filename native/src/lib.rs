@@ -1576,10 +1576,14 @@ fn set_text_layer_font_keyframe(source: &str, composition_id: u64, layer_id: u64
         .and_then(|group| group.prop_mut("sourceText"))
         .ok_or_else(|| format!("Layer {layer_id} has no Source Text property"))?;
     if property.static_only { return Err("Source Text font cannot be keyframed".into()); }
-    let mut doc = match &property.value {
-        Value::Text(doc) => (**doc).clone(),
-        _ => return Err(format!("Layer {layer_id} Source Text is not a text document")),
-    };
+    // Text/font keys share one canonical TextDoc property. Start from the
+    // document active at this frame so a font change never rewinds text or styling.
+    let mut doc = property.keys.iter()
+        .filter(|key| key.time <= tick)
+        .max_by_key(|key| key.time)
+        .and_then(|key| match &key.value { Value::Text(doc) => Some((**doc).clone()), _ => None })
+        .or_else(|| match &property.value { Value::Text(doc) => Some((**doc).clone()), _ => None })
+        .ok_or_else(|| format!("Layer {layer_id} Source Text is not a text document"))?;
     doc.font = font.to_owned();
     if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
     property.set_value_at(tick, Value::Text(Box::new(doc)));
