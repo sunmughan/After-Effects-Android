@@ -226,6 +226,7 @@ fun EditorScreen(
     onSetCanonicalTextLayerKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetCanonicalTextLayerSize: (Long, Long, Double) -> Unit,
     onSetCanonicalTextLayerTracking: (Long, Long, Double) -> Unit,
+    onSetCanonicalTextLayerFont: (Long, Long, String) -> Unit = { _, _, _ -> },
     onSetCanonicalLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
@@ -751,6 +752,7 @@ fun EditorScreen(
                     onSetCanonicalTextLayerKeyframe = onSetCanonicalTextLayerKeyframe,
                     onSetTextLayerSize = onSetCanonicalTextLayerSize,
                     onSetTextLayerTracking = onSetCanonicalTextLayerTracking,
+                    onSetTextLayerFont = onSetCanonicalTextLayerFont,
                     onSetLayerScalarProperty = onSetCanonicalLayerScalarProperty,
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
@@ -1307,6 +1309,7 @@ private fun CanonicalProjectEditor(
     onSetCanonicalTextLayerKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetTextLayerSize: (Long, Long, Double) -> Unit,
     onSetTextLayerTracking: (Long, Long, Double) -> Unit,
+    onSetTextLayerFont: (Long, Long, String) -> Unit = { _, _, _ -> },
     onSetLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
@@ -1361,6 +1364,7 @@ private fun CanonicalProjectEditor(
     var textDraft by remember(composition?.id, layer?.id, layer?.textParams?.text) { mutableStateOf(layer?.textParams?.text.orEmpty()) }
     var textSizeDraft by remember(composition?.id, layer?.id, layer?.textParams?.size) { mutableStateOf((layer?.textParams?.size ?: 0.0).toString()) }
     var textTrackingDraft by remember(composition?.id, layer?.id, layer?.textParams?.tracking) { mutableStateOf((layer?.textParams?.tracking ?: 0.0).toString()) }
+    var textFontDraft by remember(composition?.id, layer?.id, layer?.textParams?.font) { mutableStateOf(layer?.textParams?.font.orEmpty()) }
     var paramDrafts by remember(composition?.id, layer?.id) { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var previewFrame by remember(composition?.id) { mutableIntStateOf(0) }
     LaunchedEffect(playheadFrame, composition?.durationFrames) {
@@ -1975,6 +1979,21 @@ private fun CanonicalProjectEditor(
                 layer.textParams?.let { textParams ->
                     Text("Text · Source Text", color = EditorPalette.text, fontSize = 12.sp)
                     Text("Font · ${textParams.font}", color = EditorPalette.muted, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        BasicTextField(
+                            value = textFontDraft,
+                            onValueChange = { textFontDraft = it.take(128) },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                            modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical text layer font" },
+                            decorationBox = { inner -> Box { if (textFontDraft.isEmpty()) Text("Font family", color = EditorPalette.muted); inner() } }
+                        )
+                        TextButton(
+                            enabled = editable && textFontDraft.isNotBlank() && textFontDraft.length <= 128,
+                            onClick = { onSetTextLayerFont(composition.id, layer.id, textFontDraft) },
+                            modifier = Modifier.semantics { contentDescription = "Apply canonical text font" }
+                        ) { Text("Apply font", color = EditorPalette.violet, fontSize = 10.sp) }
+                    }
                     BasicTextField(
                         value = textDraft,
                         onValueChange = { textDraft = it.take(20000) },
