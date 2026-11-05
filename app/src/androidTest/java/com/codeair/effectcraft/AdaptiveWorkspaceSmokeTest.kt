@@ -31,6 +31,7 @@ import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.PropertyKeyframe
 import com.codeair.effectcraft.ui.EditorScreen
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 
