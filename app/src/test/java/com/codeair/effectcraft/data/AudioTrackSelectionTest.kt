@@ -37,3 +37,21 @@ class AudioTrackSelectionTest {
         assertEquals("audio/mp4a-latm", AudioTrackSelection.PASSTHROUGH_MIME)
     }
 }
+
+    @Test
+    fun everyAudioStatusExplainsTheActualExportOutcome() {
+        assertEquals("with audio", AudioStatus.INCLUDED.describe())
+        assertEquals(
+            "video-only — composition has no audio",
+            AudioStatus.NO_AUDIO_IN_COMPOSITION.describe()
+        )
+        assertEquals(
+            "video-only — audio file unavailable",
+            AudioStatus.AUDIO_FILE_UNAVAILABLE.describe()
+        )
+        assertEquals(
+            "video-only — no compatible AAC audio track",
+            AudioStatus.AUDIO_TRACK_UNSUPPORTED.describe()
+        )
+    }
+}
