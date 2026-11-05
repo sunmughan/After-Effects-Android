@@ -4796,6 +4796,7 @@ mod tests {
         assert_eq!(bool_prop.keys[1].time, Tick::from_rational(15, 1, 30));
         assert_eq!(bool_prop.keys[1].value, Value::Bool(false));
         assert_eq!(bool_prop.keys[1].in_interp, Interp::Hold);
+        assert_eq!(bool_prop.keys[1].out_interp, Interp::Hold);
         assert_eq!(bool_prop.value_at(Tick::from_rational(7, 1, 30)), Value::Bool(true));
         assert_eq!(bool_prop.value_at(Tick::from_rational(15, 1, 30)), Value::Bool(false));
         assert_eq!(bool_prop.value_at(Tick::from_rational(29, 1, 30)), Value::Bool(false), "a hold key never tweens toward the next value");
@@ -4808,7 +4809,10 @@ mod tests {
         assert_eq!(popup_prop.keys.len(), 2);
         assert_eq!(popup_prop.keys[0].value, Value::Enum(2));
         assert_eq!(popup_prop.keys[1].value, Value::Enum(1));
+        assert_eq!(popup_prop.keys[0].in_interp, Interp::Hold);
+        assert_eq!(popup_prop.keys[0].out_interp, Interp::Hold);
         assert_eq!(popup_prop.keys[1].in_interp, Interp::Hold);
+        assert_eq!(popup_prop.keys[1].out_interp, Interp::Hold);
         assert_eq!(popup_prop.value_at(Tick::from_rational(7, 1, 30)), Value::Enum(2));
         assert_eq!(popup_prop.value_at(Tick::from_rational(29, 1, 30)), Value::Enum(1));
         // Metadata now carries the hold keys (bool as JSON boolean, enum as index).
