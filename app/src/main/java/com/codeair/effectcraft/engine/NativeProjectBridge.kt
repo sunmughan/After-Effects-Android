@@ -160,7 +160,7 @@ object NativeProjectBridge {
     /** Sets the canonical Source Text font family/name, preserving the rest of TextDoc. */
     fun setTextLayerFontEcproj(json: String, compositionId: Long, layerId: Long, font: String): String? {
         ensureLoaded()
-        if (!available || font.isBlank() || font.length > 128 || font.any(Char::isISOControl)) return null
+        if (!available || font.isBlank() || font.length > 128 || font.any { it.code < 0x20 || it.code in 0x7f..0x9f }) return null
         return runCatching { setTextLayerFontEcprojNative(json, compositionId, layerId, font.trim()) }.getOrNull()
     }
 
