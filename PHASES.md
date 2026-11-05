@@ -503,7 +503,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 
 ## M0 — Foundation, toolchain and CI
 **Status: COMPLETE — exact-head CI verified** · CI #774 (run 42000609659) completed SUCCESS on tested SHA `a3093e31c1a8f8d5ca1eac986494ec902f0aaa65`: Assemble/test and independent cold rebuild/compare both green; ARM64+x86_64 JNI, Rust 42/42, JVM suite green, API30 connected 132/132 (0 failures/errors/skips), APK content/native reproducibility PASS. This exact head includes M6 repository rollback fixes `d31daf6f`, `4dd8536c`, and `ea55290c`. Owner acceptance gate #13 CLOSED 2026-11-05 ("M0 is accepted"); personal-only/no-open-license intent resolved (Run 64).
-- **Remaining gate:** rerun the full workflow and cold content/native comparison on the latest branch head after M6 repository transaction commit `14cdb798`; #765 is valid evidence for `d1660eb7` only. Owner acceptance and license-intent gates are closed.
+- **Remaining M0 gate: none.** Exact-head CI #774 covers `a3093e31`, including the M6 transaction and rollback corrections. Physical ARM64 installation/smoke is tracked under M6/M7, not M0.
 - **Historical correction:** the stale #286 completion was withdrawn. M0 completion is now based on the explicit current-head native/JNI, Wrapper, tests and cold-repro gates above, not the old aggregate alone.
 - [x] Native Android/Compose project and offline manifest; no INTERNET permission.
 - [x] Pinned upstream EffectCraft revision, Rust/JNI bridge, Android toolchain and ABI targets.
