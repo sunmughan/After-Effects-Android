@@ -2025,8 +2025,16 @@ private fun CanonicalParamGroupRows(
             val draft = paramDrafts[param.uid] ?: param.components.joinToString(", ")
             val parsed = draft.split(",").map { it.trim().toDoubleOrNull() }
             val valid = parsed.size == 4 && parsed.all { channel -> channel?.isFinite() == true && channel in 0.0..1.0 }
+            val swatchColor = if (valid) {
+                Color(parsed[0]!!.toFloat(), parsed[1]!!.toFloat(), parsed[2]!!.toFloat(), parsed[3]!!.toFloat())
+            } else EditorPalette.panelRaised
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Box(
+                    Modifier.size(22.dp).clip(RoundedCornerShape(4.dp)).background(swatchColor)
+                        .border(BorderStroke(1.dp, EditorPalette.border), RoundedCornerShape(4.dp))
+                        .semantics { contentDescription = "Canonical $section color preview ${group.name} ${param.name}" }
+                )
                 BasicTextField(
                     value = draft,
                     onValueChange = { onParamDraftChange(param.uid, it.take(96)) },
