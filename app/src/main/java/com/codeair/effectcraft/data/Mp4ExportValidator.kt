@@ -80,6 +80,12 @@ object Mp4ExportValidator {
                     val timing = sampleWindow(extractor, bufferBytes = 256 * 1024)
                     audioFirstPtsUs = timing.first
                     audioLastPtsUs = timing.second
+                    require(audioFirstPtsUs != null && audioFirstPtsUs >= 0L) {
+                        "MP4 AAC first presentation timestamp must be nonnegative"
+                    }
+                    require(audioLastPtsUs != null && audioLastPtsUs < durationUs) {
+                        "MP4 AAC last presentation timestamp must precede the video end"
+                    }
                 }
             }
             return Result(videoSamples, durationUs, audioSamples, audioFirstPtsUs, audioLastPtsUs, audioTrackDurationUs)
@@ -88,7 +94,7 @@ object Mp4ExportValidator {
         }
     }
 
-    /** Rewinds the currently selected AAC track and captures its PTS window. */
+    /** Rewinds the currently selected AAC track and captures a validated PTS window. */
     private fun sampleWindow(extractor: MediaExtractor, bufferBytes: Int): Pair<Long?, Long?> {
         extractor.seekTo(0, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
         val buffer = ByteBuffer.allocate(bufferBytes)
@@ -97,8 +103,8 @@ object Mp4ExportValidator {
         while (true) {
             if (extractor.readSampleData(buffer, 0) < 0) break
             val pts = extractor.sampleTime
+            last = AudioTrackSelection.validateSamplePts(previousPtsUs = last, currentPtsUs = pts)
             if (first == null) first = pts
-            last = pts
             extractor.advance()
         }
         return first to last
