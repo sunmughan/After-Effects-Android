@@ -1024,9 +1024,8 @@ private fun MotionPathOverlay(
 ) {
     if (keys.size < 2 || compositionWidth <= 0 || compositionHeight <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
     val path = remember(keys) { MotionPath.samplePath(keys) }
-    Canvas(
-        modifier = modifier.semantics { contentDescription = "Motion path overlay" }
-    ) {
+    Box(modifier = modifier.semantics { contentDescription = "Motion path overlay" }) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
         // The rendered frame is comp-sized, so ContentScale.Fit maps comp
         // coordinates onto the drawn rect with one uniform scale; the rect
         // is centred when the box letterboxes the frame.
@@ -1062,6 +1061,7 @@ private fun MotionPathOverlay(
             }
             val isCurrent = key.frame == currentFrame
             drawCircle(if (isCurrent) EditorPalette.violet else EditorPalette.mint, radius = if (isCurrent) 6f else 5f, center = centre)
+        }
         }
     }
 }
@@ -2390,7 +2390,14 @@ private fun CanonicalParamGroupRows(
                     ) {
                         param.options.forEachIndexed { index, option ->
                             DropdownMenuItem(
-                                text = { Text(option, color = EditorPalette.text, fontSize = 11.sp) },
+                                text = {
+                                    Text(
+                                        option,
+                                        modifier = Modifier.semantics { contentDescription = "Canonical popup option ${param.name} $option" },
+                                        color = EditorPalette.text,
+                                        fontSize = 11.sp
+                                    )
+                                },
                                 onClick = {
                                     expandedPopupUid = null
                                     if (param.keys.isEmpty()) onApplyPopup(param.uid, index)
