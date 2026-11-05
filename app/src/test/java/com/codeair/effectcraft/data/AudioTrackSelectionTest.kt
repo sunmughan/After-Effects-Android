@@ -53,4 +53,26 @@ class AudioTrackSelectionTest {
             AudioStatus.AUDIO_TRACK_UNSUPPORTED.describe()
         )
     }
+
+    @Test
+    fun finalAacSamplePtsMustBeNonnegativeAndStrictlyIncreasing() {
+        assertEquals(0L, AudioTrackSelection.validateSamplePts(null, 0L))
+        assertEquals(1_024L, AudioTrackSelection.validateSamplePts(0L, 1_024L))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsNegativeFinalAacPts() {
+        AudioTrackSelection.validateSamplePts(null, -1L)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsDuplicateFinalAacPts() {
+        AudioTrackSelection.validateSamplePts(1_024L, 1_024L)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsDecreasingFinalAacPts() {
+        AudioTrackSelection.validateSamplePts(2_048L, 1_024L)
+    }
+
 }
