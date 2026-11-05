@@ -1,3 +1,4 @@
+use effectcraft_project::props::ParamUi;
 use effectcraft_project::Project;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jlong, jstring};
@@ -718,10 +719,28 @@ fn layer_rotation_axis(layer: &effectcraft_project::Layer, match_id: &str) -> f6
     rotation
 }
 
-/// Direct scalar and vector parameters of one parameter group, in
-/// depth-first order. Color, path, gradient, popup and layer-reference
-/// parameters are not editable through the generic uid setter and are
-/// omitted here, so metadata never promises an edit the UI cannot make.
+/// Sorted, deduplicated keyframe frame indices of one property, in
+/// composition frame units — the same frame<->tick conversion as the
+/// renderer, so metadata frames and rendered frames agree.
+fn hold_keyframes(
+    property: &effectcraft_project::props::Property,
+    frame_rate: effectcraft_time::FrameRate,
+) -> Vec<i64> {
+    let mut keyframes = property.keys.iter()
+        .map(|key| key.time.to_rational_floor(frame_rate.den, frame_rate.num))
+        .collect::<Vec<_>>();
+    keyframes.sort_unstable();
+    keyframes.dedup();
+    keyframes
+}
+
+/// Direct scalar, vector, color, checkbox-bool and popup-enum parameters
+/// of one parameter group, in depth-first order. Path, gradient and
+/// layer-reference parameters are not editable through the generic uid
+/// setter and are omitted here, so metadata never promises an edit the UI
+/// cannot make. A bool is exposed only with a Checkbox UI and an enum only
+/// with a Popup UI (both non-static-only); Hidden popups such as Fill
+/// Blend Mode stay omitted.
 fn collect_param_items(
     group: &effectcraft_project::PropGroup,
     prefix: &str,
@@ -738,6 +757,8 @@ fn collect_param_items(
         let mut scalars = Vec::new();
         let mut vecs = Vec::new();
         let mut colors = Vec::new();
+        let mut bools = Vec::new();
+        let mut popups = Vec::new();
         for prop_child in &child_group.children {
             let Node::Prop(property) = prop_child else { continue };
             match &property.value {
@@ -773,16 +794,41 @@ fn collect_param_items(
                         "keyframes": keyframes
                     }));
                 },
+                Value::Bool(value) if matches!(&property.ui, ParamUi::Checkbox) && !property.static_only => {
+                    bools.push(json!({
+                        "uid": property.uid,
+                        "name": property.name,
+                        "value": value,
+                        "keys": curve_keys_json(property, frame_rate),
+                        "keyframes": hold_keyframes(property, frame_rate)
+                    }));
+                },
+                Value::Enum(value) if matches!(&property.ui, ParamUi::Popup { .. }) && !property.static_only => {
+                    let options = match &property.ui {
+                        ParamUi::Popup { options } => options.clone(),
+                        _ => Vec::new(),
+                    };
+                    popups.push(json!({
+                        "uid": property.uid,
+                        "name": property.name,
+                        "value": value,
+                        "options": options,
+                        "keys": curve_keys_json(property, frame_rate),
+                        "keyframes": hold_keyframes(property, frame_rate)
+                    }));
+                },
                 _ => {}
             }
         }
-        if !scalars.is_empty() || !vecs.is_empty() || !colors.is_empty() {
+        if !scalars.is_empty() || !vecs.is_empty() || !colors.is_empty() || !bools.is_empty() || !popups.is_empty() {
             out.push(json!({
                 "name": name,
                 "kind": child_group.match_id,
                 "scalars": scalars,
                 "vecs": vecs,
-                "colors": colors
+                "colors": colors,
+                "bools": bools,
+                "popups": popups
             }));
         }
         collect_param_items(child_group, &name, out, frame_rate);
@@ -894,6 +940,12 @@ fn curve_keys_json(
             Value::Scalar(value) => json!(value),
             Value::Vec2(value) => json!(value),
             Value::Vec3(value) => json!(value),
+            // Hold-only values have no numeric tween: a bool rides as a
+            // JSON boolean and an enum as its 0-based option index, and
+            // the Kotlin parser maps both onto the curve value (1.0/0.0
+            // for bools, the index for enums).
+            Value::Bool(value) => json!(value),
+            Value::Enum(value) => json!(value),
             _ => continue,
         };
         let ease_json = |ease: &Vec<Ease>| ease.iter()
@@ -1543,6 +1595,208 @@ fn set_layer_color_keyframe(
     if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
     property.set_value_at(tick, Value::Color(rgba));
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Loads one shape-item or effect parameter for mutation, addressed by
+/// its native uid. Shared by the bool/popup setters so the lookup (and
+/// the locked-layer rejection) lives in exactly one place.
+fn load_param_property_mut<'a>(
+    project: &'a mut Project,
+    composition_id: u64,
+    layer_id: u64,
+    uid: u64,
+) -> Result<&'a mut effectcraft_project::props::Property, String> {
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    layer.props.prop_mut(&format!("@{uid}"))
+        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))
+}
+
+/// Number of options of a popup parameter, when its UI carries one.
+fn popup_option_count(property: &effectcraft_project::props::Property) -> Option<usize> {
+    match &property.ui {
+        ParamUi::Popup { options } => Some(options.len()),
+        _ => None,
+    }
+}
+
+/// Sets the static value of a checkbox (Bool) parameter. Refuses when
+/// the property already has keys: a static write must never silently
+/// upsert a frame-0 key — change the value with a hold keyframe instead.
+fn set_layer_bool_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, value: bool) -> Result<String, String> {
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if !matches!(&property.value, Value::Bool(_)) {
+        return Err(format!("Parameter {uid} is not a checkbox"));
+    }
+    if !property.keys.is_empty() {
+        return Err(format!("Parameter {uid} already has keyframes; change its value with a hold keyframe"));
+    }
+    property.set_value_at(Tick::ZERO, Value::Bool(value));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Sets the static value of a popup (Enum) parameter: the 0-based index
+/// into the popup's options. Refuses out-of-range indices and refuses
+/// when the property already has keys (see `set_layer_bool_property`).
+fn set_layer_popup_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, index: i64) -> Result<String, String> {
+    if index < 0 {
+        return Err("Popup option index must be non-negative".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if !matches!(&property.value, Value::Enum(_)) {
+        return Err(format!("Parameter {uid} is not a popup"));
+    }
+    if let Some(count) = popup_option_count(property) {
+        if index as usize >= count {
+            return Err(format!("Popup option {index} is out of range (0..{count})"));
+        }
+    }
+    if !property.keys.is_empty() {
+        return Err(format!("Parameter {uid} already has keyframes; change its value with a hold keyframe"));
+    }
+    property.set_value_at(Tick::ZERO, Value::Enum(index as u32));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Authors one hold keyframe for a checkbox (Bool) parameter at `frame`.
+/// The first key seeds frame 0 with the parameter's current value, so a
+/// key authored mid-timeline never rewrites earlier frames, matching the
+/// scalar/vector/color keyframe setters. Upstream `hold_only` forces Hold
+/// interpolation on both sides, so the value holds (never tweens) until
+/// the next key — the generic hold-key path Gap 4 (Source Text) reuses.
+fn set_layer_bool_keyframe(source: &str, composition_id: u64, layer_id: u64, uid: u64, frame: i64, value: bool) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let frame_rate = project.comp(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?.frame_rate;
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if property.static_only {
+        return Err(format!("Parameter {uid} cannot be keyframed"));
+    }
+    if !matches!(&property.value, Value::Bool(_)) {
+        return Err(format!("Parameter {uid} is not a checkbox"));
+    }
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(tick, Value::Bool(value));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Authors one hold keyframe for a popup (Enum) parameter at `frame`,
+/// with the same seeding and hold semantics as `set_layer_bool_keyframe`.
+fn set_layer_popup_keyframe(source: &str, composition_id: u64, layer_id: u64, uid: u64, frame: i64, index: i64) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if index < 0 {
+        return Err("Popup option index must be non-negative".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let frame_rate = project.comp(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?.frame_rate;
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if property.static_only {
+        return Err(format!("Parameter {uid} cannot be keyframed"));
+    }
+    if !matches!(&property.value, Value::Enum(_)) {
+        return Err(format!("Parameter {uid} is not a popup"));
+    }
+    if let Some(count) = popup_option_count(property) {
+        if index as usize >= count {
+            return Err(format!("Popup option {index} is out of range (0..{count})"));
+        }
+    }
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(tick, Value::Enum(index as u32));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerBoolPropertyEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, value: jni::sys::jboolean,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 {
+        Err("Composition, layer and parameter IDs must be non-negative".to_owned())
+    } else {
+        set_layer_bool_property(&source, composition_id as u64, layer_id as u64, uid as u64, value != 0)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerPopupPropertyEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, index: jni::sys::jint,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || index < 0 {
+        Err("Composition, layer and parameter IDs and popup index must be non-negative".to_owned())
+    } else {
+        set_layer_popup_property(&source, composition_id as u64, layer_id as u64, uid as u64, index as i64)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerBoolKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, frame: jlong, value: jni::sys::jboolean,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || frame < 0 {
+        Err("Composition, layer, parameter IDs and frame must be non-negative".to_owned())
+    } else {
+        set_layer_bool_keyframe(&source, composition_id as u64, layer_id as u64, uid as u64, frame as i64, value != 0)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerPopupKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, frame: jlong, index: jni::sys::jint,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || frame < 0 || index < 0 {
+        Err("Composition, layer, parameter IDs, frame and popup index must be non-negative".to_owned())
+    } else {
+        set_layer_popup_keyframe(&source, composition_id as u64, layer_id as u64, uid as u64, frame as i64, index as i64)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
 #[no_mangle]
@@ -2271,7 +2525,7 @@ fn remove_curve_keyframe(
     if property.static_only {
         return Err(format!("Curve property {selector} cannot be keyframed"));
     }
-    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) | Value::Color(_)) {
+    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) | Value::Color(_) | Value::Bool(_) | Value::Enum(_)) {
         return Err(format!("Curve property {selector} is not animatable"));
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
