@@ -293,8 +293,24 @@ class CanonicalProjectRepository(private val root: File) {
         if (!backupDocument.isFile || !backupSidecar.isFile) {
             throw IOException("Canonical project $id rollback pair is incomplete")
         }
-        moveReplacing(backupDocument, documentFile(id, format))
-        moveReplacing(backupSidecar, sidecarFile(id))
+        // Copy from durable backups, never consume them during recovery.
+        // If recovery itself is interrupted between the two promotions, the
+        // complete rollback pair remains available for the next startup.
+        val restoredDocument = File(root, "${id}.${format}.restore.tmp")
+        val restoredSidecar = File(root, "${id}.json.restore.tmp")
+        writeDurably(restoredDocument, backupDocument.readText(Charsets.UTF_8))
+        writeDurably(restoredSidecar, backupSidecar.readText(Charsets.UTF_8))
+        moveReplacing(restoredDocument, documentFile(id, format))
+        moveReplacing(restoredSidecar, sidecarFile(id))
+
+        val restoredMetadata = parseSidecar(sidecarFile(id).readText(Charsets.UTF_8))
+        val restoredBytes = documentFile(id, format).readText(Charsets.UTF_8)
+        if (restoredMetadata.id != id || restoredMetadata.format != format ||
+            restoredBytes.sha256() != restoredMetadata.documentSha256) {
+            throw IOException("Canonical project $id rollback could not be verified")
+        }
+        backupDocument.delete()
+        backupSidecar.delete()
     }
 
     private fun moveReplacing(source: File, target: File) {
