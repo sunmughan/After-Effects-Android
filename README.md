@@ -268,3 +268,8 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - Added exact-string assertions for all four AudioStatus outcomes in test commit 0d4b630c. New exact-head CI is required; no pass is claimed yet.
 - MP4 audio remains AAC passthrough only; missing/unavailable/unsupported audio is visibly video-only. No audio transcoding or physical lip-sync acceptance is claimed.
 - M0 owner acceptance and M2–M7 physical/user/release remainders remain open; PR #1 is draft/unmerged.
+
+
+### Latest engineering execution — M6 repository rollback recovery
+- CI #767 exposed a real rollback bug: backup sidecar integrity was compared with the already-promoted new canonical document. Corrected in [d31daf6f](https://github.com/sunmughan/After-Effects-Android/commit/d31daf6fa9e7f6b425e9d546faca37a96ca1c743), and recovery was hardened to retain backup files until the restored pair is verified in [4dd8536c](https://github.com/sunmughan/After-Effects-Android/commit/4dd8536c824bb752365f32b4be48cfdd47f19df2). The existing interrupted-promotion regression now targets the actual failure. Exact-head CI is pending; do not infer a pass from #765, which tested d1660eb7.
+- Current release remains NOT COMPLETE. See PHASES.md for M0–M7 acceptance evidence and concrete physical/owner blockers.
