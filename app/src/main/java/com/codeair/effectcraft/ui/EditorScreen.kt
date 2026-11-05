@@ -2049,7 +2049,7 @@ private fun CanonicalParamGroupRows(
     }
 }
 
-private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? =private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? =
+private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? =
     com.codeair.effectcraft.engine.RenderedFrameBitmap.decode(bytes)
 
 @Composable
