@@ -1,5 +1,7 @@
 package com.codeair.effectcraft.engine
 
+import kotlin.math.absoluteValue
+
 /**
  * Canonical upstream Transform properties with editable native keyframe tracks.
  * Keep this whitelist aligned with the Rust bridge's recursive Transform lookup.
