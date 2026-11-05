@@ -1543,6 +1543,19 @@ fn set_text_layer_tracking(source: &str, composition_id: u64, layer_id: u64, tra
     })
 }
 
+/// Sets the canonical TextDoc font family/name without discarding its text or styling.
+fn set_text_layer_font(source: &str, composition_id: u64, layer_id: u64, font: &str) -> Result<String, String> {
+    let font = font.trim();
+    if font.is_empty() || font.chars().count() > 128 || font.chars().any(char::is_control) {
+        return Err("Text font must be non-empty, at most 128 characters, and contain no control characters".into());
+    }
+    let owned = font.to_owned();
+    edit_text_doc(source, composition_id, layer_id, |doc| {
+        doc.font = owned;
+        Ok(())
+    })
+}
+
 fn set_layer_scalar_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, value: f64) -> Result<String, String> {
     if !value.is_finite() || value.abs() > 1_000_000.0 {
         return Err("Parameter value must be finite and within ±1,000,000".into());
@@ -2021,6 +2034,24 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
     };
     let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
         else { set_text_layer_tracking(&source, composition_id as u64, layer_id as u64, tracking as f64) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerFontEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, font: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let font: String = match env.get_string(&font) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_text_layer_font(&source, composition_id as u64, layer_id as u64, &font) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -3921,6 +3952,28 @@ mod tests {
         assert!(set_text_layer_size(&source, comp_id, layer_id, 0.0).is_err());
         assert!(set_text_layer_tracking(&source, comp_id, layer_id, f64::NAN).is_err());
         assert!(set_text_layer_text(&source, comp_id, 999, "Nope").is_err());
+    }
+
+    #[test]
+    fn canonical_text_font_edit_preserves_source_and_validates_input() {
+        use effectcraft_project::Value;
+
+        let (source, comp_id, layer_id) = text_layer_project();
+        let texted = set_text_layer_text(&source, comp_id, layer_id, "Brand title").unwrap();
+        let fonted = set_text_layer_font(&texted, comp_id, layer_id, "  Inter Display  ").unwrap();
+        let project: Project = serde_json::from_str(&fonted).unwrap();
+        let doc = match &project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("text").unwrap().prop("sourceText").unwrap().value {
+            Value::Text(doc) => doc,
+            other => panic!("sourceText must be Text, got {other:?}"),
+        };
+        assert_eq!(doc.text, "Brand title");
+        assert_eq!(doc.font, "Inter Display");
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&fonted).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["layers"][0]["text"]["font"], "Inter Display");
+        assert!(set_text_layer_font(&source, comp_id, layer_id, " ").is_err());
+        assert!(set_text_layer_font(&source, comp_id, layer_id, &"F".repeat(129)).is_err());
+        assert!(set_text_layer_font(&source, comp_id, layer_id, "Bad\\nFont").is_err());
+        assert!(set_text_layer_font(&source, comp_id, 999, "Inter").is_err());
     }
 
     #[test]
