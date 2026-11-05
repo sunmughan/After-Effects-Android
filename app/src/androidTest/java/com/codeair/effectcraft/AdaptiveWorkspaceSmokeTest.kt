@@ -711,6 +711,18 @@ class AdaptiveWorkspaceSmokeTest {
         // The workspace frame arrives through a LaunchedEffect that decodes
         // on a background dispatcher, so waitForIdle can return before the
         // bitmap (and the overlay over it) is composed; poll for the node.
+        // First prove the supplied native RGBA frame is decoded and displayed;
+        // the vector overlay is meaningful only over a real composition frame.
+        assertNotNull(
+            "Motion-path fixture frame must decode",
+            com.codeair.effectcraft.engine.RenderedFrameBitmap.decode(blackFrameBytes())
+        )
+        compose.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
+            }.isSuccess
+        }
+        compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithContentDescription("Motion path overlay")
                 .fetchSemanticsNodes().isNotEmpty()
