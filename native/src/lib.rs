@@ -1697,8 +1697,18 @@ fn load_param_property_mut<'a>(
     let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
         .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
     require_layer_unlocked(layer)?;
-    layer.props.prop_mut(&format!("@{uid}"))
-        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))
+    let property = layer.props.prop_mut(&format!("@{uid}"))
+        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))?;
+    // Bool/Enum values never interpolate by construction, so a checkbox or
+    // popup is hold-only whatever the file says: hand-built or older files
+    // may omit the `hold_only` flag (serde defaults it to false), and
+    // trusting it would author Linear keys for a value that cannot tween.
+    // Deriving it here matches upstream `Property::new`, and the repaired
+    // flag is written back when the edit is saved.
+    if matches!(&property.value, Value::Bool(_) | Value::Enum(_)) {
+        property.hold_only = true;
+    }
+    Ok(property)
 }
 
 /// Number of options of a popup parameter, when its UI carries one.
