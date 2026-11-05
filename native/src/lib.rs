@@ -3743,6 +3743,229 @@ mod tests {
         assert_eq!(same, keyed);
     }
 
+    fn position_property(project: &Project, comp_id: u64, layer_id: u64) -> &effectcraft_project::Property {
+        let layer = project.comp(ItemId(comp_id)).unwrap().layers.iter().find(|l| l.id.0 == layer_id).unwrap();
+        layer.props.sub("transform").unwrap().get("position").unwrap()
+    }
+
+    fn position_frames(project: &Project, comp_id: u64, layer_id: u64) -> Vec<i64> {
+        position_property(project, comp_id, layer_id).keys.iter()
+            .map(|k| k.time.to_rational_floor(1, 30)).collect()
+    }
+
+    #[test]
+    fn roving_key_is_retimed_proportionally_to_path_length() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        // Equal 100px legs: the roving middle key lands exactly halfway in time.
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 0.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 10, 100.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 30, 100.0, 100.0, 0.0).unwrap();
+        let roved = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 10, true).unwrap();
+        let project: Project = serde_json::from_str(&roved).unwrap();
+        assert_eq!(position_frames(&project, comp_id, layer_id), vec![0, 15, 30]);
+        assert!(position_property(&project, comp_id, layer_id).keys[1].roving);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&roved).unwrap()).unwrap();
+        let curve = &metadata["compositions"][0]["layers"][0]["transformCurves"]["position"];
+        assert_eq!(curve[1]["roving"], true);
+        assert_eq!(curve[1]["spatialAuto"], true);
+        assert_eq!(curve[0]["roving"], false);
+
+        // Unequal legs (30px then 40px): middle lands at 30/70 of the 30-frame span.
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 0.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 10, 30.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 30, 30.0, 40.0, 0.0).unwrap();
+        let roved = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 10, true).unwrap();
+        let project: Project = serde_json::from_str(&roved).unwrap();
+        assert_eq!(position_frames(&project, comp_id, layer_id), vec![0, 13, 30]);
+
+        // First and last keys can never rove: setting roving on them is cleared.
+        let first = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 0, true).unwrap();
+        let first_project: Project = serde_json::from_str(&first).unwrap();
+        assert!(!position_property(&first_project, comp_id, layer_id).keys[0].roving);
+        let last = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 30, true).unwrap();
+        let last_project: Project = serde_json::from_str(&last).unwrap();
+        assert!(!position_property(&last_project, comp_id, layer_id).keys[2].roving);
+
+        // Fewer than three keys clears roving everywhere.
+        let two = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 0.0, 0.0, 0.0).unwrap();
+        let two = set_layer_transform_keyframe(&two, comp_id, layer_id, "position", 10, 100.0, 0.0, 0.0).unwrap();
+        let two = set_keyframe_roving(&two, comp_id, layer_id, "transform:position", 0, true).unwrap();
+        let two_project: Project = serde_json::from_str(&two).unwrap();
+        assert!(position_property(&two_project, comp_id, layer_id).keys.iter().all(|k| !k.roving));
+
+        // Roving is a spatial-property concept: scale rejects it, as do bad frames.
+        assert!(set_keyframe_roving(&keyed, comp_id, layer_id, "transform:scale", 10, true).is_err());
+        assert!(set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 11, true).is_err());
+        assert!(set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", -1, true).is_err());
+    }
+
+    #[test]
+    fn spatial_tangents_bend_the_path() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 0.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 15, 100.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 30, 200.0, 0.0, 0.0).unwrap();
+        let bent = set_keyframe_spatial_tangents(&keyed, comp_id, layer_id, "transform:position", 15, [0.0, -60.0, 0.0], [0.0, -60.0, 0.0], false).unwrap();
+        let project: Project = serde_json::from_str(&bent).unwrap();
+        let property = position_property(&project, comp_id, layer_id);
+        assert_eq!(property.keys[1].spatial_in, [0.0, -60.0, 0.0]);
+        assert_eq!(property.keys[1].spatial_out, [0.0, -60.0, 0.0]);
+        assert!(!property.keys[1].spatial_auto);
+        // Mid-segment evaluation sits on the Bezier curve, well off the y=0 chord.
+        let mid = match property.value_at(effectcraft_time::Tick::from_rational(22, 1, 30)) {
+            Value::Vec3(value) => value,
+            _ => panic!("position must evaluate to Vec3"),
+        };
+        assert!(mid[0] > 100.0 && mid[0] < 200.0, "bent path x {mid:?} must stay between its keys");
+        assert!(mid[1] < -10.0, "bent path y {} must sit well above the straight chord", mid[1]);
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&bent).unwrap()).unwrap();
+        let curve = &metadata["compositions"][0]["layers"][0]["transformCurves"]["position"];
+        assert_eq!(curve[1]["spatialIn"], json!([0.0, -60.0, 0.0]));
+        assert_eq!(curve[1]["spatialOut"], json!([0.0, -60.0, 0.0]));
+        assert_eq!(curve[1]["spatialAuto"], false);
+
+        // Auto-Bezier keys derive Catmull-Rom tangents from neighbours, so the
+        // path bulges off the chord even with no stored tangents.
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 0.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 15, 100.0, 100.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 30, 200.0, 0.0, 0.0).unwrap();
+        let auto_project: Project = serde_json::from_str(&keyed).unwrap();
+        let auto_value = match position_property(&auto_project, comp_id, layer_id)
+            .value_at(effectcraft_time::Tick::from_rational(7, 1, 30)) {
+            Value::Vec3(value) => value,
+            _ => panic!("position must evaluate to Vec3"),
+        };
+        assert!(auto_value[1] > 51.0, "auto-Bezier path y {} must bulge above the chord midpoint 50", auto_value[1]);
+
+        // Tangents on a non-spatial property, non-finite components and bad frames reject.
+        assert!(set_keyframe_spatial_tangents(&keyed, comp_id, layer_id, "transform:scale", 15, [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], false).is_err());
+        assert!(set_keyframe_spatial_tangents(&keyed, comp_id, layer_id, "transform:position", 15, [f64::NAN, 0.0, 0.0], [0.0, 0.0, 0.0], false).is_err());
+        assert!(set_keyframe_spatial_tangents(&keyed, comp_id, layer_id, "transform:position", 15, [0.0, 0.0, 0.0], [f64::INFINITY, 0.0, 0.0], false).is_err());
+        assert!(set_keyframe_spatial_tangents(&keyed, comp_id, layer_id, "transform:position", 16, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], false).is_err());
+        assert!(set_keyframe_spatial_tangents(&keyed, comp_id, layer_id, "transform:position", -1, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], false).is_err());
+    }
+
+    #[test]
+    fn move_keyframe_preserves_spatial_fields_and_retimes() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 0.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 15, 100.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 30, 200.0, 0.0, 0.0).unwrap();
+        let keyed = set_keyframe_spatial_tangents(&keyed, comp_id, layer_id, "transform:position", 15, [0.0, -40.0, 0.0], [0.0, -40.0, 0.0], false).unwrap();
+        let keyed = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 15, true).unwrap();
+        // Dragging a roving key in time cannot move it: retiming re-spaces it
+        // by path length (equal legs here, so it snaps back to frame 15),
+        // while its roving flag and tangents survive the drag.
+        let dragged = move_keyframe(&keyed, comp_id, layer_id, "transform:position", 15, 20).unwrap();
+        let project: Project = serde_json::from_str(&dragged).unwrap();
+        assert_eq!(position_frames(&project, comp_id, layer_id), vec![0, 15, 30]);
+        let moved = &position_property(&project, comp_id, layer_id).keys[1];
+        assert!(moved.roving);
+        assert_eq!(moved.spatial_in, [0.0, -40.0, 0.0]);
+        assert_eq!(moved.spatial_out, [0.0, -40.0, 0.0]);
+        assert!(!moved.spatial_auto);
+        assert_eq!(moved.value, Value::Vec3([100.0, 0.0, 0.0]));
+
+        // A non-roving key drags freely in time and still keeps its tangents.
+        let plain = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 15, false).unwrap();
+        let dragged = move_keyframe(&plain, comp_id, layer_id, "transform:position", 15, 20).unwrap();
+        let project: Project = serde_json::from_str(&dragged).unwrap();
+        assert_eq!(position_frames(&project, comp_id, layer_id), vec![0, 20, 30]);
+        let moved = &position_property(&project, comp_id, layer_id).keys[1];
+        assert!(!moved.roving);
+        assert_eq!(moved.spatial_in, [0.0, -40.0, 0.0]);
+        assert_eq!(moved.spatial_out, [0.0, -40.0, 0.0]);
+    }
+
+    #[test]
+    fn remove_curve_keyframe_retimes_roving_run() {
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_layer_transform_keyframe(&source, comp_id, layer_id, "position", 0, 0.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 10, 100.0, 0.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 20, 100.0, 100.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id, layer_id, "position", 30, 200.0, 100.0, 0.0).unwrap();
+        let keyed = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 10, true).unwrap();
+        let keyed = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 20, true).unwrap();
+        // Deleting a roving key re-times the survivor by path length:
+        // 100px then ~141px of a 30-frame span puts it at frame 12.
+        let (removed, was_removed) = remove_curve_keyframe(&keyed, comp_id, layer_id, "transform:position", 20).unwrap();
+        assert!(was_removed);
+        let project: Project = serde_json::from_str(&removed).unwrap();
+        assert_eq!(position_frames(&project, comp_id, layer_id), vec![0, 12, 30]);
+        assert!(position_property(&project, comp_id, layer_id).keys[1].roving);
+        // Deleting a fixed endpoint never strands a roving key at the edge:
+        // the new first key has its roving flag cleared.
+        let (removed, was_removed) = remove_curve_keyframe(&keyed, comp_id, layer_id, "transform:position", 0).unwrap();
+        assert!(was_removed);
+        let project: Project = serde_json::from_str(&removed).unwrap();
+        assert_eq!(position_frames(&project, comp_id, layer_id), vec![10, 20, 30]);
+        assert!(!position_property(&project, comp_id, layer_id).keys[0].roving);
+    }
+
+    fn red_centroid(bytes: &[u8]) -> Option<(f64, f64)> {
+        if bytes.len() < 8 { return None; }
+        let width = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
+        let (mut sx, mut sy, mut n) = (0f64, 0f64, 0f64);
+        for (index, pixel) in bytes[8..].chunks_exact(4).enumerate() {
+            if pixel[0] > 200 && pixel[1] < 20 && pixel[2] < 20 && pixel[3] > 200 {
+                sx += (index % width) as f64;
+                sy += (index / width) as f64;
+                n += 1.0;
+            }
+        }
+        if n == 0.0 { None } else { Some((sx / n, sy / n)) }
+    }
+
+    #[test]
+    fn spatial_keys_change_rendered_frame() {
+        use effectcraft_project::{build, Comp, Footage, FootageKind, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        use image::ImageEncoder;
+
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(&[255, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
+            .unwrap();
+        let path = std::env::temp_dir().join("effectcraft-spatial-red.png");
+        std::fs::write(&path, png).unwrap();
+        let mut project = Project::default();
+        let comp = Comp::new(64, 64, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Spatial", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let footage = Footage {
+            path: path.to_string_lossy().into_owned(),
+            kind: FootageKind::Still,
+            width: 1,
+            height: 1,
+            has_video: true,
+            missing: false,
+            ..Footage::default()
+        };
+        let item_id = project.add_item("Red pixel", Label::Sandstone, None, ItemKind::Footage(footage));
+        let layer = build::layer(&mut project, &comp, "Red square", LayerSource::Footage { item: item_id }, (16, 16), None);
+        let layer_id = layer.id.0;
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        let source = project.to_file_json().unwrap();
+
+        // Straight horizontal run, bent upward by explicit spatial tangents.
+        let keyed = set_layer_transform_keyframe(&source, comp_id.0, layer_id, "position", 0, 16.0, 32.0, 0.0).unwrap();
+        let keyed = set_layer_transform_keyframe(&keyed, comp_id.0, layer_id, "position", 30, 48.0, 32.0, 0.0).unwrap();
+        let keyed = set_keyframe_spatial_tangents(&keyed, comp_id.0, layer_id, "transform:position", 0, [0.0, 0.0, 0.0], [0.0, -24.0, 0.0], false).unwrap();
+        let keyed = set_keyframe_spatial_tangents(&keyed, comp_id.0, layer_id, "transform:position", 30, [0.0, -24.0, 0.0], [0.0, 0.0, 0.0], false).unwrap();
+
+        // Control: at frame 0 the square sits at its first key.
+        let frame0 = render_frame_rgba(&keyed, comp_id.0, 0, 64).unwrap();
+        let (x0, y0) = red_centroid(&frame0).expect("frame 0 must contain the red square");
+        assert!((x0 - 16.0).abs() < 4.0, "frame 0 centroid x {x0} must sit at the first key");
+        assert!((y0 - 32.0).abs() < 4.0, "frame 0 centroid y {y0} must sit at the first key");
+        // Mid-time the square rides the Bezier path (y ~14), not the y=32 chord.
+        let frame15 = render_frame_rgba(&keyed, comp_id.0, 15, 64).unwrap();
+        let (x15, y15) = red_centroid(&frame15).expect("frame 15 must contain the red square");
+        assert!((x15 - 32.0).abs() < 6.0, "mid-time centroid x {x15} must sit halfway across");
+        assert!(y15 < 24.0, "mid-time centroid y {y15} must ride the bent motion path, not the y=32 chord");
+        std::fs::remove_file(path).unwrap();
+    }
+
     #[test]
     fn canonical_param_keyframes_bezier_and_drag() {
         use effectcraft_project::{build, Comp, ItemKind, LayerSource, Value};
