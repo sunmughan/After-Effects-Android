@@ -144,7 +144,9 @@ class CanonicalProjectRepository(private val root: File) {
         recoverInterruptedUpdate(checkedId)
         val file = sidecarFile(checkedId)
         if (!file.isFile) return null
-        return runCatching { parseSidecar(file.readText(Charsets.UTF_8)) }.getOrNull()
+        return runCatching { parseSidecar(file.readText(Charsets.UTF_8)) }
+            .getOrNull()
+            ?.takeIf { it.id == checkedId }
     }
 
     /** Sidecar-driven listing: newest first, display name breaks timestamp ties. */
@@ -154,7 +156,12 @@ class CanonicalProjectRepository(private val root: File) {
         val sidecars = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
         sidecars.forEach { file -> runCatching { recoverInterruptedUpdate(file.nameWithoutExtension) } }
         return sidecars
-            .mapNotNull { file -> runCatching { parseSidecar(file.readText(Charsets.UTF_8)) }.getOrNull() }
+            .mapNotNull { file ->
+                val fileId = file.nameWithoutExtension
+                runCatching { parseSidecar(file.readText(Charsets.UTF_8)) }
+                    .getOrNull()
+                    ?.takeIf { it.id == fileId }
+            }
             .sortedWith(compareByDescending<Metadata> { it.updatedAtMillis }.thenBy { it.displayName })
     }
 
@@ -189,6 +196,9 @@ class CanonicalProjectRepository(private val root: File) {
                 val raw = runCatching { JSONObject(file.readText(Charsets.UTF_8)) }.getOrNull()
                     ?: return@mapNotNull MigrationResult(file.nameWithoutExtension, null, null, "Corrupt project metadata")
                 val id = raw.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                if (id != file.nameWithoutExtension) {
+                    return@mapNotNull MigrationResult(file.nameWithoutExtension, null, null, "Project metadata ID does not match its filename")
+                }
                 if (raw.has("version")) {
                     val version = raw.optInt("version", -1)
                     if (version == CURRENT_SCHEMA_VERSION) null

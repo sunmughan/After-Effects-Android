@@ -148,6 +148,28 @@ class CanonicalProjectRepositoryTest {
     }
 
     @Test
+    fun sidecarIdMustMatchRepositoryFilenameForLookupListingAndMigration() {
+        val root = Files.createTempDirectory("effectcraft-repo-sidecar-id").toFile()
+        try {
+            val repo = CanonicalProjectRepository(root)
+            val valid = repo.create("Valid", document, "ecproj")
+            val mismatched = repo.create("Mismatched", updated, "ecproj")
+            val sidecar = File(root, "${mismatched.id}.json")
+            sidecar.writeText(
+                JSONObject(sidecar.readText(Charsets.UTF_8)).put("id", valid.id).toString(),
+                Charsets.UTF_8
+            )
+
+            assertNull(repo.metadata(mismatched.id))
+            assertEquals(listOf(valid), repo.list())
+            val migration = repo.migrateAll().single { it.id == mismatched.id }
+            assertEquals("Project metadata ID does not match its filename", migration.error)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun updateFailureRestoresPreviousDocument() {
         val root = Files.createTempDirectory("effectcraft-repo-rollback").toFile()
         try {
