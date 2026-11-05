@@ -2062,7 +2062,11 @@ private fun CanonicalProjectEditor(
                         onParamDraftChange = { uid, value -> paramDrafts = paramDrafts + (uid to value) },
                         onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
-                        onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) }
+                        onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
+                        playheadFrame = previewFrame,
+                        onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
+                            onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
+                        }
                     )
                 } else {
                     Text("No effects on this layer.", color = EditorPalette.muted, fontSize = 11.sp)
