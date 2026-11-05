@@ -36,7 +36,6 @@ class AudioTrackSelectionTest {
     fun passthroughMimeIsAacOnly() {
         assertEquals("audio/mp4a-latm", AudioTrackSelection.PASSTHROUGH_MIME)
     }
-}
 
     @Test
     fun everyAudioStatusExplainsTheActualExportOutcome() {
