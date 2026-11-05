@@ -3939,13 +3939,26 @@ mod tests {
         let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&keyed).unwrap()).unwrap();
         assert_eq!(metadata["compositions"][0]["layers"][0]["text"]["keys"][1]["frame"], 15);
         assert_eq!(metadata["compositions"][0]["layers"][0]["text"]["keys"][1]["text"], "Frame fifteen");
+        let seed_text = match &property.keys[0].value {
+            Value::Text(doc) => doc.text.clone(),
+            other => panic!("frame-0 seed must be a Text value, got {other:?}"),
+        };
         let selector = format!("param:{}", property.uid);
         let (removed_json, removed) = remove_curve_keyframe(&keyed, comp_id, layer_id, &selector, 15).unwrap();
         assert!(removed);
         let removed_project: Project = serde_json::from_str(&removed_json).unwrap();
         let removed_property = removed_project.comp(ItemId(comp_id)).unwrap().layers[0].props
             .sub("text").unwrap().prop("sourceText").unwrap();
-        assert!(removed_property.keys.is_empty(), "last text key removal restores static Source Text");
+        assert_eq!(removed_property.keys.len(), 1, "removing the frame-15 key leaves the frame-0 seed");
+        assert_eq!(removed_property.keys[0].time, Tick::ZERO);
+        // Removing the last (seed) key collapses back to the static value.
+        let (static_json, removed_zero) = remove_curve_keyframe(&removed_json, comp_id, layer_id, &selector, 0).unwrap();
+        assert!(removed_zero);
+        let static_project: Project = serde_json::from_str(&static_json).unwrap();
+        let static_property = static_project.comp(ItemId(comp_id)).unwrap().layers[0].props
+            .sub("text").unwrap().prop("sourceText").unwrap();
+        assert!(static_property.keys.is_empty(), "last text key removal restores static Source Text");
+        assert!(matches!(&static_property.value, Value::Text(doc) if doc.text == seed_text));
         assert!(set_text_layer_text_keyframe(&source, comp_id, layer_id, -1, "bad").is_err());
         assert!(set_text_layer_text_keyframe(&source, comp_id, layer_id, 0, &"x".repeat(20_001)).is_err());
     }
