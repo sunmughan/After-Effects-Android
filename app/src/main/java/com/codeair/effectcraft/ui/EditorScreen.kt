@@ -2395,7 +2395,8 @@ private fun CanonicalParamGroupRows(
                                     expandedPopupUid = null
                                     if (param.keys.isEmpty()) onApplyPopup(param.uid, index)
                                     else onPopupKeyframeAction(param.uid, playheadFrame, index, false)
-                                }
+                                },
+                                modifier = Modifier.semantics { contentDescription = "Canonical $section popup option ${group.name} ${param.name} $option" }
                             )
                         }
                     }

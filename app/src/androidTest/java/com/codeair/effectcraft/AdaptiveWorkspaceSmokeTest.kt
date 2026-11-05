@@ -530,10 +530,13 @@ class AdaptiveWorkspaceSmokeTest {
             .performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, 301L, 0, false, false), captures.boolKeyframe)
         // Popup trigger opens the option menu; picking an option with no
-        // keys edits the static value.
+        // keys edits the static value. Click by content description: the
+        // bare text "Both" is ambiguous (the interpolation-side checkbox
+        // in the curve section shows the same word off-screen).
         compose.onNodeWithContentDescription("Canonical effect popup parameter Gaussian Blur Blur Dimensions")
             .performScrollTo().performClick()
-        compose.onNodeWithText("Both").performClick()
+        compose.onNodeWithContentDescription("Canonical effect popup option Gaussian Blur Blur Dimensions Both")
+            .performClick()
         assertEquals(listOf<Any>(10L, 2L, 402L, 2), captures.popupProperty)
         // Add key authors a hold key at the playhead with the held option.
         compose.onNodeWithContentDescription("Add canonical effect popup keyframe Gaussian Blur Blur Dimensions frame 0")

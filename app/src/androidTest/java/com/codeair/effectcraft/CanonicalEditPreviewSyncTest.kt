@@ -165,6 +165,10 @@ class CanonicalEditPreviewSyncTest {
             if (child.optString("match") == "effects") effectsChildren = child.getJSONArray("children")
         }
         val effects = effectsChildren ?: throw AssertionError("Effects group missing from Title layer props")
+        // The grafted Bool/Enum props deliberately omit the upstream
+        // `hold_only` flag: the bridge must derive hold-only from the
+        // value itself (see the Rust hold-only derivation test), so this
+        // fixture proves keyframes still come back Hold, not Linear.
         effects.put(
             JSONObject(
                 """{"node":"Group","uid":90020,"match":"gaussianBlur","name":"Gaussian Blur","children":[
