@@ -155,6 +155,7 @@ class CanonicalSelectionEditorTest {
                     onSetCanonicalTextLayerTracking = { _, _, _ -> },
                     onSetCanonicalLayerScalarProperty = { _, _, _, _ -> },
                     onSetCanonicalLayerVecProperty = { _, _, _, _, _, _ -> },
+                    onSetCanonicalLayerColorProperty = { _, _, _, _, _, _, _ -> },
                     onRelinkCanonicalAsset = {},
                     onRenderCanonicalFrame = { _, frame -> renderedFrames.add(frame); null },
                     safGrants = emptyList(),
