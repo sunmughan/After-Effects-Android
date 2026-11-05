@@ -1781,6 +1781,8 @@ fn set_layer_bool_keyframe(source: &str, composition_id: u64, layer_id: u64, uid
         return Err(format!("Parameter {uid} is not a checkbox"));
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    // Bool tracks are discrete: force Hold on both sides of every key.
+    property.hold_only = true;
     if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
     property.set_value_at(tick, Value::Bool(value));
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
@@ -1810,6 +1812,8 @@ fn set_layer_popup_keyframe(source: &str, composition_id: u64, layer_id: u64, ui
         }
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    // Popup indices are discrete: force Hold on both sides of every key.
+    property.hold_only = true;
     if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
     property.set_value_at(tick, Value::Enum(index as u32));
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
