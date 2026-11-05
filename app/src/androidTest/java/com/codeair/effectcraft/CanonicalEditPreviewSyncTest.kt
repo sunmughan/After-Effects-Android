@@ -164,7 +164,8 @@ class CanonicalEditPreviewSyncTest {
             JSONObject(
                 """{"node":"Group","uid":90020,"match":"gaussianBlur","name":"Gaussian Blur","children":[
                     {"node":"Prop","uid":90021,"match":"blurriness","name":"Blurriness","value":{"t":"Scalar","v":0.0}},
-                    {"node":"Prop","uid":90022,"match":"center","name":"Center","value":{"t":"Vec2","v":[0.0,0.0]}}
+                    {"node":"Prop","uid":90022,"match":"center","name":"Center","value":{"t":"Vec2","v":[0.0,0.0]}},
+                    {"node":"Prop","uid":90023,"match":"color","name":"Color","value":{"t":"Color","v":[1.0,1.0,1.0,1.0]}}
                 ]}"""
             )
         )
@@ -663,6 +664,25 @@ class CanonicalEditPreviewSyncTest {
         assertFramesDiffer(baseFrame, redoneFrame, "Redo preview must match the edited preview, not the original")
         val (_, editedFrame) = previewBeforeAndAfter(fixture.project, edited, fixture.compositionId, 0)
         assertArrayEquals("Redo preview must equal the edited preview", editedFrame, redoneFrame)
+    }
+
+
+    @Test
+    fun rgbaEffectParameterEditUpdatesCanonicalDataAndPreviewSession() {
+        val fixture = baseFixture()
+        val before = shapedFixture(fixture)
+        val edited = applyEdit(
+            NativeProjectBridge.setLayerColorPropertyEcproj(
+                before, fixture.compositionId, fixture.firstId, 90023, 0.25, 0.5, 0.75, 0.5
+            )
+        )
+        val color = layer(canonical(edited), fixture.firstId).effects
+            .single { it.kind == "gaussianBlur" }.colors.single { it.uid == 90023 }
+        assertEquals(listOf(0.25, 0.5, 0.75, 0.5), color.components)
+        assertNotNull(
+            "Preview session must accept and render the RGBA-edited canonical project",
+            previewRenders(before, edited, fixture.compositionId, 0)
+        )
     }
 
     @Test
