@@ -61,7 +61,9 @@ class PngSequenceExportService : Service() {
         val percent: Int,
         val message: String,
         val finished: Boolean,
-        val succeeded: Boolean
+        val succeeded: Boolean,
+        val copiedBytes: Long = 0L,
+        val totalBytes: Long = 0L
     )
 
     private val cancelled = AtomicBoolean(false)
@@ -172,7 +174,7 @@ class PngSequenceExportService : Service() {
                         ForegroundPngSequenceExport.Phase.VALIDATING ->
                             "Validating completed PNG sequence"
                         ForegroundPngSequenceExport.Phase.COPYING ->
-                            "Copying completed ZIP to selected destination"
+                            "Copying ZIP to destination: ${progress.percent}% (${progress.completedBytes}/${progress.totalBytes} bytes)"
                         ForegroundPngSequenceExport.Phase.DONE ->
                             "Exported ${plan.frameCount} PNG frames: ${settings.width}x${settings.height} @ ${settings.frameRate} FPS"
                         ForegroundPngSequenceExport.Phase.CANCELLED ->
@@ -180,12 +182,17 @@ class PngSequenceExportService : Service() {
                         ForegroundPngSequenceExport.Phase.FAILED ->
                             "PNG sequence export failed"
                     }
-                    updateStatus(progress.phase, progress.completedFrames, plan.frameCount,
-                        progress.percent, message, finished = false)
-                    if (progress.phase == ForegroundPngSequenceExport.Phase.RENDERING) {
-                        updateNotification(progress.completedFrames, plan.frameCount, message)
-                    } else {
-                        updateNotification(plan.frameCount, plan.frameCount, message)
+                    updateStatus(
+                        progress.phase, progress.completedFrames, plan.frameCount,
+                        progress.percent, message, finished = false,
+                        copiedBytes = progress.completedBytes, totalBytes = progress.totalBytes
+                    )
+                    when (progress.phase) {
+                        ForegroundPngSequenceExport.Phase.RENDERING ->
+                            updateNotification(progress.completedFrames, plan.frameCount, message)
+                        ForegroundPngSequenceExport.Phase.COPYING ->
+                            updateNotification(progress.percent, 100, message)
+                        else -> updateNotification(plan.frameCount, plan.frameCount, message)
                     }
                 }
             )
@@ -215,9 +222,11 @@ class PngSequenceExportService : Service() {
         percent: Int,
         message: String,
         finished: Boolean,
-        succeeded: Boolean = false
+        succeeded: Boolean = false,
+        copiedBytes: Long = 0L,
+        totalBytes: Long = 0L
     ) {
-        status = Status(phase, completedFrames, frameCount, percent, message, finished, succeeded)
+        status = Status(phase, completedFrames, frameCount, percent, message, finished, succeeded, copiedBytes, totalBytes)
     }
 
     private fun createChannel() {

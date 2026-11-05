@@ -1,3 +1,5 @@
+**Run 103 progress (2026-11-05):** M5 foreground PNG ZIP export now fsyncs and atomically publishes its interruption marker before rendering; SAF-copy progress is byte-accurate 0→100% (previously showed 100% before copying). Added JVM marker-metadata and monotonic copy-progress regressions. CI #695's one failure was the offline permission allowlist missing the new foreground-service permissions, fixed in 246d7123; #697 was still at ARM64 build and is superseded by this head. Exact-head verification pending. See PHASES.md Run 103.
+
 # EffectCraft for Android
 
 **Run 100 progress (2026-11-05):** exact CI #685 (run 41925868774) built ARM64+x86_64 native/JNI successfully but Rust tests failed to compile: three cache-lifecycle fixtures still called the new 7-argument render_parsed_frame with six args (E0061). Fixed by passing explicit None cache in uncached CPU/live/retired fixtures (`c0656d28`); assertions and production paths unchanged. Fresh exact-head CI is pending; no pass claimed. See PHASES.md Run 100.

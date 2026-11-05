@@ -2,6 +2,8 @@ package com.codeair.effectcraft.data
 
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.CancellationException
 import org.json.JSONObject
 
@@ -45,7 +47,13 @@ import org.json.JSONObject
 object ForegroundPngSequenceExport {
     enum class Phase { RENDERING, VALIDATING, COPYING, DONE, CANCELLED, FAILED }
 
-    data class Progress(val completedFrames: Int, val percent: Int, val phase: Phase)
+    data class Progress(
+        val completedFrames: Int,
+        val percent: Int,
+        val phase: Phase,
+        val completedBytes: Long = 0L,
+        val totalBytes: Long = 0L
+    )
 
     data class Result(val framesValidated: Int, val uncompressedBytes: Long, val destinationBytes: Long)
 
@@ -78,7 +86,23 @@ object ForegroundPngSequenceExport {
             put("frameCount", plan.frameCount)
             put("startedAtMillis", System.currentTimeMillis())
         }
-        markerFile.writeText(marker.toString(), Charsets.UTF_8)
+        val markerTemp = File(stagingDir, markerFile.name + ".tmp")
+        try {
+            FileOutputStream(markerTemp).use { output ->
+                output.write(marker.toString().toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            try {
+                Files.move(markerTemp.toPath(), markerFile.toPath(), StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                Files.move(markerTemp.toPath(), markerFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } catch (failure: Throwable) {
+            markerTemp.delete()
+            markerFile.delete()
+            stagingFile.delete()
+            throw failure
+        }
         return StartedExport(stagingFile, markerFile, plan)
     }
 
@@ -116,12 +140,18 @@ object ForegroundPngSequenceExport {
             onProgress(Progress(plan.frameCount, 100, Phase.VALIDATING))
             val validated = PngSequenceZipValidator.validate(started.stagingFile, plan)
             checkNotCancelled(isCancelled)
-            onProgress(Progress(plan.frameCount, 100, Phase.COPYING))
+            val stagedBytes = started.stagingFile.length().coerceAtLeast(1L)
+            onProgress(Progress(plan.frameCount, 0, Phase.COPYING, 0L, stagedBytes))
             val destinationBytes = copyToDestination(
                 started.stagingFile,
                 { checkNotCancelled(isCancelled) },
-                { _ -> onProgress(Progress(plan.frameCount, 100, Phase.COPYING)) }
+                { copied ->
+                    val bounded = copied.coerceIn(0L, stagedBytes)
+                    val percent = ((bounded * 100L) / stagedBytes).toInt().coerceIn(0, 100)
+                    onProgress(Progress(plan.frameCount, percent, Phase.COPYING, bounded, stagedBytes))
+                }
             )
+            onProgress(Progress(plan.frameCount, 100, Phase.COPYING, stagedBytes, stagedBytes))
             onProgress(Progress(plan.frameCount, 100, Phase.DONE))
             return Result(validated.framesValidated, validated.uncompressedBytes, destinationBytes)
         } catch (failure: Throwable) {

@@ -56,6 +56,59 @@ class ForegroundPngSequenceExportTest {
         }
 
     @Test
+    fun interruptionMarkerIsCompleteAndPublishedBeforeRendering() {
+        val dir = tempDir()
+        val started = ForegroundPngSequenceExport.begin(plan(start = 4, end = 6), dir)
+        try {
+            assertTrue(started.markerFile.isFile)
+            assertTrue(started.stagingFile.isFile)
+            assertEquals(0L, started.stagingFile.length())
+            val marker = org.json.JSONObject(started.markerFile.readText(Charsets.UTF_8))
+            assertEquals("png-sequence", marker.getString("format"))
+            assertEquals(320, marker.getInt("width"))
+            assertEquals(320, marker.getInt("height"))
+            assertEquals(24, marker.getInt("frameRate"))
+            assertEquals(4, marker.getInt("startFrame"))
+            assertEquals(6, marker.getInt("endFrame"))
+            assertEquals(3, marker.getInt("frameCount"))
+            assertTrue(marker.getLong("startedAtMillis") > 0L)
+            assertTrue(started.markerFile.name.endsWith(ForegroundPngSequenceExport.MARKER_SUFFIX))
+        } finally {
+            started.stagingFile.delete()
+            started.markerFile.delete()
+            File(dir, started.markerFile.name + ".tmp").delete()
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun destinationCopyProgressTracksBytesFromZeroToComplete() {
+        val dir = tempDir()
+        val destination = File(dir, "final.zip")
+        val progress = mutableListOf<ForegroundPngSequenceExport.Progress>()
+        val result = ForegroundPngSequenceExport.run(
+            plan = plan(),
+            stagingDir = dir,
+            renderPng = { png() },
+            copyToDestination = { staging, ensureActive, onBytesCopied ->
+                copyToFile(destination)(staging, ensureActive, onBytesCopied)
+            },
+            rollbackDestination = { destination.delete() },
+            onProgress = { if (it.phase == ForegroundPngSequenceExport.Phase.COPYING) progress += it }
+        )
+        assertTrue(result.destinationBytes > 0L)
+        assertEquals(0, progress.first().percent)
+        assertEquals(100, progress.last().percent)
+        assertEquals(progress.last().totalBytes, progress.last().completedBytes)
+        assertTrue(progress.all { it.totalBytes > 0L && it.completedBytes in 0L..it.totalBytes })
+        assertTrue("Copy percentage must never regress",
+            progress.zipWithNext().all { (before, after) -> after.percent >= before.percent })
+        assertEquals(progress.last().totalBytes, destination.length())
+        destination.delete()
+        dir.deleteRecursively()
+    }
+
+    @Test
     fun progressIsReportedDuringExportAndDestinationValidates() {
         val dir = tempDir()
         val destination = File(dir, "final.zip")
