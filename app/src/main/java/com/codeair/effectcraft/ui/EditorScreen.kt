@@ -1006,7 +1006,9 @@ private fun MotionPathOverlay(
 ) {
     if (keys.size < 2 || compositionWidth <= 0 || compositionHeight <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
     val path = remember(keys) { MotionPath.samplePath(keys) }
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier.semantics { contentDescription = "Motion path overlay" }
+    ) {
         // The rendered frame is comp-sized, so ContentScale.Fit maps comp
         // coordinates onto the drawn rect with one uniform scale; the rect
         // is centred when the box letterboxes the frame.

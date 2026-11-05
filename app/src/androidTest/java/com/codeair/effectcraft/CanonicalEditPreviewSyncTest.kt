@@ -1,5 +1,7 @@
 package com.codeair.effectcraft
 
+import android.graphics.Color
+import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalEditHistory
 import com.codeair.effectcraft.data.CanonicalEditSnapshot
 import com.codeair.effectcraft.data.CanonicalGestureEdit
@@ -8,6 +10,7 @@ import com.codeair.effectcraft.data.CanonicalLayerSelection
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.engine.NativeProjectBridge
 import com.codeair.effectcraft.engine.NativeSession
+import com.codeair.effectcraft.engine.RenderedFrameBitmap
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -16,6 +19,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 /**
  * Instrumented leg of M4 #9 ("Verify every edit updates engine preview
@@ -779,5 +783,145 @@ class CanonicalEditPreviewSyncTest {
             "Preview session must render the project after the selection-moving delete",
             previewRenders(fixture.project, deleted, fixture.compositionId, 0)
         )
+    }
+
+    // --- M4-L10 Gap 1: roving/spatial path interpolation ---
+
+    /**
+     * Three position keys with unequal legs (30px then 90px), so the
+     * roving retime moves the middle key: 30 * 30/120 = 7.5 -> frame 8.
+     */
+    private fun positionKeys(project: String, compositionId: Long, layerId: Long): String {
+        var edited = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(project, compositionId, layerId, "position", 0, 0.0, 0.0, 0.0)
+        )
+        edited = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(edited, compositionId, layerId, "position", 15, 30.0, 0.0, 0.0)
+        )
+        edited = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(edited, compositionId, layerId, "position", 30, 120.0, 0.0, 0.0)
+        )
+        return edited
+    }
+
+    private fun positionTrack(project: String, layerId: Long): List<CanonicalCurveKey> {
+        return canonical(project).compositions.single().layers.first { it.id == layerId }.transformCurves["position"]
+            ?: throw AssertionError("No position track in canonical metadata")
+    }
+
+    /** Centroid of the bright (white-glyph) pixels of a rendered frame. */
+    private fun brightCentroid(frame: ByteArray): Pair<Double, Double> {
+        val bitmap = RenderedFrameBitmap.decode(frame)
+            ?: throw AssertionError("Frame bytes did not decode")
+        try {
+            var sumX = 0.0
+            var sumY = 0.0
+            var count = 0
+            for (y in 0 until bitmap.height) {
+                for (x in 0 until bitmap.width) {
+                    val pixel = bitmap.getPixel(x, y)
+                    val brightness = (Color.red(pixel) + Color.green(pixel) + Color.blue(pixel)) / 3
+                    if (brightness > 128) {
+                        sumX += x
+                        sumY += y
+                        count++
+                    }
+                }
+            }
+            assertTrue("Rendered frame has no bright pixels", count > 0)
+            return (sumX / count) to (sumY / count)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test
+    fun rovingToggleRetimesKeysByPathLengthAndUpdatesPreview() {
+        val fixture = baseFixture()
+        val keyed = positionKeys(fixture.project, fixture.compositionId, fixture.firstId)
+        val before = positionTrack(keyed, fixture.firstId)
+        assertEquals(listOf(0, 15, 30), before.map { it.frame })
+        assertTrue(before.none { it.roving })
+        val edited = applyEdit(
+            NativeProjectBridge.setLayerKeyframeRovingEcproj(keyed, fixture.compositionId, fixture.firstId, "transform:position", 15, true)
+        )
+        // The canonical JSON carries the flag and the retimed times: the
+        // parsed metadata is the inspect output, so these prove the fields
+        // survived the native round-trip.
+        val after = positionTrack(edited, fixture.firstId)
+        assertEquals(listOf(0, 8, 30), after.map { it.frame })
+        assertEquals(listOf(false, true, false), after.map { it.roving })
+        val (baseFrame, editedFrame) = previewBeforeAndAfter(keyed, edited, fixture.compositionId, 8)
+        assertFramesDiffer(baseFrame, editedFrame, "Preview pixels must move with the roving retime at frame 8")
+    }
+
+    @Test
+    fun spatialTangentsBendThePathInPreview() {
+        val fixture = baseFixture()
+        var keyed = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, "position", 0, 0.0, 0.0, 0.0)
+        )
+        keyed = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "position", 15, 100.0, 0.0, 0.0)
+        )
+        keyed = applyEdit(
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "position", 30, 200.0, 0.0, 0.0)
+        )
+        val edited = applyEdit(
+            NativeProjectBridge.setLayerKeyframeSpatialTangentsEcproj(
+                keyed, fixture.compositionId, fixture.firstId, "transform:position", 15,
+                0.0, -60.0, 0.0, 0.0, -60.0, 0.0, false
+            )
+        )
+        val middle = positionTrack(edited, fixture.firstId).first { it.frame == 15 }
+        assertFalse(middle.spatialAuto)
+        assertEquals(listOf(0.0, -60.0, 0.0), middle.spatialIn)
+        assertEquals(listOf(0.0, -60.0, 0.0), middle.spatialOut)
+        // Frames stay put: no roving key, so the tangent change retimes nothing.
+        assertEquals(listOf(0, 15, 30), positionTrack(edited, fixture.firstId).map { it.frame })
+        val (baseFrame, editedFrame) = previewBeforeAndAfter(keyed, edited, fixture.compositionId, 7)
+        assertFramesDiffer(baseFrame, editedFrame, "Preview pixels must bend with the manual spatial tangents at frame 7")
+        val (_, baseY) = brightCentroid(baseFrame)
+        val (_, editedY) = brightCentroid(editedFrame)
+        assertTrue("Bent path centroid y $editedY must sit above straight centroid y $baseY", editedY < baseY - 5.0)
+    }
+
+    @Test
+    fun preExistingRovingKeysRenderAlongTheRetimedPath() {
+        val fixture = baseFixture()
+        val keyed = positionKeys(fixture.project, fixture.compositionId, fixture.firstId)
+        val roving = applyEdit(
+            NativeProjectBridge.setLayerKeyframeRovingEcproj(keyed, fixture.compositionId, fixture.firstId, "transform:position", 15, true)
+        )
+        // Re-import the edited project as a fresh fixture, the way a saved
+        // .ecproj with roving keys arrives: a new session on the raw JSON,
+        // and a fresh inspect of it.
+        val track = canonical(roving).compositions.single().layers.first { it.id == fixture.firstId }.transformCurves["position"]
+            ?: throw AssertionError("No position track after re-import")
+        assertEquals(listOf(0, 8, 30), track.map { it.frame })
+        assertEquals(listOf(false, true, false), track.map { it.roving })
+        val session = NativeSession.open(roving, 160)
+            ?: throw AssertionError("Preview session must open the re-imported roving project")
+        try {
+            val rovingFrame = session.render(fixture.compositionId, 8)
+                ?: throw AssertionError("Preview session must render the re-imported project at frame 8")
+            val (rovingX, _) = brightCentroid(rovingFrame)
+            val plainSession = NativeSession.open(keyed, 160)
+                ?: throw AssertionError("Preview session must open the pre-roving project")
+            try {
+                val middleFrame = plainSession.render(fixture.compositionId, 15)
+                    ?: throw AssertionError("Preview session must render the pre-roving project at frame 15")
+                val (middleX, _) = brightCentroid(middleFrame)
+                assertTrue("Retimed centroid x $rovingX must sit near the middle-key centroid x $middleX", abs(rovingX - middleX) < 8.0)
+                val earlyFrame = plainSession.render(fixture.compositionId, 8)
+                    ?: throw AssertionError("Preview session must render the pre-roving project at frame 8")
+                val (earlyX, _) = brightCentroid(earlyFrame)
+                assertTrue("Retimed centroid x $rovingX must sit ahead of the non-roving frame-8 centroid x $earlyX", rovingX - earlyX > 5.0)
+            } finally {
+                plainSession.close()
+            }
+        } finally {
+            session.close()
+        }
     }
 }

@@ -252,6 +252,8 @@ class AdaptiveWorkspaceSmokeTest {
         var textTracking: List<Any>? = null
         var scalarProperty: List<Any>? = null
         var vecProperty: List<Any>? = null
+        var roving: List<Any>? = null
+        var spatialTangents: List<Any>? = null
     }
 
     private fun setCanonicalEditorContent(
@@ -261,7 +263,9 @@ class AdaptiveWorkspaceSmokeTest {
         onRemoveCurveKey: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
         onAddTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
         onRemoveTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
-        onAddCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> }
+        onAddCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+        playheadFrame: Int = 0,
+        frameBytes: ByteArray? = null
     ) {
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -270,7 +274,7 @@ class AdaptiveWorkspaceSmokeTest {
                     project = project,
                     selectedLayer = project.layers.first(),
                     selectedLayerId = project.layers.first().id,
-                    playheadFrame = 0,
+                    playheadFrame = playheadFrame,
                     selectedOpacityKeyframes = emptyList(),
                     isPlaying = false,
                     saveMessage = "Saved",
@@ -324,6 +328,10 @@ class AdaptiveWorkspaceSmokeTest {
                     onAddCanonicalLayerTransformKeyframe = onAddTransformKeyframe,
                     onRemoveCanonicalLayerTransformKeyframe = onRemoveTransformKeyframe,
                     onAddCanonicalCurveKey = onAddCurveKey,
+                    onSetCanonicalKeyframeRoving = { c, l, p, f, r -> captures.roving = listOf(c, l, p, f, r) },
+                    onSetCanonicalKeyframeSpatialTangents = { c, l, p, f, inX, inY, inZ, outX, outY, outZ, auto ->
+                        captures.spatialTangents = listOf(c, l, p, f, inX, inY, inZ, outX, outY, outZ, auto)
+                    },
                     onSetCanonicalLayerPosition = { _, _, _, _ -> },
                     onSetCanonicalLayerScale = { _, _, _, _ -> },
                     onSetCanonicalLayerRotation = { _, _, _ -> },
@@ -339,7 +347,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerVecProperty = { c, l, uid, x, y, z -> captures.vecProperty = listOf(c, l, uid, x, y, z) },
                     onSetCanonicalLayerColorProperty = { _, _, _, _, _, _, _ -> },
                     onRelinkCanonicalAsset = {},
-                    onRenderCanonicalFrame = { _, _ -> null },
+                    onRenderCanonicalFrame = { _, _ -> frameBytes },
                     safGrants = emptyList(),
                     missingManifestEntries = 0,
                     onReleaseSafGrant = { _, _ -> },
@@ -348,6 +356,45 @@ class AdaptiveWorkspaceSmokeTest {
                 )
             }
         }
+    }
+
+    /** A synthetic 320x180 black raw-RGBA frame (8-byte header + pixels). */
+    private fun blackFrameBytes(width: Int = 320, height: Int = 180): ByteArray {
+        val bytes = ByteArray(8 + width * height * 4)
+        bytes[0] = (width shr 24).toByte()
+        bytes[1] = (width shr 16).toByte()
+        bytes[2] = (width shr 8).toByte()
+        bytes[3] = width.toByte()
+        bytes[4] = (height shr 24).toByte()
+        bytes[5] = (height shr 16).toByte()
+        bytes[6] = (height shr 8).toByte()
+        bytes[7] = height.toByte()
+        for (index in 0 until width * height) {
+            bytes[8 + index * 4 + 3] = 255.toByte()
+        }
+        return bytes
+    }
+
+    /** A layer with a 3-key position track (unequal legs) for Gap 1 tests. */
+    private fun canonicalRovingLayer(): CanonicalProjectInfo {
+        val keys = listOf(
+            CanonicalCurveKey(frame = 0, value = 0.0, components = listOf(0.0, 0.0, 0.0)),
+            CanonicalCurveKey(frame = 15, value = 30.0, components = listOf(30.0, 0.0, 0.0)),
+            CanonicalCurveKey(frame = 30, value = 120.0, components = listOf(120.0, 0.0, 0.0))
+        )
+        val layer = CanonicalLayerInfo(
+            id = 2, name = "Headline", source = "Text", visible = true,
+            opacityPercent = 100.0, positionX = 30.0, positionY = 0.0,
+            scaleX = 100.0, scaleY = 100.0, rotationDegrees = 0.0,
+            transformKeyframes = mapOf("position" to listOf(0, 15, 30)),
+            transformCurves = mapOf("position" to keys)
+        )
+        val composition = CanonicalCompositionInfo(
+            id = 10, name = "Main", width = 640, height = 360,
+            frameRateNum = 30, frameRateDen = 1, durationSeconds = 3.0,
+            layers = listOf(layer)
+        )
+        return CanonicalProjectInfo(compositions = listOf(composition))
     }
 
     private fun canonicalM4Layer(locked: Boolean): CanonicalProjectInfo {
@@ -589,5 +636,45 @@ class AdaptiveWorkspaceSmokeTest {
         assertEquals(null, captures.anchor)
         assertEquals(null, captures.text)
         assertEquals(null, captures.scalarProperty)
+    }
+
+    // --- M4-L10 Gap 1: roving/spatial path interpolation ---
+
+    @Test
+    fun motionPathOverlayDrawsForSpatialPositionTrack() {
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(canonicalRovingLayer(), captures, frameBytes = blackFrameBytes())
+        compose.waitForIdle()
+        // The workspace preview renders the supplied frame, and the selected
+        // layer's 3-key position track draws its motion-path overlay over it.
+        compose.onNodeWithContentDescription("Motion path overlay").assertIsDisplayed()
+    }
+
+    @Test
+    fun rovingToggleTargetsSelectedLayerAndCurrentFrame() {
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(canonicalRovingLayer(), captures, playheadFrame = 15)
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        // The inspector opens on the position property at the playhead (frame
+        // 15), where the middle key sits: the roving switch, the auto-path
+        // switch and the straight-path button are all present and operable
+        // through their semantics actions.
+        compose.onNodeWithContentDescription("Roving keyframe for position at frame 15")
+            .performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "position", 15, true), captures.roving)
+        compose.onNodeWithContentDescription("Auto motion path for position at frame 15")
+            .performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(
+            listOf<Any>(10L, 2L, "position", 15, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false),
+            captures.spatialTangents
+        )
+        compose.onNodeWithContentDescription("Straight path for position at frame 15")
+            .performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(
+            listOf<Any>(10L, 2L, "position", 15, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false),
+            captures.spatialTangents
+        )
+        compose.onNodeWithContentDescription("Show motion path overlay")
+            .performScrollTo().assertIsDisplayed().performClick()
     }
 }
