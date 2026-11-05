@@ -80,11 +80,12 @@ gap remains. Missing means no code exists.
   offers an MP4 export dialog (dimensions, FPS, frame range, bitrate),
   a `CreateDocument("video/mp4")` SAF path, progress messages, and
   deletion of the partial document on cancel or failure.
-- Scaling without aspect control: `app/src/main/java/com/codeair/effectcraft/engine/Yuv420FrameConverter.kt`
-  scales each frame to the exact plan dimensions with
-  `Bitmap.createScaledBitmap`. That is a stretch, not a crop and not a
-  letterbox. Aspect ratio is preserved only when the plan dimensions
-  already match the composition aspect ratio.
+- Aspect-preserving contain (letterbox/pillarbox): `app/src/main/java/com/codeair/effectcraft/engine/Yuv420FrameConverter.kt`
+  scales each frame into the exact plan dimensions without stretching,
+  centers it, and composites unused area to opaque black before I420
+  conversion. Same-aspect output fills the frame. This is not a crop;
+  crop/cover remains unimplemented. JVM fit-geometry and API30 pixel/
+  chroma regressions are committed; fresh exact-head CI is pending.
 
 ### Missing
 

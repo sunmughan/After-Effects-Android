@@ -22,6 +22,25 @@ class Yuv420FrameConverterTest {
         return bytes
     }
 
+    @Test fun containFitPreservesAspectAndCentersLetterbox() {
+        val wide = Yuv420FrameConverter.fitContainRect(1920, 1080, 1280, 960)
+        assertEquals(0.0, wide.left, 0.001)
+        assertEquals(120.0, wide.top, 0.001)
+        assertEquals(1280.0, wide.right, 0.001)
+        assertEquals(840.0, wide.bottom, 0.001)
+        assertEquals(1280.0, wide.width, 0.001)
+        assertEquals(720.0, wide.height, 0.001)
+
+        val tall = Yuv420FrameConverter.fitContainRect(640, 480, 1280, 720)
+        assertEquals(160.0, tall.left, 0.001)
+        assertEquals(0.0, tall.top, 0.001)
+        assertEquals(1120.0, tall.right, 0.001)
+        assertEquals(720.0, tall.bottom, 0.001)
+        assertThrows(IllegalArgumentException::class.java) {
+            Yuv420FrameConverter.fitContainRect(0, 1, 2, 2)
+        }
+    }
+
     @Test fun solidRedConvertsToBt601LimitedI420() {
         val red = List(4) { listOf(255, 0, 0, 255) }.flatten()
         val frame = Yuv420FrameConverter.fromNativeRgba(envelope(2, 2, red))

@@ -1,5 +1,11 @@
 package com.codeair.effectcraft.engine
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+
 /**
  * Converts the native frame envelope (big-endian width/height followed by RGBA8)
  * to tightly packed planar YUV 4:2:0 (I420: Y, U, V planes).
@@ -18,6 +24,27 @@ object Yuv420FrameConverter {
 
     const val MAX_SIDE = 4096
     const val MAX_PIXELS = 8_388_608L
+
+    /** Centered destination rectangle for aspect-preserving contain/letterbox. */
+    data class FitRect(val left: Double, val top: Double, val right: Double, val bottom: Double) {
+        val width: Double get() = right - left
+        val height: Double get() = bottom - top
+    }
+
+    /**
+     * Computes a centered, aspect-preserving fit rectangle. This pure helper
+     * is shared by the Android bitmap path and JVM geometry tests.
+     */
+    fun fitContainRect(sourceWidth: Int, sourceHeight: Int, targetWidth: Int, targetHeight: Int): FitRect {
+        require(sourceWidth > 0 && sourceHeight > 0) { "Source dimensions must be positive" }
+        require(targetWidth > 0 && targetHeight > 0) { "Target dimensions must be positive" }
+        val scale = minOf(targetWidth.toDouble() / sourceWidth, targetHeight.toDouble() / sourceHeight)
+        val fittedWidth = sourceWidth * scale
+        val fittedHeight = sourceHeight * scale
+        val left = (targetWidth - fittedWidth) / 2.0
+        val top = (targetHeight - fittedHeight) / 2.0
+        return FitRect(left, top, left + fittedWidth, top + fittedHeight)
+    }
 
     fun fromNativeRgba(envelope: ByteArray): Frame {
         require(envelope.size >= 8) { "Native frame is missing its dimension header" }
@@ -67,22 +94,33 @@ object Yuv420FrameConverter {
     }
 
     /**
-     * Scales an ARGB bitmap to the encoder's requested size and converts it
-     * directly to I420. Alpha is composited over black. The bitmap is not
-     * recycled here; ownership stays with the caller.
+     * Aspect-preserving contain conversion to the encoder's requested size.
+     * Any unused area is opaque black (letterbox/pillarbox); source alpha is
+     * composited over black. The input bitmap remains owned by the caller.
      */
-    fun fromBitmap(bitmap: android.graphics.Bitmap, targetWidth: Int, targetHeight: Int): Frame {
+    fun fromBitmap(bitmap: Bitmap, targetWidth: Int, targetHeight: Int): Frame {
         require(targetWidth in 2..MAX_SIDE && targetHeight in 2..MAX_SIDE &&
             targetWidth % 2 == 0 && targetHeight % 2 == 0) {
             "YUV420 output dimensions must be even and between 2 and $MAX_SIDE"
         }
         val pixelCount = targetWidth.toLong() * targetHeight
         require(pixelCount <= MAX_PIXELS) { "Bitmap exceeds the YUV420 pixel budget" }
-        val scaled = if (bitmap.width == targetWidth && bitmap.height == targetHeight) bitmap
-            else android.graphics.Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        val fitted = if (bitmap.width == targetWidth && bitmap.height == targetHeight) bitmap
+            else Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888).also { output ->
+                val rect = fitContainRect(bitmap.width, bitmap.height, targetWidth, targetHeight)
+                Canvas(output).apply {
+                    drawColor(Color.BLACK)
+                    drawBitmap(
+                        bitmap,
+                        null,
+                        RectF(rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(), rect.bottom.toFloat()),
+                        Paint(Paint.FILTER_BITMAP_FLAG)
+                    )
+                }
+            }
         try {
             val argb = IntArray(pixelCount.toInt())
-            scaled.getPixels(argb, 0, targetWidth, 0, 0, targetWidth, targetHeight)
+            fitted.getPixels(argb, 0, targetWidth, 0, 0, targetWidth, targetHeight)
             val ySize = argb.size
             val chromaSize = ySize / 4
             val output = ByteArray(ySize + chromaSize * 2)
@@ -109,7 +147,7 @@ object Yuv420FrameConverter {
             }
             return Frame(targetWidth, targetHeight, output)
         } finally {
-            if (scaled !== bitmap) scaled.recycle()
+            if (fitted !== bitmap) fitted.recycle()
         }
     }
 

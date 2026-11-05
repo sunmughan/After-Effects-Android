@@ -22,6 +22,34 @@ class Yuv420BitmapConversionInstrumentedTest {
         }
     }
 
+    @Test fun mismatchedAspectRatioLetterboxesInsteadOfStretching() {
+        val bitmap = Bitmap.createBitmap(8, 4, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.eraseColor(Color.RED)
+            val frame = Yuv420FrameConverter.fromBitmap(bitmap, 4, 4)
+            assertEquals(4, frame.width)
+            assertEquals(4, frame.height)
+            // 8:4 source fits 4:4 output as 4:2: opaque black bars occupy
+            // rows 0 and 3; the two center rows preserve the red source.
+            assertArrayEquals(
+                byteArrayOf(
+                    16, 16, 16, 16,
+                    82, 82, 82, 82,
+                    82, 82, 82, 82,
+                    16, 16, 16, 16
+                ),
+                frame.i420.copyOfRange(0, 16)
+            )
+            // Each 2x2 chroma block contains two black and two red pixels.
+            assertArrayEquals(
+                byteArrayOf(109, 109, 109, 109, 184.toByte(), 184.toByte(), 184.toByte(), 184.toByte()),
+                frame.i420.copyOfRange(16, 24)
+            )
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     @Test fun bitmapIsScaledToRequestedEvenDimensions() {
         val bitmap = Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
         try {
