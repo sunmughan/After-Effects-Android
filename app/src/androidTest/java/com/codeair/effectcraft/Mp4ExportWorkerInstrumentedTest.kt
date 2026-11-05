@@ -218,6 +218,7 @@ class Mp4ExportWorkerInstrumentedTest {
                 assertEquals(validated.audioSamples, finalReport.audioSamples)
                 assertEquals(validated.audioFirstPtsUs, finalReport.audioFirstPtsUs)
                 assertEquals(validated.audioLastPtsUs, finalReport.audioLastPtsUs)
+                assertEquals(validated.audioTrackDurationUs, finalReport.audioTrackDurationUs)
             } finally {
                 runCatching { context.contentResolver.delete(destination, null, null) }
             }
