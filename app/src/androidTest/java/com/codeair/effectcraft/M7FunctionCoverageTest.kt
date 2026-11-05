@@ -30,6 +30,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
@@ -173,9 +174,24 @@ class M7FunctionCoverageTest {
 
     @Test
     fun import_nativeEnvelopeValidationRejectsInvalidEnvelope() {
+        // Gate-run-727 diagnosis: the original ec-m7 assertion expected
+        // "Invalid canonical project" for this input, but production
+        // passes the envelope's own error string through (parse
+        // requires valid and reports optString("error", "Invalid
+        // canonical project")), so this input is rejected with "bad".
+        // Pin both production paths instead of one wrong fragment:
+        // error passthrough when the envelope carries an error, and
+        // the fallback message when it does not. Rejection itself is
+        // still asserted in both cases — no weakening.
         try {
             CanonicalProjectDocument.validateNativeEnvelope("{\"valid\":false,\"error\":\"bad\"}")
             fail("An invalid envelope must be rejected")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("bad"))
+        }
+        try {
+            CanonicalProjectDocument.validateNativeEnvelope("{\"valid\":false}")
+            fail("An invalid envelope without an error string must be rejected")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("Invalid canonical project"))
         }
@@ -684,7 +700,15 @@ class M7FunctionCoverageTest {
         // not call back. Same field, same assertion — no weakening.
         compose.onNodeWithContentDescription("Export FPS").performTextClearance()
         compose.onNodeWithText("Render ZIP").performClick()
-        compose.onNodeWithText("Enter valid numeric settings").assertIsDisplayed()
+        // Gate-run-727 diagnosis: the error text IS composed when the
+        // FPS field is blank, but the settings dialog content scrolls
+        // (height-capped column) and the error sits below the fold, so
+        // assertIsDisplayed fails with "is not displayed" even though
+        // the node exists. Scroll it into view first, then keep the
+        // full displayed assertion — no weakening, same message check.
+        compose.onNodeWithText("Enter valid numeric settings")
+            .performScrollTo()
+            .assertIsDisplayed()
         assertEquals(0, exported)
     }
 }
