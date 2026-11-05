@@ -136,6 +136,13 @@ object NativeProjectBridge {
         return runCatching { setTextLayerTextEcprojNative(json, compositionId, layerId, text) }.getOrNull()
     }
 
+    /** Authors a native hold Source Text keyframe at a composition frame. */
+    fun setTextLayerTextKeyframeEcproj(json: String, compositionId: Long, layerId: Long, frame: Long, text: String): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || text.length > 20_000) return null
+        return runCatching { setTextLayerTextKeyframeEcprojNative(json, compositionId, layerId, frame, text) }.getOrNull()
+    }
+
     /** Sets the Source Text size of a canonical Text layer. */
     fun setTextLayerSizeEcproj(json: String, compositionId: Long, layerId: Long, size: Double): String? {
         ensureLoaded()
@@ -423,6 +430,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setTextLayerTextEcprojNative(json: String, compositionId: Long, layerId: Long, text: String): String
+
+    @JvmStatic
+    private external fun setTextLayerTextKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, text: String): String
 
     @JvmStatic
     private external fun setTextLayerSizeEcprojNative(json: String, compositionId: Long, layerId: Long, size: Double): String

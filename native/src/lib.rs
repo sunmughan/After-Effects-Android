@@ -847,15 +847,25 @@ fn layer_param_items(
     items
 }
 
-fn layer_text_params(layer: &effectcraft_project::Layer) -> Option<serde_json::Value> {
+fn layer_text_params(layer: &effectcraft_project::Layer, frame_rate: effectcraft_time::FrameRate) -> Option<serde_json::Value> {
     let text_group = layer.props.sub("text")?;
     let property = text_group.prop("sourceText")?;
     if let Value::Text(doc) = &property.value {
+        let mut keys = property.keys.iter().filter_map(|key| match &key.value {
+            Value::Text(key_doc) => Some(json!({
+                "frame": key.time.to_rational_floor(frame_rate.den, frame_rate.num),
+                "text": key_doc.text
+            })),
+            _ => None,
+        }).collect::<Vec<_>>();
+        keys.sort_by_key(|key| key["frame"].as_i64().unwrap_or(0));
         Some(json!({
+            "uid": property.uid,
             "text": doc.text,
             "font": doc.font,
             "size": doc.size,
-            "tracking": doc.tracking
+            "tracking": doc.tracking,
+            "keys": keys
         }))
     } else {
         None
@@ -1041,7 +1051,7 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "rotationYDegrees": layer_rotation_axis(layer, "rotationY"),
                 "locked": layer.switches.locked,
                 "threeD": layer.switches.three_d,
-                "text": layer_text_params(layer),
+                "text": layer_text_params(layer, comp.frame_rate),
                 "shapeItems": layer_param_items(layer, "contents", comp.frame_rate),
                 "effects": layer_param_items(layer, "effects", comp.frame_rate)
             })).collect();
@@ -1482,6 +1492,35 @@ fn set_text_layer_text(source: &str, composition_id: u64, layer_id: u64, text: &
         doc.text = owned;
         Ok(())
     })
+}
+
+/// Authors a hold-only Source Text key at the composition frame. The first
+/// key seeds frame zero with the current document; each key preserves base
+/// character/paragraph styles and changes only the text payload.
+fn set_text_layer_text_keyframe(source: &str, composition_id: u64, layer_id: u64, frame: i64, text: &str) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if text.chars().count() > 20_000 { return Err("Source Text must be at most 20,000 characters".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let tick = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let text_group = layer.props.sub_mut("text")
+        .ok_or_else(|| format!("Layer {layer_id} has no Text group"))?;
+    let property = text_group.prop_mut("sourceText")
+        .ok_or_else(|| format!("Layer {layer_id} has no Source Text property"))?;
+    let mut doc = match &property.value {
+        Value::Text(doc) => (**doc).clone(),
+        _ => return Err(format!("Layer {layer_id} Source Text is not a text document")),
+    };
+    if property.static_only { return Err("Source Text cannot be keyframed".into()); }
+    doc.text = text.to_owned();
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(tick, Value::Text(Box::new(doc)));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
 fn set_text_layer_size(source: &str, composition_id: u64, layer_id: u64, size: f64) -> Result<String, String> {
@@ -1933,6 +1972,27 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
     };
     let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
         else { set_text_layer_text(&source, composition_id as u64, layer_id as u64, &text) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerTextKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong, text: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let text: String = match env.get_string(&text) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_text_layer_text_keyframe(&source, composition_id as u64, layer_id as u64, frame as i64, &text)
+    };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -2525,7 +2585,7 @@ fn remove_curve_keyframe(
     if property.static_only {
         return Err(format!("Curve property {selector} cannot be keyframed"));
     }
-    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) | Value::Color(_) | Value::Bool(_) | Value::Enum(_)) {
+    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) | Value::Color(_) | Value::Bool(_) | Value::Enum(_) | Value::Text(_)) {
         return Err(format!("Curve property {selector} is not animatable"));
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
@@ -3861,6 +3921,33 @@ mod tests {
         assert!(set_text_layer_size(&source, comp_id, layer_id, 0.0).is_err());
         assert!(set_text_layer_tracking(&source, comp_id, layer_id, f64::NAN).is_err());
         assert!(set_text_layer_text(&source, comp_id, 999, "Nope").is_err());
+    }
+
+    #[test]
+    fn canonical_source_text_hold_keys_seed_metadata_and_remove() {
+        use effectcraft_project::Value;
+
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed = set_text_layer_text_keyframe(&source, comp_id, layer_id, 15, "Frame fifteen").unwrap();
+        let project: Project = serde_json::from_str(&keyed).unwrap();
+        let comp = project.comp(ItemId(comp_id)).unwrap();
+        let property = comp.layers[0].props.sub("text").unwrap().prop("sourceText").unwrap();
+        assert_eq!(property.keys.len(), 2, "frame 0 seed + frame 15 hold key");
+        assert_eq!(property.keys[0].time, Tick::ZERO);
+        assert_eq!(property.keys[1].time, Tick::from_rational(15, comp.frame_rate.den, comp.frame_rate.num));
+        assert!(matches!(&property.keys[1].value, Value::Text(doc) if doc.text == "Frame fifteen"));
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&keyed).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["layers"][0]["text"]["keys"][1]["frame"], 15);
+        assert_eq!(metadata["compositions"][0]["layers"][0]["text"]["keys"][1]["text"], "Frame fifteen");
+        let selector = format!("param:{}", property.uid);
+        let (removed_json, removed) = remove_curve_keyframe(&keyed, comp_id, layer_id, &selector, 15).unwrap();
+        assert!(removed);
+        let removed_project: Project = serde_json::from_str(&removed_json).unwrap();
+        let removed_property = removed_project.comp(ItemId(comp_id)).unwrap().layers[0].props
+            .sub("text").unwrap().prop("sourceText").unwrap();
+        assert!(removed_property.keys.is_empty(), "last text key removal restores static Source Text");
+        assert!(set_text_layer_text_keyframe(&source, comp_id, layer_id, -1, "bad").is_err());
+        assert!(set_text_layer_text_keyframe(&source, comp_id, layer_id, 0, &"x".repeat(20_001)).is_err());
     }
 
     #[test]

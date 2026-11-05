@@ -1302,6 +1302,7 @@ private fun CanonicalProjectEditor(
     onSetLayerRotationY: (Long, Long, Double) -> Unit,
     onSetLayerLocked: (Long, Long, Boolean) -> Unit,
     onSetTextLayerText: (Long, Long, String) -> Unit,
+    onSetCanonicalTextLayerKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetTextLayerSize: (Long, Long, Double) -> Unit,
     onSetTextLayerTracking: (Long, Long, Double) -> Unit,
     onSetLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
@@ -1985,7 +1986,21 @@ private fun CanonicalProjectEditor(
                             onClick = { onSetTextLayerText(composition.id, layer.id, textDraft) },
                             modifier = Modifier.semantics { contentDescription = "Apply canonical text" }
                         ) { Text("Apply text", color = EditorPalette.violet, fontSize = 11.sp) }
+                        val hasTextKey = textParams.keys.any { key -> key.frame == previewFrame }
+                        TextButton(
+                            enabled = editable && (hasTextKey || textDraft.isNotEmpty()),
+                            onClick = { onSetCanonicalTextLayerKeyframe(composition.id, layer.id, textParams.uid, previewFrame, textDraft, hasTextKey) },
+                            modifier = Modifier.semantics {
+                                contentDescription = if (hasTextKey) "Remove canonical Source Text keyframe frame $previewFrame"
+                                else "Add canonical Source Text keyframe frame $previewFrame"
+                            }
+                        ) { Text(if (hasTextKey) "Remove key" else "Add key", color = if (hasTextKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
                     }
+                    Text(
+                        "Source Text keys · " + if (textParams.keys.isEmpty()) "none" else textParams.keys.joinToString { key -> key.frame.toString() + ": " + key.text.take(24) },
+                        color = EditorPalette.amber, fontSize = 10.sp,
+                        modifier = Modifier.semantics { contentDescription = "Canonical Source Text keyframes" }
+                    )
                     Text("Text · Size / Tracking", color = EditorPalette.text, fontSize = 12.sp)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         BasicTextField(

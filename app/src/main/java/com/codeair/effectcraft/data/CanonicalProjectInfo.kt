@@ -82,11 +82,15 @@ fun holdValueAt(keys: List<CanonicalCurveKey>, frame: Int, staticValue: Double):
 }
 
 /** Text layer source parameters; null on layers that carry no Source Text property. */
+data class CanonicalTextKey(val frame: Int, val text: String)
+
 data class CanonicalTextParams(
     val text: String,
     val font: String,
     val size: Double,
-    val tracking: Double
+    val tracking: Double,
+    val keys: List<CanonicalTextKey> = emptyList(),
+    val uid: Long = 0L
 )
 
 /**
@@ -244,11 +248,18 @@ data class CanonicalProjectInfo(
                         locked = layer.optBoolean("locked", false),
                         threeD = layer.optBoolean("threeD", false),
                         textParams = textJson?.let {
+                            val textKeys = it.optJSONArray("keys")
+                            val keys = (0 until (textKeys?.length() ?: 0)).map { keyIndex ->
+                                val key = textKeys!!.getJSONObject(keyIndex)
+                                CanonicalTextKey(key.getInt("frame"), key.optString("text", ""))
+                            }.sortedBy { key -> key.frame }
                             CanonicalTextParams(
                                 text = it.optString("text", ""),
                                 font = it.optString("font", ""),
                                 size = it.optDouble("size", 0.0),
-                                tracking = it.optDouble("tracking", 0.0)
+                                tracking = it.optDouble("tracking", 0.0),
+                                keys = keys,
+                                uid = it.optLong("uid", 0L)
                             )
                         },
                         shapeItems = parseParamGroups(layer.optJSONArray("shapeItems")),

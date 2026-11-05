@@ -10,7 +10,7 @@ class CanonicalProjectParamsTest {
     private fun layerJson(): String {
         return """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[
             {"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0,"position":[320.0,180.0],"scale":[100.0,100.0],"rotationDegrees":15.0,"anchor":[120.5,80.25],"orientation":[10.0,20.0,30.0],"rotationXDegrees":45.0,"rotationYDegrees":-30.0,"locked":true,"threeD":false,
-             "text":{"text":"Hello mobile","font":"Inter","size":48.0,"tracking":12.5},
+             "text":{"uid":501,"text":"Hello mobile","font":"Inter","size":48.0,"tracking":12.5,"keys":[{"frame":0,"text":"Hello mobile"},{"frame":15,"text":"Hello mobile 2"}]},
              "shapeItems":[{"name":"Rectangle Path 1","kind":"rect","scalars":[{"uid":101,"name":"Roundness","value":24.0}],"vecs":[{"uid":102,"name":"Size","components":[320.0,160.0]}]}],
              "effects":[{"name":"Gaussian Blur","kind":"gaussianBlur","scalars":[{"uid":201,"name":"Blurriness","value":15.0}],"vecs":[]}]},
             {"id":3,"name":"Clip","source":"Footage","visible":true,"opacityPercent":100.0}
@@ -35,6 +35,8 @@ class CanonicalProjectParamsTest {
         assertEquals("Inter", text.font)
         assertEquals(48.0, text.size, 0.001)
         assertEquals(12.5, text.tracking, 0.001)
+        assertEquals(501L, text.uid)
+        assertEquals(listOf(CanonicalTextKey(0, "Hello mobile"), CanonicalTextKey(15, "Hello mobile 2")), text.keys)
     }
 
     @Test

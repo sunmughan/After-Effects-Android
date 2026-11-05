@@ -760,6 +760,28 @@ class CanonicalEditPreviewSyncTest {
     }
 
     @Test
+    fun sourceTextHoldKeyframeUpdatesCanonicalMetadataAndPreviewSession() {
+        val fixture = baseFixture()
+        val keyed = applyEdit(
+            NativeProjectBridge.setTextLayerTextKeyframeEcproj(
+                fixture.project, fixture.compositionId, fixture.firstId, 15, "Frame fifteen"
+            )
+        )
+        val text = layer(canonical(keyed), fixture.firstId).textParams!!
+        assertEquals(listOf(0, 15), text.keys.map { key -> key.frame })
+        assertEquals("Frame fifteen", text.keys.last().text)
+        assertNotNull(
+            "Preview session must accept and render a Source Text hold-keyframed project at frame 15",
+            previewRenders(fixture.project, keyed, fixture.compositionId, 15)
+        )
+        val (removed, wasRemoved) = removeEdit(
+            NativeProjectBridge.removeLayerCurveKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "param:" + text.uid, 15)
+        )
+        assertTrue(wasRemoved)
+        assertEquals(listOf(0), layer(canonical(removed), fixture.firstId).textParams!!.keys.map { key -> key.frame })
+    }
+
+    @Test
     fun previewDragGestureUpdatesCanonicalDataAndPreviewPixels() {
         val fixture = baseFixture()
         val info = canonical(fixture.project)

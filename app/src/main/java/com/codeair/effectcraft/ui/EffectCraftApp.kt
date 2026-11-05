@@ -1403,7 +1403,23 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical text updated · saved locally"
                 )
             },
-            onSetCanonicalTextLayerSize = { compositionId, layerId, size ->
+            onSetCanonicalTextLayerKeyframe = { compositionId, layerId, uid, frame, text, remove ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else if (remove) {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, "param:$uid", frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove Source Text keyframe"
+                    else if (!removed) saveMessage = "No Source Text keyframe · frame $frame"
+                    else applyCanonicalEdit(envelope, "Source Text keyframe removed · frame $frame · saved locally")
+                } else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerTextKeyframeEcproj(source, compositionId, layerId, frame.toLong(), text),
+                    "Source Text keyframe added · frame $frame · saved locally"
+                )
+            },
+            onSetTextLayerSize = { compositionId, layerId, size ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
                 else applyCanonicalEdit(
