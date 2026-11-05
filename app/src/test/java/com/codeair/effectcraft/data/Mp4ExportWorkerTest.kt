@@ -39,6 +39,34 @@ class Mp4ExportWorkerTest {
     }
 
     @Test
+    fun resolveAudioRequiresContentAddressedPayloadVerification() {
+        val first = java.nio.file.Files.createTempFile("effectcraft-audio-unverified", ".m4a").toFile()
+        val second = java.nio.file.Files.createTempFile("effectcraft-audio-verified", ".m4a").toFile()
+        val firstHash = "a".repeat(64)
+        val secondHash = "b".repeat(64)
+        try {
+            val resolution = Mp4ExportWorker.resolveAudio(
+                listOf(
+                    item(hasAudio = true, path = "offline/$firstHash.m4a"),
+                    item(hasAudio = true, path = "offline/$secondHash.m4a")
+                ),
+                verifyPayload = { hash, file -> hash == secondHash && file == second }
+            ) { hash ->
+                when (hash) {
+                    firstHash -> first
+                    secondHash -> second
+                    else -> null
+                }
+            }
+            assertTrue(resolution.hasAudioItems)
+            assertEquals("Corrupt/unverified first asset must be skipped in favor of verified second", second, resolution.file)
+        } finally {
+            first.delete()
+            second.delete()
+        }
+    }
+
+    @Test
     fun resolveAudioSkipsMissingAndUnreadableOfflinePayloads() {
         val dir = java.nio.file.Files.createTempDirectory("effectcraft-audio-resolution").toFile()
         val missing = File(dir, "missing.m4a")
