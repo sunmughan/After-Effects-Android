@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.security.MessageDigest
 import org.json.JSONObject
 
 class CanonicalProjectRepositoryTest {
@@ -92,7 +93,7 @@ class CanonicalProjectRepositoryTest {
             documentFile.writeText(document, Charsets.UTF_8)
             sidecarFile.writeText(
                 JSONObject(sidecarFile.readText(Charsets.UTF_8))
-                    .put("documentSha256", updated.sha256()).toString(),
+                    .put("documentSha256", sha256ForTest(updated)).toString(),
                 Charsets.UTF_8
             )
 
@@ -272,4 +273,8 @@ class CanonicalProjectRepositoryTest {
             root.deleteRecursively()
         }
     }
+
+    private fun sha256ForTest(value: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
 }

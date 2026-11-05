@@ -277,3 +277,7 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 
 ### Run 114 — M6 canonical rollback recovery fixes
 CI #767 failed one JVM regression because rollback metadata was checked against the interrupted live document. Fixes in [d31daf6f](https://github.com/sunmughan/After-Effects-Android/commit/d31daf6fa9e7f6b425e9d546faca37a96ca1c743), [4dd8536c](https://github.com/sunmughan/After-Effects-Android/commit/4dd8536c824bb752365f32b4be48cfdd47f19df2), and [ea55290c](https://github.com/sunmughan/After-Effects-Android/commit/ea55290c28ecda804e4d7095fd11bf51f30e38fa) correct backup digest verification, preserve rollback files through recovery verification, and normalize legacy rollback digests. Latest exact-head CI is pending; no green claim. Release remains NOT COMPLETE; details in PHASES.md.
+
+
+### Automation Run 116 — canonical rollback test compiler fix
+CI #779 failed before tests because the test called a private production `String.sha256()` extension (`CanonicalProjectRepositoryTest.kt:95`). The test now uses its own MessageDigest helper with the recovery assertions unchanged. Fresh exact-head CI is pending; no JVM/emulator/reproducibility pass is claimed. M0 remains accepted on #774; M2–M6 physical/product gates and M7 signed release/install remain open. See PHASES.md.
