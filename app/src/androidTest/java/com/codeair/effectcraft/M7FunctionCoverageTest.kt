@@ -25,10 +25,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.and
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -672,10 +674,22 @@ class M7FunctionCoverageTest {
         sequenceSettingsScreen { _, _, _, _, _ -> exported++ }
         compose.onNodeWithContentDescription("Export PNG sequence ZIP").performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
-        // The dialog's editable fields, in order, are Width, Height, FPS,
-        // Start frame, End frame. Blanking the FPS field must block the
-        // export with the dialog's own validation message, not call back.
-        compose.onAllNodes(hasSetTextAction())[2].performTextClearance()
+        // Integration note: the original ec-m7 test selected the FPS
+        // field by position via onAllNodes(hasSetTextAction())[2], but
+        // the generic onAllNodes(matcher) collection was removed from
+        // the Compose testing library this branch pins (BOM 2026.08.00),
+        // so that call no longer compiles. The FPS field is selected
+        // directly instead, by the value it holds after the dialog
+        // opens: Width 320, Height 180, FPS 30, Start 0, End 299, so
+        // the editable node holding "30" is the FPS field. The
+        // SetText-action requirement excludes the "300 frames" header
+        // text, which also contains "30". Blanking the FPS field must
+        // block the export with the dialog's own validation message,
+        // not call back. Same field, same assertion — no weakening.
+        compose.onNode(
+            hasSetTextAction() and hasText("30", substring = true),
+            useUnmergedTree = true,
+        ).performTextClearance()
         compose.onNodeWithText("Render ZIP").performClick()
         compose.onNodeWithText("Enter valid numeric settings").assertIsDisplayed()
         assertEquals(0, exported)
