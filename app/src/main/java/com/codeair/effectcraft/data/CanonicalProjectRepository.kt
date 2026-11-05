@@ -97,7 +97,15 @@ class CanonicalProjectRepository(private val root: File) {
         // A process death between document and sidecar promotion otherwise
         // leaves the old digest pointing at new bytes and hides the project.
         writeDurably(backupDocument, previousBytes)
-        writeDurably(backupSidecar, sidecar.readText(Charsets.UTF_8))
+        // Normalize a legacy v0 sidecar in the rollback copy. metadata()
+        // derives the missing digest from the verified old document, but the
+        // on-disk legacy sidecar may not yet contain it; recovery needs an
+        // explicit digest to validate the backup document independently.
+        val rollbackMetadata = JSONObject(sidecar.readText(Charsets.UTF_8)).apply {
+            put("version", previous.schemaVersion)
+            put("documentSha256", previous.documentSha256)
+        }
+        writeDurably(backupSidecar, rollbackMetadata.toString())
         val updated = previous.copy(
             documentSha256 = document.sha256(),
             updatedAtMillis = System.currentTimeMillis()
