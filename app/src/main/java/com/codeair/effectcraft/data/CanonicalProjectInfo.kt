@@ -83,6 +83,7 @@ fun holdValueAt(keys: List<CanonicalCurveKey>, frame: Int, staticValue: Double):
 
 /** Text layer source parameters; null on layers that carry no Source Text property. */
 data class CanonicalTextKey(val frame: Int, val text: String)
+data class CanonicalTextFontKey(val frame: Int, val font: String)
 
 data class CanonicalTextParams(
     val text: String,
@@ -90,6 +91,7 @@ data class CanonicalTextParams(
     val size: Double,
     val tracking: Double,
     val keys: List<CanonicalTextKey> = emptyList(),
+    val fontKeys: List<CanonicalTextFontKey> = emptyList(),
     val uid: Long = 0L
 )
 
@@ -253,12 +255,17 @@ data class CanonicalProjectInfo(
                                 val key = textKeys!!.getJSONObject(keyIndex)
                                 CanonicalTextKey(key.getInt("frame"), key.optString("text", ""))
                             }.sortedBy { key -> key.frame }
+                            val fontKeys = (0 until (textKeys?.length() ?: 0)).mapNotNull { keyIndex ->
+                                val key = textKeys!!.getJSONObject(keyIndex)
+                                key.optString("font").takeIf { it.isNotBlank() }?.let { CanonicalTextFontKey(key.getInt("frame"), it) }
+                            }.sortedBy { key -> key.frame }
                             CanonicalTextParams(
                                 text = it.optString("text", ""),
                                 font = it.optString("font", ""),
                                 size = it.optDouble("size", 0.0),
                                 tracking = it.optDouble("tracking", 0.0),
                                 keys = keys,
+                                fontKeys = fontKeys,
                                 uid = it.optLong("uid", 0L)
                             )
                         },

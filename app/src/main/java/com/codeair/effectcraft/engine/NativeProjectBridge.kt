@@ -164,6 +164,13 @@ object NativeProjectBridge {
         return runCatching { setTextLayerFontEcprojNative(json, compositionId, layerId, font.trim()) }.getOrNull()
     }
 
+    /** Authors a hold key for the canonical TextDoc font at a composition frame. */
+    fun setTextLayerFontKeyframeEcproj(json: String, compositionId: Long, layerId: Long, frame: Long, font: String): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || font.isBlank() || font.length > 128 || font.any { it.code < 0x20 || it.code in 0x7f..0x9f }) return null
+        return runCatching { setTextLayerFontKeyframeEcprojNative(json, compositionId, layerId, frame, font.trim()) }.getOrNull()
+    }
+
     /** Sets one scalar shape-item or effect parameter, addressed by its native uid. */
     fun setLayerScalarPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String? {
         ensureLoaded()
@@ -449,6 +456,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setTextLayerFontEcprojNative(json: String, compositionId: Long, layerId: Long, font: String): String
+
+    @JvmStatic
+    private external fun setTextLayerFontKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, font: String): String
 
     @JvmStatic
     private external fun setLayerScalarPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String

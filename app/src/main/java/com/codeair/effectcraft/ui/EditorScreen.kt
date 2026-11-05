@@ -227,6 +227,7 @@ fun EditorScreen(
     onSetCanonicalTextLayerSize: (Long, Long, Double) -> Unit,
     onSetCanonicalTextLayerTracking: (Long, Long, Double) -> Unit,
     onSetCanonicalTextLayerFont: (Long, Long, String) -> Unit = { _, _, _ -> },
+    onSetCanonicalTextLayerFontKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetCanonicalLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
@@ -753,6 +754,7 @@ fun EditorScreen(
                     onSetTextLayerSize = onSetCanonicalTextLayerSize,
                     onSetTextLayerTracking = onSetCanonicalTextLayerTracking,
                     onSetTextLayerFont = onSetCanonicalTextLayerFont,
+                    onSetTextLayerFontKeyframe = onSetCanonicalTextLayerFontKeyframe,
                     onSetLayerScalarProperty = onSetCanonicalLayerScalarProperty,
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
@@ -1310,6 +1312,7 @@ private fun CanonicalProjectEditor(
     onSetTextLayerSize: (Long, Long, Double) -> Unit,
     onSetTextLayerTracking: (Long, Long, Double) -> Unit,
     onSetTextLayerFont: (Long, Long, String) -> Unit = { _, _, _ -> },
+    onSetTextLayerFontKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
@@ -1993,7 +1996,21 @@ private fun CanonicalProjectEditor(
                             onClick = { onSetTextLayerFont(composition.id, layer.id, textFontDraft) },
                             modifier = Modifier.semantics { contentDescription = "Apply canonical text font" }
                         ) { Text("Apply font", color = EditorPalette.violet, fontSize = 10.sp) }
+                        val hasFontKey = textParams.fontKeys.any { key -> key.frame == previewFrame }
+                        TextButton(
+                            enabled = editable && textFontDraft.isNotBlank() && textFontDraft.length <= 128,
+                            onClick = { onSetTextLayerFontKeyframe(composition.id, layer.id, textParams.uid, previewFrame, textFontDraft, hasFontKey) },
+                            modifier = Modifier.semantics {
+                                contentDescription = if (hasFontKey) "Remove canonical font keyframe frame $previewFrame"
+                                else "Add canonical font keyframe frame $previewFrame"
+                            }
+                        ) { Text(if (hasFontKey) "Remove key" else "Key font", color = if (hasFontKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
                     }
+                    Text(
+                        "Font keys · " + if (textParams.fontKeys.isEmpty()) "none" else textParams.fontKeys.joinToString { key -> "${key.frame}: ${key.font}" },
+                        color = EditorPalette.amber, fontSize = 10.sp,
+                        modifier = Modifier.semantics { contentDescription = "Canonical font keyframes" }
+                    )
                     BasicTextField(
                         value = textDraft,
                         onValueChange = { textDraft = it.take(20000) },

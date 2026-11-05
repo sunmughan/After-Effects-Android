@@ -854,7 +854,8 @@ fn layer_text_params(layer: &effectcraft_project::Layer, frame_rate: effectcraft
         let mut keys = property.keys.iter().filter_map(|key| match &key.value {
             Value::Text(key_doc) => Some(json!({
                 "frame": key.time.to_rational_floor(frame_rate.den, frame_rate.num),
-                "text": key_doc.text
+                "text": key_doc.text,
+                "font": key_doc.font
             })),
             _ => None,
         }).collect::<Vec<_>>();
@@ -1556,6 +1557,35 @@ fn set_text_layer_font(source: &str, composition_id: u64, layer_id: u64, font: &
     })
 }
 
+/// Authors a hold key for the TextDoc font family at a composition frame.
+fn set_text_layer_font_keyframe(source: &str, composition_id: u64, layer_id: u64, frame: i64, font: &str) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    let font = font.trim();
+    if font.is_empty() || font.chars().count() > 128 || font.chars().any(char::is_control) {
+        return Err("Text font must be non-empty, at most 128 characters, and contain no control characters".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let tick = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = layer.props.sub_mut("text")
+        .and_then(|group| group.prop_mut("sourceText"))
+        .ok_or_else(|| format!("Layer {layer_id} has no Source Text property"))?;
+    if property.static_only { return Err("Source Text font cannot be keyframed".into()); }
+    let mut doc = match &property.value {
+        Value::Text(doc) => (**doc).clone(),
+        _ => return Err(format!("Layer {layer_id} Source Text is not a text document")),
+    };
+    doc.font = font.to_owned();
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(tick, Value::Text(Box::new(doc)));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 fn set_layer_scalar_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, value: f64) -> Result<String, String> {
     if !value.is_finite() || value.abs() > 1_000_000.0 {
         return Err("Parameter value must be finite and within ±1,000,000".into());
@@ -2052,6 +2082,27 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
     };
     let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
         else { set_text_layer_font(&source, composition_id as u64, layer_id as u64, &font) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerFontKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong, font: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let font: String = match env.get_string(&font) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_text_layer_font_keyframe(&source, composition_id as u64, layer_id as u64, frame as i64, &font)
+    };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -3974,6 +4025,27 @@ mod tests {
         assert!(set_text_layer_font(&source, comp_id, layer_id, &"F".repeat(129)).is_err());
         assert!(set_text_layer_font(&source, comp_id, layer_id, "Bad\nFont").is_err());
         assert!(set_text_layer_font(&source, comp_id, 999, "Inter").is_err());
+    }
+
+    #[test]
+    fn canonical_source_text_font_keyframe_preserves_text_and_serializes_font() {
+        use effectcraft_project::Value;
+        let (source, comp_id, layer_id) = text_layer_project();
+        let keyed_text = set_text_layer_text_keyframe(&source, comp_id, layer_id, 15, "Frame fifteen").unwrap();
+        let keyed_font = set_text_layer_font_keyframe(&keyed_text, comp_id, layer_id, 30, "  Noto Sans  ").unwrap();
+        let project: Project = serde_json::from_str(&keyed_font).unwrap();
+        let property = project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("text").unwrap().prop("sourceText").unwrap();
+        let font_key = property.keys.iter().find(|key| key.time.to_rational_floor(1, 30) == 30).unwrap();
+        match &font_key.value {
+            Value::Text(doc) => { assert_eq!(doc.font, "Noto Sans"); assert_eq!(doc.text, "Frame fifteen"); }
+            other => panic!("font key must preserve TextDoc, got {other:?}"),
+        }
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&keyed_font).unwrap()).unwrap();
+        let keys = metadata["compositions"][0]["layers"][0]["text"]["keys"].as_array().unwrap();
+        assert!(keys.iter().any(|key| key["frame"] == 30 && key["font"] == "Noto Sans"));
+        assert!(set_text_layer_font_keyframe(&source, comp_id, layer_id, -1, "Inter").is_err());
+        assert!(set_text_layer_font_keyframe(&source, comp_id, layer_id, 15, " ").is_err());
+        assert!(set_text_layer_font_keyframe(&source, comp_id, 999, 15, "Inter").is_err());
     }
 
     #[test]

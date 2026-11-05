@@ -1443,6 +1443,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical text font updated · saved locally"
                 )
             },
+            onSetCanonicalTextLayerFontKeyframe = { compositionId, layerId, uid, frame, font, remove ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else if (remove) {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, "param:$uid", frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove font keyframe"
+                    else if (!removed) saveMessage = "No font keyframe · frame $frame"
+                    else applyCanonicalEdit(envelope, "Font keyframe removed · frame $frame · saved locally")
+                } else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerFontKeyframeEcproj(source, compositionId, layerId, frame.toLong(), font),
+                    "Font keyframe added · frame $frame · saved locally"
+                )
+            },
             onSetCanonicalLayerScalarProperty = { compositionId, layerId, uid, value ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
