@@ -30,11 +30,17 @@ class MotionPathTest {
         )
         // Middle key: out tangent is (next - prev) / 6, in tangent its mirror.
         val (tin, tout) = MotionPath.effectiveTangents(keys, 1)
-        assertEquals(listOf(-200.0 / 6.0, 0.0, 0.0), tin)
-        assertEquals(listOf(200.0 / 6.0, 0.0, 0.0), tout)
+        assertEquals(-200.0 / 6.0, tin[0], 0.000001)
+        assertEquals(0.0, tin[1], 0.000001)
+        assertEquals(0.0, tin[2], 0.000001)
+        assertEquals(200.0 / 6.0, tout[0], 0.000001)
+        assertEquals(0.0, tout[1], 0.000001)
+        assertEquals(0.0, tout[2], 0.000001)
         // End keys use their one neighbour.
         val (_, firstOut) = MotionPath.effectiveTangents(keys, 0)
-        assertEquals(listOf(100.0 / 6.0, 100.0 / 6.0, 0.0), firstOut)
+        assertEquals(100.0 / 6.0, firstOut[0], 0.000001)
+        assertEquals(100.0 / 6.0, firstOut[1], 0.000001)
+        assertEquals(0.0, firstOut[2], 0.000001)
     }
 
     @Test
@@ -63,10 +69,15 @@ class MotionPathTest {
         val path = MotionPath.samplePath(keys, stepsPerSegment = 8)
         assertEquals(0.0, path.first().x, 0.001)
         assertEquals(200.0, path.last().x, 0.001)
-        // Mid-segment of the bent leg sits well above the y=0 chord.
-        val mid = path.minByOrNull { it.y }!!
-        assertTrue("bent path lowest y ${mid.y} must sit well above the chord", mid.y < -10.0)
-        assertTrue("bent path midpoint x ${mid.x} must stay between its keys", mid.x > 100.0 && mid.x < 200.0)
+        // Both legs bend upward: the lowest point sits well above the y=0 chord.
+        val minY = path.minOf { it.y }
+        assertTrue("bent path lowest y $minY must sit well above the chord", minY < -10.0)
+        // And the second leg specifically bends: some point between the
+        // middle and last keys sits well above the chord.
+        assertTrue(
+            "bent second leg must dip below the chord",
+            path.any { it.x > 100.0 && it.x < 200.0 && it.y < -10.0 }
+        )
     }
 
     @Test

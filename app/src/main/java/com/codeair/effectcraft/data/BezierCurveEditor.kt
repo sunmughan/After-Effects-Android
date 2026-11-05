@@ -32,7 +32,14 @@ data class CurveKey(
     val inHandle: CurveHandle? = null,
     val outHandle: CurveHandle? = null,
     val inInterp: CurveInterp = if (inHandle == null) CurveInterp.LINEAR else CurveInterp.BEZIER,
-    val outInterp: CurveInterp = if (outHandle == null) CurveInterp.LINEAR else CurveInterp.BEZIER
+    val outInterp: CurveInterp = if (outHandle == null) CurveInterp.LINEAR else CurveInterp.BEZIER,
+    /** True when this key roves across time (constant speed along the motion path). */
+    val roving: Boolean = false,
+    /** Stored spatial (motion-path) tangents, relative to the key value; ignored when [spatialAuto] is true. */
+    val spatialIn: List<Double> = listOf(0.0, 0.0, 0.0),
+    val spatialOut: List<Double> = listOf(0.0, 0.0, 0.0),
+    /** True when the renderer derives tangents from neighbours (Catmull-Rom auto-Bezier). */
+    val spatialAuto: Boolean = true
 ) {
     init {
         require(frame >= 0) { "Curve key frame must be non-negative" }

@@ -241,6 +241,48 @@ object NativeProjectBridge {
     }
 
     /**
+     * Toggles roving ("Rove Across Time") on one key of a spatial
+     * property. [selector] is "transform:position" or "transform:anchor".
+     * The roving run is re-timed by path length, so the toggle takes
+     * effect immediately; first/last keys can never rove. Returns the
+     * edited-project envelope, or null when native is unavailable or any
+     * argument is invalid.
+     */
+    fun setLayerKeyframeRovingEcproj(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long, roving: Boolean): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || !isSupportedCurveSelector(selector)) return null
+        return runCatching { setLayerKeyframeRovingEcprojNative(json, compositionId, layerId, selector, frame, roving) }.getOrNull()
+    }
+
+    /**
+     * Sets the spatial (motion-path) tangents of one key of a spatial
+     * property, relative to the key value, in comp pixels. [spatialAuto]
+     * selects the upstream Catmull-Rom auto-Bezier tangents instead of
+     * the stored ones; zero tangents with [spatialAuto] false is the
+     * straight (linear-path) preset. Tangents change path length, so the
+     * roving run is re-timed. Returns the edited-project envelope, or
+     * null when native is unavailable or any argument is invalid.
+     */
+    fun setLayerKeyframeSpatialTangentsEcproj(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long, inX: Double, inY: Double, inZ: Double, outX: Double, outY: Double, outZ: Double, spatialAuto: Boolean): String? {
+        ensureLoaded()
+        val tangents = listOf(inX, inY, inZ, outX, outY, outZ)
+        if (!available || frame < 0 || !isSupportedCurveSelector(selector) || tangents.any { !it.isFinite() || it.absoluteValue > 1_000_000.0 }) return null
+        return runCatching { setLayerKeyframeSpatialTangentsEcprojNative(json, compositionId, layerId, selector, frame, inX, inY, inZ, outX, outY, outZ, spatialAuto) }.getOrNull()
+    }
+
+    /**
+     * Re-times the roving run on one curve property without changing any
+     * key, for callers that edited the track in bulk. Returns the
+     * edited-project envelope, or null when native is unavailable or any
+     * argument is invalid.
+     */
+    fun retimeLayerRovingKeysEcproj(json: String, compositionId: Long, layerId: Long, selector: String): String? {
+        ensureLoaded()
+        if (!available || !isSupportedCurveSelector(selector)) return null
+        return runCatching { retimeLayerRovingKeysEcprojNative(json, compositionId, layerId, selector) }.getOrNull()
+    }
+
+    /**
      * Authors one shape-item or effect scalar/vector parameter keyframe at
      * [frame], addressed by its native uid. The first key seeds frame 0 with
      * the parameter's current value. Returns the edited-project envelope,
@@ -374,6 +416,12 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun moveLayerKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, selector: String, fromFrame: Long, toFrame: Long): String
+
+    private external fun setLayerKeyframeRovingEcprojNative(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long, roving: Boolean): String
+
+    private external fun setLayerKeyframeSpatialTangentsEcprojNative(json: String, compositionId: Long, layerId: Long, selector: String, frame: Long, inX: Double, inY: Double, inZ: Double, outX: Double, outY: Double, outZ: Double, spatialAuto: Boolean): String
+
+    private external fun retimeLayerRovingKeysEcprojNative(json: String, compositionId: Long, layerId: Long, selector: String): String
 
     @JvmStatic
     private external fun setLayerParamKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, x: Double, y: Double, z: Double): String

@@ -16,7 +16,16 @@ data class CanonicalCurveKey(
     val inSpeed: Double = 0.0,
     val inInfluence: Double = 0.0,
     val outSpeed: Double = 0.0,
-    val outInfluence: Double = 0.0
+    val outInfluence: Double = 0.0,
+    /** True when this key roves across time (constant speed along the motion path). */
+    val roving: Boolean = false,
+    /** Stored spatial (motion-path) tangents, relative to the key value; ignored when [spatialAuto] is true. */
+    val spatialIn: List<Double> = listOf(0.0, 0.0, 0.0),
+    val spatialOut: List<Double> = listOf(0.0, 0.0, 0.0),
+    /** True when the renderer derives tangents from neighbours (Catmull-Rom auto-Bezier). */
+    val spatialAuto: Boolean = true,
+    /** Full value components (2 for Vec2, 3 for Vec3, 1 for scalars); [value] is components[0]. */
+    val components: List<Double> = listOf(value)
 )
 
 /** One editable scalar parameter of a shape item or effect, addressed by its stable native uid. */
@@ -260,6 +269,17 @@ data class CanonicalProjectInfo(
                     is org.json.JSONArray -> if (rawValue.length() > 0) rawValue.optDouble(0, 0.0) else 0.0
                     else -> 0.0
                 }
+                // The full vector rides along for the motion-path overlay;
+                // the graph still plots the first component.
+                val components = when (rawValue) {
+                    is Number -> listOf(rawValue.toDouble())
+                    is org.json.JSONArray -> (0 until rawValue.length()).map { rawValue.optDouble(it, 0.0) }
+                    else -> listOf(0.0)
+                }
+                fun spatialTangents(name: String): List<Double> {
+                    val array = key.optJSONArray(name) ?: return listOf(0.0, 0.0, 0.0)
+                    return (0 until 3).map { array.optDouble(it, 0.0) }
+                }
                 fun ease(side: String): Pair<Double, Double> {
                     val easeArray = key.optJSONArray(side)
                     val entry = if (easeArray != null && easeArray.length() > 0) easeArray.optJSONObject(0) else null
@@ -275,7 +295,12 @@ data class CanonicalProjectInfo(
                     inSpeed = inEase.first,
                     inInfluence = inEase.second,
                     outSpeed = outEase.first,
-                    outInfluence = outEase.second
+                    outInfluence = outEase.second,
+                    roving = key.optBoolean("roving", false),
+                    spatialIn = spatialTangents("spatialIn"),
+                    spatialOut = spatialTangents("spatialOut"),
+                    spatialAuto = key.optBoolean("spatialAuto", true),
+                    components = components
                 )
             }.sortedBy { it.frame }
         }
