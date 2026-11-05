@@ -459,8 +459,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         session = NativeSession.open(source, nativeRenderSide)
                             ?: error("Native renderer unavailable for this project")
                         val audio = Mp4ExportWorker.resolveAudio(
-                            canonicalProjectInfo?.items ?: emptyList()
-                        ) { sha256 -> offlineAssetStore.fileFor(sha256) }
+                            items = canonicalProjectInfo?.items ?: emptyList(),
+                            verifyPayload = { sha256, _ -> offlineAssetStore.verify(sha256) },
+                            fileFor = { sha256 -> offlineAssetStore.fileFor(sha256) }
+                        )
                         Mp4ExportWorker.exportToStaged(
                             plan = plan,
                             stagedFile = staged,
