@@ -203,8 +203,8 @@ class CanonicalEditPreviewSyncTest {
      * same frame again, and returns both frames. Fails when the session
      * refuses the edited project or either render is null.
      */
-    private fun previewBeforeAndAfter(before: String, after: String, compositionId: Long, frame: Long): Pair<ByteArray, ByteArray> {
-        val session = NativeSession.open(before, 160)
+    private fun previewBeforeAndAfter(before: String, after: String, compositionId: Long, frame: Long, maxSide: Int = 160): Pair<ByteArray, ByteArray> {
+        val session = NativeSession.open(before, maxSide)
             ?: throw AssertionError("Preview session must open for the pre-edit project")
         try {
             val baseFrame = session.render(compositionId, frame)
@@ -882,7 +882,7 @@ class CanonicalEditPreviewSyncTest {
         assertEquals(listOf(0.0, -60.0, 0.0), middle.spatialOut)
         // Frames stay put: no roving key, so the tangent change retimes nothing.
         assertEquals(listOf(0, 15, 30), positionTrack(edited, fixture.firstId).map { it.frame })
-        val (baseFrame, editedFrame) = previewBeforeAndAfter(keyed, edited, fixture.compositionId, 7)
+        val (baseFrame, editedFrame) = previewBeforeAndAfter(keyed, edited, fixture.compositionId, 7, maxSide = 320)
         assertFramesDiffer(baseFrame, editedFrame, "Preview pixels must bend with the manual spatial tangents at frame 7")
         val (_, baseY) = brightCentroid(baseFrame)
         val (_, editedY) = brightCentroid(editedFrame)
@@ -903,13 +903,13 @@ class CanonicalEditPreviewSyncTest {
             ?: throw AssertionError("No position track after re-import")
         assertEquals(listOf(0, 5, 30), track.map { it.frame })
         assertEquals(listOf(false, true, false), track.map { it.roving })
-        val session = NativeSession.open(roving, 160)
+        val session = NativeSession.open(roving, 320)
             ?: throw AssertionError("Preview session must open the re-imported roving project")
         try {
             val rovingFrame = session.render(fixture.compositionId, 5)
                 ?: throw AssertionError("Preview session must render the re-imported project at frame 5")
             val (rovingX, _) = brightCentroid(rovingFrame)
-            val plainSession = NativeSession.open(keyed, 160)
+            val plainSession = NativeSession.open(keyed, 320)
                 ?: throw AssertionError("Preview session must open the pre-roving project")
             try {
                 val middleFrame = plainSession.render(fixture.compositionId, 15)
