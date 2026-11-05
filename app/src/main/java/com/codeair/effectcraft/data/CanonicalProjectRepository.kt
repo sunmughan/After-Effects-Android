@@ -209,7 +209,7 @@ class CanonicalProjectRepository(private val root: File) {
         }
     }
 
-    private fun parseSidecar(json: String): Metadata {
+    private fun parseSidecar(json: String, verifyDocumentIntegrity: Boolean = true): Metadata {
         val raw = JSONObject(json)
         require(raw.optString("format") == SIDECAR_FORMAT) { "Unsupported project metadata format" }
         val version = if (raw.has("version")) raw.getInt("version") else 0
@@ -225,7 +225,7 @@ class CanonicalProjectRepository(private val root: File) {
             ?.let { it.readText(Charsets.UTF_8).sha256() }
         // A sidecar is an integrity record, not a cache hint. Never replace a
         // declared digest with the digest of possibly tampered document bytes.
-        if (declaredHash.isNotEmpty() && actualHash != null && declaredHash != actualHash) {
+        if (verifyDocumentIntegrity && declaredHash.isNotEmpty() && actualHash != null && declaredHash != actualHash) {
             throw IllegalArgumentException("Canonical project document SHA-256 mismatch")
         }
         return Metadata(
@@ -267,7 +267,13 @@ class CanonicalProjectRepository(private val root: File) {
             }
 
             val backupPairIsValid = runCatching {
-                val metadata = parseSidecar(backupSidecar.readText(Charsets.UTF_8))
+                // Parse backup metadata independently of the currently promoted
+                // document: normal integrity checking intentionally compares
+                // against the live file, which is the interrupted new document.
+                val metadata = parseSidecar(
+                    backupSidecar.readText(Charsets.UTF_8),
+                    verifyDocumentIntegrity = false
+                )
                 metadata.id == id && metadata.format == format &&
                     backupDocument.isFile &&
                     backupDocument.readText(Charsets.UTF_8).sha256() == metadata.documentSha256
