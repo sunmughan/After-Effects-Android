@@ -1,3 +1,5 @@
+**Run 106 progress (2026-11-05):** MP4 audio resolver now accepts only existing readable regular offline payloads; missing/directory/unresolved SHA assets correctly surface as AUDIO_FILE_UNAVAILABLE instead of AUDIO_TRACK_UNSUPPORTED. Updated positive resolver fixture and added regression for missing/unreadable payloads. CI #704 (c41a54dd) was at ARM64 and #703 (d7c138aa) at x86_64 native build when inspected; both superseded, exact-head CI pending. See PHASES.md Run 106.
+
 **Run 103 progress (2026-11-05):** M5 foreground PNG ZIP export now fsyncs and atomically publishes its interruption marker before rendering; SAF-copy progress is byte-accurate 0→100% (previously showed 100% before copying). Added JVM marker-metadata and monotonic copy-progress regressions. CI #695's one failure was the offline permission allowlist missing the new foreground-service permissions, fixed in 246d7123; #697 was still at ARM64 build and is superseded by this head. Exact-head verification pending. See PHASES.md Run 103.
 
 # EffectCraft for Android

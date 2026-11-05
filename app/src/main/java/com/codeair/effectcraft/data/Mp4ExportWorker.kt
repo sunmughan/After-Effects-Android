@@ -75,7 +75,7 @@ object Mp4ExportWorker {
             val name = item.path!!.substringAfterLast('/')
             if (name.length > 65 && name.substring(0, 64).matches(Regex("[a-f0-9]{64}"))) {
                 val file = runCatching { fileFor(name.substring(0, 64)) }.getOrNull()
-                if (file != null) return AudioResolution(file, true)
+                if (file != null && file.isFile && file.canRead()) return AudioResolution(file, true)
             }
         }
         return AudioResolution(null, true)

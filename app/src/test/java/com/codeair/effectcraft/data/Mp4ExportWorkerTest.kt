@@ -22,16 +22,47 @@ class Mp4ExportWorkerTest {
 
     @Test
     fun resolveAudioReturnsFirstResolvableOfflinePayload() {
-        val found = File("/tmp/fake-audio.m4a")
-        val resolution = Mp4ExportWorker.resolveAudio(
-            listOf(
-                item(hasAudio = true, path = "https://example.invalid/not-offline.mp4"),
-                item(hasAudio = true, path = "offline/$sha.m4a"),
-                item(hasAudio = true, path = "offline/${"b".repeat(64)}.m4a")
-            )
-        ) { hash -> if (hash == sha) found else null }
-        assertTrue(resolution.hasAudioItems)
-        assertEquals(found, resolution.file)
+        val found = java.nio.file.Files.createTempFile("effectcraft-audio", ".m4a").toFile()
+        try {
+            val resolution = Mp4ExportWorker.resolveAudio(
+                listOf(
+                    item(hasAudio = true, path = "https://example.invalid/not-offline.mp4"),
+                    item(hasAudio = true, path = "offline/$sha.m4a"),
+                    item(hasAudio = true, path = "offline/${"b".repeat(64)}.m4a")
+                )
+            ) { hash -> if (hash == sha) found else null }
+            assertTrue(resolution.hasAudioItems)
+            assertEquals(found, resolution.file)
+        } finally {
+            found.delete()
+        }
+    }
+
+    @Test
+    fun resolveAudioSkipsMissingAndUnreadableOfflinePayloads() {
+        val dir = java.nio.file.Files.createTempDirectory("effectcraft-audio-resolution").toFile()
+        val missing = File(dir, "missing.m4a")
+        val directoryInsteadOfFile = File(dir, "not-a-media-file")
+        directoryInsteadOfFile.mkdir()
+        try {
+            val resolution = Mp4ExportWorker.resolveAudio(
+                listOf(
+                    item(hasAudio = true, path = "offline/${"a".repeat(64)}.m4a"),
+                    item(hasAudio = true, path = "offline/${"b".repeat(64)}.m4a"),
+                    item(hasAudio = true, path = "offline/${"c".repeat(64)}.m4a")
+                )
+            ) { hash ->
+                when (hash) {
+                    "a".repeat(64) -> missing
+                    "b".repeat(64) -> directoryInsteadOfFile
+                    else -> null
+                }
+            }
+            assertTrue(resolution.hasAudioItems)
+            assertEquals(null, resolution.file)
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     @Test
