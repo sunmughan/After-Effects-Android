@@ -4,7 +4,7 @@ use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
-use effectcraft_project::keyframe::{Ease, Interp};
+use effectcraft_project::keyframe::{retime_roving, Ease, Interp};
 use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
 use effectcraft_render::{Accelerator, Backend, LayerCache, RenderOpts, Renderer};
@@ -906,6 +906,10 @@ fn curve_keys_json(
             "outInterp": key.out_interp.label(),
             "inEase": ease_json(&key.in_ease),
             "outEase": ease_json(&key.out_ease),
+            "roving": key.roving,
+            "spatialIn": key.spatial_in,
+            "spatialOut": key.spatial_out,
+            "spatialAuto": key.spatial_auto,
         }));
     }
     keys.sort_by_key(|key| key["frame"].as_i64().unwrap_or(0));
@@ -1203,6 +1207,7 @@ fn remove_layer_transform_keyframe(
             property.keys.retain(|key| key.time != tick);
         }
     }
+    retime_roving_run(property, frame_rate);
     let json = project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))?;
     Ok((json, removed))
 }
@@ -1895,6 +1900,9 @@ fn set_layer_transform_keyframe(
     if was_static && tick != Tick::ZERO {
         property.keys.retain(|key| key.time != Tick::ZERO);
     }
+    // A new fixed key splits a roving run (or a new key lands inside one),
+    // so the survivors re-space by path length.
+    retime_roving_run(property, frame_rate);
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
@@ -2070,6 +2078,141 @@ fn set_keyframe_bezier(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Re-times a roving run after an edit that changed key times or path
+/// shape. A no-op when no key roves; upstream `retime_roving` clears
+/// roving on the first/last keys and on tracks with fewer than three keys.
+///
+/// The bridge addresses keys by frame, so a retimed key must land on an
+/// exact frame tick or later exact-tick lookups (move/remove/Bezier) miss
+/// it — upstream times are sub-frame precise. Each moved key is therefore
+/// snapped to its nearest frame tick, but only when that tick is still
+/// free: a run squeezed inside one frame has no free frame tick, and
+/// snapping there would collide with a neighbour or reorder the track,
+/// so such a key keeps its upstream time.
+fn retime_roving_run(property: &mut effectcraft_project::props::Property, frame_rate: effectcraft_time::FrameRate) {
+    if !property.keys.iter().any(|key| key.roving) {
+        return;
+    }
+    let before: Vec<Tick> = property.keys.iter().map(|key| key.time).collect();
+    retime_roving(&mut property.keys, property.spatial);
+    for index in 0..property.keys.len() {
+        if property.keys[index].time == before[index] {
+            continue;
+        }
+        let frame = (property.keys[index].time.seconds() * frame_rate.num as f64 / frame_rate.den as f64).round() as i64;
+        if frame < 0 {
+            continue;
+        }
+        let snapped = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+        let prev_ok = index == 0 || snapped > property.keys[index - 1].time;
+        let next_ok = index + 1 >= property.keys.len() || snapped < property.keys[index + 1].time;
+        if prev_ok && next_ok {
+            property.keys[index].time = snapped;
+        }
+    }
+}
+
+/// Resolves a curve property for a spatial edit, rejecting anything that
+/// cannot carry a motion path (non-spatial properties and non-vector values).
+fn resolve_spatial_property_mut<'a>(
+    layer: &'a mut effectcraft_project::Layer,
+    selector: &str,
+) -> Result<&'a mut effectcraft_project::props::Property, String> {
+    let property = resolve_curve_property_mut(layer, selector)?;
+    if !property.spatial {
+        return Err(format!("Curve property {selector} is not spatial, so it has no motion path"));
+    }
+    match &property.value {
+        Value::Vec2(_) | Value::Vec3(_) => Ok(property),
+        _ => Err(format!("Curve property {selector} is not spatial, so it has no motion path")),
+    }
+}
+
+fn load_project_layer_mut<'a>(
+    project: &'a mut Project,
+    composition_id: u64,
+    layer_id: u64,
+) -> Result<&'a mut effectcraft_project::Layer, String> {
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    Ok(layer)
+}
+
+/// Toggles roving ("Rove Across Time") on one key of a spatial property.
+/// The run is re-timed by path length afterwards, so the toggle takes
+/// effect immediately; upstream clears roving on first/last keys and on
+/// tracks with fewer than three keys.
+fn set_keyframe_roving(
+    source: &str, composition_id: u64, layer_id: u64, selector: &str,
+    frame: i64, roving: bool,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let frame_rate = project.comp(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?.frame_rate;
+    let layer = load_project_layer_mut(&mut project, composition_id, layer_id)?;
+    let property = resolve_spatial_property_mut(layer, selector)?;
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    let key = property.keys.iter_mut().find(|key| key.time == tick)
+        .ok_or_else(|| format!("No curve keyframe exists at frame {frame} for {selector}"))?;
+    key.roving = roving;
+    retime_roving_run(property, frame_rate);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Sets the spatial (motion-path) tangents of one key of a spatial
+/// property, relative to the key value. `spatial_auto` selects the upstream
+/// Catmull-Rom auto-Bezier tangents instead of the stored ones; passing
+/// zero tangents with `spatial_auto` false is the straight (linear-path)
+/// preset. Tangents change path length, so the roving run is re-timed.
+fn set_keyframe_spatial_tangents(
+    source: &str, composition_id: u64, layer_id: u64, selector: &str,
+    frame: i64, spatial_in: [f64; 3], spatial_out: [f64; 3], spatial_auto: bool,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !spatial_in.iter().chain(spatial_out.iter()).all(|component| component.is_finite()) {
+        return Err("Spatial tangents must be finite".into());
+    }
+    if spatial_in.iter().chain(spatial_out.iter()).any(|component| component.abs() > 1_000_000.0) {
+        return Err("Spatial tangent exceeds its property limit".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let frame_rate = project.comp(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?.frame_rate;
+    let layer = load_project_layer_mut(&mut project, composition_id, layer_id)?;
+    let property = resolve_spatial_property_mut(layer, selector)?;
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    let key = property.keys.iter_mut().find(|key| key.time == tick)
+        .ok_or_else(|| format!("No curve keyframe exists at frame {frame} for {selector}"))?;
+    key.spatial_in = spatial_in;
+    key.spatial_out = spatial_out;
+    key.spatial_auto = spatial_auto;
+    retime_roving_run(property, frame_rate);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+/// Re-times the roving run on one curve property without changing any key,
+/// for callers that edited the track in bulk (for example after a drag that
+/// bypassed the single-key entry points). Returns the project unchanged
+/// when nothing roves.
+fn retime_roving_keys(
+    source: &str, composition_id: u64, layer_id: u64, selector: &str,
+) -> Result<String, String> {
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let frame_rate = project.comp(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?.frame_rate;
+    let layer = load_project_layer_mut(&mut project, composition_id, layer_id)?;
+    let property = resolve_curve_property_mut(layer, selector)?;
+    retime_roving_run(property, frame_rate);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Drags a curve key from one frame to another, keeping its value and both
 /// Bezier sides intact. Dragging past a neighbour reorders the track;
 /// dragging exactly onto a neighbour replaces that neighbour, matching
@@ -2104,6 +2247,9 @@ fn move_keyframe(
     property.keys.retain(|key| key.time != to_tick);
     property.keys.push(moved);
     property.keys.sort_by_key(|key| key.time);
+    // The moved key keeps its roving flag and spatial tangents (the whole
+    // struct moves), and a roving run re-spaces by path length afterwards.
+    retime_roving_run(property, frame_rate);
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
@@ -2137,6 +2283,7 @@ fn remove_curve_keyframe(
             property.keys.retain(|key| key.time != tick);
         }
     }
+    retime_roving_run(property, frame_rate);
     let json = project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))?;
     Ok((json, removed))
 }
@@ -2421,6 +2568,76 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_m
         Err("Composition, layer and frames must be non-negative".to_owned())
     } else {
         move_keyframe(&source, composition_id as u64, layer_id as u64, &selector, from_frame, to_frame)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerKeyframeRovingEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    selector: JString, frame: jlong, roving: jboolean,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let selector: String = match env.get_string(&selector) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_keyframe_roving(&source, composition_id as u64, layer_id as u64, &selector, frame, roving != 0)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerKeyframeSpatialTangentsEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    selector: JString, frame: jlong,
+    in_x: jni::sys::jdouble, in_y: jni::sys::jdouble, in_z: jni::sys::jdouble,
+    out_x: jni::sys::jdouble, out_y: jni::sys::jdouble, out_z: jni::sys::jdouble,
+    spatial_auto: jboolean,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let selector: String = match env.get_string(&selector) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_keyframe_spatial_tangents(&source, composition_id as u64, layer_id as u64, &selector, frame,
+            [in_x as f64, in_y as f64, in_z as f64], [out_x as f64, out_y as f64, out_z as f64], spatial_auto != 0)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_retimeLayerRovingKeysEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong,
+    selector: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let selector: String = match env.get_string(&selector) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 {
+        Err("Composition and layer must be non-negative".to_owned())
+    } else {
+        retime_roving_keys(&source, composition_id as u64, layer_id as u64, &selector)
     };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
@@ -3887,11 +4104,11 @@ mod tests {
         let keyed = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 10, true).unwrap();
         let keyed = set_keyframe_roving(&keyed, comp_id, layer_id, "transform:position", 20, true).unwrap();
         // Deleting a roving key re-times the survivor by path length:
-        // 100px then ~141px of a 30-frame span puts it at frame 12.
+        // arc length with auto tangents puts it ~12.5 frames in, rounding to 13.
         let (removed, was_removed) = remove_curve_keyframe(&keyed, comp_id, layer_id, "transform:position", 20).unwrap();
         assert!(was_removed);
         let project: Project = serde_json::from_str(&removed).unwrap();
-        assert_eq!(position_frames(&project, comp_id, layer_id), vec![0, 12, 30]);
+        assert_eq!(position_frames(&project, comp_id, layer_id), vec![0, 13, 30]);
         assert!(position_property(&project, comp_id, layer_id).keys[1].roving);
         // Deleting a fixed endpoint never strands a roving key at the edge:
         // the new first key has its roving flag cleared.
@@ -3923,9 +4140,11 @@ mod tests {
         use effectcraft_time::{FrameRate, Tick};
         use image::ImageEncoder;
 
+        // A 16x16 red still: footage draws at its source size, so the red
+        // square spans the 16x16 layer and its centroid tracks the position.
         let mut png = Vec::new();
         image::codecs::png::PngEncoder::new(&mut png)
-            .write_image(&[255, 0, 0, 255], 1, 1, image::ExtendedColorType::Rgba8)
+            .write_image(&vec![255u8, 0, 0, 255].repeat(16 * 16), 16, 16, image::ExtendedColorType::Rgba8)
             .unwrap();
         let path = std::env::temp_dir().join("effectcraft-spatial-red.png");
         std::fs::write(&path, png).unwrap();
@@ -3935,8 +4154,8 @@ mod tests {
         let footage = Footage {
             path: path.to_string_lossy().into_owned(),
             kind: FootageKind::Still,
-            width: 1,
-            height: 1,
+            width: 16,
+            height: 16,
             has_video: true,
             missing: false,
             ..Footage::default()
