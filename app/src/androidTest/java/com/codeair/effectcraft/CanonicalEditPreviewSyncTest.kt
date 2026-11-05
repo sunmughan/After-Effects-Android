@@ -677,7 +677,7 @@ class CanonicalEditPreviewSyncTest {
             )
         )
         val color = layer(canonical(edited), fixture.firstId).effects
-            .single { it.kind == "gaussianBlur" }.colors.single { it.uid == 90023 }
+            .single { it.kind == "gaussianBlur" }.colors.single { it.uid == 90023L }
         assertEquals(listOf(0.25, 0.5, 0.75, 0.5), color.components)
         assertNotNull(
             "Preview session must accept and render the RGBA-edited canonical project",
