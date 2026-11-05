@@ -4185,6 +4185,204 @@ mod tests {
         std::fs::remove_file(path).unwrap();
     }
 
+    /// M4-L10 Gap 3 (bool/popup hold keys): builds a shape layer carrying a
+    /// Checkbox bool (Rectangle Per-Corner Roundness) and a Popup enum
+    /// (Polystar Type: Star/Polygon) plus a red fill, and a null layer with
+    /// a Gaussian Blur group carrying a Checkbox bool (Repeat Edge Pixels)
+    /// and a Popup enum (Blur Dimensions). Returns the project JSON, the
+    /// composition id, the shape layer id, the null layer id, and the four
+    /// parameter uids in (per_corner, star_type, repeat_edge, dimensions)
+    /// order.
+    fn bool_popup_project() -> (String, u64, u64, u64, (u64, u64, u64, u64)) {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Value};
+        use effectcraft_project::props::ParamUi;
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let mut shape_layer = build::layer(&mut project, &comp, "Shape", LayerSource::Shape, (640, 360), None);
+        let shape_id = shape_layer.id.0;
+        let mut next_id = 10_000u64;
+        let mut ids = build::Ids(&mut next_id);
+        let rect = build::shape_rect(&mut ids, [200.0, 100.0], [0.0, 0.0], 0.0);
+        let star = build::shape_star(&mut ids, true, 5.0, [0.0, 0.0], 120.0, 50.0);
+        let fill = build::shape_fill(&mut ids, [1.0, 0.0, 0.0, 1.0]);
+        shape_layer.props.sub_mut("contents").unwrap().children.push(rect.into());
+        shape_layer.props.sub_mut("contents").unwrap().children.push(star.into());
+        shape_layer.props.sub_mut("contents").unwrap().children.push(fill.into());
+        project.comp_mut(comp_id).unwrap().layers.push(shape_layer);
+        let mut null_layer = build::layer(&mut project, &comp, "Null", LayerSource::Null, (640, 360), None);
+        let null_id = null_layer.id.0;
+        let mut effect = ids.group("gaussianBlur", "Gaussian Blur");
+        effect = effect.with(ids.prop("blurriness", "Blurriness", Value::Scalar(0.0)));
+        effect = effect.with(ids.prop("repeatEdge", "Repeat Edge Pixels", Value::Bool(false)).with_ui(ParamUi::Checkbox));
+        effect = effect.with(ids.prop("dimensions", "Blur Dimensions", Value::Enum(0)).with_ui(ParamUi::Popup { options: vec!["Horizontal".to_owned(), "Vertical".to_owned(), "Both".to_owned()] }));
+        null_layer.props.sub_mut("effects").unwrap().children.push(effect.into());
+        project.comp_mut(comp_id).unwrap().layers.push(null_layer);
+        let source = project.to_file_json().unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&source).unwrap()).unwrap();
+        let shape_meta = &metadata["compositions"][0]["layers"][0]["shapeItems"];
+        let rect_item = shape_meta.as_array().unwrap().iter()
+            .find(|item| item["kind"] == "rect").expect("rect shape item must be exposed");
+        let per_corner_uid = rect_item["bools"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Per-Corner Roundness").expect("rect Per-Corner Roundness bool must be exposed")["uid"].as_u64().unwrap();
+        let star_item = shape_meta.as_array().unwrap().iter()
+            .find(|item| item["kind"] == "star").expect("star shape item must be exposed");
+        let star_type_uid = star_item["popups"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Type").expect("star Type popup must be exposed")["uid"].as_u64().unwrap();
+        let blur_item = metadata["compositions"][0]["layers"][1]["effects"].as_array().unwrap().iter()
+            .find(|item| item["name"] == "Gaussian Blur").expect("effect group must be exposed");
+        let repeat_edge_uid = blur_item["bools"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Repeat Edge Pixels").expect("Repeat Edge Pixels bool must be exposed")["uid"].as_u64().unwrap();
+        let dimensions_uid = blur_item["popups"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Blur Dimensions").expect("Blur Dimensions popup must be exposed")["uid"].as_u64().unwrap();
+        (source, comp_id.0, shape_id, null_id, (per_corner_uid, star_type_uid, repeat_edge_uid, dimensions_uid))
+    }
+
+    #[test]
+    fn canonical_bool_and_popup_hold_keys_roundtrip_metadata_and_remove() {
+        use effectcraft_project::Value;
+        use effectcraft_time::Tick;
+
+        let (source, comp_id, shape_id, null_id, (per_corner_uid, star_type_uid, repeat_edge_uid, dimensions_uid)) = bool_popup_project();
+        // Metadata exposes the static values, the popup options, and empty key lists.
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&source).unwrap()).unwrap();
+        let rect_item = metadata["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "rect").unwrap();
+        let per_corner_meta = rect_item["bools"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Per-Corner Roundness").unwrap();
+        assert_eq!(per_corner_meta["value"], false);
+        assert_eq!(per_corner_meta["keys"], json!([]));
+        assert_eq!(per_corner_meta["keyframes"], json!([]));
+        let star_item = metadata["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "star").unwrap();
+        let star_type_meta = star_item["popups"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Type").unwrap();
+        assert_eq!(star_type_meta["value"], 0);
+        assert_eq!(star_type_meta["options"], json!(["Star", "Polygon"]));
+        assert_eq!(star_type_meta["keys"], json!([]));
+        // Hidden popups (e.g. Fill Blend Mode) stay omitted: metadata never
+        // promises an edit the UI cannot make, while real popups show.
+        let fill_item = metadata["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "fill").unwrap();
+        let fill_popups = fill_item["popups"].as_array().unwrap();
+        assert!(fill_popups.iter().any(|param| param["name"] == "Fill Rule"));
+        assert!(fill_popups.iter().all(|param| param["name"] != "Blend Mode"));
+
+        // Static setters update the static value while the property has no keys.
+        let toggled = set_layer_bool_property(&source, comp_id, shape_id, per_corner_uid, true).unwrap();
+        let toggled_meta: serde_json::Value = serde_json::from_str(&inspect_project(&toggled).unwrap()).unwrap();
+        assert_eq!(toggled_meta["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "rect").unwrap()["bools"][0]["value"], true);
+        let picked = set_layer_popup_property(&source, comp_id, null_id, dimensions_uid, 2).unwrap();
+        let picked_meta: serde_json::Value = serde_json::from_str(&inspect_project(&picked).unwrap()).unwrap();
+        assert_eq!(picked_meta["compositions"][0]["layers"][1]["effects"][0]["popups"][0]["value"], 2);
+        assert!(set_layer_popup_property(&source, comp_id, null_id, dimensions_uid, 3).is_err(), "index 3 is outside the 3-option popup");
+        assert!(set_layer_bool_property(&source, comp_id, shape_id, star_type_uid, true).is_err(), "bool setter must reject an Enum parameter");
+        assert!(set_layer_popup_property(&source, comp_id, null_id, repeat_edge_uid, 1).is_err(), "popup setter must reject a Bool parameter");
+
+        // Hold keyframes: the first key seeds frame 0 with the static value,
+        // keys carry Hold interpolation on both sides, and evaluation holds
+        // (never tweens) between keys.
+        let keyed_bool = set_layer_bool_keyframe(&toggled, comp_id, shape_id, per_corner_uid, 15, false).unwrap();
+        let bool_project: Project = serde_json::from_str(&keyed_bool).unwrap();
+        let bool_prop = bool_project.comp(ItemId(comp_id)).unwrap()
+            .layers.iter().find(|layer| layer.id == LayerId(shape_id)).unwrap()
+            .props.prop(&format!("@{per_corner_uid}")).unwrap();
+        assert_eq!(bool_prop.keys.len(), 2, "first bool key seeds frame 0 from the static value");
+        assert_eq!(bool_prop.keys[0].time, Tick::ZERO);
+        assert_eq!(bool_prop.keys[0].value, Value::Bool(true));
+        assert_eq!(bool_prop.keys[0].in_interp, Interp::Hold);
+        assert_eq!(bool_prop.keys[0].out_interp, Interp::Hold);
+        assert_eq!(bool_prop.keys[1].time, Tick::from_rational(15, 1, 30));
+        assert_eq!(bool_prop.keys[1].value, Value::Bool(false));
+        assert_eq!(bool_prop.keys[1].in_interp, Interp::Hold);
+        assert_eq!(bool_prop.value_at(Tick::from_rational(7, 1, 30)), Value::Bool(true));
+        assert_eq!(bool_prop.value_at(Tick::from_rational(15, 1, 30)), Value::Bool(false));
+        assert_eq!(bool_prop.value_at(Tick::from_rational(29, 1, 30)), Value::Bool(false), "a hold key never tweens toward the next value");
+
+        let keyed_popup = set_layer_popup_keyframe(&picked, comp_id, null_id, dimensions_uid, 15, 1).unwrap();
+        let popup_project: Project = serde_json::from_str(&keyed_popup).unwrap();
+        let popup_prop = popup_project.comp(ItemId(comp_id)).unwrap()
+            .layers.iter().find(|layer| layer.id == LayerId(null_id)).unwrap()
+            .props.prop(&format!("@{dimensions_uid}")).unwrap();
+        assert_eq!(popup_prop.keys.len(), 2);
+        assert_eq!(popup_prop.keys[0].value, Value::Enum(2));
+        assert_eq!(popup_prop.keys[1].value, Value::Enum(1));
+        assert_eq!(popup_prop.keys[1].in_interp, Interp::Hold);
+        assert_eq!(popup_prop.value_at(Tick::from_rational(7, 1, 30)), Value::Enum(2));
+        assert_eq!(popup_prop.value_at(Tick::from_rational(29, 1, 30)), Value::Enum(1));
+        // Metadata now carries the hold keys (bool as JSON boolean, enum as index).
+        let keyed_meta: serde_json::Value = serde_json::from_str(&inspect_project(&keyed_popup).unwrap()).unwrap();
+        let popup_keys = &keyed_meta["compositions"][0]["layers"][1]["effects"][0]["popups"][0]["keys"];
+        assert_eq!(popup_keys[0]["frame"], 0);
+        assert_eq!(popup_keys[0]["value"], 2);
+        assert_eq!(popup_keys[0]["inInterp"], "Hold");
+        assert_eq!(popup_keys[1]["frame"], 15);
+        assert_eq!(popup_keys[1]["value"], 1);
+        assert_eq!(keyed_meta["compositions"][0]["layers"][1]["effects"][0]["popups"][0]["keyframes"], json!([0, 15]));
+
+        // Negatives: static setters refuse once keys exist (a static write
+        // must never silently upsert a frame-0 key); out-of-range popup
+        // indices, wrong kinds, unknown uids and negative frames reject;
+        // a Bezier handle on a hold-only key rejects.
+        assert!(set_layer_bool_property(&keyed_bool, comp_id, shape_id, per_corner_uid, false).is_err());
+        assert!(set_layer_popup_property(&keyed_popup, comp_id, null_id, dimensions_uid, 0).is_err());
+        assert!(set_layer_popup_keyframe(&source, comp_id, null_id, dimensions_uid, 15, 3).is_err());
+        assert!(set_layer_bool_keyframe(&source, comp_id, shape_id, star_type_uid, 15, true).is_err());
+        assert!(set_layer_popup_keyframe(&source, comp_id, null_id, repeat_edge_uid, 15, 1).is_err());
+        assert!(set_layer_bool_keyframe(&source, comp_id, shape_id, 999_999, 15, true).is_err());
+        assert!(set_layer_bool_keyframe(&source, comp_id, shape_id, per_corner_uid, -1, true).is_err());
+        let selector = format!("param:{repeat_edge_uid}");
+        assert!(set_keyframe_bezier(&keyed_bool, comp_id, shape_id, &format!("param:{per_corner_uid}"), 15, "incoming", 8.0, 0.6).is_err());
+        let _ = selector;
+
+        // Removal: dropping the mid key leaves the frame-0 seed; dropping
+        // the last key collapses back to the static value at that frame.
+        let (without_mid, removed_mid) = remove_curve_keyframe(&keyed_bool, comp_id, shape_id, &format!("param:{per_corner_uid}"), 15).unwrap();
+        assert!(removed_mid);
+        let mid_project: Project = serde_json::from_str(&without_mid).unwrap();
+        let mid_prop = mid_project.comp(ItemId(comp_id)).unwrap()
+            .layers.iter().find(|layer| layer.id == LayerId(shape_id)).unwrap()
+            .props.prop(&format!("@{per_corner_uid}")).unwrap();
+        assert_eq!(mid_prop.keys.len(), 1);
+        assert_eq!(mid_prop.keys[0].value, Value::Bool(true));
+        let (static_json, removed_zero) = remove_curve_keyframe(&without_mid, comp_id, shape_id, &format!("param:{per_corner_uid}"), 0).unwrap();
+        assert!(removed_zero);
+        let static_project: Project = serde_json::from_str(&static_json).unwrap();
+        let static_prop = static_project.comp(ItemId(comp_id)).unwrap()
+            .layers.iter().find(|layer| layer.id == LayerId(shape_id)).unwrap()
+            .props.prop(&format!("@{per_corner_uid}")).unwrap();
+        assert!(static_prop.keys.is_empty());
+        assert_eq!(static_prop.value, Value::Bool(true));
+        let (unchanged, removed_again) = remove_curve_keyframe(&static_json, comp_id, shape_id, &format!("param:{per_corner_uid}"), 0).unwrap();
+        assert!(!removed_again);
+        assert_eq!(unchanged, static_json);
+    }
+
+    #[test]
+    fn canonical_popup_keyframe_changes_rendered_shape() {
+        use effectcraft_project::Value;
+
+        let (source, comp_id, shape_id, _null_id, (_per_corner_uid, star_type_uid, _repeat_edge_uid, _dimensions_uid)) = bool_popup_project();
+        // Star (index 0) holds until frame 15, then the shape is a polygon.
+        let keyed = set_layer_popup_keyframe(&source, comp_id, shape_id, star_type_uid, 15, 1).unwrap();
+        let project: Project = serde_json::from_str(&keyed).unwrap();
+        let star_prop = project.comp(ItemId(comp_id)).unwrap()
+            .layers.iter().find(|layer| layer.id == LayerId(shape_id)).unwrap()
+            .props.prop(&format!("@{star_type_uid}")).unwrap();
+        assert_eq!(star_prop.value_at(effectcraft_time::Tick::from_rational(14, 1, 30)), Value::Enum(0));
+        assert_eq!(star_prop.value_at(effectcraft_time::Tick::from_rational(15, 1, 30)), Value::Enum(1));
+        let frame7 = render_frame_rgba(&keyed, comp_id, 7, 160).unwrap();
+        let frame14 = render_frame_rgba(&keyed, comp_id, 14, 160).unwrap();
+        let frame15 = render_frame_rgba(&keyed, comp_id, 15, 160).unwrap();
+        assert_eq!(frame14, frame7, "hold semantics: frame 14 must still render the star");
+        assert_ne!(frame15, frame14, "the frame-15 polygon key must change the rendered shape");
+        assert!(frame15[8..].chunks_exact(4).any(|pixel| pixel[0] > 200), "the polygon frame must paint red fill pixels");
+    }
+
     #[test]
     fn canonical_param_keyframes_bezier_and_drag() {
         use effectcraft_project::{build, Comp, ItemKind, LayerSource, Value};
