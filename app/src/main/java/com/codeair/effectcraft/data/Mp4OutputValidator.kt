@@ -47,7 +47,7 @@ object Mp4OutputValidator {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(file.absolutePath)
-            return inspect(extractor, plan)
+            return inspect(extractor, plan, expectAudio)
         } finally {
             extractor.release()
         }
