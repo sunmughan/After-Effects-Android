@@ -73,6 +73,40 @@ class CanonicalProjectRepositoryTest {
     }
 
     @Test
+    fun interruptedRollbackPromotionIsRecoveredAgainByFreshLoad() {
+        val root = Files.createTempDirectory("effectcraft-repo-recovery-death").toFile()
+        try {
+            val repo = CanonicalProjectRepository(root)
+            val created = repo.create("Recovery itself interrupted", document, "ecproj")
+            val documentFile = File(root, "${created.id}.ecproj")
+            val sidecarFile = File(root, "${created.id}.json")
+            val backupDocument = File(root, "${created.id}.ecproj.update-bak")
+            val backupSidecar = File(root, "${created.id}.json.update-bak")
+
+            // Durable rollback pair survives the first recovery attempt.
+            backupDocument.writeText(document, Charsets.UTF_8)
+            backupSidecar.writeText(sidecarFile.readText(Charsets.UTF_8), Charsets.UTF_8)
+
+            // Simulate recovery dying after it restored the old document but
+            // before it restored the old sidecar (which still describes v2).
+            documentFile.writeText(document, Charsets.UTF_8)
+            sidecarFile.writeText(
+                JSONObject(sidecarFile.readText(Charsets.UTF_8))
+                    .put("documentSha256", updated.sha256()).toString(),
+                Charsets.UTF_8
+            )
+
+            val reopened = CanonicalProjectRepository(root)
+            assertEquals(document, reopened.load(created.id))
+            assertEquals(created.documentSha256, reopened.metadata(created.id)?.documentSha256)
+            assertFalse(backupDocument.exists())
+            assertFalse(backupSidecar.exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun completedUpdateWithLeftoverBackupsKeepsNewPairAndCleansBackups() {
         val root = Files.createTempDirectory("effectcraft-repo-update-committed").toFile()
         try {
