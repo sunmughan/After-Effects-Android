@@ -158,4 +158,27 @@ class BezierCurveEditorTest {
         assertThrows(IllegalArgumentException::class.java) { CurveHandle(0.0, 1.5) }
         assertThrows(IllegalArgumentException::class.java) { CurveHandle(0.0, -0.1) }
     }
+
+    @Test
+    fun dragPreservesRovingFlagAndSpatialTangents() {
+        val track = CurveTrack("position", listOf(
+            CurveKey(0, 0.0),
+            CurveKey(
+                10, 100.0,
+                roving = true,
+                spatialIn = listOf(0.0, -40.0, 0.0),
+                spatialOut = listOf(0.0, -40.0, 0.0),
+                spatialAuto = false
+            ),
+            CurveKey(20, 200.0)
+        ))
+        val moved = BezierCurveEditor.move(track, 10, 15)
+        assertEquals(listOf(0, 15, 20), moved.keys.map { it.frame })
+        val dragged = moved.keys[1]
+        assertTrue("drag must preserve the roving flag", dragged.roving)
+        assertEquals(listOf(0.0, -40.0, 0.0), dragged.spatialIn)
+        assertEquals(listOf(0.0, -40.0, 0.0), dragged.spatialOut)
+        assertEquals(false, dragged.spatialAuto)
+        assertEquals(100.0, dragged.value, 0.0)
+    }
 }

@@ -111,6 +111,41 @@ class CanonicalProjectInfoTest {
         assertEquals(0.6, roundness.keys.single().inInfluence, 0.001)
     }
 
+    @Test
+    fun parsesRovingAndSpatialFieldsWithDefaults() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0,"transformCurves":{"position":[{"frame":0,"value":[0.0,0.0,0.0],"inInterp":"Linear","outInterp":"Linear","inEase":[],"outEase":[]},{"frame":15,"value":[100.0,0.0,0.0],"inInterp":"Linear","outInterp":"Linear","inEase":[],"outEase":[],"roving":true,"spatialIn":[0.0,-40.0,0.0],"spatialOut":[0.0,-40.0,0.0],"spatialAuto":false},{"frame":30,"value":[200.0,0.0,0.0],"inInterp":"Linear","outInterp":"Linear","inEase":[],"outEase":[]}]}}]}]}"""
+
+        val position = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().transformCurves["position"]!!
+
+        // Missing fields default to the upstream key defaults: not roving,
+        // auto-Bezier tangents, zero stored tangents.
+        assertEquals(false, position[0].roving)
+        assertEquals(true, position[0].spatialAuto)
+        assertEquals(listOf(0.0, 0.0, 0.0), position[0].spatialIn)
+        assertEquals(listOf(0.0, 0.0, 0.0), position[0].spatialOut)
+        assertEquals(true, position[1].roving)
+        assertEquals(false, position[1].spatialAuto)
+        assertEquals(listOf(0.0, -40.0, 0.0), position[1].spatialIn)
+        assertEquals(listOf(0.0, -40.0, 0.0), position[1].spatialOut)
+        // The full vector value rides along for the motion-path overlay.
+        assertEquals(listOf(100.0, 0.0, 0.0), position[1].components)
+        assertEquals(listOf(200.0, 0.0, 0.0), position[2].components)
+    }
+
+    @Test
+    fun spatialTrackExposesSingleSpeedFromFirstEaseEntry() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[{"id":2,"name":"Headline","source":"Text","visible":true,"opacityPercent":100.0,"transformCurves":{"position":[{"frame":0,"value":[0.0,0.0,0.0],"inInterp":"Bezier","outInterp":"Bezier","inEase":[{"speed":11.0,"influence":0.2},{"speed":22.0,"influence":0.3},{"speed":33.0,"influence":0.4}],"outEase":[{"speed":44.0,"influence":0.5},{"speed":55.0,"influence":0.6},{"speed":66.0,"influence":0.7}]}]}}]}]}"""
+
+        val key = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().transformCurves["position"]!!.single()
+
+        // A spatial track has one speed along the path, not one per
+        // dimension: only the first ease entry is exposed.
+        assertEquals(11.0, key.inSpeed, 0.001)
+        assertEquals(0.2, key.inInfluence, 0.001)
+        assertEquals(44.0, key.outSpeed, 0.001)
+        assertEquals(0.5, key.outInfluence, 0.001)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsInvalidNativeMetadataEnvelope() {
         CanonicalProjectInfo.parse("""{"valid":false,"error":"invalid project"}""")
