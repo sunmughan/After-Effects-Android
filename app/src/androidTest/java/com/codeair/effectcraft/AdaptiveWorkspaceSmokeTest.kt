@@ -6,6 +6,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -378,13 +379,13 @@ class AdaptiveWorkspaceSmokeTest {
     /** A layer with a 3-key position track (unequal legs) for Gap 1 tests. */
     private fun canonicalRovingLayer(): CanonicalProjectInfo {
         val keys = listOf(
-            CanonicalCurveKey(frame = 0, value = 0.0, components = listOf(0.0, 0.0, 0.0)),
-            CanonicalCurveKey(frame = 15, value = 30.0, components = listOf(30.0, 0.0, 0.0)),
-            CanonicalCurveKey(frame = 30, value = 120.0, components = listOf(120.0, 0.0, 0.0))
+            CanonicalCurveKey(frame = 0, value = 0.0, components = listOf(0.0, 90.0, 0.0)),
+            CanonicalCurveKey(frame = 15, value = 30.0, components = listOf(30.0, 90.0, 0.0)),
+            CanonicalCurveKey(frame = 30, value = 180.0, components = listOf(180.0, 90.0, 0.0))
         )
         val layer = CanonicalLayerInfo(
             id = 2, name = "Headline", source = "Text", visible = true,
-            opacityPercent = 100.0, positionX = 30.0, positionY = 0.0,
+            opacityPercent = 100.0, positionX = 30.0, positionY = 90.0,
             scaleX = 100.0, scaleY = 100.0, rotationDegrees = 0.0,
             transformKeyframes = mapOf("position" to listOf(0, 15, 30)),
             transformCurves = mapOf("position" to keys)
@@ -644,7 +645,13 @@ class AdaptiveWorkspaceSmokeTest {
     fun motionPathOverlayDrawsForSpatialPositionTrack() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalRovingLayer(), captures, frameBytes = blackFrameBytes())
-        compose.waitForIdle()
+        // The workspace frame arrives through a LaunchedEffect that decodes
+        // on a background dispatcher, so waitForIdle can return before the
+        // bitmap (and the overlay over it) is composed; poll for the node.
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithContentDescription("Motion path overlay")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         // The workspace preview renders the supplied frame, and the selected
         // layer's 3-key position track draws its motion-path overlay over it.
         compose.onNodeWithContentDescription("Motion path overlay").assertIsDisplayed()

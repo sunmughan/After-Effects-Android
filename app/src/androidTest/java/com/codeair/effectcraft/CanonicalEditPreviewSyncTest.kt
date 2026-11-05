@@ -788,18 +788,21 @@ class CanonicalEditPreviewSyncTest {
     // --- M4-L10 Gap 1: roving/spatial path interpolation ---
 
     /**
-     * Three position keys with unequal legs (30px then 90px), so the
-     * roving retime moves the middle key: 30 * 30/120 = 7.5 -> frame 8.
+     * Three position keys with unequal legs (30px then 150px), so the
+     * roving retime moves the middle key: 30 * 30/180 = 5 -> frame 5.
+     * Keys sit at y=90 so the glyphs render fully on-screen: the text
+     * anchor is the baseline, so at y=0 only a 1px sliver shows (and the
+     * session's half-scale render averages even that away).
      */
     private fun positionKeys(project: String, compositionId: Long, layerId: Long): String {
         var edited = applyEdit(
-            NativeProjectBridge.setLayerTransformKeyframeEcproj(project, compositionId, layerId, "position", 0, 0.0, 0.0, 0.0)
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(project, compositionId, layerId, "position", 0, 0.0, 90.0, 0.0)
         )
         edited = applyEdit(
-            NativeProjectBridge.setLayerTransformKeyframeEcproj(edited, compositionId, layerId, "position", 15, 30.0, 0.0, 0.0)
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(edited, compositionId, layerId, "position", 15, 30.0, 90.0, 0.0)
         )
         edited = applyEdit(
-            NativeProjectBridge.setLayerTransformKeyframeEcproj(edited, compositionId, layerId, "position", 30, 120.0, 0.0, 0.0)
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(edited, compositionId, layerId, "position", 30, 180.0, 90.0, 0.0)
         )
         return edited
     }
@@ -849,23 +852,23 @@ class CanonicalEditPreviewSyncTest {
         // parsed metadata is the inspect output, so these prove the fields
         // survived the native round-trip.
         val after = positionTrack(edited, fixture.firstId)
-        assertEquals(listOf(0, 8, 30), after.map { it.frame })
+        assertEquals(listOf(0, 5, 30), after.map { it.frame })
         assertEquals(listOf(false, true, false), after.map { it.roving })
-        val (baseFrame, editedFrame) = previewBeforeAndAfter(keyed, edited, fixture.compositionId, 8)
-        assertFramesDiffer(baseFrame, editedFrame, "Preview pixels must move with the roving retime at frame 8")
+        val (baseFrame, editedFrame) = previewBeforeAndAfter(keyed, edited, fixture.compositionId, 5)
+        assertFramesDiffer(baseFrame, editedFrame, "Preview pixels must move with the roving retime at frame 5")
     }
 
     @Test
     fun spatialTangentsBendThePathInPreview() {
         val fixture = baseFixture()
         var keyed = applyEdit(
-            NativeProjectBridge.setLayerTransformKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, "position", 0, 0.0, 0.0, 0.0)
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, "position", 0, 0.0, 90.0, 0.0)
         )
         keyed = applyEdit(
-            NativeProjectBridge.setLayerTransformKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "position", 15, 100.0, 0.0, 0.0)
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "position", 15, 100.0, 90.0, 0.0)
         )
         keyed = applyEdit(
-            NativeProjectBridge.setLayerTransformKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "position", 30, 200.0, 0.0, 0.0)
+            NativeProjectBridge.setLayerTransformKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "position", 30, 200.0, 90.0, 0.0)
         )
         val edited = applyEdit(
             NativeProjectBridge.setLayerKeyframeSpatialTangentsEcproj(
@@ -898,13 +901,13 @@ class CanonicalEditPreviewSyncTest {
         // and a fresh inspect of it.
         val track = canonical(roving).compositions.single().layers.first { it.id == fixture.firstId }.transformCurves["position"]
             ?: throw AssertionError("No position track after re-import")
-        assertEquals(listOf(0, 8, 30), track.map { it.frame })
+        assertEquals(listOf(0, 5, 30), track.map { it.frame })
         assertEquals(listOf(false, true, false), track.map { it.roving })
         val session = NativeSession.open(roving, 160)
             ?: throw AssertionError("Preview session must open the re-imported roving project")
         try {
-            val rovingFrame = session.render(fixture.compositionId, 8)
-                ?: throw AssertionError("Preview session must render the re-imported project at frame 8")
+            val rovingFrame = session.render(fixture.compositionId, 5)
+                ?: throw AssertionError("Preview session must render the re-imported project at frame 5")
             val (rovingX, _) = brightCentroid(rovingFrame)
             val plainSession = NativeSession.open(keyed, 160)
                 ?: throw AssertionError("Preview session must open the pre-roving project")
@@ -913,10 +916,10 @@ class CanonicalEditPreviewSyncTest {
                     ?: throw AssertionError("Preview session must render the pre-roving project at frame 15")
                 val (middleX, _) = brightCentroid(middleFrame)
                 assertTrue("Retimed centroid x $rovingX must sit near the middle-key centroid x $middleX", abs(rovingX - middleX) < 8.0)
-                val earlyFrame = plainSession.render(fixture.compositionId, 8)
-                    ?: throw AssertionError("Preview session must render the pre-roving project at frame 8")
+                val earlyFrame = plainSession.render(fixture.compositionId, 5)
+                    ?: throw AssertionError("Preview session must render the pre-roving project at frame 5")
                 val (earlyX, _) = brightCentroid(earlyFrame)
-                assertTrue("Retimed centroid x $rovingX must sit ahead of the non-roving frame-8 centroid x $earlyX", rovingX - earlyX > 5.0)
+                assertTrue("Retimed centroid x $rovingX must sit ahead of the non-roving frame-5 centroid x $earlyX", rovingX - earlyX > 5.0)
             } finally {
                 plainSession.close()
             }
