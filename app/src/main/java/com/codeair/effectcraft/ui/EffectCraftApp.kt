@@ -1435,6 +1435,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical text tracking updated · saved locally"
                 )
             },
+            onSetCanonicalTextLayerFont = { compositionId, layerId, font ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerFontEcproj(source, compositionId, layerId, font),
+                    "Canonical text font updated · saved locally"
+                )
+            },
             onSetCanonicalLayerScalarProperty = { compositionId, layerId, uid, value ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
