@@ -270,9 +270,10 @@ M0/M1 acceptance evidence: [CI #286](https://github.com/sunmughan/After-Effects-
 - M0 owner acceptance and M2–M7 physical/user/release remainders remain open; PR #1 is draft/unmerged.
 
 
-### Latest engineering execution — M6 repository rollback recovery
-- CI #767 exposed a real rollback bug: backup sidecar integrity was compared with the already-promoted new canonical document. Corrected in [d31daf6f](https://github.com/sunmughan/After-Effects-Android/commit/d31daf6fa9e7f6b425e9d546faca37a96ca1c743), and recovery was hardened to retain backup files until the restored pair is verified in [4dd8536c](https://github.com/sunmughan/After-Effects-Android/commit/4dd8536c824bb752365f32b4be48cfdd47f19df2). The existing interrupted-promotion regression now targets the actual failure. Exact-head CI is pending; do not infer a pass from #765, which tested d1660eb7.
-- Current release remains NOT COMPLETE. See PHASES.md for M0–M7 acceptance evidence and concrete physical/owner blockers.
+### Latest engineering execution — M0 exact-head acceptance and M6 rollback durability
+- CI #774 [run 42000609659](https://github.com/sunmughan/After-Effects-Android/actions/runs/42000609659) is fully green on exact SHA `a3093e31`: Assemble/test and independent cold rebuild/compare, Rust 42/42, API30 instrumentation 132/132, JVM suite, both JNI ABIs, and APK content/native reproducibility. This head includes M6 recovery fixes [d31daf6f](https://github.com/sunmughan/After-Effects-Android/commit/d31daf6fa9e7f6b425e9d546faca37a96ca1c743), [4dd8536c](https://github.com/sunmughan/After-Effects-Android/commit/4dd8536c824bb752365f32b4be48cfdd47f19df2), [ea55290c](https://github.com/sunmughan/After-Effects-Android/commit/ea55290c28ecda804e4d7095fd11bf51f30e38fa). M0 is now exact-head COMPLETE.
+- Added a further process-death-during-rollback regression in [8969dced](https://github.com/sunmughan/After-Effects-Android/commit/8969dced839129a66ed640de14b6638af323538a). CI #775 is pending for that new test; do not extrapolate #774 to it.
+- Release remains NOT COMPLETE. See PHASES.md for M2–M6 physical/device gates and M7 signed artifact/install/merge requirements.
 
 
 ### Run 114 — M6 canonical rollback recovery fixes
