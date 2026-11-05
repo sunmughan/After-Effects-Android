@@ -682,7 +682,7 @@ class M7FunctionCoverageTest {
         // text, which also contains "30". Blanking the FPS field must
         // block the export with the dialog's own validation message,
         // not call back. Same field, same assertion — no weakening.
-        compose.onNodeWithText("30", useUnmergedTree = true).performTextClearance()
+        compose.onNodeWithContentDescription("Export FPS").performTextClearance()
         compose.onNodeWithText("Render ZIP").performClick()
         compose.onNodeWithText("Enter valid numeric settings").assertIsDisplayed()
         assertEquals(0, exported)
