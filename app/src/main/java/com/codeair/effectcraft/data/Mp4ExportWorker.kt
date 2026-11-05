@@ -67,6 +67,7 @@ object Mp4ExportWorker {
      */
     fun resolveAudio(
         items: List<CanonicalProjectItemInfo>,
+        verifyPayload: (sha256: String, file: File) -> Boolean = { _, file -> file.isFile && file.canRead() },
         fileFor: (sha256: String) -> File?
     ): AudioResolution {
         val audioItems = items.filter { it.hasAudio && !it.missing && it.path != null }
@@ -74,8 +75,11 @@ object Mp4ExportWorker {
         for (item in audioItems) {
             val name = item.path!!.substringAfterLast('/')
             if (name.length > 65 && name.substring(0, 64).matches(Regex("[a-f0-9]{64}"))) {
-                val file = runCatching { fileFor(name.substring(0, 64)) }.getOrNull()
-                if (file != null && file.isFile && file.canRead()) return AudioResolution(file, true)
+                val hash = name.substring(0, 64)
+                val file = runCatching { fileFor(hash) }.getOrNull()
+                val verified = file != null && file.isFile && file.canRead() &&
+                    runCatching { verifyPayload(hash, file) }.getOrDefault(false)
+                if (verified) return AudioResolution(file, true)
             }
         }
         return AudioResolution(null, true)
