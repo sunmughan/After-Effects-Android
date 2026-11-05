@@ -1419,7 +1419,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Source Text keyframe added · frame $frame · saved locally"
                 )
             },
-            onSetTextLayerSize = { compositionId, layerId, size ->
+            onSetCanonicalTextLayerSize = { compositionId, layerId, size ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
                 else applyCanonicalEdit(
