@@ -122,7 +122,18 @@ object ForegroundPngSequenceExport {
         isCancelled: () -> Boolean = { false },
         onProgress: (Progress) -> Unit = {}
     ): Result {
+        // Next-export sweep, scoped to this export's own format only, so a
+        // live copy marker of another export type is never touched. A kill
+        // during an earlier final copy left a `.copying` marker plus staging
+        // behind; clearing it here is what makes a restart from frame 0
+        // start clean even if the startup sweep did not run. The marker
+        // itself is owned by FinalCopyRecovery (M5-L7); the render marker
+        // lifecycle below is unchanged.
+        runCatching {
+            FinalCopyRecovery.recover(stagingDir, formats = setOf(FinalCopyRecovery.FORMAT_PNG_SEQUENCE))
+        }
         val started = begin(plan, stagingDir)
+        var copyMarker: File? = null
         try {
             checkNotCancelled(isCancelled)
             FileOutputStream(started.stagingFile).use { archiveOutput ->
@@ -141,6 +152,13 @@ object ForegroundPngSequenceExport {
             val validated = PngSequenceZipValidator.validate(started.stagingFile, plan)
             checkNotCancelled(isCancelled)
             val stagedBytes = started.stagingFile.length().coerceAtLeast(1L)
+            // M5-L7: publish the copy marker immediately before the final
+            // SAF copy. A kill from here on leaves marker plus staging
+            // behind for startup or next-export recovery. A marker failure
+            // is best effort: the copy still runs, only undetected.
+            copyMarker = runCatching {
+                FinalCopyRecovery.beginCopy(started.stagingFile, FinalCopyRecovery.FORMAT_PNG_SEQUENCE)
+            }.getOrNull()
             onProgress(Progress(plan.frameCount, 0, Phase.COPYING, 0L, stagedBytes))
             val destinationBytes = copyToDestination(
                 started.stagingFile,
@@ -165,6 +183,7 @@ object ForegroundPngSequenceExport {
         } finally {
             started.stagingFile.delete()
             started.markerFile.delete()
+            copyMarker?.let { runCatching { FinalCopyRecovery.finishCopy(it) } }
         }
     }
 

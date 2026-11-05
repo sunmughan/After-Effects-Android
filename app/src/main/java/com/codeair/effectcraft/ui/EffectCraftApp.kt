@@ -44,6 +44,7 @@ import com.codeair.effectcraft.data.ProjectEditorActions
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.ProjectFileFormats
 import com.codeair.effectcraft.data.ProjectKeyframeStore
+import com.codeair.effectcraft.data.FinalCopyRecovery
 import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.Mp4ExportWorker
 import com.codeair.effectcraft.export.PngSequenceExportService
@@ -440,6 +441,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 var session: NativeSession? = null
                 var outputCompleted = false
                 var stagedMp4: File? = null
+                var mp4CopyMarker: File? = null
                 val exportJob = currentCoroutineContext()[Job]
                 try {
                     val composition = canonicalProjectInfo?.compositions
@@ -479,9 +481,19 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         )
                     }
                     // Only the validated staged file is ever copied to SAF.
+                    // M5-L7: publish the copy marker immediately before the
+                    // final SAF copy, so a kill mid-copy leaves a detectable
+                    // marker plus staging for startup recovery. A marker
+                    // failure is best effort: the copy still runs, only
+                    // undetected. The marker is deleted in the finally below
+                    // on every non-kill path; no codec or encoding code here
+                    // is changed.
                     mp4ExportWritingOutput = true
                     saveMessage = "Copying validated MP4 to selected destination…"
                     withContext(Dispatchers.IO) {
+                        mp4CopyMarker = runCatching {
+                            FinalCopyRecovery.beginCopy(staged, FinalCopyRecovery.FORMAT_MP4)
+                        }.getOrNull()
                         SafDocumentWriter.copyFileToDocument(
                             context = context,
                             sourceFile = staged,
@@ -514,6 +526,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 } finally {
                     session?.close()
                     stagedMp4?.delete()
+                    mp4CopyMarker?.let { runCatching { FinalCopyRecovery.finishCopy(it) } }
                     if (!outputCompleted) runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
                     mp4ExportInProgress = false
                     mp4ExportWritingOutput = false
@@ -627,11 +640,20 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             val cleanup = withContext(Dispatchers.IO) { StaleSequenceExportCleanup.cleanup(context.cacheDir) }
             val videoCleanup = withContext(Dispatchers.IO) { StaleVideoExportCleanup.cleanup(context.cacheDir) }
             val exportRecovery = withContext(Dispatchers.IO) { ForegroundPngSequenceExport.recover(context.cacheDir) }
+            // M5-L7: startup sweep for kills during the final SAF copy, all
+            // formats. This runs in a fresh process where no copy is in
+            // flight, so every copy marker here belongs to a dead export.
+            // It cleans only app-side staging and markers; a provider-side
+            // partial at the chosen destination cannot be removed here and
+            // is reported as possibly remaining.
+            val copyRecovery = withContext(Dispatchers.IO) { FinalCopyRecovery.recover(context.cacheDir) }
             val recovered = buildList {
                 if (cleanup.removed > 0) add("${cleanup.removed} abandoned PNG sequence archive(s)")
                 if (videoCleanup.removed > 0) add("${videoCleanup.removed} abandoned MP4 export(s) — restart the export if needed")
                 if (exportRecovery.cleaned > 0) add("${exportRecovery.cleaned} interrupted PNG sequence export(s) cleaned, restart the export if needed")
                 if (exportRecovery.orphanMarkersRemoved > 0) add("${exportRecovery.orphanMarkersRemoved} orphan export marker(s) removed")
+                if (copyRecovery.cleaned > 0) add("${copyRecovery.cleaned} interrupted final copy/copies (${copyRecovery.cleanedFormats.joinToString()}) cleaned: app staging and marker removed, restart the export from the start; a partial file may still remain at the destination you chose, delete it there if present")
+                if (copyRecovery.orphanMarkersRemoved > 0) add("${copyRecovery.orphanMarkersRemoved} orphan final-copy marker(s) removed; a partial file may still remain at the destination you chose, delete it there if present")
             }
             if (recovered.isNotEmpty()) saveMessage = "Recovered " + recovered.joinToString(" and ")
         }
