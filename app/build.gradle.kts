@@ -5,6 +5,22 @@ plugins {
     id("com.github.jk1.dependency-license-report") version "3.1.4"
 }
 
+// M7 release signing: read ONLY from Gradle properties supplied by the caller
+// (in CI, from GitHub Actions secrets via -P flags in android-release.yml).
+// No keystore, password, alias or secret value is ever committed or defaulted
+// here. When any property is absent, no release signing config is created and
+// a release build is unsigned: it must never be treated as a release artifact.
+// The release workflow fails before Gradle runs if any required secret is
+// absent, so that path cannot silently produce an unsigned "release" in CI.
+val releaseKeystoreFile = providers.gradleProperty("effectcraft.release.keystoreFile").orNull
+val releaseKeystorePassword = providers.gradleProperty("effectcraft.release.keystorePassword").orNull
+val releaseKeyAlias = providers.gradleProperty("effectcraft.release.keyAlias").orNull
+val releaseKeyPassword = providers.gradleProperty("effectcraft.release.keyPassword").orNull
+val hasReleaseSigning = !releaseKeystoreFile.isNullOrBlank()
+    && !releaseKeystorePassword.isNullOrBlank()
+    && !releaseKeyAlias.isNullOrBlank()
+    && !releaseKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.codeair.effectcraft"
     compileSdk = 37
@@ -16,6 +32,34 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystoreFile!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // M7: first release build type. R8 minification + resource
+            // shrinking apply to release only, so debug builds and the
+            // existing debug CI path are unchanged.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     buildFeatures {
@@ -64,5 +108,7 @@ dependencies {
 }
 
 licenseReport {
-    configurations = arrayOf("debugRuntimeClasspath")
+    // M7: the release workflow also generates this report, so it must cover
+    // the release runtime graph, not only debug. Debug CI output is unchanged.
+    configurations = arrayOf("debugRuntimeClasspath", "releaseRuntimeClasspath")
 }
