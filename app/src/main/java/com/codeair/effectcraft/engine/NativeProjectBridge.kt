@@ -157,6 +157,13 @@ object NativeProjectBridge {
         return runCatching { setTextLayerTrackingEcprojNative(json, compositionId, layerId, tracking) }.getOrNull()
     }
 
+    /** Sets the canonical Source Text font family/name, preserving the rest of TextDoc. */
+    fun setTextLayerFontEcproj(json: String, compositionId: Long, layerId: Long, font: String): String? {
+        ensureLoaded()
+        if (!available || font.isBlank() || font.length > 128 || font.any(Char::isISOControl)) return null
+        return runCatching { setTextLayerFontEcprojNative(json, compositionId, layerId, font.trim()) }.getOrNull()
+    }
+
     /** Sets one scalar shape-item or effect parameter, addressed by its native uid. */
     fun setLayerScalarPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String? {
         ensureLoaded()
@@ -439,6 +446,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setTextLayerTrackingEcprojNative(json: String, compositionId: Long, layerId: Long, tracking: Double): String
+
+    @JvmStatic
+    private external fun setTextLayerFontEcprojNative(json: String, compositionId: Long, layerId: Long, font: String): String
 
     @JvmStatic
     private external fun setLayerScalarPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String
