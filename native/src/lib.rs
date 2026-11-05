@@ -4846,6 +4846,50 @@ mod tests {
     }
 
     #[test]
+    fn bool_popup_hold_keys_derive_hold_only_from_value() {
+        let (source, comp_id, shape_id, null_id, (per_corner_uid, _star_type_uid, _repeat_edge_uid, dimensions_uid)) = bool_popup_project();
+        // A hand-built or older file may omit the `hold_only` flag (serde
+        // defaults it to false): Bool/Enum values never interpolate by
+        // construction, so the bridge must still author Hold keys. This is
+        // the connected-test failure (line 760): the grafted fixture omits
+        // the flag, and the bool keys came back Linear instead of Hold.
+        let mut project: Project = serde_json::from_str(&source).unwrap();
+        project.comp_mut(ItemId(comp_id)).unwrap()
+            .layers.find_mut(|layer| layer.id == LayerId(shape_id)).unwrap()
+            .props.prop_mut(&format!("@{per_corner_uid}")).unwrap().hold_only = false;
+        project.comp_mut(ItemId(comp_id)).unwrap()
+            .layers.find_mut(|layer| layer.id == LayerId(null_id)).unwrap()
+            .props.prop_mut(&format!("@{dimensions_uid}")).unwrap().hold_only = false;
+        let source = project.to_file_json().unwrap();
+
+        let keyed_bool = set_layer_bool_keyframe(&source, comp_id, shape_id, per_corner_uid, 15, false).unwrap();
+        let bool_project: Project = serde_json::from_str(&keyed_bool).unwrap();
+        let bool_prop = bool_project.comp(ItemId(comp_id)).unwrap()
+            .layers.iter().find(|layer| layer.id == LayerId(shape_id)).unwrap()
+            .props.prop(&format!("@{per_corner_uid}")).unwrap();
+        assert_eq!(bool_prop.keys.len(), 2);
+        assert!(bool_prop.keys.iter().all(|key| key.in_interp == Interp::Hold && key.out_interp == Interp::Hold),
+            "bool keys must hold on both sides even when the file omits hold_only");
+        let bool_meta: serde_json::Value = serde_json::from_str(&inspect_project(&keyed_bool).unwrap()).unwrap();
+        let bool_keys = bool_meta["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "rect").unwrap()["bools"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Per-Corner Roundness").unwrap()["keys"].clone();
+        assert!(bool_keys.as_array().unwrap().iter().all(|key| key["inInterp"] == "Hold" && key["outInterp"] == "Hold"));
+
+        let keyed_popup = set_layer_popup_keyframe(&source, comp_id, null_id, dimensions_uid, 15, 1).unwrap();
+        let popup_project: Project = serde_json::from_str(&keyed_popup).unwrap();
+        let popup_prop = popup_project.comp(ItemId(comp_id)).unwrap()
+            .layers.iter().find(|layer| layer.id == LayerId(null_id)).unwrap()
+            .props.prop(&format!("@{dimensions_uid}")).unwrap();
+        assert_eq!(popup_prop.keys.len(), 2);
+        assert!(popup_prop.keys.iter().all(|key| key.in_interp == Interp::Hold && key.out_interp == Interp::Hold),
+            "popup keys must hold on both sides even when the file omits hold_only");
+        let popup_meta: serde_json::Value = serde_json::from_str(&inspect_project(&keyed_popup).unwrap()).unwrap();
+        let popup_keys = &popup_meta["compositions"][0]["layers"][1]["effects"][0]["popups"][0]["keys"];
+        assert!(popup_keys.as_array().unwrap().iter().all(|key| key["inInterp"] == "Hold" && key["outInterp"] == "Hold"));
+    }
+
+    #[test]
     fn canonical_popup_keyframe_changes_rendered_shape() {
         use effectcraft_project::Value;
 
