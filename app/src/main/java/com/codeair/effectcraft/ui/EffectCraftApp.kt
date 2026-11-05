@@ -1419,6 +1419,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical parameter updated · saved locally"
                 )
             },
+            onSetCanonicalLayerColorProperty = { compositionId, layerId, uid, red, green, blue, alpha ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerColorPropertyEcproj(source, compositionId, layerId, uid, red, green, blue, alpha),
+                    "Canonical color parameter updated · saved locally"
+                )
+            },
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))

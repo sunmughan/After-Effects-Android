@@ -737,6 +737,7 @@ fn collect_param_items(
         };
         let mut scalars = Vec::new();
         let mut vecs = Vec::new();
+        let mut colors = Vec::new();
         for prop_child in &child_group.children {
             let Node::Prop(property) = prop_child else { continue };
             match &property.value {
@@ -758,15 +759,22 @@ fn collect_param_items(
                     "components": value,
                     "keys": curve_keys_json(property, frame_rate)
                 })),
+                Value::Color(value) => colors.push(json!({
+                    "uid": property.uid,
+                    "name": property.name,
+                    "components": value,
+                    "keys": curve_keys_json(property, frame_rate)
+                })),
                 _ => {}
             }
         }
-        if !scalars.is_empty() || !vecs.is_empty() {
+        if !scalars.is_empty() || !vecs.is_empty() || !colors.is_empty() {
             out.push(json!({
                 "name": name,
                 "kind": child_group.match_id,
                 "scalars": scalars,
-                "vecs": vecs
+                "vecs": vecs,
+                "colors": colors
             }));
         }
         collect_param_items(child_group, &name, out, frame_rate);
@@ -1472,6 +1480,30 @@ fn set_layer_vec_property(source: &str, composition_id: u64, layer_id: u64, uid:
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+fn set_layer_color_property(
+    source: &str, composition_id: u64, layer_id: u64, uid: u64,
+    red: f64, green: f64, blue: f64, alpha: f64,
+) -> Result<String, String> {
+    let rgba = [red, green, blue, alpha];
+    if rgba.iter().any(|component| !component.is_finite() || !(0.0..=1.0).contains(component)) {
+        return Err("Color components must be finite and between 0 and 1".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = layer.props.prop_mut(&format!("@{uid}"))
+        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))?;
+    if !matches!(&property.value, Value::Color(_)) {
+        return Err(format!("Parameter {uid} is not a color"));
+    }
+    property.set_value_at(Tick::ZERO, Value::Color(rgba));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerScaleEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
@@ -1641,6 +1673,28 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
     let result = if composition_id < 0 || layer_id < 0 || uid < 0 { Err("Composition, layer and parameter IDs must be non-negative".to_owned()) }
         else { set_layer_vec_property(&source, composition_id as u64, layer_id as u64, uid as u64, x as f64, y as f64, z as f64) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerColorPropertyEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong,
+    red: jni::sys::jdouble, green: jni::sys::jdouble, blue: jni::sys::jdouble, alpha: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 {
+        Err("Composition, layer and parameter IDs must be non-negative".to_owned())
+    } else {
+        set_layer_color_property(&source, composition_id as u64, layer_id as u64, uid as u64,
+            red as f64, green as f64, blue as f64, alpha as f64)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
@@ -3301,6 +3355,9 @@ mod tests {
         let mut effect = ids.group("gaussianBlur", "Gaussian Blur");
         effect = effect.with(ids.prop("blurriness", "Blurriness", Value::Scalar(0.0)));
         null_layer.props.sub_mut("effects").unwrap().children.push(effect.into());
+        let mut color_effect = ids.group("colorTint", "Color Tint");
+        color_effect = color_effect.with(ids.prop("tint", "Tint", Value::Color([0.1, 0.2, 0.3, 1.0])));
+        null_layer.props.sub_mut("effects").unwrap().children.push(color_effect.into());
         project.comp_mut(comp_id).unwrap().layers.push(null_layer);
         let source = project.to_file_json().unwrap();
 
@@ -3326,11 +3383,25 @@ mod tests {
             .find(|item| item["name"] == "Gaussian Blur").expect("effect group must be exposed");
         let blur_uid = blur_item["scalars"].as_array().unwrap().iter()
             .find(|param| param["name"] == "Blurriness").expect("Blurriness param must be exposed")["uid"].as_u64().unwrap();
+        let tint_item = effect_meta["effects"].as_array().unwrap()
+            .iter().find(|item| item["name"] == "Color Tint").expect("color effect group must be exposed");
+        let tint = tint_item["colors"].as_array().unwrap()
+            .iter().find(|param| param["name"] == "Tint").expect("color parameter must be exposed");
+        let tint_uid = tint["uid"].as_u64().unwrap();
+        assert_eq!(tint["components"], json!([0.1, 0.2, 0.3, 1.0]));
         let blurred = set_layer_scalar_property(&rounded, comp_id.0, null_id, blur_uid, 15.0).unwrap();
         let blurred_meta: serde_json::Value = serde_json::from_str(&inspect_project(&blurred).unwrap()).unwrap();
         let blurred_item = blurred_meta["compositions"][0]["layers"][1]["effects"].as_array().unwrap().iter()
             .find(|item| item["name"] == "Gaussian Blur").unwrap();
         assert_eq!(blurred_item["scalars"].as_array().unwrap().iter().find(|p| p["name"] == "Blurriness").unwrap()["value"], 15.0);
+        let tinted = set_layer_color_property(&blurred, comp_id.0, null_id, tint_uid, 0.4, 0.5, 0.6, 0.7).unwrap();
+        let tinted_meta: serde_json::Value = serde_json::from_str(&inspect_project(&tinted).unwrap()).unwrap();
+        let edited_tint = tinted_meta["compositions"][0]["layers"][1]["effects"].as_array().unwrap()
+            .iter().find(|item| item["name"] == "Color Tint").unwrap()["colors"].as_array().unwrap()
+            .iter().find(|param| param["name"] == "Tint").unwrap();
+        assert_eq!(edited_tint["components"], json!([0.4, 0.5, 0.6, 0.7]));
+        assert!(set_layer_color_property(&source, comp_id.0, null_id, tint_uid, 1.1, 0.0, 0.0, 1.0).is_err());
+        assert!(set_layer_color_property(&source, comp_id.0, null_id, blur_uid, 0.0, 0.0, 0.0, 1.0).is_err());
         assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, size_uid, 10.0).is_err());
         assert!(set_layer_vec_property(&source, comp_id.0, shape_id, roundness_uid, 1.0, 2.0, 0.0).is_err());
         assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, 999_999, 10.0).is_err());

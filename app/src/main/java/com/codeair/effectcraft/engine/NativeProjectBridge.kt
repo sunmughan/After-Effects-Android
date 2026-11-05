@@ -165,6 +165,13 @@ object NativeProjectBridge {
         return runCatching { setLayerVecPropertyEcprojNative(json, compositionId, layerId, uid, x, y, z) }.getOrNull()
     }
 
+    /** Sets a straight-RGBA color parameter by stable native uid; components are 0..1. */
+    fun setLayerColorPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, red: Double, green: Double, blue: Double, alpha: Double): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || listOf(red, green, blue, alpha).any { !it.isFinite() || it !in 0.0..1.0 }) return null
+        return runCatching { setLayerColorPropertyEcprojNative(json, compositionId, layerId, uid, red, green, blue, alpha) }.getOrNull()
+    }
+
     /**
      * Authors one canonical Transform/Opacity keyframe at [frame] (0–100 percent).
      * The first key seeds frame 0 with the layer's current opacity, so authoring
@@ -339,6 +346,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerVecPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, x: Double, y: Double, z: Double): String
+
+    @JvmStatic
+    private external fun setLayerColorPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, red: Double, green: Double, blue: Double, alpha: Double): String
 
     @JvmStatic
     private external fun setLayerOpacityEcprojNative(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String

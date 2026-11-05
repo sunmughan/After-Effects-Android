@@ -219,6 +219,7 @@ fun EditorScreen(
     onSetCanonicalTextLayerTracking: (Long, Long, Double) -> Unit,
     onSetCanonicalLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
+    onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?,
     onQueryBackendStatus: (() -> String?)? = null,
@@ -717,6 +718,7 @@ fun EditorScreen(
                     onSetTextLayerTracking = onSetCanonicalTextLayerTracking,
                     onSetLayerScalarProperty = onSetCanonicalLayerScalarProperty,
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
+                    onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
                     onQueryBackendStatus = onQueryBackendStatus,
@@ -1190,6 +1192,7 @@ private fun CanonicalProjectEditor(
     onSetTextLayerTracking: (Long, Long, Double) -> Unit,
     onSetLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
+    onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
     onQueryBackendStatus: (() -> String?)? = null,
@@ -1868,7 +1871,8 @@ private fun CanonicalProjectEditor(
                         paramDrafts = paramDrafts,
                         onParamDraftChange = { uid, value -> paramDrafts = paramDrafts + (uid to value) },
                         onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
-                        onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) }
+                        onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
+                        onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) }
                     )
                 } else if (layer.source == "Shape") {
                     Text("No editable shape parameters in this layer.", color = EditorPalette.muted, fontSize = 11.sp)
@@ -1882,7 +1886,8 @@ private fun CanonicalProjectEditor(
                         paramDrafts = paramDrafts,
                         onParamDraftChange = { uid, value -> paramDrafts = paramDrafts + (uid to value) },
                         onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
-                        onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) }
+                        onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
+                        onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) }
                     )
                 } else {
                     Text("No effects on this layer.", color = EditorPalette.muted, fontSize = 11.sp)
@@ -1967,7 +1972,8 @@ private fun CanonicalParamGroupRows(
     paramDrafts: Map<Long, String>,
     onParamDraftChange: (Long, String) -> Unit,
     onApplyScalar: (Long, Double) -> Unit,
-    onApplyVec: (Long, Double, Double, Double) -> Unit
+    onApplyVec: (Long, Double, Double, Double) -> Unit,
+    onApplyColor: (Long, Double, Double, Double, Double) -> Unit
 ) {
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
@@ -2015,10 +2021,35 @@ private fun CanonicalParamGroupRows(
                 ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
             }
         }
+        group.colors.forEach { param ->
+            val draft = paramDrafts[param.uid] ?: param.components.joinToString(", ")
+            val parsed = draft.split(",").map { it.trim().toDoubleOrNull() }
+            val valid = parsed.size == 4 && parsed.all { channel -> channel?.isFinite() == true && channel in 0.0..1.0 }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                BasicTextField(
+                    value = draft,
+                    onValueChange = { onParamDraftChange(param.uid, it.take(96)) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                    modifier = Modifier.weight(1.5f).semantics { contentDescription = "Canonical $section color parameter ${group.name} ${param.name} RGBA" },
+                    decorationBox = { inner -> Box { if (draft.isEmpty()) Text("R, G, B, A", color = EditorPalette.muted); inner() } }
+                )
+                TextButton(
+                    enabled = editable && valid,
+                    onClick = {
+                        val values = parsed.map { it!! }
+                        onApplyColor(param.uid, values[0], values[1], values[2], values[3])
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section color parameter ${group.name} ${param.name}" }
+                ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+            }
+            Text("RGBA · 0–1 per channel", color = EditorPalette.muted, fontSize = 9.sp)
+        }
     }
 }
 
-private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? =
+private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? =private fun decodeRenderedFrame(bytes: ByteArray): Bitmap? =
     com.codeair.effectcraft.engine.RenderedFrameBitmap.decode(bytes)
 
 @Composable

@@ -7,6 +7,16 @@ import org.junit.Test
 
 class CanonicalProjectInfoTest {
     @Test
+    fun parsesNativeStraightRgbaEffectParameters() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Layer","source":"Null","effects":[{"name":"Tint","kind":"colorTint","scalars":[],"vecs":[],"colors":[{"uid":42,"name":"Color","components":[0.1,0.2,0.3,0.4],"keys":[]}]}]}]}]}"""
+        val color = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().effects.single().colors.single()
+        assertEquals(42L, color.uid)
+        assertEquals("Color", color.name)
+        assertEquals(listOf(0.1, 0.2, 0.3, 0.4), color.components)
+        assertTrue(color.keys.isEmpty())
+    }
+
+    @Test
     fun parsesCompositionLayerAndLinkedMediaInventory() {
         val metadata = """{"valid":true,"schema":1,"itemCount":2,"compositionCount":1,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layerCount":1,"layers":[{"id":2,"name":"Headline","source":"Text","visible":false,"opacityPercent":35.0,"position":[123.5,456.25],"scale":[125.0,80.0],"rotationDegrees":42.5}]}],"items":[{"id":10,"name":"Main","type":"Composition","parentId":null,"media":{}},{"id":20,"name":"Footage","type":"Video","parentId":null,"media":{"path":"content://media/1","width":1920,"height":1080,"hasVideo":true,"hasAudio":true,"missing":false,"sequence":[]}}]}"""
 

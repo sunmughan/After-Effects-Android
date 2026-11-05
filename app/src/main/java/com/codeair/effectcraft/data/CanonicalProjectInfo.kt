@@ -35,6 +35,14 @@ data class CanonicalVecParam(
     val keys: List<CanonicalCurveKey> = emptyList()
 )
 
+/** One editable straight-RGBA color parameter (components in 0..1) addressed by native uid. */
+data class CanonicalColorParam(
+    val uid: Long,
+    val name: String,
+    val components: List<Double>,
+    val keys: List<CanonicalCurveKey> = emptyList()
+)
+
 /** Text layer source parameters; null on layers that carry no Source Text property. */
 data class CanonicalTextParams(
     val text: String,
@@ -45,14 +53,15 @@ data class CanonicalTextParams(
 
 /**
  * One shape item (for example a Rectangle path) or one effect group, with the
- * scalar and vector parameters the native model exposes for editing. Color,
- * path, gradient and popup parameters are not editable through this list.
+ * scalar, vector and straight-RGBA color parameters the native model exposes
+ * for editing. Path, gradient and popup parameters remain non-editable.
  */
 data class CanonicalParamGroup(
     val name: String,
     val kind: String,
     val scalars: List<CanonicalScalarParam> = emptyList(),
-    val vecs: List<CanonicalVecParam> = emptyList()
+    val vecs: List<CanonicalVecParam> = emptyList(),
+    val colors: List<CanonicalColorParam> = emptyList()
 )
 
 data class CanonicalLayerInfo(
@@ -296,12 +305,25 @@ data class CanonicalProjectInfo(
                         keys = parseCurveKeys(param.optJSONArray("keys"))
                     )
                 }
+                val colorArray = group.optJSONArray("colors")
+                val colors = (0 until (colorArray?.length() ?: 0)).map { colorIndex ->
+                    val param = colorArray!!.getJSONObject(colorIndex)
+                    val componentsArray = param.optJSONArray("components")
+                    val components = (0 until (componentsArray?.length() ?: 0)).map { componentsArray!!.getDouble(it) }
+                    CanonicalColorParam(
+                        uid = param.getLong("uid"),
+                        name = param.optString("name", "Color"),
+                        components = components,
+                        keys = parseCurveKeys(param.optJSONArray("keys"))
+                    )
+                }
                 groups.add(
                     CanonicalParamGroup(
                         name = group.optString("name", "Parameter group"),
                         kind = group.optString("kind", ""),
                         scalars = scalars,
-                        vecs = vecs
+                        vecs = vecs,
+                        colors = colors
                     )
                 )
             }

@@ -281,3 +281,6 @@ CI #767 failed one JVM regression because rollback metadata was checked against 
 
 ### Automation Run 116 — canonical rollback test compiler fix
 CI #779 failed before tests because the test called a private production `String.sha256()` extension (`CanonicalProjectRepositoryTest.kt:95`). The test now uses its own MessageDigest helper with the recovery assertions unchanged. Fresh exact-head CI is pending; no JVM/emulator/reproducibility pass is claimed. M0 remains accepted on #774; M2–M6 physical/product gates and M7 signed release/install remain open. See PHASES.md.
+
+
+**Automation Run 117 (2026-11-05):** CI #780 [42019973108](https://github.com/sunmughan/After-Effects-Android/actions/runs/42019973108) is fully green on exact SHA `4a650c6e`: Assemble/test + independent cold rebuild/compare, API30 132/132 connected tests (0 failed/skipped), JVM task, both native ABIs/JNI and APK content/native reproducibility. New M4 increment implements real canonical RGBA effect/shape parameter editing through native `Value::Color` + JNI, 0..1 channel validation, inspector RGBA input, durable canonical edit/save/preview sync; Rust and Kotlin regressions added. Fresh exact-head CI pending for this new code. M0 remains COMPLETE (#774). See PHASES.md Run 117; release NOT COMPLETE.
