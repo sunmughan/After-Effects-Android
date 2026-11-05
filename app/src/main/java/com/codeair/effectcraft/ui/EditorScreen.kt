@@ -2393,7 +2393,7 @@ private fun CanonicalParamGroupRows(
                                 text = {
                                     Text(
                                         option,
-                                        modifier = Modifier.semantics { contentDescription = "Canonical popup option ${param.name} $option" },
+                                        modifier = Modifier.semantics { contentDescription = "Canonical $section popup option ${group.name} ${param.name} $option" },
                                         color = EditorPalette.text,
                                         fontSize = 11.sp
                                     )
