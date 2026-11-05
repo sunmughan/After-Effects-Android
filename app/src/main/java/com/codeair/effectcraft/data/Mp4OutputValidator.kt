@@ -131,20 +131,19 @@ object Mp4OutputValidator {
                 val bytes = extractor.readSampleData(audioBuffer, 0)
                 if (bytes < 0) break
                 val pts = extractor.sampleTime
-                require(pts >= 0L) { "MP4 AAC sample has a negative presentation timestamp" }
-                if (audioFirstPtsUs == null) {
-                    audioFirstPtsUs = pts
-                } else {
-                    require(pts > audioLastPtsUs!!) {
-                        "MP4 AAC presentation timestamps are not strictly increasing"
-                    }
-                }
-                audioLastPtsUs = pts
+                audioLastPtsUs = AudioTrackSelection.validateSamplePts(audioLastPtsUs, pts)
+                if (audioFirstPtsUs == null) audioFirstPtsUs = pts
                 audioSamples++
                 extractor.advance()
             }
             require(!expectAudio || audioSamples > 0L) {
                 "MP4 AAC track contains no samples"
+            }
+            require(audioTrackDurationUs == null || audioTrackDurationUs > 0L) {
+                "MP4 AAC track has no positive duration"
+            }
+            require(!expectAudio || (audioTrackDurationUs != null && audioTrackDurationUs > 0L)) {
+                "MP4 AAC track duration is unavailable"
             }
             if (audioSamples > 0L) {
                 require(audioLastPtsUs!! < trackDurationUs) {
