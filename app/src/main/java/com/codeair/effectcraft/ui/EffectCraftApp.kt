@@ -530,6 +530,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             verified.audioLastPtsUs == stagedResult.audioLastPtsUs) {
                             "MP4 validation AAC presentation window differs from staged export"
                         }
+                        check(verified.audioTrackDurationUs == stagedResult.audioTrackDurationUs) {
+                            "MP4 validation AAC track duration differs from staged export"
+                        }
                     } else {
                         check(verified.audioSamples == 0L) {
                             "MP4 unexpectedly contains AAC audio for a video-only export"
