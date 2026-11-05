@@ -115,6 +115,37 @@ class Mp4ExportWorkerTest {
     }
 
     @Test
+    fun resolveAudioRejectsSameSizeCorruptionInOfflineAssetStore() {
+        val dir = java.nio.file.Files.createTempDirectory("effectcraft-audio-store").toFile()
+        val store = OfflineAssetStore(dir)
+        val bytes = byteArrayOf(1, 2, 3, 4, 5, 6)
+        val asset = store.import(java.io.ByteArrayInputStream(bytes), "voice.m4a", "audio/mp4")
+        val item = item(hasAudio = true, path = "offline/" + asset.sha256 + "." + asset.extension)
+        try {
+            val valid = Mp4ExportWorker.resolveAudio(
+                listOf(item),
+                verifyPayload = { hash, _ -> store.verify(hash) }
+            ) { hash -> store.fileFor(hash) }
+            val payload = store.fileFor(asset.sha256)!!
+            assertEquals(payload, valid.file)
+            assertTrue(store.verify(asset.sha256))
+
+            // Preserve the indexed length while changing the content digest.
+            payload.writeBytes(byteArrayOf(6, 5, 4, 3, 2, 1))
+            assertEquals(bytes.size.toLong(), payload.length())
+            assertFalse(store.verify(asset.sha256))
+            val corrupted = Mp4ExportWorker.resolveAudio(
+                listOf(item),
+                verifyPayload = { hash, _ -> store.verify(hash) }
+            ) { hash -> store.fileFor(hash) }
+            assertTrue(corrupted.hasAudioItems)
+            assertEquals("Same-size bit rot must not reach MediaExtractor", null, corrupted.file)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun audioRangeUsesCompositionFrameRateNotExportFrameRate() {
         // Export frames 30..59 at 10 FPS from a 30 FPS composition:
         // composition time runs 1,000,000..2,000,000us regardless of export FPS.
