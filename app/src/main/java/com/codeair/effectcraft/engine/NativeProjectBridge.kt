@@ -171,6 +171,13 @@ object NativeProjectBridge {
         if (!available || uid < 0 || listOf(red, green, blue, alpha).any { !it.isFinite() || it !in 0.0..1.0 }) return null
         return runCatching { setLayerColorPropertyEcprojNative(json, compositionId, layerId, uid, red, green, blue, alpha) }.getOrNull()
     }
+    
+    /** Authors a canonical RGBA parameter keyframe at a composition frame. */
+    fun setLayerColorKeyframeEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, red: Double, green: Double, blue: Double, alpha: Double): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || frame < 0 || listOf(red, green, blue, alpha).any { !it.isFinite() || it !in 0.0..1.0 }) return null
+        return runCatching { setLayerColorKeyframeEcprojNative(json, compositionId, layerId, uid, frame, red, green, blue, alpha) }.getOrNull()
+    }
 
     /**
      * Authors one canonical Transform/Opacity keyframe at [frame] (0–100 percent).
@@ -349,6 +356,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerColorPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, red: Double, green: Double, blue: Double, alpha: Double): String
+    
+    @JvmStatic
+    private external fun setLayerColorKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, red: Double, green: Double, blue: Double, alpha: Double): String
 
     @JvmStatic
     private external fun setLayerOpacityEcprojNative(json: String, compositionId: Long, layerId: Long, opacityPercent: Double): String

@@ -1427,6 +1427,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical color parameter updated · saved locally"
                 )
             },
+            onSetCanonicalLayerColorKeyframe = { compositionId, layerId, uid, frame, red, green, blue, alpha, remove ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else if (remove) {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, "param:$uid", frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove color keyframe"
+                    else if (!removed) saveMessage = "No color keyframe · frame $frame"
+                    else applyCanonicalEdit(envelope, "Canonical color keyframe removed · frame $frame · saved locally")
+                } else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerColorKeyframeEcproj(source, compositionId, layerId, uid, frame.toLong(), red, green, blue, alpha),
+                    "Canonical color keyframe added · frame $frame · saved locally"
+                )
+            },
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))

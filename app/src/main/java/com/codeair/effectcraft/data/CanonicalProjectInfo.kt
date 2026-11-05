@@ -40,7 +40,8 @@ data class CanonicalColorParam(
     val uid: Long,
     val name: String,
     val components: List<Double>,
-    val keys: List<CanonicalCurveKey> = emptyList()
+    val keys: List<CanonicalCurveKey> = emptyList(),
+    val keyframes: List<Int> = emptyList()
 )
 
 /** Text layer source parameters; null on layers that carry no Source Text property. */
@@ -279,6 +280,11 @@ data class CanonicalProjectInfo(
             }.sortedBy { it.frame }
         }
 
+        private fun parseFrameIndices(array: org.json.JSONArray?): List<Int> =
+            (0 until (array?.length() ?: 0)).mapNotNull { index ->
+                array!!.optInt(index, -1).takeIf { it >= 0 }
+            }.distinct().sorted()
+
         private fun parseParamGroups(array: org.json.JSONArray?): List<CanonicalParamGroup> {
             val groups = mutableListOf<CanonicalParamGroup>()
             for (index in 0 until (array?.length() ?: 0)) {
@@ -314,7 +320,8 @@ data class CanonicalProjectInfo(
                         uid = param.getLong("uid"),
                         name = param.optString("name", "Color"),
                         components = components,
-                        keys = parseCurveKeys(param.optJSONArray("keys"))
+                        keys = parseCurveKeys(param.optJSONArray("keys")),
+                        keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
                     )
                 }
                 groups.add(

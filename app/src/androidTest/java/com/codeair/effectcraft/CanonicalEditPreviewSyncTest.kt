@@ -679,9 +679,17 @@ class CanonicalEditPreviewSyncTest {
         val color = layer(canonical(edited), fixture.firstId).effects
             .single { it.kind == "gaussianBlur" }.colors.single { it.uid == 90023L }
         assertEquals(listOf(0.25, 0.5, 0.75, 0.5), color.components)
+        val keyed = applyEdit(
+            NativeProjectBridge.setLayerColorKeyframeEcproj(
+                edited, fixture.compositionId, fixture.firstId, 90023, 15, 0.75, 0.25, 0.5, 1.0
+            )
+        )
+        val keyedColor = layer(canonical(keyed), fixture.firstId).effects
+            .single { it.kind == "gaussianBlur" }.colors.single { it.uid == 90023L }
+        assertEquals(listOf(0, 15), keyedColor.keyframes)
         assertNotNull(
-            "Preview session must accept and render the RGBA-edited canonical project",
-            previewRenders(before, edited, fixture.compositionId, 0)
+            "Preview session must accept and render the RGBA-keyframed canonical project at frame 15",
+            previewRenders(before, keyed, fixture.compositionId, 15)
         )
     }
 

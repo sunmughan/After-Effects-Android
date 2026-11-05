@@ -759,12 +759,20 @@ fn collect_param_items(
                     "components": value,
                     "keys": curve_keys_json(property, frame_rate)
                 })),
-                Value::Color(value) => colors.push(json!({
-                    "uid": property.uid,
-                    "name": property.name,
-                    "components": value,
-                    "keys": curve_keys_json(property, frame_rate)
-                })),
+                Value::Color(value) => {
+                    let mut keyframes = property.keys.iter()
+                        .map(|key| key.time.to_rational_floor(frame_rate.den, frame_rate.num))
+                        .collect::<Vec<_>>();
+                    keyframes.sort_unstable();
+                    keyframes.dedup();
+                    colors.push(json!({
+                        "uid": property.uid,
+                        "name": property.name,
+                        "components": value,
+                        "keys": curve_keys_json(property, frame_rate),
+                        "keyframes": keyframes
+                    }));
+                },
                 _ => {}
             }
         }
@@ -1504,6 +1512,56 @@ fn set_layer_color_property(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+fn set_layer_color_keyframe(
+    source: &str, composition_id: u64, layer_id: u64, uid: u64, frame: i64,
+    red: f64, green: f64, blue: f64, alpha: f64,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    let rgba = [red, green, blue, alpha];
+    if rgba.iter().any(|component| !component.is_finite() || !(0.0..=1.0).contains(component)) {
+        return Err("Color components must be finite and between 0 and 1".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = layer.props.prop_mut(&format!("@{uid}"))
+        .ok_or_else(|| format!("Layer {layer_id} has no parameter with uid {uid}"))?;
+    if !matches!(&property.value, Value::Color(_)) {
+        return Err(format!("Parameter {uid} is not a color"));
+    }
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(tick, Value::Color(rgba));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerColorKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, frame: jlong,
+    red: jni::sys::jdouble, green: jni::sys::jdouble, blue: jni::sys::jdouble, alpha: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || frame < 0 {
+        Err("Composition, layer, parameter IDs and frame must be non-negative".to_owned())
+    } else {
+        set_layer_color_keyframe(&source, composition_id as u64, layer_id as u64, uid as u64, frame as i64,
+            red as f64, green as f64, blue as f64, alpha as f64)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerScaleEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, x: jni::sys::jdouble, y: jni::sys::jdouble,
@@ -2067,7 +2125,7 @@ fn remove_curve_keyframe(
     if property.static_only {
         return Err(format!("Curve property {selector} cannot be keyframed"));
     }
-    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_)) {
+    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) | Value::Color(_)) {
         return Err(format!("Curve property {selector} is not animatable"));
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
@@ -3400,6 +3458,19 @@ mod tests {
             .iter().find(|item| item["name"] == "Color Tint").unwrap()["colors"].as_array().unwrap()
             .iter().find(|param| param["name"] == "Tint").unwrap();
         assert_eq!(edited_tint["components"], json!([0.4, 0.5, 0.6, 0.7]));
+        let keyed_tint = set_layer_color_keyframe(&tinted, comp_id.0, null_id, tint_uid, 15, 0.8, 0.25, 0.5, 1.0).unwrap();
+        let keyed_meta: serde_json::Value = serde_json::from_str(&inspect_project(&keyed_tint).unwrap()).unwrap();
+        let keyed_color = keyed_meta["compositions"][0]["layers"][1]["effects"].as_array().unwrap()
+            .iter().find(|item| item["name"] == "Color Tint").unwrap()["colors"].as_array().unwrap()
+            .iter().find(|param| param["name"] == "Tint").unwrap();
+        assert_eq!(keyed_color["keyframes"], json!([0, 15]));
+        let mut keyed_project: Project = serde_json::from_str(&keyed_tint).unwrap();
+        let keyed_property = keyed_project.comp_mut(ItemId(comp_id.0)).unwrap()
+            .layers.find_mut(|layer| layer.id == LayerId(null_id)).unwrap()
+            .props.prop_mut(&format!("@{tint_uid}")).unwrap();
+        assert_eq!(keyed_property.keys.len(), 2);
+        assert_eq!(keyed_property.keys[1].value, Value::Color([0.8, 0.25, 0.5, 1.0]));
+        assert!(set_layer_color_keyframe(&source, comp_id.0, null_id, tint_uid, -1, 0.0, 0.0, 0.0, 1.0).is_err());
         assert!(set_layer_color_property(&source, comp_id.0, null_id, tint_uid, 1.1, 0.0, 0.0, 1.0).is_err());
         assert!(set_layer_color_property(&source, comp_id.0, null_id, blur_uid, 0.0, 0.0, 0.0, 1.0).is_err());
         assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, size_uid, 10.0).is_err());

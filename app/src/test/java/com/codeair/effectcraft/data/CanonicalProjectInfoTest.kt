@@ -8,12 +8,13 @@ import org.junit.Test
 class CanonicalProjectInfoTest {
     @Test
     fun parsesNativeStraightRgbaEffectParameters() {
-        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Layer","source":"Null","effects":[{"name":"Tint","kind":"colorTint","scalars":[],"vecs":[],"colors":[{"uid":42,"name":"Color","components":[0.1,0.2,0.3,0.4],"keys":[]}]}]}]}]}"""
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Layer","source":"Null","effects":[{"name":"Tint","kind":"colorTint","scalars":[],"vecs":[],"colors":[{"uid":42,"name":"Color","components":[0.1,0.2,0.3,0.4],"keys":[],"keyframes":[0,15]}]}]}]}]}"""
         val color = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().effects.single().colors.single()
         assertEquals(42L, color.uid)
         assertEquals("Color", color.name)
         assertEquals(listOf(0.1, 0.2, 0.3, 0.4), color.components)
         assertTrue(color.keys.isEmpty())
+        assertEquals(listOf(0, 15), color.keyframes)
     }
 
     @Test

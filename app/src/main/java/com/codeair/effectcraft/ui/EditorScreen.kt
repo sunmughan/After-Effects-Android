@@ -220,6 +220,7 @@ fun EditorScreen(
     onSetCanonicalLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
+    onSetCanonicalLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?,
     onQueryBackendStatus: (() -> String?)? = null,
@@ -719,6 +720,7 @@ fun EditorScreen(
                     onSetLayerScalarProperty = onSetCanonicalLayerScalarProperty,
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
+                    onSetLayerColorKeyframe = onSetCanonicalLayerColorKeyframe,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
                     onQueryBackendStatus = onQueryBackendStatus,
@@ -1193,6 +1195,7 @@ private fun CanonicalProjectEditor(
     onSetLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
+    onSetLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
     onQueryBackendStatus: (() -> String?)? = null,
@@ -1872,7 +1875,11 @@ private fun CanonicalProjectEditor(
                         onParamDraftChange = { uid, value -> paramDrafts = paramDrafts + (uid to value) },
                         onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
-                        onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) }
+                        onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
+                        playheadFrame = previewFrame,
+                        onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
+                            onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
+                        }
                     )
                 } else if (layer.source == "Shape") {
                     Text("No editable shape parameters in this layer.", color = EditorPalette.muted, fontSize = 11.sp)
@@ -1973,7 +1980,9 @@ private fun CanonicalParamGroupRows(
     onParamDraftChange: (Long, String) -> Unit,
     onApplyScalar: (Long, Double) -> Unit,
     onApplyVec: (Long, Double, Double, Double) -> Unit,
-    onApplyColor: (Long, Double, Double, Double, Double) -> Unit
+    onApplyColor: (Long, Double, Double, Double, Double) -> Unit,
+    playheadFrame: Int,
+    onColorKeyframeAction: (Long, Int, Double, Double, Double, Double, Boolean) -> Unit
 ) {
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
@@ -2051,8 +2060,20 @@ private fun CanonicalParamGroupRows(
                     },
                     modifier = Modifier.semantics { contentDescription = "Apply canonical $section color parameter ${group.name} ${param.name}" }
                 ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+                val hasColorKey = playheadFrame in param.keyframes
+                TextButton(
+                    enabled = editable && (hasColorKey || valid),
+                    onClick = {
+                        val values = parsed.map { it ?: 0.0 }
+                        onColorKeyframeAction(param.uid, playheadFrame, values[0], values[1], values[2], values[3], hasColorKey)
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = if (hasColorKey) "Remove canonical $section color keyframe ${group.name} ${param.name} frame $playheadFrame"
+                        else "Add canonical $section color keyframe ${group.name} ${param.name} frame $playheadFrame"
+                    }
+                ) { Text(if (hasColorKey) "Remove key" else "Add key", color = if (hasColorKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
             }
-            Text("RGBA · 0–1 per channel", color = EditorPalette.muted, fontSize = 9.sp)
+            Text("RGBA · 0–1 per channel · key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
         }
     }
 }
