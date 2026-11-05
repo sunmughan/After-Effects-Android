@@ -1467,7 +1467,7 @@ private fun CanonicalProjectEditor(
                             bitmapWidth = previewBitmap.width,
                             bitmapHeight = previewBitmap.height,
                             currentFrame = previewFrame,
-                            modifier = Modifier.fillMaxWidth().aspectRatio(bitmapWidth.toFloat() / bitmapHeight.toFloat())
+                            modifier = Modifier.fillMaxWidth().aspectRatio(previewBitmap.width.toFloat() / previewBitmap.height.toFloat())
                         )
                     }
                 } else {
