@@ -359,6 +359,20 @@ class CanonicalEditPreviewSyncTest {
     }
 
     @Test
+    fun textFontEditUpdatesCanonicalMetadataAndPreviewSession() {
+        val fixture = baseFixture()
+        val edited = applyEdit(
+            NativeProjectBridge.setTextLayerFontEcproj(fixture.project, fixture.compositionId, fixture.firstId, "Noto Sans")
+        )
+        assertEquals("Noto Sans", layer(canonical(edited), fixture.firstId).textParams!!.font)
+        assertNotNull(
+            "Preview session must accept a canonical TextDoc font edit",
+            previewRenders(fixture.project, edited, fixture.compositionId, 0)
+        )
+        assertNull("Blank font names must be rejected before JNI", NativeProjectBridge.setTextLayerFontEcproj(fixture.project, fixture.compositionId, fixture.firstId, " "))
+    }
+
+    @Test
     fun shapeScalarEditUpdatesCanonicalDataAndPreviewSession() {
         val fixture = baseFixture()
         val shaped = shapedFixture(fixture)
