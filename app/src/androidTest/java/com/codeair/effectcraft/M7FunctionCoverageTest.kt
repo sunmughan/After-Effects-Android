@@ -652,6 +652,7 @@ class M7FunctionCoverageTest {
                     onSetCanonicalTextLayerTracking = { _, _, _ -> },
                     onSetCanonicalLayerScalarProperty = { _, _, _, _ -> },
                     onSetCanonicalLayerVecProperty = { _, _, _, _, _, _ -> },
+                    onSetCanonicalLayerColorProperty = { _, _, _, _, _, _, _ -> },
                     onRelinkCanonicalAsset = {},
                     onRenderCanonicalFrame = { _, _ -> null },
                     safGrants = emptyList(),
