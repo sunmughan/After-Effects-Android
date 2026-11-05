@@ -76,10 +76,11 @@ object Mp4ExportWorker {
             val name = item.path!!.substringAfterLast('/')
             if (name.length > 65 && name.substring(0, 64).matches(Regex("[a-f0-9]{64}"))) {
                 val hash = name.substring(0, 64)
-                val file = runCatching { fileFor(hash) }.getOrNull()
-                val verified = file != null && file.isFile && file.canRead() &&
-                    runCatching { verifyPayload(hash, file) }.getOrDefault(false)
-                if (verified) return AudioResolution(file, true)
+                val candidate = runCatching { fileFor(hash) }.getOrNull()
+                val file = candidate?.takeIf { it.isFile && it.canRead() }
+                if (file != null && runCatching { verifyPayload(hash, file) }.getOrDefault(false)) {
+                    return AudioResolution(file, true)
+                }
             }
         }
         return AudioResolution(null, true)
