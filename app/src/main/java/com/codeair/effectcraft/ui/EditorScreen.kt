@@ -56,6 +56,9 @@ import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ModalBottomSheet
@@ -101,6 +104,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.codeair.effectcraft.data.CanonicalParamGroup
+import com.codeair.effectcraft.data.holdValueAt
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
@@ -225,6 +229,10 @@ fun EditorScreen(
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
+    onSetCanonicalLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
+    onSetCanonicalLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
+    onSetCanonicalLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
+    onSetCanonicalLayerPopupKeyframe: (Long, Long, Long, Int, Int, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onRelinkCanonicalAsset: (Long) -> Unit,
     onRenderCanonicalFrame: (Long, Long) -> ByteArray?,
     onQueryBackendStatus: (() -> String?)? = null,
@@ -745,6 +753,10 @@ fun EditorScreen(
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
                     onSetLayerColorKeyframe = onSetCanonicalLayerColorKeyframe,
+                    onSetLayerBoolProperty = onSetCanonicalLayerBoolProperty,
+                    onSetLayerPopupProperty = onSetCanonicalLayerPopupProperty,
+                    onSetLayerBoolKeyframe = onSetCanonicalLayerBoolKeyframe,
+                    onSetLayerPopupKeyframe = onSetCanonicalLayerPopupKeyframe,
                     onRelinkAsset = onRelinkCanonicalAsset,
                     onRenderFrame = onRenderCanonicalFrame,
                     onQueryBackendStatus = onQueryBackendStatus,
@@ -1296,6 +1308,10 @@ private fun CanonicalProjectEditor(
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
+    onSetLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
+    onSetLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
+    onSetLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
+    onSetLayerPopupKeyframe: (Long, Long, Long, Int, Int, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onRelinkAsset: (Long) -> Unit,
     onRenderFrame: (Long, Long) -> ByteArray?,
     onQueryBackendStatus: (() -> String?)? = null,
@@ -2047,6 +2063,14 @@ private fun CanonicalProjectEditor(
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
+                        },
+                        onApplyBool = { uid, value -> onSetLayerBoolProperty(composition.id, layer.id, uid, value) },
+                        onApplyPopup = { uid, index -> onSetLayerPopupProperty(composition.id, layer.id, uid, index) },
+                        onBoolKeyframeAction = { uid, frame, value, remove ->
+                            onSetLayerBoolKeyframe(composition.id, layer.id, uid, frame, value, remove)
+                        },
+                        onPopupKeyframeAction = { uid, frame, index, remove ->
+                            onSetLayerPopupKeyframe(composition.id, layer.id, uid, frame, index, remove)
                         }
                     )
                 } else if (layer.source == "Shape") {
@@ -2066,6 +2090,14 @@ private fun CanonicalProjectEditor(
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
+                        },
+                        onApplyBool = { uid, value -> onSetLayerBoolProperty(composition.id, layer.id, uid, value) },
+                        onApplyPopup = { uid, index -> onSetLayerPopupProperty(composition.id, layer.id, uid, index) },
+                        onBoolKeyframeAction = { uid, frame, value, remove ->
+                            onSetLayerBoolKeyframe(composition.id, layer.id, uid, frame, value, remove)
+                        },
+                        onPopupKeyframeAction = { uid, frame, index, remove ->
+                            onSetLayerPopupKeyframe(composition.id, layer.id, uid, frame, index, remove)
                         }
                     )
                 } else {
@@ -2138,10 +2170,14 @@ private fun CanonicalProjectEditor(
 
 /**
  * Editable rows for one shape item or effect group: one text field plus
- * Apply per scalar parameter, and one comma-separated field plus Apply per
- * vector parameter. Parameters the native model does not expose as scalar
- * or vector (color, path, gradient, popup) are absent from the list, never
- * shown as editable.
+ * Apply per scalar parameter, one comma-separated field plus Apply per
+ * vector parameter, a checkbox per bool parameter and a dropdown per popup
+ * parameter. A bool/popup value change edits the static value while the
+ * parameter has no keys, and authors a hold key at the playhead once it
+ * does; each row also carries Add key / Remove key buttons in the same
+ * style as the color rows. Parameters the native model does not expose
+ * (path, gradient, layer-reference) are absent from the list, never shown
+ * as editable.
  */
 @Composable
 private fun CanonicalParamGroupRows(
@@ -2154,8 +2190,13 @@ private fun CanonicalParamGroupRows(
     onApplyVec: (Long, Double, Double, Double) -> Unit,
     onApplyColor: (Long, Double, Double, Double, Double) -> Unit,
     playheadFrame: Int,
-    onColorKeyframeAction: (Long, Int, Double, Double, Double, Double, Boolean) -> Unit
+    onColorKeyframeAction: (Long, Int, Double, Double, Double, Double, Boolean) -> Unit,
+    onApplyBool: (Long, Boolean) -> Unit,
+    onApplyPopup: (Long, Int) -> Unit,
+    onBoolKeyframeAction: (Long, Int, Boolean, Boolean) -> Unit,
+    onPopupKeyframeAction: (Long, Int, Int, Boolean) -> Unit
 ) {
+    var expandedPopupUid by remember { mutableStateOf<Long?>(null) }
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
         group.scalars.forEach { param ->
@@ -2246,6 +2287,76 @@ private fun CanonicalParamGroupRows(
                 ) { Text(if (hasColorKey) "Remove key" else "Add key", color = if (hasColorKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
             }
             Text("RGBA · 0–1 per channel · key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
+        }
+        group.bools.forEach { param ->
+            // The checkbox shows the value held at the playhead (last hold
+            // key at or before it, else the static value); toggling edits
+            // the static value while the parameter has no keys, and authors
+            // a hold key at the playhead once it does.
+            val held = holdValueAt(param.keys, playheadFrame, if (param.value) 1.0 else 0.0) >= 0.5
+            val hasBoolKey = playheadFrame in param.keyframes
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Checkbox(
+                    checked = held,
+                    enabled = editable,
+                    onCheckedChange = { checked ->
+                        if (param.keys.isEmpty()) onApplyBool(param.uid, checked)
+                        else onBoolKeyframeAction(param.uid, playheadFrame, checked, false)
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Canonical $section bool parameter ${group.name} ${param.name}" }
+                )
+                Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text(if (held) "On" else "Off", color = EditorPalette.text, fontSize = 11.sp)
+                TextButton(
+                    enabled = editable,
+                    onClick = { onBoolKeyframeAction(param.uid, playheadFrame, held, hasBoolKey) },
+                    modifier = Modifier.semantics {
+                        contentDescription = if (hasBoolKey) "Remove canonical $section bool keyframe ${group.name} ${param.name} frame $playheadFrame"
+                        else "Add canonical $section bool keyframe ${group.name} ${param.name} frame $playheadFrame"
+                    }
+                ) { Text(if (hasBoolKey) "Remove key" else "Add key", color = if (hasBoolKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
+            }
+            Text("Hold · ${if (held) "on" else "off"} at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
+        }
+        group.popups.forEach { param ->
+            val heldIndex = holdValueAt(param.keys, playheadFrame, param.value.toDouble()).roundToInt()
+                .coerceIn(0, (param.options.size - 1).coerceAtLeast(0))
+            val heldOption = param.options.getOrNull(heldIndex) ?: ""
+            val hasPopupKey = playheadFrame in param.keyframes
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Box {
+                    TextButton(
+                        enabled = editable,
+                        onClick = { expandedPopupUid = param.uid },
+                        modifier = Modifier.semantics { contentDescription = "Canonical $section popup parameter ${group.name} ${param.name}" }
+                    ) { Text(heldOption, color = EditorPalette.text, fontSize = 11.sp) }
+                    DropdownMenu(
+                        expanded = expandedPopupUid == param.uid,
+                        onDismissRequest = { expandedPopupUid = null }
+                    ) {
+                        param.options.forEachIndexed { index, option ->
+                            DropdownMenuItem(
+                                text = { Text(option, color = EditorPalette.text, fontSize = 11.sp) },
+                                onClick = {
+                                    expandedPopupUid = null
+                                    if (param.keys.isEmpty()) onApplyPopup(param.uid, index)
+                                    else onPopupKeyframeAction(param.uid, playheadFrame, index, false)
+                                }
+                            )
+                        }
+                    }
+                }
+                TextButton(
+                    enabled = editable,
+                    onClick = { onPopupKeyframeAction(param.uid, playheadFrame, heldIndex, hasPopupKey) },
+                    modifier = Modifier.semantics {
+                        contentDescription = if (hasPopupKey) "Remove canonical $section popup keyframe ${group.name} ${param.name} frame $playheadFrame"
+                        else "Add canonical $section popup keyframe ${group.name} ${param.name} frame $playheadFrame"
+                    }
+                ) { Text(if (hasPopupKey) "Remove key" else "Add key", color = if (hasPopupKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
+            }
+            Text("Hold · $heldOption at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
         }
     }
 }

@@ -1459,6 +1459,54 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical color keyframe added · frame $frame · saved locally"
                 )
             },
+            onSetCanonicalLayerBoolProperty = { compositionId, layerId, uid, value ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerBoolPropertyEcproj(source, compositionId, layerId, uid, value),
+                    "Canonical checkbox parameter updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerPopupProperty = { compositionId, layerId, uid, index ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerPopupPropertyEcproj(source, compositionId, layerId, uid, index),
+                    "Canonical popup parameter updated · saved locally"
+                )
+            },
+            onSetCanonicalLayerBoolKeyframe = { compositionId, layerId, uid, frame, value, remove ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else if (remove) {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, "param:$uid", frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove checkbox keyframe"
+                    else if (!removed) saveMessage = "No checkbox keyframe · frame $frame"
+                    else applyCanonicalEdit(envelope, "Canonical checkbox keyframe removed · frame $frame · saved locally")
+                } else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerBoolKeyframeEcproj(source, compositionId, layerId, uid, frame.toLong(), value),
+                    "Canonical checkbox hold keyframe added · frame $frame · saved locally"
+                )
+            },
+            onSetCanonicalLayerPopupKeyframe = { compositionId, layerId, uid, frame, index, remove ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else if (remove) {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, "param:$uid", frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove popup keyframe"
+                    else if (!removed) saveMessage = "No popup keyframe · frame $frame"
+                    else applyCanonicalEdit(envelope, "Canonical popup keyframe removed · frame $frame · saved locally")
+                } else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerPopupKeyframeEcproj(source, compositionId, layerId, uid, frame.toLong(), index),
+                    "Canonical popup hold keyframe added · frame $frame · saved locally"
+                )
+            },
             onRelinkCanonicalAsset = { itemId ->
                 pendingRelinkItemId = itemId
                 relinkAssetLauncher.launch(arrayOf("*/*"))
