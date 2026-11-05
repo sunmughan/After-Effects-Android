@@ -84,19 +84,35 @@ class CanonicalProjectRepository(private val root: File) {
         val previous = metadata(checkedId) ?: throw IOException("Canonical project $checkedId is not in the repository")
         validateDocument(document, previous.format)
         val previousBytes = load(checkedId)
+            ?: throw IOException("Canonical project $checkedId has no readable document")
+        val sidecar = sidecarFile(checkedId)
+        if (!sidecar.isFile) throw IOException("Canonical project $checkedId has no metadata sidecar")
+        val backupDocument = updateBackupDocumentFile(checkedId, previous.format)
+        val backupSidecar = updateBackupSidecarFile(checkedId)
+        if (backupDocument.exists() || backupSidecar.exists()) {
+            throw IOException("Canonical project $checkedId has an unresolved interrupted update")
+        }
+
+        // Keep a durable rollback pair before touching the committed files.
+        // A process death between document and sidecar promotion otherwise
+        // leaves the old digest pointing at new bytes and hides the project.
+        writeDurably(backupDocument, previousBytes)
+        writeDurably(backupSidecar, sidecar.readText(Charsets.UTF_8))
         val updated = previous.copy(
             documentSha256 = document.sha256(),
             updatedAtMillis = System.currentTimeMillis()
         )
-        writeDocument(checkedId, previous.format, document)
         try {
+            writeDocument(checkedId, previous.format, document)
             writeSidecar(updated)
         } catch (failure: Throwable) {
-            // Roll back the document so a failed metadata write never leaves a
-            // document/sidecar pair that disagrees about the project content.
-            if (previousBytes != null) writeDocument(checkedId, previous.format, previousBytes)
+            runCatching { restoreInterruptedUpdate(checkedId, previous.format) }
             throw failure
         }
+        // If deletion is interrupted, the next metadata/load/list call sees
+        // a consistent new pair and only cleans these redundant backups.
+        backupDocument.delete()
+        backupSidecar.delete()
         return updated
     }
 
@@ -116,7 +132,9 @@ class CanonicalProjectRepository(private val root: File) {
 
     @Synchronized
     fun metadata(id: String): Metadata? {
-        val file = sidecarFile(validateId(id))
+        val checkedId = validateId(id)
+        recoverInterruptedUpdate(checkedId)
+        val file = sidecarFile(checkedId)
         if (!file.isFile) return null
         return runCatching { parseSidecar(file.readText(Charsets.UTF_8)) }.getOrNull()
     }
@@ -125,7 +143,9 @@ class CanonicalProjectRepository(private val root: File) {
     @Synchronized
     fun list(): List<Metadata> {
         if (!root.isDirectory) return emptyList()
-        return root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
+        val sidecars = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
+        sidecars.forEach { file -> runCatching { recoverInterruptedUpdate(file.nameWithoutExtension) } }
+        return sidecars
             .mapNotNull { file -> runCatching { parseSidecar(file.readText(Charsets.UTF_8)) }.getOrNull() }
             .sortedWith(compareByDescending<Metadata> { it.updatedAtMillis }.thenBy { it.displayName })
     }
@@ -220,6 +240,70 @@ class CanonicalProjectRepository(private val root: File) {
             sourceName = raw.optString("sourceName").takeIf { it.isNotEmpty() }
         )
     }
+
+    /**
+     * Reconciles a two-file project update after process death. The document
+     * is promoted before its digest sidecar; until both agree, the durable
+     * previous pair is restored. A matching new pair means the transaction
+     * committed and only stale backups need cleanup.
+     */
+    private fun recoverInterruptedUpdate(id: String) {
+        val backupSidecar = updateBackupSidecarFile(id)
+        for (format in listOf(FORMAT_ECPROJ, FORMAT_ECPROJX)) {
+            val backupDocument = updateBackupDocumentFile(id, format)
+            if (!backupDocument.exists() && !backupSidecar.exists()) continue
+
+            val currentPairIsValid = runCatching {
+                val metadata = parseSidecar(sidecarFile(id).readText(Charsets.UTF_8))
+                val currentDocument = documentFile(id, metadata.format)
+                metadata.id == id && metadata.format == format &&
+                    currentDocument.isFile &&
+                    currentDocument.readText(Charsets.UTF_8).sha256() == metadata.documentSha256
+            }.getOrDefault(false)
+            if (currentPairIsValid) {
+                backupDocument.delete()
+                backupSidecar.delete()
+                return
+            }
+
+            val backupPairIsValid = runCatching {
+                val metadata = parseSidecar(backupSidecar.readText(Charsets.UTF_8))
+                metadata.id == id && metadata.format == format &&
+                    backupDocument.isFile &&
+                    backupDocument.readText(Charsets.UTF_8).sha256() == metadata.documentSha256
+            }.getOrDefault(false)
+            if (backupPairIsValid) {
+                restoreInterruptedUpdate(id, format)
+                return
+            }
+            // Neither pair can be proven consistent. Preserve all bytes for
+            // diagnosis rather than deleting a possibly recoverable project.
+        }
+    }
+
+    private fun restoreInterruptedUpdate(id: String, format: String) {
+        val backupDocument = updateBackupDocumentFile(id, format)
+        val backupSidecar = updateBackupSidecarFile(id)
+        if (!backupDocument.isFile || !backupSidecar.isFile) {
+            throw IOException("Canonical project $id rollback pair is incomplete")
+        }
+        moveReplacing(backupDocument, documentFile(id, format))
+        moveReplacing(backupSidecar, sidecarFile(id))
+    }
+
+    private fun moveReplacing(source: File, target: File) {
+        try {
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: Exception) {
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    private fun updateBackupDocumentFile(id: String, format: String): File =
+        File(root, "$id.$format.update-bak")
+
+    private fun updateBackupSidecarFile(id: String): File =
+        File(root, "$id.json.update-bak")
 
     private fun ensureDirectory() {
         if (!root.exists() && !root.mkdirs()) throw IOException("Unable to create canonical project repository")

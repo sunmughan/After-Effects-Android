@@ -47,6 +47,55 @@ class CanonicalProjectRepositoryTest {
     }
 
     @Test
+    fun interruptedDocumentPromotionRollsBackToDurableProjectPairOnFreshLoad() {
+        val root = Files.createTempDirectory("effectcraft-repo-update-death").toFile()
+        try {
+            val repo = CanonicalProjectRepository(root)
+            val created = repo.create("Crash-safe update", document, "ecproj")
+            val documentFile = File(root, "${created.id}.ecproj")
+            val sidecarFile = File(root, "${created.id}.json")
+            val backupDocument = File(root, "${created.id}.ecproj.update-bak")
+            val backupSidecar = File(root, "${created.id}.json.update-bak")
+            backupDocument.writeText(documentFile.readText(Charsets.UTF_8), Charsets.UTF_8)
+            backupSidecar.writeText(sidecarFile.readText(Charsets.UTF_8), Charsets.UTF_8)
+
+            // Simulate process death after new document bytes are promoted but
+            // before the new SHA-256 sidecar is promoted.
+            documentFile.writeText(updated, Charsets.UTF_8)
+            val reopened = CanonicalProjectRepository(root)
+            assertEquals(document, reopened.load(created.id))
+            assertEquals(created.documentSha256, reopened.metadata(created.id)?.documentSha256)
+            assertFalse(backupDocument.exists())
+            assertFalse(backupSidecar.exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun completedUpdateWithLeftoverBackupsKeepsNewPairAndCleansBackups() {
+        val root = Files.createTempDirectory("effectcraft-repo-update-committed").toFile()
+        try {
+            val repo = CanonicalProjectRepository(root)
+            val created = repo.create("Committed update", document, "ecproj")
+            repo.update(created.id, updated)
+            File(root, "${created.id}.ecproj.update-bak").writeText(document, Charsets.UTF_8)
+            File(root, "${created.id}.json.update-bak").writeText(
+                JSONObject(File(root, "${created.id}.json").readText(Charsets.UTF_8))
+                    .put("documentSha256", created.documentSha256).toString(),
+                Charsets.UTF_8
+            )
+
+            val reopened = CanonicalProjectRepository(root)
+            assertEquals(updated, reopened.load(created.id))
+            assertFalse(File(root, "${created.id}.ecproj.update-bak").exists())
+            assertFalse(File(root, "${created.id}.json.update-bak").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun validatesDocumentsAndRejectsUnknownIdsOrFormats() {
         val root = Files.createTempDirectory("effectcraft-repo-validate").toFile()
         try {
