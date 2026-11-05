@@ -855,7 +855,8 @@ fn layer_text_params(layer: &effectcraft_project::Layer, frame_rate: effectcraft
             Value::Text(key_doc) => Some(json!({
                 "frame": key.time.to_rational_floor(frame_rate.den, frame_rate.num),
                 "text": key_doc.text,
-                "font": key_doc.font
+                "font": key_doc.font,
+                "tracking": key_doc.tracking
             })),
             _ => None,
         }).collect::<Vec<_>>();
@@ -1590,6 +1591,38 @@ fn set_text_layer_font_keyframe(source: &str, composition_id: u64, layer_id: u64
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Authors a Source Text tracking hold key at the composition frame. Text,
+/// font and styling are taken from the document active at that frame because
+/// tracking shares the canonical TextDoc property with other text attributes.
+fn set_text_layer_tracking_keyframe(source: &str, composition_id: u64, layer_id: u64, frame: i64, tracking: f64) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    if !tracking.is_finite() || tracking.abs() > 10_000.0 {
+        return Err("Text tracking must be finite and within ±10,000".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let tick = Tick::from_rational(frame, comp.frame_rate.den, comp.frame_rate.num);
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let property = layer.props.sub_mut("text")
+        .and_then(|group| group.prop_mut("sourceText"))
+        .ok_or_else(|| format!("Layer {layer_id} has no Source Text property"))?;
+    if property.static_only { return Err("Source Text tracking cannot be keyframed".into()); }
+    let mut doc = property.keys.iter()
+        .filter(|key| key.time <= tick)
+        .max_by_key(|key| key.time)
+        .and_then(|key| match &key.value { Value::Text(doc) => Some((**doc).clone()), _ => None })
+        .or_else(|| match &property.value { Value::Text(doc) => Some((**doc).clone()), _ => None })
+        .ok_or_else(|| format!("Layer {layer_id} Source Text is not a text document"))?;
+    doc.tracking = tracking;
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(tick, Value::Text(Box::new(doc)));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 fn set_layer_scalar_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, value: f64) -> Result<String, String> {
     if !value.is_finite() || value.abs() > 1_000_000.0 {
         return Err("Parameter value must be finite and within ±1,000,000".into());
@@ -2120,6 +2153,23 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
         Err("Composition, layer and frame must be non-negative".to_owned())
     } else {
         set_text_layer_font_keyframe(&source, composition_id as u64, layer_id as u64, frame as i64, &font)
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerTrackingKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong, tracking: jni::sys::jdouble,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 {
+        Err("Composition, layer and frame must be non-negative".to_owned())
+    } else {
+        set_text_layer_tracking_keyframe(&source, composition_id as u64, layer_id as u64, frame as i64, tracking as f64)
     };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
@@ -4064,6 +4114,29 @@ mod tests {
         assert!(set_text_layer_font_keyframe(&source, comp_id, layer_id, -1, "Inter").is_err());
         assert!(set_text_layer_font_keyframe(&source, comp_id, layer_id, 15, " ").is_err());
         assert!(set_text_layer_font_keyframe(&source, comp_id, 999, 15, "Inter").is_err());
+    }
+
+    #[test]
+    fn canonical_source_text_tracking_keyframe_preserves_document_and_serializes_value() {
+        use effectcraft_project::Value;
+        let (source, comp_id, layer_id) = text_layer_project();
+        let tracked = set_text_layer_tracking(&source, comp_id, layer_id, 12.5).unwrap();
+        let keyed_text = set_text_layer_text_keyframe(&tracked, comp_id, layer_id, 10, "Frame ten").unwrap();
+        let keyed_tracking = set_text_layer_tracking_keyframe(&keyed_text, comp_id, layer_id, 15, 42.5).unwrap();
+        let project: Project = serde_json::from_str(&keyed_tracking).unwrap();
+        let property = project.comp(ItemId(comp_id)).unwrap().layers[0].props.sub("text").unwrap().prop("sourceText").unwrap();
+        let tracking_key = property.keys.iter().find(|key| key.time.to_rational_floor(1, 30) == 15).unwrap();
+        match &tracking_key.value {
+            Value::Text(doc) => { assert_eq!(doc.text, "Frame ten"); assert_eq!(doc.tracking, 42.5); assert_eq!(doc.font, "Inter"); }
+            other => panic!("tracking key must preserve TextDoc, got {other:?}"),
+        }
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&keyed_tracking).unwrap()).unwrap();
+        let keys = metadata["compositions"][0]["layers"][0]["text"]["keys"].as_array().unwrap();
+        assert!(keys.iter().any(|key| key["frame"] == 15 && key["tracking"] == 42.5 && key["text"] == "Frame ten"));
+        assert!(keys.iter().any(|key| key["frame"] == 10 && key["tracking"] == 12.5));
+        assert!(set_text_layer_tracking_keyframe(&source, comp_id, layer_id, -1, 2.0).is_err());
+        assert!(set_text_layer_tracking_keyframe(&source, comp_id, layer_id, 15, f64::NAN).is_err());
+        assert!(set_text_layer_tracking_keyframe(&source, 999, layer_id, 15, 2.0).is_err());
     }
 
     #[test]

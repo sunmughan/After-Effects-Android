@@ -364,6 +364,21 @@ class CanonicalEditPreviewSyncTest {
     }
 
     @Test
+    fun textTrackingKeyframeUpdatesCanonicalMetadataAndPreviewSession() {
+        val fixture = baseFixture()
+        val edited = applyEdit(
+            NativeProjectBridge.setTextLayerTrackingKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, 15, 42.5)
+        )
+        val text = layer(canonical(edited), fixture.firstId).textParams!!
+        assertTrue(text.keys.any { it.frame == 15 && it.tracking == 42.5 })
+        assertNotNull(
+            "Preview session must render a canonical TextDoc tracking key",
+            previewRenders(fixture.project, edited, fixture.compositionId, 15)
+        )
+        assertNull("Non-finite tracking key must be rejected before JNI", NativeProjectBridge.setTextLayerTrackingKeyframeEcproj(fixture.project, fixture.compositionId, fixture.firstId, 15, Double.NaN))
+    }
+
+    @Test
     fun textFontEditUpdatesCanonicalMetadataAndPreviewSession() {
         val fixture = baseFixture()
         val edited = applyEdit(

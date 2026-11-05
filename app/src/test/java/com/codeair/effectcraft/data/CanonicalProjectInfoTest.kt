@@ -18,6 +18,16 @@ class CanonicalProjectInfoTest {
     }
 
     @Test
+    fun parsesSourceTextTrackingValuesOnCompositeHoldKeys() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Title","source":"Text","text":{"uid":7,"text":"Base","font":"Inter","size":32.0,"tracking":0.0,"keys":[{"frame":15,"text":"Frame fifteen","font":"Noto Sans","tracking":42.5},{"frame":0,"text":"Base","font":"Inter","tracking":0.0}]}}]}]}"""
+        val text = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().textParams!!
+        assertEquals(listOf(0, 15), text.keys.map { it.frame })
+        assertEquals("Frame fifteen", text.keys[1].text)
+        assertEquals(42.5, text.keys[1].tracking, 0.001)
+        assertEquals(0.0, text.keys[0].tracking, 0.001)
+    }
+
+    @Test
     fun parsesCompositionLayerAndLinkedMediaInventory() {
         val metadata = """{"valid":true,"schema":1,"itemCount":2,"compositionCount":1,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layerCount":1,"layers":[{"id":2,"name":"Headline","source":"Text","visible":false,"opacityPercent":35.0,"position":[123.5,456.25],"scale":[125.0,80.0],"rotationDegrees":42.5}]}],"items":[{"id":10,"name":"Main","type":"Composition","parentId":null,"media":{}},{"id":20,"name":"Footage","type":"Video","parentId":null,"media":{"path":"content://media/1","width":1920,"height":1080,"hasVideo":true,"hasAudio":true,"missing":false,"sequence":[]}}]}"""
 

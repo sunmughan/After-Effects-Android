@@ -228,6 +228,7 @@ fun EditorScreen(
     onSetCanonicalTextLayerTracking: (Long, Long, Double) -> Unit,
     onSetCanonicalTextLayerFont: (Long, Long, String) -> Unit = { _, _, _ -> },
     onSetCanonicalTextLayerFontKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
+    onSetCanonicalTextLayerTrackingKeyframe: (Long, Long, Long, Int, Double, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetCanonicalLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
@@ -755,6 +756,7 @@ fun EditorScreen(
                     onSetTextLayerTracking = onSetCanonicalTextLayerTracking,
                     onSetTextLayerFont = onSetCanonicalTextLayerFont,
                     onSetTextLayerFontKeyframe = onSetCanonicalTextLayerFontKeyframe,
+                    onSetTextLayerTrackingKeyframe = onSetCanonicalTextLayerTrackingKeyframe,
                     onSetLayerScalarProperty = onSetCanonicalLayerScalarProperty,
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
@@ -1313,6 +1315,7 @@ private fun CanonicalProjectEditor(
     onSetTextLayerTracking: (Long, Long, Double) -> Unit,
     onSetTextLayerFont: (Long, Long, String) -> Unit = { _, _, _ -> },
     onSetTextLayerFontKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
+    onSetTextLayerTrackingKeyframe: (Long, Long, Long, Int, Double, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetLayerScalarProperty: (Long, Long, Long, Double) -> Unit,
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
@@ -2067,7 +2070,21 @@ private fun CanonicalProjectEditor(
                             onClick = { onSetTextLayerTracking(composition.id, layer.id, textTrackingDraft.toDouble()) },
                             modifier = Modifier.semantics { contentDescription = "Apply canonical text tracking" }
                         ) { Text("Apply tracking", color = EditorPalette.violet, fontSize = 10.sp) }
+                        val hasTrackingKey = textParams.keys.any { key -> key.frame == previewFrame }
+                        TextButton(
+                            enabled = editable && textTrackingDraft.toDoubleOrNull()?.isFinite() == true,
+                            onClick = { onSetTextLayerTrackingKeyframe(composition.id, layer.id, textParams.uid, previewFrame, textTrackingDraft.toDouble(), hasTrackingKey) },
+                            modifier = Modifier.semantics {
+                                contentDescription = if (hasTrackingKey) "Remove canonical Source Text keyframe frame $previewFrame"
+                                else "Add canonical Source Text tracking keyframe frame $previewFrame"
+                            }
+                        ) { Text(if (hasTrackingKey) "Remove key" else "Key tracking", color = if (hasTrackingKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
                     }
+                    Text(
+                        "Tracking at Source Text keys · " + if (textParams.keys.isEmpty()) "none" else textParams.keys.joinToString { "${it.frame}: ${it.tracking}" },
+                        color = EditorPalette.amber, fontSize = 10.sp,
+                        modifier = Modifier.semantics { contentDescription = "Canonical Source Text tracking keyframes" }
+                    )
                 }
                 Text("Opacity · ${opacityDraft.roundToInt()}%", color = EditorPalette.text, fontSize = 12.sp)
                 Slider(

@@ -1459,6 +1459,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Font keyframe added · frame $frame · saved locally"
                 )
             },
+            onSetCanonicalTextLayerTrackingKeyframe = { compositionId, layerId, uid, frame, tracking, remove ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else if (remove) {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, "param:$uid", frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove tracking keyframe"
+                    else if (!removed) saveMessage = "No Source Text key · frame $frame"
+                    else applyCanonicalEdit(envelope, "Source Text tracking key removed · frame $frame · saved locally")
+                } else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerTrackingKeyframeEcproj(source, compositionId, layerId, frame.toLong(), tracking),
+                    "Source Text tracking key added · frame $frame · saved locally"
+                )
+            },
             onSetCanonicalLayerScalarProperty = { compositionId, layerId, uid, value ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

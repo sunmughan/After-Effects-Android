@@ -171,6 +171,13 @@ object NativeProjectBridge {
         return runCatching { setTextLayerFontKeyframeEcprojNative(json, compositionId, layerId, frame, font.trim()) }.getOrNull()
     }
 
+    /** Authors a canonical Source Text tracking key at the composition frame. */
+    fun setTextLayerTrackingKeyframeEcproj(json: String, compositionId: Long, layerId: Long, frame: Long, tracking: Double): String? {
+        ensureLoaded()
+        if (!available || frame < 0 || !tracking.isFinite() || tracking !in -10_000.0..10_000.0) return null
+        return runCatching { setTextLayerTrackingKeyframeEcprojNative(json, compositionId, layerId, frame, tracking) }.getOrNull()
+    }
+
     /** Sets one scalar shape-item or effect parameter, addressed by its native uid. */
     fun setLayerScalarPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String? {
         ensureLoaded()
@@ -459,6 +466,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setTextLayerFontKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, font: String): String
+
+    @JvmStatic
+    private external fun setTextLayerTrackingKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, tracking: Double): String
 
     @JvmStatic
     private external fun setLayerScalarPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Double): String
