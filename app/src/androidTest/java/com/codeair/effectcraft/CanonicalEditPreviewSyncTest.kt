@@ -169,7 +169,9 @@ class CanonicalEditPreviewSyncTest {
                 """{"node":"Group","uid":90020,"match":"gaussianBlur","name":"Gaussian Blur","children":[
                     {"node":"Prop","uid":90021,"match":"blurriness","name":"Blurriness","value":{"t":"Scalar","v":0.0}},
                     {"node":"Prop","uid":90022,"match":"center","name":"Center","value":{"t":"Vec2","v":[0.0,0.0]}},
-                    {"node":"Prop","uid":90023,"match":"color","name":"Color","value":{"t":"Color","v":[1.0,1.0,1.0,1.0]}}
+                    {"node":"Prop","uid":90023,"match":"color","name":"Color","value":{"t":"Color","v":[1.0,1.0,1.0,1.0]}},
+                    {"node":"Prop","uid":90024,"match":"repeatEdge","name":"Repeat Edge Pixels","value":{"t":"Bool","v":false},"ui":{"kind":"Checkbox"}},
+                    {"node":"Prop","uid":90025,"match":"dimensions","name":"Blur Dimensions","value":{"t":"Enum","v":0},"ui":{"kind":"Popup","options":["Horizontal","Vertical","Both"]}}
                 ]}"""
             )
         )
@@ -695,6 +697,66 @@ class CanonicalEditPreviewSyncTest {
             "Preview session must accept and render the RGBA-keyframed canonical project at frame 15",
             previewRenders(before, keyed, fixture.compositionId, 15)
         )
+    }
+
+    @Test
+    fun boolAndPopupHoldKeysUpdateCanonicalDataAndPreviewSession() {
+        val fixture = baseFixture()
+        val before = shapedFixture(fixture)
+        // Static setters update the static value while the parameter has no keys.
+        val toggled = applyEdit(
+            NativeProjectBridge.setLayerBoolPropertyEcproj(before, fixture.compositionId, fixture.firstId, 90024, true)
+        )
+        val boolParam = layer(canonical(toggled), fixture.firstId).effects
+            .single { it.kind == "gaussianBlur" }.bools.single { it.uid == 90024L }
+        assertTrue(boolParam.value)
+        val picked = applyEdit(
+            NativeProjectBridge.setLayerPopupPropertyEcproj(toggled, fixture.compositionId, fixture.firstId, 90025, 2)
+        )
+        val popupParam = layer(canonical(picked), fixture.firstId).effects
+            .single { it.kind == "gaussianBlur" }.popups.single { it.uid == 90025L }
+        assertEquals(2, popupParam.value)
+        assertEquals(listOf("Horizontal", "Vertical", "Both"), popupParam.options)
+        // Hold keyframes at frame 15: the first key seeds frame 0 with the
+        // static value, both keys carry Hold interpolation, and the held
+        // value is the earlier key's value until the next key.
+        val keyedBool = applyEdit(
+            NativeProjectBridge.setLayerBoolKeyframeEcproj(picked, fixture.compositionId, fixture.firstId, 90024, 15, false)
+        )
+        val keyedBoolParam = layer(canonical(keyedBool), fixture.firstId).effects
+            .single { it.kind == "gaussianBlur" }.bools.single { it.uid == 90024L }
+        assertEquals(listOf(0, 15), keyedBoolParam.keyframes)
+        assertEquals(listOf(1.0, 0.0), keyedBoolParam.keys.map { it.value })
+        assertTrue(keyedBoolParam.keys.all { it.inInterp == "Hold" && it.outInterp == "Hold" })
+        val keyedPopup = applyEdit(
+            NativeProjectBridge.setLayerPopupKeyframeEcproj(keyedBool, fixture.compositionId, fixture.firstId, 90025, 15, 1)
+        )
+        val keyedPopupParam = layer(canonical(keyedPopup), fixture.firstId).effects
+            .single { it.kind == "gaussianBlur" }.popups.single { it.uid == 90025L }
+        assertEquals(listOf(0, 15), keyedPopupParam.keyframes)
+        assertEquals(listOf(2.0, 1.0), keyedPopupParam.keys.map { it.value })
+        assertTrue(keyedPopupParam.keys.all { it.inInterp == "Hold" && it.outInterp == "Hold" })
+        // The preview session accepts and renders the hold-keyframed project.
+        assertNotNull(
+            "Preview session must accept and render the bool/popup-keyframed canonical project at frame 15",
+            previewRenders(before, keyedPopup, fixture.compositionId, 15)
+        )
+        // Removing the frame-15 popup key leaves the frame-0 seed; an
+        // out-of-range popup index is rejected.
+        val (removedPopup, wasRemoved) = removeEdit(
+            NativeProjectBridge.removeLayerCurveKeyframeEcproj(keyedPopup, fixture.compositionId, fixture.firstId, "param:90025", 15)
+        )
+        assertTrue(wasRemoved)
+        assertEquals(
+            listOf(0),
+            layer(canonical(removedPopup), fixture.firstId).effects
+                .single { it.kind == "gaussianBlur" }.popups.single { it.uid == 90025L }.keyframes
+        )
+        val outOfRange = JSONObject(
+            NativeProjectBridge.setLayerPopupKeyframeEcproj(before, fixture.compositionId, fixture.firstId, 90025, 15, 3)
+                ?: throw AssertionError("Native bridge returned null for the out-of-range popup keyframe")
+        )
+        assertFalse("A popup keyframe outside the option list must be rejected", outOfRange.optBoolean("valid"))
     }
 
     @Test

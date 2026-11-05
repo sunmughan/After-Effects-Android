@@ -17,7 +17,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.Density
-import com.codeair.effectcraft.data.CanonicalCompositionInfo
+import com.codeair.effectcraft.data.CanonicalBoolParam
+import com.codeair.effectcraft.data.CanonicalPopupParam
 import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalParamGroup
@@ -253,6 +254,10 @@ class AdaptiveWorkspaceSmokeTest {
         var textTracking: List<Any>? = null
         var scalarProperty: List<Any>? = null
         var vecProperty: List<Any>? = null
+        var boolProperty: List<Any>? = null
+        var popupProperty: List<Any>? = null
+        var boolKeyframe: List<Any>? = null
+        var popupKeyframe: List<Any>? = null
         var roving: List<Any>? = null
         var spatialTangents: List<Any>? = null
     }
@@ -265,6 +270,10 @@ class AdaptiveWorkspaceSmokeTest {
         onAddTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
         onRemoveTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
         onAddCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
+        onSetBoolProperty: (Long, Long, Long, Boolean) -> Unit = { c, l, uid, v -> captures.boolProperty = listOf(c, l, uid, v) },
+        onSetPopupProperty: (Long, Long, Long, Int) -> Unit = { c, l, uid, v -> captures.popupProperty = listOf(c, l, uid, v) },
+        onSetBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { c, l, uid, f, v, r -> captures.boolKeyframe = listOf(c, l, uid, f, v, r) },
+        onSetPopupKeyframe: (Long, Long, Long, Int, Int, Boolean) -> Unit = { c, l, uid, f, v, r -> captures.popupKeyframe = listOf(c, l, uid, f, v, r) },
         playheadFrame: Int = 0,
         frameBytes: ByteArray? = null
     ) {
@@ -347,6 +356,10 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerScalarProperty = { c, l, uid, v -> captures.scalarProperty = listOf(c, l, uid, v) },
                     onSetCanonicalLayerVecProperty = { c, l, uid, x, y, z -> captures.vecProperty = listOf(c, l, uid, x, y, z) },
                     onSetCanonicalLayerColorProperty = { _, _, _, _, _, _, _ -> },
+                    onSetCanonicalLayerBoolProperty = onSetBoolProperty,
+                    onSetCanonicalLayerPopupProperty = onSetPopupProperty,
+                    onSetCanonicalLayerBoolKeyframe = onSetBoolKeyframe,
+                    onSetCanonicalLayerPopupKeyframe = onSetPopupKeyframe,
                     onRelinkCanonicalAsset = {},
                     onRenderCanonicalFrame = { _, _ -> frameBytes },
                     safGrants = emptyList(),
@@ -479,6 +492,52 @@ class AdaptiveWorkspaceSmokeTest {
         assertEquals(listOf<Any>(10L, 2L, "rotationY", 0, -30.0, 0.0, 0.0), captures.transformKeyframe)
         compose.onNodeWithContentDescription("Remove anchor keyframe").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, "anchor", 0), captures.transformKeyframeRemoved)
+    }
+
+    @Test
+    fun boolAndPopupInspectorControlsTargetSelectedLayerAndCurrentFrame() {
+        val captures = CanonicalCaptures()
+        val base = canonicalM4Layer(locked = false)
+        val composition = base.compositions.single()
+        val headline = composition.layers.first().copy(
+            shapeItems = listOf(
+                CanonicalParamGroup(
+                    name = "Rectangle Path 1", kind = "rect",
+                    bools = listOf(CanonicalBoolParam(301, "Per-Corner Roundness", false))
+                )
+            ),
+            effects = listOf(
+                CanonicalParamGroup(
+                    name = "Gaussian Blur", kind = "gaussianBlur",
+                    popups = listOf(
+                        CanonicalPopupParam(402, "Blur Dimensions", 0, listOf("Horizontal", "Vertical", "Both"))
+                    )
+                )
+            )
+        )
+        val canonical = base.copy(
+            compositions = listOf(composition.copy(layers = listOf(headline, composition.layers[1])))
+        )
+        setCanonicalEditorContent(canonical, captures)
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        // Checkbox toggle with no keys edits the static value.
+        compose.onNodeWithContentDescription("Canonical shape bool parameter Rectangle Path 1 Per-Corner Roundness")
+            .performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 301L, true), captures.boolProperty)
+        // Add key authors a hold key at the playhead with the held value.
+        compose.onNodeWithContentDescription("Add canonical shape bool keyframe Rectangle Path 1 Per-Corner Roundness frame 0")
+            .performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 301L, 0, false, false), captures.boolKeyframe)
+        // Popup trigger opens the option menu; picking an option with no
+        // keys edits the static value.
+        compose.onNodeWithContentDescription("Canonical effect popup parameter Gaussian Blur Blur Dimensions")
+            .performScrollTo().performClick()
+        compose.onNodeWithText("Both").performClick()
+        assertEquals(listOf<Any>(10L, 2L, 402L, 2), captures.popupProperty)
+        // Add key authors a hold key at the playhead with the held option.
+        compose.onNodeWithContentDescription("Add canonical effect popup keyframe Gaussian Blur Blur Dimensions frame 0")
+            .performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 402L, 0, 0, false), captures.popupKeyframe)
     }
 
     @OptIn(ExperimentalTestApi::class)
