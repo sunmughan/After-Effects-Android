@@ -31,6 +31,12 @@ class CanonicalProjectRepositoryTest {
             assertEquals(updated, repo.load(created.id))
             assertEquals(listOf(edited), repo.list())
 
+            // A fresh repository instance models app/process restart after a
+            // canonical timeline/keyframe edit has been durably promoted.
+            val reopened = CanonicalProjectRepository(root)
+            assertEquals(updated, reopened.load(created.id))
+            assertEquals(edited.documentSha256, reopened.metadata(created.id)?.documentSha256)
+
             assertTrue(repo.delete(created.id))
             assertNull(repo.load(created.id))
             assertNull(repo.metadata(created.id))
