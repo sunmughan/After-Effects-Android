@@ -586,7 +586,7 @@ fun EditorScreen(
                         OutlinedTextField(
                             value = sequenceFpsText, onValueChange = { sequenceFpsText = it.filter(Char::isDigit) },
                             label = { Text("FPS") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true, modifier = Modifier.fillMaxWidth()
+                            singleLine = true, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Export FPS" }
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
