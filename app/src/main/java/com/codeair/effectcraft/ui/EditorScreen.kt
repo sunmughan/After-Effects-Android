@@ -2,12 +2,14 @@ package com.codeair.effectcraft.ui
 
 import com.codeair.effectcraft.data.BezierCurveEditor
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
+import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalProjectRepository
 import com.codeair.effectcraft.data.CurveHandle
 import com.codeair.effectcraft.data.CurveInterp
 import com.codeair.effectcraft.data.CurveKey
 import com.codeair.effectcraft.data.CurveTrack
+import com.codeair.effectcraft.data.MotionPath
 import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.SafPermissionRegistry
 
@@ -200,6 +202,8 @@ fun EditorScreen(
     onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onRemoveCanonicalLayerTransformKeyframe: (Long, Long, String, Int) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
+    onSetCanonicalKeyframeRoving: (Long, Long, String, Int, Boolean) -> Unit = { _, _, _, _, _ -> },
+    onSetCanonicalKeyframeSpatialTangents: (Long, Long, String, Int, Double, Double, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _, _, _ -> },
     onMoveCanonicalCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
     onMoveCanonicalTransformKeyframe: (Int, Int) -> Unit = { _, _ -> },
     onSetCanonicalCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
@@ -280,6 +284,12 @@ fun EditorScreen(
     // unrendered rather than showing a decorative fake composition.
     val previewComposition = canonicalProject?.compositions?.firstOrNull()
     var workspaceFrame by remember(previewComposition?.id) { mutableStateOf<Bitmap?>(null) }
+    var showMotionPath by remember { mutableStateOf(true) }
+    // The workspace overlay follows the selected canonical layer's position
+    // track; it draws only when that track has a path to show (≥2 keys).
+    val workspaceMotionPathKeys = previewComposition?.layers
+        ?.firstOrNull { it.id in canonicalSelectedLayerIds }
+        ?.transformCurves?.get("position").orEmpty()
     LaunchedEffect(canonicalProject, previewComposition?.id, playheadFrame, canEditCanonicalProject) {
         workspaceFrame = if (previewComposition != null && canEditCanonicalProject) {
             withContext(Dispatchers.Default) {
@@ -340,7 +350,12 @@ fun EditorScreen(
                             .weight(1f)
                             .fillMaxHeight(),
                         bitmap = workspaceFrame,
-                        compositionName = previewComposition?.name
+                        compositionName = previewComposition?.name,
+                        motionPathKeys = workspaceMotionPathKeys,
+                        compositionWidth = previewComposition?.width ?: 0,
+                        compositionHeight = previewComposition?.height ?: 0,
+                        showMotionPath = showMotionPath,
+                        currentFrame = playheadFrame
                     )
                     InspectorPanel(
                         modifier = Modifier
@@ -361,7 +376,12 @@ fun EditorScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 14.dp, vertical = 4.dp),
                     bitmap = workspaceFrame,
-                    compositionName = previewComposition?.name
+                    compositionName = previewComposition?.name,
+                    motionPathKeys = workspaceMotionPathKeys,
+                    compositionWidth = previewComposition?.width ?: 0,
+                    compositionHeight = previewComposition?.height ?: 0,
+                    showMotionPath = showMotionPath,
+                    currentFrame = playheadFrame
                 )
             }
 
@@ -701,6 +721,10 @@ fun EditorScreen(
                     interpolationSide = interpolationSide,
                     onInterpolationSideChange = { interpolationSide = it },
                     onSetLayerTransformInterpolation = onSetCanonicalLayerTransformInterpolation,
+                    onSetCanonicalKeyframeRoving = onSetCanonicalKeyframeRoving,
+                    onSetCanonicalKeyframeSpatialTangents = onSetCanonicalKeyframeSpatialTangents,
+                    showMotionPath = showMotionPath,
+                    onShowMotionPathChange = { showMotionPath = it },
                     onMoveCanonicalCurveKey = onMoveCanonicalCurveKey,
                     onSetCanonicalCurveHandle = onSetCanonicalCurveHandle,
                     onAddCanonicalCurveKey = onAddCanonicalCurveKey,
@@ -971,10 +995,67 @@ private fun HeaderBar(
 }
 
 @Composable
+private fun MotionPathOverlay(
+    keys: List<CanonicalCurveKey>,
+    compositionWidth: Int,
+    compositionHeight: Int,
+    bitmapWidth: Int,
+    bitmapHeight: Int,
+    currentFrame: Int = -1,
+    modifier: Modifier = Modifier
+) {
+    if (keys.size < 2 || compositionWidth <= 0 || compositionHeight <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return
+    val path = remember(keys) { MotionPath.samplePath(keys) }
+    Canvas(modifier = modifier) {
+        // The rendered frame is comp-sized, so ContentScale.Fit maps comp
+        // coordinates onto the drawn rect with one uniform scale; the rect
+        // is centred when the box letterboxes the frame.
+        val scale = minOf(size.width / bitmapWidth.toFloat(), size.height / bitmapHeight.toFloat())
+        val drawWidth = bitmapWidth * scale
+        val drawHeight = bitmapHeight * scale
+        val offsetX = (size.width - drawWidth) / 2f
+        val offsetY = (size.height - drawHeight) / 2f
+        val scaleX = drawWidth / compositionWidth.toFloat()
+        val scaleY = drawHeight / compositionHeight.toFloat()
+        fun point(x: Double, y: Double) = Offset(offsetX + x.toFloat() * scaleX, offsetY + y.toFloat() * scaleY)
+        val points = path.map { point(it.x, it.y) }
+        for (i in 0 until points.size - 1) {
+            drawLine(EditorPalette.mint, points[i], points[i + 1], strokeWidth = 2f)
+        }
+        keys.forEach { key ->
+            val centre = point(key.components.getOrElse(0) { 0.0 }, key.components.getOrElse(1) { 0.0 })
+            if (!key.spatialAuto) {
+                // Manual tangents: draw the handle lines the renderer bends
+                // the path with, in amber, with a dot at each handle end.
+                val inEnd = point(
+                    key.components.getOrElse(0) { 0.0 } + key.spatialIn.getOrElse(0) { 0.0 },
+                    key.components.getOrElse(1) { 0.0 } + key.spatialIn.getOrElse(1) { 0.0 }
+                )
+                val outEnd = point(
+                    key.components.getOrElse(0) { 0.0 } + key.spatialOut.getOrElse(0) { 0.0 },
+                    key.components.getOrElse(1) { 0.0 } + key.spatialOut.getOrElse(1) { 0.0 }
+                )
+                drawLine(EditorPalette.amber, centre, inEnd, strokeWidth = 1.5f)
+                drawLine(EditorPalette.amber, centre, outEnd, strokeWidth = 1.5f)
+                drawCircle(EditorPalette.amber, radius = 3f, center = inEnd)
+                drawCircle(EditorPalette.amber, radius = 3f, center = outEnd)
+            }
+            val isCurrent = key.frame == currentFrame
+            drawCircle(if (isCurrent) EditorPalette.violet else EditorPalette.mint, radius = if (isCurrent) 6f else 5f, center = centre)
+        }
+    }
+}
+
+@Composable
 private fun PreviewStage(
     modifier: Modifier = Modifier,
     bitmap: Bitmap?,
-    compositionName: String?
+    compositionName: String?,
+    motionPathKeys: List<CanonicalCurveKey> = emptyList(),
+    compositionWidth: Int = 0,
+    compositionHeight: Int = 0,
+    showMotionPath: Boolean = true,
+    currentFrame: Int = -1
 ) {
     Box(
         modifier = modifier
@@ -997,12 +1078,25 @@ private fun PreviewStage(
             contentAlignment = Alignment.Center
         ) {
             if (bitmap != null) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "Rendered composition frame",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxHeight().aspectRatio(bitmap.width.toFloat() / bitmap.height.toFloat())
-                )
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(bitmap.width.toFloat() / bitmap.height.toFloat())) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Rendered composition frame",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    if (showMotionPath) {
+                        MotionPathOverlay(
+                            keys = motionPathKeys,
+                            compositionWidth = compositionWidth,
+                            compositionHeight = compositionHeight,
+                            bitmapWidth = bitmap.width,
+                            bitmapHeight = bitmap.height,
+                            currentFrame = currentFrame,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
             } else {
                 Column(
                     modifier = Modifier.padding(24.dp),
@@ -1176,6 +1270,10 @@ private fun CanonicalProjectEditor(
     interpolationSide: String = "both",
     onInterpolationSideChange: (String) -> Unit = {},
     onSetLayerTransformInterpolation: (Long, Long, String, Int, String) -> Unit = { _, _, _, _, _ -> },
+    onSetCanonicalKeyframeRoving: (Long, Long, String, Int, Boolean) -> Unit = { _, _, _, _, _ -> },
+    onSetCanonicalKeyframeSpatialTangents: (Long, Long, String, Int, Double, Double, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _, _, _ -> },
+    showMotionPath: Boolean = true,
+    onShowMotionPathChange: (Boolean) -> Unit = {},
     onMoveCanonicalCurveKey: (Long, Long, String, Int, Int) -> Unit = { _, _, _, _, _ -> },
     onSetCanonicalCurveHandle: (Long, Long, String, Int, String, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
     onAddCanonicalCurveKey: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
@@ -1359,6 +1457,17 @@ private fun CanonicalProjectEditor(
                         modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
                         contentScale = ContentScale.Fit
                     )
+                    if (showMotionPath) {
+                        MotionPathOverlay(
+                            keys = layer?.transformCurves?.get("position").orEmpty(),
+                            compositionWidth = composition.width,
+                            compositionHeight = composition.height,
+                            bitmapWidth = previewBitmap.width,
+                            bitmapHeight = previewBitmap.height,
+                            currentFrame = previewFrame,
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp)
+                        )
+                    }
                 } else {
                     Text(previewMessage, color = EditorPalette.muted, fontSize = 11.sp)
                 }
@@ -1625,7 +1734,7 @@ private fun CanonicalProjectEditor(
                 }
                 Text("Key interpolation · current frame", color = EditorPalette.text, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation").forEach { (property, label) ->
+                    listOf("position" to "Position", "scale" to "Scale", "rotation" to "Rotation", "anchor" to "Anchor").forEach { (property, label) ->
                         FilterChip(
                             selected = interpolationProperty == property,
                             onClick = { onInterpolationPropertyChange(property) },
@@ -1685,6 +1794,63 @@ private fun CanonicalProjectEditor(
                     ) { Text("Move", color = EditorPalette.violet, fontSize = 10.sp) }
                 }
                 Text("Dragging a marker on the TRANSFORM timeline lane moves that key; the curve graph move applies when several keys share the frame.", color = EditorPalette.muted, fontSize = 10.sp)
+                // Roving + motion-path controls exist only for spatial
+                // properties (position/anchor): the layer moves along a path
+                // in comp space, so a key can rove across time and the path
+                // itself can be auto or straight.
+                if (com.codeair.effectcraft.data.MotionPath.isSpatialProperty(interpolationProperty)) {
+                    val currentKey = layer.transformCurves[interpolationProperty]?.firstOrNull { it.frame == previewFrame }
+                    if (currentKey != null && composition != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Roving keyframe", color = EditorPalette.text, fontSize = 12.sp)
+                            Switch(
+                                checked = currentKey.roving,
+                                onCheckedChange = { onSetCanonicalKeyframeRoving(composition.id, layer.id, interpolationProperty, previewFrame, it) },
+                                enabled = editable,
+                                modifier = Modifier.semantics { contentDescription = "Roving keyframe for $interpolationProperty at frame $previewFrame" }
+                            )
+                        }
+                        Text("Roving keys slide in time so the layer travels the path at constant speed; first and last keys never rove.", color = EditorPalette.muted, fontSize = 10.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Auto motion path", color = EditorPalette.text, fontSize = 12.sp)
+                            Switch(
+                                checked = currentKey.spatialAuto,
+                                onCheckedChange = {
+                                    onSetCanonicalKeyframeSpatialTangents(
+                                        composition.id, layer.id, interpolationProperty, previewFrame,
+                                        currentKey.spatialIn.getOrElse(0) { 0.0 }, currentKey.spatialIn.getOrElse(1) { 0.0 }, currentKey.spatialIn.getOrElse(2) { 0.0 },
+                                        currentKey.spatialOut.getOrElse(0) { 0.0 }, currentKey.spatialOut.getOrElse(1) { 0.0 }, currentKey.spatialOut.getOrElse(2) { 0.0 },
+                                        it
+                                    )
+                                },
+                                enabled = editable,
+                                modifier = Modifier.semantics { contentDescription = "Auto motion path for $interpolationProperty at frame $previewFrame" }
+                            )
+                            TextButton(
+                                enabled = editable && (!currentKey.spatialAuto || currentKey.spatialIn.any { it != 0.0 } || currentKey.spatialOut.any { it != 0.0 }),
+                                onClick = {
+                                    onSetCanonicalKeyframeSpatialTangents(composition.id, layer.id, interpolationProperty, previewFrame, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false)
+                                },
+                                modifier = Modifier.semantics { contentDescription = "Straight path for $interpolationProperty at frame $previewFrame" }
+                            ) { Text("Straight path", color = EditorPalette.mint, fontSize = 10.sp) }
+                        }
+                        Text("Auto bends the path smoothly through the keys; Straight path runs each segment directly between keys.", color = EditorPalette.muted, fontSize = 10.sp)
+                    }
+                }
+                // The overlay toggle lives with the motion-path controls and
+                // is a view preference, so it stays enabled even for a locked
+                // layer; it only appears when the selected layer has a path.
+                val positionKeys = layer.transformCurves["position"].orEmpty()
+                if (positionKeys.size >= 2) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Show motion path", color = EditorPalette.text, fontSize = 12.sp)
+                        Switch(
+                            checked = showMotionPath,
+                            onCheckedChange = onShowMotionPathChange,
+                            modifier = Modifier.semantics { contentDescription = "Show motion path overlay" }
+                        )
+                    }
+                }
                 if (composition != null) {
                     CurveGraphSection(
                         layer = layer,
@@ -2472,6 +2638,12 @@ private fun CurveGraphSection(
     }
 
     Text("Curve graph · $label", color = EditorPalette.text, fontSize = 12.sp)
+    // A spatial track graphs one component only: the ease is a single speed
+    // along the motion path (the first ease entry), and per-dimension
+    // handles don't apply — the path itself is shown by the overlay.
+    if (selector == "transform:position" || selector == "transform:anchor") {
+        Text("Spatial track: one speed along the motion path, from the first ease entry. See the motion-path overlay for the path itself.", color = EditorPalette.muted, fontSize = 10.sp)
+    }
     Row(
         Modifier.horizontalScroll(rememberScrollState()).testTag("curve-selector-row"),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -2808,7 +2980,11 @@ private fun curveTrackFor(layer: CanonicalLayerInfo, selector: String): CurveTra
                     "Bezier" -> CurveInterp.BEZIER
                     "Hold" -> CurveInterp.HOLD
                     else -> CurveInterp.LINEAR
-                }
+                },
+                roving = key.roving,
+                spatialIn = key.spatialIn,
+                spatialOut = key.spatialOut,
+                spatialAuto = key.spatialAuto
             )
         }.sortedBy { it.frame }
     }

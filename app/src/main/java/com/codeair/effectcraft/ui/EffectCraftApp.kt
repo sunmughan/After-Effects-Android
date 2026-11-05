@@ -1203,6 +1203,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical $property interpolation set to $preset · frame $frame · saved locally"
                 )
             },
+            onSetCanonicalKeyframeRoving = { compositionId, layerId, property, frame, roving ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerKeyframeRovingEcproj(source, compositionId, layerId, "transform:$property", frame.toLong(), roving),
+                    "Canonical $property roving ${if (roving) "on" else "off"} · frame $frame · saved locally"
+                )
+            },
+            onSetCanonicalKeyframeSpatialTangents = { compositionId, layerId, property, frame, inX, inY, inZ, outX, outY, outZ, spatialAuto ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerKeyframeSpatialTangentsEcproj(source, compositionId, layerId, "transform:$property", frame.toLong(), inX, inY, inZ, outX, outY, outZ, spatialAuto),
+                    "Canonical $property motion path ${if (spatialAuto) "auto" else "manual"} · frame $frame · saved locally"
+                )
+            },
             onMoveCanonicalCurveKey = { compositionId, layerId, selector, fromFrame, toFrame ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
