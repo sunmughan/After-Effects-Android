@@ -53,6 +53,34 @@ data class CanonicalColorParam(
     val keyframes: List<Int> = emptyList()
 )
 
+/** One editable checkbox (Bool) parameter addressed by native uid; its keys are hold keys. */
+data class CanonicalBoolParam(
+    val uid: Long,
+    val name: String,
+    val value: Boolean,
+    val keys: List<CanonicalCurveKey> = emptyList(),
+    val keyframes: List<Int> = emptyList()
+)
+
+/** One editable popup (Enum) parameter addressed by native uid; [value] is the 0-based selected option index. */
+data class CanonicalPopupParam(
+    val uid: Long,
+    val name: String,
+    val value: Int,
+    val options: List<String>,
+    val keys: List<CanonicalCurveKey> = emptyList(),
+    val keyframes: List<Int> = emptyList()
+)
+
+/**
+ * Value a hold-only parameter (bool/popup) shows at [frame]: the last key
+ * at or before the frame, else the static value. Hold keys never tween,
+ * so the value between keys is exactly the earlier key's value.
+ */
+fun holdValueAt(keys: List<CanonicalCurveKey>, frame: Int, staticValue: Double): Double {
+    return keys.filter { it.frame <= frame }.maxByOrNull { it.frame }?.value ?: staticValue
+}
+
 /** Text layer source parameters; null on layers that carry no Source Text property. */
 data class CanonicalTextParams(
     val text: String,
@@ -63,15 +91,18 @@ data class CanonicalTextParams(
 
 /**
  * One shape item (for example a Rectangle path) or one effect group, with the
- * scalar, vector and straight-RGBA color parameters the native model exposes
- * for editing. Path, gradient and popup parameters remain non-editable.
+ * scalar, vector, straight-RGBA color, checkbox-bool and popup-enum
+ * parameters the native model exposes for editing. Path, gradient and
+ * layer-reference parameters remain non-editable.
  */
 data class CanonicalParamGroup(
     val name: String,
     val kind: String,
     val scalars: List<CanonicalScalarParam> = emptyList(),
     val vecs: List<CanonicalVecParam> = emptyList(),
-    val colors: List<CanonicalColorParam> = emptyList()
+    val colors: List<CanonicalColorParam> = emptyList(),
+    val bools: List<CanonicalBoolParam> = emptyList(),
+    val popups: List<CanonicalPopupParam> = emptyList()
 )
 
 data class CanonicalLayerInfo(
@@ -266,13 +297,16 @@ data class CanonicalProjectInfo(
                 val rawValue = key.opt("value")
                 val value = when (rawValue) {
                     is Number -> rawValue.toDouble()
+                    is Boolean -> if (rawValue) 1.0 else 0.0
                     is org.json.JSONArray -> if (rawValue.length() > 0) rawValue.optDouble(0, 0.0) else 0.0
                     else -> 0.0
                 }
                 // The full vector rides along for the motion-path overlay;
-                // the graph still plots the first component.
+                // the graph still plots the first component. A bool key
+                // rides as a single 1.0/0.0 component.
                 val components = when (rawValue) {
                     is Number -> listOf(rawValue.toDouble())
+                    is Boolean -> listOf(if (rawValue) 1.0 else 0.0)
                     is org.json.JSONArray -> (0 until rawValue.length()).map { rawValue.optDouble(it, 0.0) }
                     else -> listOf(0.0)
                 }
@@ -349,13 +383,40 @@ data class CanonicalProjectInfo(
                         keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
                     )
                 }
+                val boolArray = group.optJSONArray("bools")
+                val bools = (0 until (boolArray?.length() ?: 0)).map { boolIndex ->
+                    val param = boolArray!!.getJSONObject(boolIndex)
+                    CanonicalBoolParam(
+                        uid = param.getLong("uid"),
+                        name = param.optString("name", "Checkbox"),
+                        value = param.optBoolean("value", false),
+                        keys = parseCurveKeys(param.optJSONArray("keys")),
+                        keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
+                    )
+                }
+                val popupArray = group.optJSONArray("popups")
+                val popups = (0 until (popupArray?.length() ?: 0)).map { popupIndex ->
+                    val param = popupArray!!.getJSONObject(popupIndex)
+                    val optionsArray = param.optJSONArray("options")
+                    val options = (0 until (optionsArray?.length() ?: 0)).map { optionsArray!!.getString(it) }
+                    CanonicalPopupParam(
+                        uid = param.getLong("uid"),
+                        name = param.optString("name", "Popup"),
+                        value = param.optInt("value", 0),
+                        options = options,
+                        keys = parseCurveKeys(param.optJSONArray("keys")),
+                        keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
+                    )
+                }
                 groups.add(
                     CanonicalParamGroup(
                         name = group.optString("name", "Parameter group"),
                         kind = group.optString("kind", ""),
                         scalars = scalars,
                         vecs = vecs,
-                        colors = colors
+                        colors = colors,
+                        bools = bools,
+                        popups = popups
                     )
                 )
             }

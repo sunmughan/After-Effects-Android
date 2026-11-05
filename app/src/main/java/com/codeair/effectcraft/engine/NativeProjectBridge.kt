@@ -173,6 +173,44 @@ object NativeProjectBridge {
         if (!available || uid < 0 || listOf(red, green, blue, alpha).any { !it.isFinite() || it !in 0.0..1.0 }) return null
         return runCatching { setLayerColorPropertyEcprojNative(json, compositionId, layerId, uid, red, green, blue, alpha) }.getOrNull()
     }
+
+    /** Sets a checkbox (Bool) shape-item or effect parameter by stable native uid. Rejected by native when the parameter already has keys. */
+    fun setLayerBoolPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String? {
+        ensureLoaded()
+        if (!available || uid < 0) return null
+        return runCatching { setLayerBoolPropertyEcprojNative(json, compositionId, layerId, uid, value) }.getOrNull()
+    }
+
+    /** Sets a popup (Enum) shape-item or effect parameter by stable native uid; [index] is the 0-based option index. Rejected by native when the index is out of range or the parameter already has keys. */
+    fun setLayerPopupPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, index: Int): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || index < 0) return null
+        return runCatching { setLayerPopupPropertyEcprojNative(json, compositionId, layerId, uid, index) }.getOrNull()
+    }
+
+    /**
+     * Authors a hold keyframe for a checkbox (Bool) parameter at [frame].
+     * The first key seeds frame 0 with the parameter's current value; the
+     * value holds (never tweens) until the next key. Returns the
+     * edited-project envelope, or null when native is unavailable or any
+     * argument is invalid.
+     */
+    fun setLayerBoolKeyframeEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, value: Boolean): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || frame < 0) return null
+        return runCatching { setLayerBoolKeyframeEcprojNative(json, compositionId, layerId, uid, frame, value) }.getOrNull()
+    }
+
+    /**
+     * Authors a hold keyframe for a popup (Enum) parameter at [frame];
+     * [index] is the 0-based option index. Same seeding and hold
+     * semantics as [setLayerBoolKeyframeEcproj].
+     */
+    fun setLayerPopupKeyframeEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, index: Int): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || frame < 0 || index < 0) return null
+        return runCatching { setLayerPopupKeyframeEcprojNative(json, compositionId, layerId, uid, frame, index) }.getOrNull()
+    }
     
     /** Authors a canonical RGBA parameter keyframe at a composition frame. */
     fun setLayerColorKeyframeEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, red: Double, green: Double, blue: Double, alpha: Double): String? {
@@ -400,6 +438,18 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerColorPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, red: Double, green: Double, blue: Double, alpha: Double): String
+
+    @JvmStatic
+    private external fun setLayerBoolPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String
+
+    @JvmStatic
+    private external fun setLayerPopupPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, index: Int): String
+
+    @JvmStatic
+    private external fun setLayerBoolKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, value: Boolean): String
+
+    @JvmStatic
+    private external fun setLayerPopupKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, index: Int): String
     
     @JvmStatic
     private external fun setLayerColorKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, red: Double, green: Double, blue: Double, alpha: Double): String
