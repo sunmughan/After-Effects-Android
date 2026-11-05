@@ -35,6 +35,21 @@ object AudioTrackSelection {
         candidates.indexOfFirst { it.mimeType == PASSTHROUGH_MIME }.takeIf { it >= 0 }
 
     /**
+     * Enforces the timestamp invariants of a finalized muxed AAC track.
+     * The first sample may be at zero; subsequent samples must be strictly
+     * later. Returns the current timestamp to make streaming validation
+     * allocation-free. AAC priming offsets are handled before muxing; a
+     * negative PTS in the final output is therefore invalid.
+     */
+    fun validateSamplePts(previousPtsUs: Long?, currentPtsUs: Long): Long {
+        require(currentPtsUs >= 0L) { "AAC sample has a negative presentation timestamp" }
+        require(previousPtsUs == null || currentPtsUs > previousPtsUs) {
+            "AAC presentation timestamps are not strictly increasing"
+        }
+        return currentPtsUs
+    }
+
+    /**
      * Shifts an audio sample timestamp into the exported range, or null when
      * the sample falls outside [rangeStartUs, rangeEndUs). The range is in
      * composition-timeline microseconds, so the caller supplies composition
