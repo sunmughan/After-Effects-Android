@@ -21,24 +21,28 @@ object Mp4OutputValidator {
         val height: Int,
         val frameCount: Int,
         val durationUs: Long,
-        val mime: String
+        val mime: String,
+        val audioSamples: Long = 0L,
+        val audioFirstPtsUs: Long? = null,
+        val audioLastPtsUs: Long? = null,
+        val audioTrackDurationUs: Long? = null
     )
 
-    fun validate(context: Context, uri: Uri, plan: RenderQueuePlan): Report {
+    fun validate(context: Context, uri: Uri, plan: RenderQueuePlan, expectAudio: Boolean = false): Report {
         require(plan.settings.outputFormat == RenderOutputFormat.MP4_H264) {
             "Render queue is not configured for H.264 MP4"
         }
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
-            return inspect(extractor, plan)
+            return inspect(extractor, plan, expectAudio)
         } finally {
             extractor.release()
         }
     }
 
     /** File-backed variant used by codec instrumentation; production uses the SAF Uri overload. */
-    fun validateFile(file: File, plan: RenderQueuePlan): Report {
+    fun validateFile(file: File, plan: RenderQueuePlan, expectAudio: Boolean = false): Report {
         require(file.isFile && file.length() > 0L) { "MP4 output is missing or empty" }
         val extractor = MediaExtractor()
         try {
@@ -49,7 +53,7 @@ object Mp4OutputValidator {
         }
     }
 
-    private fun inspect(extractor: MediaExtractor, plan: RenderQueuePlan): Report {
+    private fun inspect(extractor: MediaExtractor, plan: RenderQueuePlan, expectAudio: Boolean): Report {
         val track = (0 until extractor.trackCount).firstOrNull { index ->
             extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
                 ?.equals(Mp4SequenceExporter.MIME, ignoreCase = true) == true
@@ -101,6 +105,63 @@ object Mp4OutputValidator {
         require(kotlin.math.abs(trackDurationUs - expectedDurationUs) <= frameDurationUs) {
             "MP4 duration ${trackDurationUs}us differs from expected ${expectedDurationUs}us"
         }
-        return Report(width, height, count, trackDurationUs, format.getString(MediaFormat.KEY_MIME) ?: Mp4SequenceExporter.MIME)
+        val audioTrack = (0 until extractor.trackCount).firstOrNull { index ->
+            extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
+                ?.equals(AudioTrackSelection.PASSTHROUGH_MIME, ignoreCase = true) == true
+        }
+        require(!expectAudio || audioTrack != null) {
+            "MP4 is missing the expected AAC audio track"
+        }
+
+        var audioSamples = 0L
+        var audioFirstPtsUs: Long? = null
+        var audioLastPtsUs: Long? = null
+        var audioTrackDurationUs: Long? = null
+        if (audioTrack != null) {
+            val audioFormat = extractor.getTrackFormat(audioTrack)
+            audioTrackDurationUs = runCatching { audioFormat.getLong(MediaFormat.KEY_DURATION) }.getOrNull()
+            extractor.unselectTrack(track)
+            extractor.selectTrack(audioTrack)
+            extractor.seekTo(0, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            // AAC access units are small; keep validation memory fixed
+            // regardless of export duration or sample count.
+            val audioBuffer = ByteBuffer.allocateDirect(1024 * 1024)
+            while (true) {
+                audioBuffer.clear()
+                val bytes = extractor.readSampleData(audioBuffer, 0)
+                if (bytes < 0) break
+                val pts = extractor.sampleTime
+                require(pts >= 0L) { "MP4 AAC sample has a negative presentation timestamp" }
+                if (audioFirstPtsUs == null) {
+                    audioFirstPtsUs = pts
+                } else {
+                    require(pts > audioLastPtsUs!!) {
+                        "MP4 AAC presentation timestamps are not strictly increasing"
+                    }
+                }
+                audioLastPtsUs = pts
+                audioSamples++
+                extractor.advance()
+            }
+            require(!expectAudio || audioSamples > 0L) {
+                "MP4 AAC track contains no samples"
+            }
+            if (audioSamples > 0L) {
+                require(audioLastPtsUs!! < trackDurationUs) {
+                    "MP4 AAC last presentation timestamp must precede the video end"
+                }
+            }
+        }
+        return Report(
+            width = width,
+            height = height,
+            frameCount = count,
+            durationUs = trackDurationUs,
+            mime = format.getString(MediaFormat.KEY_MIME) ?: Mp4SequenceExporter.MIME,
+            audioSamples = audioSamples,
+            audioFirstPtsUs = audioFirstPtsUs,
+            audioLastPtsUs = audioLastPtsUs,
+            audioTrackDurationUs = audioTrackDurationUs
+        )
     }
 }

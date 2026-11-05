@@ -144,6 +144,12 @@ object Mp4ExportWorker {
                     audioSamples = muxAudio(stagedFile, audioFile, remuxed, rangeStartUs, rangeEndUs, isCancelled)
                     if (audioSamples > 0L) {
                         val remuxedValidated = Mp4ExportValidator.validate(remuxed, plan, expectAudio = true)
+                        check(remuxedValidated.audioSamples == audioSamples) {
+                            "Muxed AAC sample count ${remuxedValidated.audioSamples} differs from written count $audioSamples"
+                        }
+                        check(remuxedValidated.audioFirstPtsUs != null && remuxedValidated.audioLastPtsUs != null) {
+                            "Validated AAC track is missing its presentation-time window"
+                        }
                         if (!remuxed.renameTo(stagedFile)) {
                             // renameTo refuses an existing target; replace by copy instead.
                             remuxed.copyTo(stagedFile, overwrite = true)

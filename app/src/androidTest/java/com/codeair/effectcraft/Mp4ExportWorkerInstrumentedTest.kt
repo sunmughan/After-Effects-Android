@@ -14,6 +14,7 @@ import com.codeair.effectcraft.data.AudioStatus
 import com.codeair.effectcraft.data.Mp4BoxInspector
 import com.codeair.effectcraft.data.Mp4ExportValidator
 import com.codeair.effectcraft.data.Mp4ExportWorker
+import com.codeair.effectcraft.data.Mp4OutputValidator
 import com.codeair.effectcraft.data.Mp4SequenceExporter
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
@@ -92,6 +93,10 @@ class Mp4ExportWorkerInstrumentedTest {
                 result.durationUs in 33_333L..100_000L)
             assertEquals(0L, result.audioSamplesWritten)
             assertTrue(staged.isFile && staged.length() > 0L)
+            val missingAudio = runCatching {
+                Mp4OutputValidator.validateFile(staged, plan(), expectAudio = true)
+            }.exceptionOrNull()
+            assertTrue("Video-only output must not pass an audio-required validator", missingAudio is IllegalArgumentException)
 
             // Independent container proof: the ported box inspector reads the
             // staged file's own headers (not MediaExtractor's view of it).
@@ -192,6 +197,30 @@ class Mp4ExportWorkerInstrumentedTest {
                 validated.audioFirstPtsUs, result.audioFirstPtsUs)
             assertEquals("Staged result must carry the measured AAC end",
                 validated.audioLastPtsUs, result.audioLastPtsUs)
+
+            // Exercise the same Uri-backed final-output validation used by
+            // EffectCraftApp after copying the staged file to SAF/MediaStore.
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, "effectcraft-aac-test-${System.nanoTime()}.mp4")
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                if (Build.VERSION.SDK_INT >= 29) {
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/EffectCraftTest")
+                }
+            }
+            val destination = context.contentResolver.insert(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values
+            ) ?: error("MediaStore refused the AAC test video entry")
+            try {
+                SafDocumentWriter.copyFileToDocument(context, staged, destination)
+                val finalReport = Mp4OutputValidator.validate(
+                    context, destination, plan(), expectAudio = true
+                )
+                assertEquals(validated.audioSamples, finalReport.audioSamples)
+                assertEquals(validated.audioFirstPtsUs, finalReport.audioFirstPtsUs)
+                assertEquals(validated.audioLastPtsUs, finalReport.audioLastPtsUs)
+            } finally {
+                runCatching { context.contentResolver.delete(destination, null, null) }
+            }
         } finally {
             fixture.delete()
             staged.delete()

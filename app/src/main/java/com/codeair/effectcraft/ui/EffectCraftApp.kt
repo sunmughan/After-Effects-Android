@@ -506,7 +506,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                     currentCoroutineContext().ensureActive()
                     val verified = withContext(Dispatchers.IO) {
-                        Mp4OutputValidator.validate(context, uri, plan)
+                        Mp4OutputValidator.validate(
+                            context = context,
+                            uri = uri,
+                            plan = plan,
+                            expectAudio = stagedResult.audioStatus == AudioStatus.INCLUDED
+                        )
                     }
                     // The destination is a byte copy of the staged file, so its
                     // validator report must agree with the staged result exactly;
@@ -516,6 +521,19 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                     check(verified.durationUs == stagedResult.durationUs) {
                         "MP4 validation duration differs from staged export"
+                    }
+                    if (stagedResult.audioStatus == AudioStatus.INCLUDED) {
+                        check(verified.audioSamples == stagedResult.audioSamplesWritten) {
+                            "MP4 validation AAC sample count differs from staged export"
+                        }
+                        check(verified.audioFirstPtsUs == stagedResult.audioFirstPtsUs &&
+                            verified.audioLastPtsUs == stagedResult.audioLastPtsUs) {
+                            "MP4 validation AAC presentation window differs from staged export"
+                        }
+                    } else {
+                        check(verified.audioSamples == 0L) {
+                            "MP4 unexpectedly contains AAC audio for a video-only export"
+                        }
                     }
                     currentCoroutineContext().ensureActive()
                     outputCompleted = true
