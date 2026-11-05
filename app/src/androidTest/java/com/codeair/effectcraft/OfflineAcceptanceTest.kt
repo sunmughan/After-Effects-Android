@@ -26,6 +26,12 @@ import java.io.File
  * network-adjacent permission is the FCM transport one (plus the
  * Android 13+ notification permission). The flow test below still
  * touches only app-private files and needs no account.
+ * SCOPE CORRECTION (M5-L8 foreground service, not a weakening): the
+ * PNG sequence export foreground service requires FOREGROUND_SERVICE
+ * plus FOREGROUND_SERVICE_DATA_SYNC for its dataSync type. Neither is
+ * an account or credential permission, and the two account/credential
+ * assertions below are unchanged; the allowlist gains exactly those
+ * two service permissions.
  */
 class OfflineAcceptanceTest {
 
@@ -46,15 +52,19 @@ class OfflineAcceptanceTest {
         assertFalse("Offline app must not request account access", requested.any { it.contains("ACCOUNT") })
         assertFalse("Offline app must not request credentials", requested.any { it.contains("CREDENTIAL") })
         // The app declares only INTERNET (FCM transport, see the manifest
-        // comment) + POST_NOTIFICATIONS, but manifest merging adds the
-        // FCM library's own permissions (WAKE_LOCK, ACCESS_NETWORK_STATE,
-        // c2dm RECEIVE) and AndroidX's app-id-scoped dynamic-receiver
-        // permission. None is an account/credential permission. Anything
-        // beyond this allowlist — a future account, location, or media
-        // permission, say — must fail here.
+        // comment) + POST_NOTIFICATIONS + the two foreground-service
+        // permissions for the PNG sequence export service, but manifest
+        // merging adds the FCM library's own permissions (WAKE_LOCK,
+        // ACCESS_NETWORK_STATE, c2dm RECEIVE) and AndroidX's
+        // app-id-scoped dynamic-receiver permission. None is an
+        // account/credential permission. Anything beyond this allowlist
+        // — a future account, location, or media permission, say —
+        // must fail here.
         val allowed = setOf(
             "android.permission.INTERNET",
             "android.permission.POST_NOTIFICATIONS",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
             "android.permission.ACCESS_NETWORK_STATE",
             "android.permission.WAKE_LOCK",
             "com.google.android.c2dm.permission.RECEIVE"
