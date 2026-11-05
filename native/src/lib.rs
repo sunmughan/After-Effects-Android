@@ -3972,7 +3972,7 @@ mod tests {
         assert_eq!(metadata["compositions"][0]["layers"][0]["text"]["font"], "Inter Display");
         assert!(set_text_layer_font(&source, comp_id, layer_id, " ").is_err());
         assert!(set_text_layer_font(&source, comp_id, layer_id, &"F".repeat(129)).is_err());
-        assert!(set_text_layer_font(&source, comp_id, layer_id, "Bad\\nFont").is_err());
+        assert!(set_text_layer_font(&source, comp_id, layer_id, "Bad\nFont").is_err());
         assert!(set_text_layer_font(&source, comp_id, 999, "Inter").is_err());
     }
 
