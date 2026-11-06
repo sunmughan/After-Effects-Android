@@ -359,3 +359,7 @@ CI #874 exposed an invalid measured preview size conversion at EditorScreen.kt:1
 - Shape/mask/effect Path parameters now expose upstream vertices, tangents, closed and feather metadata; the Android inspector can edit the complete ShapePath JSON and apply it through validated Rust/JNI canonical persistence and native preview-session refresh.
 - Regression coverage: Rust geometry/validation/metadata, JVM ShapePath parsing, API 30 canonical edit + NativeSession render. Visual vertex/Bezier handle manipulation and animated Path keys remain future work; exact-head CI is pending.
 - CI #880's Kotlin callback-scope compile failure was fixed in #0de73bcf; #881 was superseded before a verdict. New path commits require fresh CI and cold APK/native comparison. Release NOT COMPLETE; see PHASES.md for M0–M7 gates and blockers.
+
+
+### M4 ShapePath follow-up
+- Wired the effects inspector's Apply path action as well as shape/mask paths through the canonical native setter ([35706a07](https://github.com/sunmughan/After-Effects-Android/commit/35706a07bcc6a970d16c4003ea35f8ad294f4bfe)). Both ShapePath call sites verified. CI #893 is pending; no current-head pass claimed.
