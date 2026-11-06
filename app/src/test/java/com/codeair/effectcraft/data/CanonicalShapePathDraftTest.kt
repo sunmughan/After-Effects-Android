@@ -82,6 +82,24 @@ class CanonicalShapePathDraftTest {
         assertEquals(1, edited.getJSONArray("feather").getJSONObject(0).getInt("segment"))
     }
 
+    @Test fun draggingOneTangentHandleChangesOnlyItsOffsetAndPreservesPathMetadata() {
+        val source = fixture()
+        val moved = JSONObject(CanonicalShapePathDraft.moveTangentHandle(
+            source, "out_tangents", 1, CanonicalShapePathDraft.Vertex(12.25, -6.5)
+        )!!)
+        val offsets = CanonicalShapePathDraft.tangentOffsets(moved.toString(), "out_tangents")!!
+        assertEquals(0.0, offsets[0].x, 0.0)
+        assertEquals(12.25, offsets[1].x, 0.0)
+        assertEquals(-6.5, offsets[1].y, 0.0)
+        assertEquals(0.0, offsets[2].y, 0.0)
+        assertEquals(0.0, CanonicalShapePathDraft.tangentOffsets(moved.toString(), "in_tangents")!![1].x, 0.0)
+        assertEquals(3.0, CanonicalShapePathDraft.vertices(moved.toString())!![1].x, 0.0)
+        assertEquals("preserved", moved.getString("custom"))
+        assertNull(CanonicalShapePathDraft.moveTangentHandle(source, "vertices", 1, CanonicalShapePathDraft.Vertex(1.0, 2.0)))
+        assertNull(CanonicalShapePathDraft.moveTangentHandle(source, "in_tangents", 3, CanonicalShapePathDraft.Vertex(1.0, 2.0)))
+        assertNull(CanonicalShapePathDraft.moveTangentHandle(source, "in_tangents", 0, CanonicalShapePathDraft.Vertex(Double.NaN, 2.0)))
+    }
+
     @Test fun tangentEditsRejectWrongFieldLengthAndNonFiniteValues() {
         val source = fixture()
         val offsets = CanonicalShapePathDraft.tangentOffsets(source, "in_tangents")!!
