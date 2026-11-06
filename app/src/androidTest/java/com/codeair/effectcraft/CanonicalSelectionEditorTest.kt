@@ -184,12 +184,17 @@ class CanonicalSelectionEditorTest {
         // The COLOR lane draws one swatch per color keyframe (the key's own
         // RGBA, not the layer's current color) and seeks the nearest key.
         // The lane sits below the transform lane, so scroll it into view
-        // before asserting it is displayed.
-        compose.onNodeWithContentDescription("Canonical color keyframes: 0: #FF0000, 15: #00FF00, 30: #0000FF")
-            .performScrollTo().assertIsDisplayed()
+        // before asserting it is displayed. Tap at frame 15's own position
+        // in the lane: the tap detector seeks the nearest key to the tapped
+        // frame, which must be 15 (a centre tap would land near frame 45
+        // and seek 30 instead).
+        val colorLane = compose.onNodeWithContentDescription("Canonical color keyframes: 0: #FF0000, 15: #00FF00, 30: #0000FF")
+        colorLane.performScrollTo().assertIsDisplayed()
         workspaceFrame.intValue = 14
-        compose.onNodeWithContentDescription("Canonical color keyframes: 0: #FF0000, 15: #00FF00, 30: #0000FF")
-            .performClick()
+        val laneBounds = colorLane.fetchSemanticsNode().boundsInRoot
+        colorLane.performTouchInput {
+            click(Offset(laneBounds.width * 15f / 89f, laneBounds.height / 2f))
+        }
         assertEquals(15, workspaceFrame.intValue)
 
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
