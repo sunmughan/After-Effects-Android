@@ -1450,3 +1450,11 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
   - **M6 Reliability — PARTIAL:** journal crash recovery, offline asset integrity/GC, process-death groundwork, performance budgets and instrumentation exist. Physical-device memory/thermal/frame-time profiling, API/ABI/device matrix, long-session leak/crash and TalkBack/accessibility UX acceptance remain open.
   - **M7 Release — NOT ACCEPTED:** latest-head full CI/cold reproducibility, configurable signed release APK/AAB (secrets protected), downloadable artifact, physical install/run, release notes/limitations and authorized PR merge/release verification are outstanding.
 - **Release NOT COMPLETE.** Current CI #968 failure is corrected at test-source level; no pass is claimed for `fc029c2b` until a fresh exact-head run finishes.
+
+
+## Automation Run 10 follow-up — arbitrary-t ShapePath insertion (2026-11-06)
+
+- M4 extends the existing exact de Casteljau draft operation to the inspector: numeric `t` entry (strictly finite `0<t<1`) and **Insert at t** now place a new anchor at the chosen parameter, while Insert midpoint remains the fast `t=0.5` action. Both use the same geometry-preserving split, tangent and feather remap, and select the inserted anchor.
+- UI commit [7aae588e](https://github.com/sunmughan/After-Effects-Android/commit/7aae588e2201470015be4de91aa64ad5f6ea0d58); API30 custom-`t` regression [06bde801](https://github.com/sunmughan/After-Effects-Android/commit/06bde801d0353eba2fbe16356eb586c2ac89f23b); test replaces the default `0.5` field before entering `0.25` [d8cc9a99](https://github.com/sunmughan/After-Effects-Android/commit/d8cc9a99b6d60230043b1484caaf01edf78bd60c).
+- Latest source/test commit before tracker sync: `d8cc9a99`. CI #975 [42270588285] started on older README SHA `1a9782e4`; new pushes supersede it. A fresh exact-head workflow must finish Kotlin/JVM/API30/native ABI and cold APK/native reproducibility before any acceptance flip.
+- M4 next: multi-segment selection/editing, shape-path key interpolation/roving/spatial parity, and broader native preview update acceptance. M2/M3/M5/M6/M7 remain open per the acceptance ledger above; **Release NOT COMPLETE.**
