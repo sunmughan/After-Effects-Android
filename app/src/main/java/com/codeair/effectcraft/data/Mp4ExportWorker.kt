@@ -225,8 +225,9 @@ object Mp4ExportWorker {
         try {
             videoExtractor.setDataSource(videoFile.absolutePath)
             val videoTrackIndex = (0 until videoExtractor.trackCount).firstOrNull { index ->
-                videoExtractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME) == Mp4SequenceExporter.MIME
-            } ?: error("Staged MP4 is missing its H.264 video track")
+                videoExtractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
+                    ?.startsWith("video/") == true
+            } ?: error("Staged MP4 is missing its video track")
             audioExtractor.setDataSource(audioFile.absolutePath)
             val audioFormat = audioExtractor.getTrackFormat(audioTrackIndex)
             muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)

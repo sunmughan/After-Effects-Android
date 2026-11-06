@@ -8,11 +8,11 @@ import java.nio.ByteBuffer
 /**
  * Verifies a staged MP4 with MediaExtractor before any SAF copy, mirroring
  * the ZIP exporter's staged-integrity discipline. Rejects a missing or
- * empty file, a missing H.264 video track, a video sample count that does
- * not equal the plan frame count, and a duration that disagrees with the
- * plan by more than one frame. When audio was muxed, the AAC track must
- * also be present with at least one sample. A rejected file is never
- * copied; the caller deletes it.
+ * empty file, a missing video track in the plan's codec (H.264 or HEVC), a
+ * video sample count that does not equal the plan frame count, and a
+ * duration that disagrees with the plan by more than one frame. When audio
+ * was muxed, the AAC track must also be present with at least one sample.
+ * A rejected file is never copied; the caller deletes it.
  */
 object Mp4ExportValidator {
     data class Result(
@@ -30,6 +30,8 @@ object Mp4ExportValidator {
     fun validate(file: File, plan: RenderQueuePlan, expectAudio: Boolean): Result {
         Mp4ExportRequirements.checkPlan(plan)
         require(file.isFile && file.length() > 0L) { "MP4 output is missing or empty" }
+        val expectedVideoMime = Mp4SequenceExporter.mimeFor(plan.settings.outputFormat)
+        val videoLabel = Mp4SequenceExporter.codecLabel(plan.settings.outputFormat)
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(file.absolutePath)
@@ -40,7 +42,7 @@ object Mp4ExportValidator {
             for (index in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(index)
                 val mime = format.getString(MediaFormat.KEY_MIME)
-                if (mime == "video/avc" && videoTrack < 0) {
+                if (mime == expectedVideoMime && videoTrack < 0) {
                     videoTrack = index
                     if (format.containsKey(MediaFormat.KEY_DURATION)) {
                         videoDurationUs = format.getLong(MediaFormat.KEY_DURATION)
@@ -52,7 +54,7 @@ object Mp4ExportValidator {
                         ?.getLong(MediaFormat.KEY_DURATION)
                 }
             }
-            require(videoTrack >= 0) { "MP4 is missing its H.264 video track" }
+            require(videoTrack >= 0) { "MP4 is missing its $videoLabel video track" }
             if (expectAudio) {
                 require(audioTrack >= 0) { "MP4 is missing its muxed AAC audio track" }
             }

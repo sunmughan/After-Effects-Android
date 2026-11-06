@@ -9,7 +9,9 @@ package com.codeair.effectcraft.data
  */
 enum class RenderOutputFormat {
     PNG_SEQUENCE_ZIP,
-    MP4_H264
+    MP4_H264,
+    /** H.265/HEVC in MP4: explicit opt-in only, offered after HevcEncoderProbe confirms a hardware encoder. */
+    MP4_HEVC
 }
 
 data class RenderQueueSettings(
@@ -82,12 +84,14 @@ data class RenderQueuePlan private constructor(
             require(countLong in 1L..MAX_FRAME_COUNT.toLong()) {
                 "Render queue must contain between 1 and $MAX_FRAME_COUNT frames"
             }
-            if (settings.outputFormat == RenderOutputFormat.MP4_H264) {
+            if (settings.outputFormat == RenderOutputFormat.MP4_H264 ||
+                settings.outputFormat == RenderOutputFormat.MP4_HEVC
+            ) {
                 require(settings.width % 2 == 0 && settings.height % 2 == 0) {
-                    "H.264 YUV420 dimensions must be even"
+                    "MP4 YUV420 dimensions must be even"
                 }
                 require(settings.videoBitrate in 250_000..50_000_000) {
-                    "H.264 bitrate must be between 250 kbps and 50 Mbps"
+                    "MP4 bitrate must be between 250 kbps and 50 Mbps"
                 }
             }
             val pixels = settings.width.toLong() * settings.height.toLong()

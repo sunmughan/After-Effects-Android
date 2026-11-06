@@ -79,6 +79,21 @@ class RenderQueuePlanTest {
     }
 
     @Test
+    fun hevcPlanSharesMp4DimensionAndBitrateRules() {
+        val hevc = RenderQueueSettings(
+            width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29,
+            outputFormat = RenderOutputFormat.MP4_HEVC, videoBitrate = 8_000_000
+        )
+        assertEquals(30, RenderQueuePlan.create(hevc).frameCount)
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(hevc.copy(width = 641))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(hevc.copy(videoBitrate = 50_000_001))
+        }
+    }
+
+    @Test
     fun enforcesPerFramePixelsAndTotalRgbaBudget() {
         assertThrows(IllegalArgumentException::class.java) {
             RenderQueuePlan.create(settings(width = 4096, height = 4096))

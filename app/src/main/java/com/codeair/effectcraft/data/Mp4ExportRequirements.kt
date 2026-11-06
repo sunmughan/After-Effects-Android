@@ -1,17 +1,21 @@
 package com.codeair.effectcraft.data
 
 /**
- * MP4-specific plan rules on top of [RenderQueuePlan] validation. H.264
- * ByteBuffer encoding needs even dimensions (YUV420 chroma subsampling), so
- * odd dimensions are rejected with a message telling the user to pick even
- * values instead of silently padding or distorting the frame.
+ * MP4-specific plan rules on top of [RenderQueuePlan] validation. H.264 and
+ * HEVC ByteBuffer encoding needs even dimensions (YUV420 chroma
+ * subsampling), so odd dimensions are rejected with a message telling the
+ * user to pick even values instead of silently padding or distorting the
+ * frame.
  */
 object Mp4ExportRequirements {
     const val MAX_BIT_RATE = 20_000_000
     const val MIN_BIT_RATE = 1_000_000
 
     fun checkPlan(plan: RenderQueuePlan) {
-        require(plan.settings.outputFormat == RenderOutputFormat.MP4_H264) {
+        require(
+            plan.settings.outputFormat == RenderOutputFormat.MP4_H264 ||
+                plan.settings.outputFormat == RenderOutputFormat.MP4_HEVC
+        ) {
             "MP4 export requires an MP4 render plan"
         }
         require(plan.settings.width % 2 == 0 && plan.settings.height % 2 == 0) {

@@ -1032,7 +1032,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onCancelMp4Sequence = { if (!mp4ExportWritingOutput) mp4ExportJob?.cancel() },
             mp4ExportProgress = mp4ExportProgress,
-            onExportMp4Sequence = { width, height, fps, startFrame, endFrame, bitrate ->
+            onExportMp4Sequence = { width, height, fps, startFrame, endFrame, bitrate, outputFormat ->
                 val composition = canonicalProjectInfo?.compositions?.firstOrNull()
                 if (importedEcproj == null || composition == null) {
                     saveMessage = "Import a canonical composition before exporting MP4"
@@ -1040,7 +1040,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "Another render is already running"
                 } else {
                     runCatching {
-                        val settings = RenderQueueSettings(width, height, fps, startFrame, endFrame, RenderOutputFormat.MP4_H264, bitrate)
+                        val settings = RenderQueueSettings(width, height, fps, startFrame, endFrame, outputFormat, bitrate)
                         RenderQueuePlan.create(settings, composition.durationFrames)
                         pendingMp4Settings = settings
                         pendingMp4CompositionId = composition.id

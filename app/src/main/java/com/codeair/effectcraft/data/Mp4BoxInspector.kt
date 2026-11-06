@@ -121,7 +121,9 @@ object Mp4BoxInspector {
         require(entryOffset + 8 <= stsd.end) { "Video track stsd entry is truncated" }
         val entrySize = readU32(bytes, entryOffset).toInt()
         val codec = String(bytes, entryOffset + 4, 4, Charsets.US_ASCII)
-        require(codec == "avc1") { "Video track codec $codec is not H.264 (avc1)" }
+        require(codec == "avc1" || codec == "hev1" || codec == "hvc1") {
+            "Video track codec $codec is not H.264 (avc1) or HEVC (hev1/hvc1)"
+        }
         require(entryOffset + entrySize <= stsd.end) { "Video track stsd entry extends past stsd" }
         // VisualSampleEntry: 8 (box header) + 8 (sample entry header) +
         // 2 + 2 + 12 (pre-defined/reserved), then width/height.

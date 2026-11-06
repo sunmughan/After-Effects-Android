@@ -1,14 +1,17 @@
 # Codec and audio decision record for M5-L8
 
-Status: PROPOSAL ONLY. This record is not a user-approved choice, not an
-implementation, and not a PASS for M5-L8. The codec choice is still an open
-user decision. No code was changed for this record.
+Status: DECIDED by the owner 2026-11-06. H.264 AVC in MP4 with AAC audio
+is the only default. H.265/HEVC in MP4 is an explicit opt-in only, offered
+after a runtime probe confirms a hardware HEVC encoder exists on the
+device. No AV1 encode. This record is the decision; the implementation
+below it is real code (probe, plan, exporter, validator, export dialog),
+not a proposal. The M5-L8 bullet stays unchecked until the codec/audio
+part is proven by the acceptance tests in section 8, including the
+physical-device items that CI cannot prove.
 
 Scope: M5-L8 only, codec/audio part. The foreground-service part of M5-L8
 was recorded separately in Run 104 for PNG-sequence export only. This
-record does not change that result, and the M5-L8 bullet stays unchecked
-with no PASS label until the codec/audio part is both decided by the user
-and proven by acceptance tests.
+record does not change that result.
 
 Branch: feat/android-app-foundation. App minimum SDK is 26, target SDK is
 37 (app/build.gradle.kts). All availability statements below are for that
@@ -244,16 +247,31 @@ one more settings choice, one more scaling path in
 `Yuv420FrameConverter`, preview coverage, and acceptance tests for
 both padded and cropped output dimensions and content.
 
-## 5. Recommended first-delivery subset (proposal, not approved)
+## 5. Decided first-delivery subset (owner decision 2026-11-06)
 
 - Video: H.264 AVC in MP4, using the existing MediaCodec and MediaMuxer
   path. Keep even dimensions, the 250 kbps to 50 Mbps bitrate range
   with the 8 Mbps default, the 2 second I-frame interval, and the
   flexible-YUV420 encoder probe with a visible failure when no encoder
-  exists.
+  exists. H.264 is the only default; the export dialog offers no other
+  codec unless the HEVC opt-in below is available.
+- HEVC opt-in: H.265/HEVC in MP4 is offered only as an explicit opt-in
+  after `HevcEncoderProbe` confirms a hardware HEVC encoder exists on
+  the device (flexible YUV420 input, hardware-accelerated flag on API
+  29+, name heuristic below that). A software HEVC encoder never opens
+  the opt-in. The export dialog shows the H.265 button disabled with a
+  stated reason when no hardware encoder exists. `RenderOutputFormat.MP4_HEVC`
+  shares the MP4 dimension and bitrate rules; `Mp4SequenceExporter`,
+  `Mp4ExportValidator`, and `Mp4BoxInspector` accept the HEVC track
+  (hev1/hvc1). Full HEVC encode is proven only on a device with a
+  hardware HEVC encoder; CI emulator coverage is the probe's
+  self-consistency test, not an encode.
 - Audio: AAC LC passthrough only, first AAC track only, composition-FPS
   range shift plus trimming to the range, video-only fallback labeled
   with the reason. No transcode, no mixing, no multi-track.
+- No AV1 encode: AV1 encoding is not implemented and not offered. The
+  encoder is mandatory only from Android 14 and cannot serve a minSdk
+  26 app; it stays rejected for v1.
 - Sync: shift plus trim, with staged measurement of audio start, audio
   end, and video duration, and a tolerance gate (proposed: 100 ms, to
   be confirmed by the user) applied before SAF copy.
@@ -301,9 +319,9 @@ both padded and cropped output dimensions and content.
 
 ## 7. Open questions that only the user can answer
 
-1. Video codec and container for v1: is H.264 AVC in MP4 accepted as
-   the first delivery, or does the user want HEVC, AV1, or another
-   codec first despite the availability limits in section 2?
+1. Video codec and container for v1: DECIDED 2026-11-06. H.264 AVC in
+   MP4 is the only default; HEVC is an explicit opt-in after the
+   hardware probe; no AV1 encode.
 2. Audio codec for v1: is AAC passthrough only accepted, with non-AAC
    sources exporting video-only and labeled, or must v1 also transcode
    non-AAC sources to AAC?
@@ -325,8 +343,9 @@ both padded and cropped output dimensions and content.
    answer affects whether H.264/MP4 is sufficient or a second codec
    is needed sooner.
 
-No codec work beyond this record should start until questions 1 to 4
-are answered, because each answer changes the implementation.
+No codec work beyond this record should start until questions 2 to 4
+are answered, because each answer changes the implementation. Question 1
+is decided (see above).
 
 ## 8. Acceptance tests that would prove the chosen codec
 
@@ -383,8 +402,11 @@ run on at least one physical device before any device claim is made.
 
 ## 9. What this record does not do
 
-- It implements no codec, no audio transcode, no crop, no letterbox,
-  and no foreground service for MP4.
+- It implements no audio transcode, no crop, no letterbox,
+  and no foreground service for MP4. The HEVC opt-in IS implemented
+  (probe, plan format, exporter MIME, validator, inspector, dialog
+  gate); full HEVC encode is proven only on a device with a hardware
+  HEVC encoder.
 - It does not flip the M5-L8 bullet, which stays unchecked with no
   PASS label.
 - It does not approve any threshold: the 100 ms sync tolerance, the

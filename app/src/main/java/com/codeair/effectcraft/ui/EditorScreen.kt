@@ -111,6 +111,7 @@ import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.PropertyKeyframe
+import com.codeair.effectcraft.data.HevcEncoderProbe
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
@@ -173,7 +174,7 @@ fun EditorScreen(
     onOpenMp4Settings: () -> Unit = {},
     onCancelMp4Sequence: () -> Unit = {},
     mp4ExportProgress: Int = 0,
-    onExportMp4Sequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int, bitrate: Int) -> Unit = { _, _, _, _, _, _ -> },
+    onExportMp4Sequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int, bitrate: Int, outputFormat: RenderOutputFormat) -> Unit = { _, _, _, _, _, _, _ -> },
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
@@ -276,6 +277,10 @@ fun EditorScreen(
     var sequenceBitrateText by remember { mutableStateOf("8000000") }
     var sequenceOutputFormat by remember { mutableStateOf(RenderOutputFormat.PNG_SEQUENCE_ZIP) }
     var sequenceSettingsError by remember { mutableStateOf<String?>(null) }
+    // Hardware HEVC probe for the H.265 opt-in: null while unprobed, true
+    // only when a hardware HEVC encoder exists. Probed once, when the
+    // export settings dialog first opens.
+    var hevcAvailable by remember { mutableStateOf<Boolean?>(null) }
     val openSequenceSettings: (RenderOutputFormat) -> Unit = { format ->
         sequenceOutputFormat = format
         sequenceBitrateText = "8000000"
@@ -591,9 +596,26 @@ fun EditorScreen(
 
         if (showSequenceSettings) {
             val composition = canonicalProject?.compositions?.firstOrNull()
+            val isMp4 = sequenceOutputFormat == RenderOutputFormat.MP4_H264 ||
+                sequenceOutputFormat == RenderOutputFormat.MP4_HEVC
+            LaunchedEffect(showSequenceSettings) {
+                if (hevcAvailable == null) {
+                    hevcAvailable = withContext(Dispatchers.Default) {
+                        HevcEncoderProbe.probe().codecName != null
+                    }
+                }
+            }
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showSequenceSettings = false },
-                title = { Text(if (sequenceOutputFormat == RenderOutputFormat.MP4_H264) "H.264 MP4 settings" else "PNG sequence settings") },
+                title = {
+                    Text(
+                        when (sequenceOutputFormat) {
+                            RenderOutputFormat.MP4_H264 -> "H.264 MP4 settings"
+                            RenderOutputFormat.MP4_HEVC -> "H.265 MP4 settings"
+                            else -> "PNG sequence settings"
+                        }
+                    )
+                },
                 text = {
                     Column(
                         Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
@@ -607,6 +629,15 @@ fun EditorScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP }) { Text("PNG ZIP") }
                             TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 }) { Text("MP4 H.264") }
+                            TextButton(
+                                onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_HEVC },
+                                enabled = hevcAvailable == true
+                            ) { Text("MP4 H.265") }
+                        }
+                        if (hevcAvailable == null) {
+                            Text("Checking for a hardware HEVC encoder…", color = EditorPalette.muted, fontSize = 11.sp)
+                        } else if (hevcAvailable == false) {
+                            Text("H.265 needs a hardware HEVC encoder — this device has none.", color = EditorPalette.muted, fontSize = 11.sp)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
@@ -637,7 +668,7 @@ fun EditorScreen(
                                 singleLine = true, modifier = Modifier.weight(1f)
                             )
                         }
-                        if (sequenceOutputFormat == RenderOutputFormat.MP4_H264) {
+                        if (isMp4) {
                             OutlinedTextField(
                                 value = sequenceBitrateText,
                                 onValueChange = { sequenceBitrateText = it.filter(Char::isDigit) },
@@ -647,9 +678,11 @@ fun EditorScreen(
                             )
                         }
                         Text(
-                            if (sequenceOutputFormat == RenderOutputFormat.MP4_H264)
-                                "H.264 MP4 uses the device MediaCodec encoder; AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
-                            else "PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track.",
+                            when (sequenceOutputFormat) {
+                                RenderOutputFormat.MP4_H264 -> "H.264 MP4 uses the device MediaCodec encoder; AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
+                                RenderOutputFormat.MP4_HEVC -> "H.265 MP4 uses the device hardware HEVC encoder; AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
+                                else -> "PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track."
+                            },
                             color = EditorPalette.muted, fontSize = 11.sp
                         )
                         sequenceSettingsError?.let { Text(it, color = EditorPalette.amber, fontSize = 12.sp) }
@@ -670,13 +703,13 @@ fun EditorScreen(
                             runCatching { RenderQueuePlan.create(settings, composition?.durationFrames ?: end + 1) }
                                 .onSuccess {
                                     showSequenceSettings = false
-                                    if (sequenceOutputFormat == RenderOutputFormat.MP4_H264)
-                                        onExportMp4Sequence(width, height, fps, start, end, bitrate)
+                                    if (isMp4)
+                                        onExportMp4Sequence(width, height, fps, start, end, bitrate, sequenceOutputFormat)
                                     else onExportPngSequence(width, height, fps, start, end)
                                 }
                                 .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
                         }
-                    }) { Text(if (sequenceOutputFormat == RenderOutputFormat.MP4_H264) "Render MP4" else "Render ZIP") }
+                    }) { Text(if (isMp4) "Render MP4" else "Render ZIP") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showSequenceSettings = false }) { Text("Cancel") }

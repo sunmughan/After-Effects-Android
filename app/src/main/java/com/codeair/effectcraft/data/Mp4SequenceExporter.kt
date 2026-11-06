@@ -12,7 +12,10 @@ import java.io.FileDescriptor
 import java.util.concurrent.CancellationException
 
 /**
- * Streams canonical native RGBA frames into an Android H.264 encoder and MP4 muxer.
+ * Streams canonical native RGBA frames into an Android H.264 or HEVC
+ * encoder and MP4 muxer. H.264 is the only default (user decision
+ * 2026-11-06); HEVC is an explicit opt-in whose encoder must be the
+ * hardware encoder [HevcEncoderProbe] confirms, never a software encoder.
  *
  * The caller supplies a fresh SAF/app-private output FileDescriptor and a callback
  * that renders one canonical composition frame. Frames are converted/scaled one
@@ -21,8 +24,23 @@ import java.util.concurrent.CancellationException
  */
 object Mp4SequenceExporter {
     const val MIME = "video/avc"
+    const val HEVC_MIME = "video/hevc"
     private const val INPUT_TIMEOUT_US = 10_000L
     private const val OUTPUT_TIMEOUT_US = 10_000L
+
+    /** The encoder MIME for a plan format; throws for non-MP4 formats. */
+    fun mimeFor(format: RenderOutputFormat): String = when (format) {
+        RenderOutputFormat.MP4_H264 -> MIME
+        RenderOutputFormat.MP4_HEVC -> HEVC_MIME
+        RenderOutputFormat.PNG_SEQUENCE_ZIP -> throw IllegalArgumentException("PNG sequence has no video encoder MIME")
+    }
+
+    /** Short codec label for messages: "H.264" or "HEVC". */
+    fun codecLabel(format: RenderOutputFormat): String = when (format) {
+        RenderOutputFormat.MP4_H264 -> "H.264"
+        RenderOutputFormat.MP4_HEVC -> "HEVC"
+        RenderOutputFormat.PNG_SEQUENCE_ZIP -> throw IllegalArgumentException("PNG sequence has no video codec")
+    }
 
     data class Result(val framesEncoded: Int, val durationUs: Long, val codecName: String)
 
@@ -35,14 +53,17 @@ object Mp4SequenceExporter {
         isCancelled: () -> Boolean = { false },
         onProgress: (completedFrames: Int, percent: Int) -> Unit = { _, _ -> }
     ): Result {
-        require(plan.settings.outputFormat == RenderOutputFormat.MP4_H264) {
-            "Render queue is not configured for H.264 MP4"
+        val format = plan.settings.outputFormat
+        require(format == RenderOutputFormat.MP4_H264 || format == RenderOutputFormat.MP4_HEVC) {
+            "Render queue is not configured for MP4"
         }
+        val mime = mimeFor(format)
+        val label = codecLabel(format)
         require(plan.settings.width % 2 == 0 && plan.settings.height % 2 == 0) {
-            "H.264 YUV420 output dimensions must be even"
+            "$label YUV420 output dimensions must be even"
         }
         checkCancellation(isCancelled)
-        val codecName = findFlexibleEncoder()
+        val codecName = findFlexibleEncoder(mime, hardwareOnly = format == RenderOutputFormat.MP4_HEVC)
         val encoder = MediaCodec.createByCodecName(codecName)
         val muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         val state = MuxerState()
@@ -50,13 +71,13 @@ object Mp4SequenceExporter {
         var encoderStarted = false
         var framesEncoded = 0
         try {
-            val format = MediaFormat.createVideoFormat(MIME, plan.settings.width, plan.settings.height).apply {
+            val videoFormat = MediaFormat.createVideoFormat(mime, plan.settings.width, plan.settings.height).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
                 setInteger(MediaFormat.KEY_BIT_RATE, plan.settings.videoBitrate)
                 setInteger(MediaFormat.KEY_FRAME_RATE, plan.settings.frameRate)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
             }
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             encoder.start()
             encoderStarted = true
 
@@ -89,7 +110,7 @@ object Mp4SequenceExporter {
             while (!drain(encoder, muxer, state, info, OUTPUT_TIMEOUT_US, isCancelled)) {
                 checkCancellation(isCancelled)
             }
-            check(state.started) { "H.264 encoder produced no MP4 output track" }
+            check(state.started) { "$label encoder produced no MP4 output track" }
             return Result(
                 framesEncoded,
                 framesEncoded.toLong() * 1_000_000L / plan.settings.frameRate,
@@ -103,12 +124,16 @@ object Mp4SequenceExporter {
         }
     }
 
-    private fun findFlexibleEncoder(): String {
+    private fun findFlexibleEncoder(mime: String, hardwareOnly: Boolean): String {
+        if (hardwareOnly) {
+            return HevcEncoderProbe.probe().codecName
+                ?: throw IllegalStateException("No hardware HEVC encoder accepts flexible YUV420 input on this device")
+        }
         val codecs = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
         return codecs.firstOrNull { codec ->
-            codec.isEncoder && codec.supportedTypes.any { it.equals(MIME, ignoreCase = true) } &&
+            codec.isEncoder && codec.supportedTypes.any { it.equals(mime, ignoreCase = true) } &&
                 runCatching {
-                    codec.getCapabilitiesForType(MIME).colorFormats.contains(
+                    codec.getCapabilitiesForType(mime).colorFormats.contains(
                         MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
                     )
                 }.getOrDefault(false)
@@ -211,7 +236,7 @@ object Mp4SequenceExporter {
                 MediaCodec.INFO_TRY_AGAIN_LATER -> return false
                 MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED -> Unit
                 MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    check(!state.started) { "H.264 encoder changed output format more than once" }
+                    check(!state.started) { "Encoder changed output format more than once" }
                     state.track = muxer.addTrack(encoder.outputFormat)
                     muxer.start()
                     state.started = true
@@ -222,8 +247,8 @@ object Mp4SequenceExporter {
                         if (info.size > 0 &&
                             info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0
                         ) {
-                            check(state.started) { "H.264 encoder emitted samples before its output format" }
-                            requireNotNull(encoded) { "H.264 encoder returned a null output buffer" }
+                            check(state.started) { "Encoder emitted samples before its output format" }
+                            requireNotNull(encoded) { "Encoder returned a null output buffer" }
                             encoded.position(info.offset)
                             encoded.limit(info.offset + info.size)
                             muxer.writeSampleData(state.track, encoded, info)
