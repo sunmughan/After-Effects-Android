@@ -2363,8 +2363,8 @@ private fun CanonicalProjectEditor(
  * parameter has no keys, and authors a hold key at the playhead once it
  * does; each row also carries Add key / Remove key buttons in the same
  * style as the color rows. Parameters the native model does not expose
- * (path, gradient, layer-reference) are absent from the list, never shown
- * as editable.
+ * (path, gradient and layer-reference) are exposed through dedicated
+ * validated editors rather than the generic numeric rows.
  */
 @Composable
 private fun CanonicalParamGroupRows(
@@ -2496,13 +2496,13 @@ private fun CanonicalParamGroupRows(
                     modifier = Modifier.fillMaxWidth().height(84.dp)
                         .background(EditorPalette.panelRaised, RoundedCornerShape(4.dp))
                         .padding(6.dp)
-                        .semantics { contentDescription = "Canonical $section path JSON \${group.name} \${param.name}" },
+                        .semantics { contentDescription = "Canonical $section path JSON ${group.name} ${param.name}" },
                     decorationBox = { inner -> Box { if (draft.isEmpty()) Text("ShapePath JSON", color = EditorPalette.muted); inner() } }
                 )
                 TextButton(
                     enabled = editable && draft.isNotBlank(),
                     onClick = { onApplyPath(param.uid, draft) },
-                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section path \${group.name} \${param.name}" }
+                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section path ${group.name} ${param.name}" }
                 ) { Text("Apply path", color = EditorPalette.violet, fontSize = 10.sp) }
                 Text("Path · vertices/tangents in composition coordinates · max 4096 vertices", color = EditorPalette.muted, fontSize = 9.sp)
             }
