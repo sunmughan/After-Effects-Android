@@ -186,6 +186,15 @@ class OfflineAssetStore(
      * reported in [GcResult.failed] for the next run. Re-running collection
      * with the same referenced set is a no-op.
      */
+    /**
+     * Safe project-aware collection. Reference enumeration is fail-closed,
+     * so corrupt manifests abort collection before any asset is deleted.
+     */
+    @Synchronized
+    @Throws(IOException::class)
+    fun collectGarbage(manifests: ProjectAssetManifestStore): GcResult =
+        collectGarbage(manifests.allReferencedHashes())
+
     @Synchronized
     fun collectGarbage(referencedHashes: Set<String>): GcResult {
         val referenced = referencedHashes.map { it.decodeHash() }.toSet()

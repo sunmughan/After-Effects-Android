@@ -10,6 +10,34 @@ import java.nio.file.Files
 
 class OfflineAssetStoreGcTest {
     @Test
+    fun projectAwareGarbageCollectionFailsClosedOnCorruptManifest() {
+        val assetRoot = Files.createTempDirectory("effectcraft-gc-safe-assets").toFile()
+        val manifestRoot = Files.createTempDirectory("effectcraft-gc-safe-manifests").toFile()
+        try {
+            val assets = OfflineAssetStore(assetRoot)
+            val kept = assets.import(ByteArrayInputStream(byteArrayOf(1, 2, 3)), "kept.png")
+            val dropped = assets.import(ByteArrayInputStream(byteArrayOf(4, 5, 6)), "dropped.png")
+            val manifests = ProjectAssetManifestStore(manifestRoot)
+            manifests.load("project-safe").also { it.link(10, kept.sha256) }.let(manifests::save)
+
+            // A corrupt manifest must abort before the unreferenced payload is deleted.
+            File(manifestRoot, "corrupt.json").writeText("{not-json")
+            val failure = runCatching { assets.collectGarbage(manifests) }.exceptionOrNull()
+            assertTrue(failure is java.io.IOException)
+            assertTrue(failure?.message.orEmpty().contains("corrupt project asset manifest"))
+            assertTrue("Fail-closed scan must preserve every payload on error", assets.get(dropped.sha256) != null)
+
+            assertTrue(File(manifestRoot, "corrupt.json").delete())
+            val result = assets.collectGarbage(manifests)
+            assertEquals(listOf(dropped.sha256), result.deleted.map { it.sha256 })
+            assertEquals(listOf(kept.sha256), assets.list().map { it.sha256 })
+        } finally {
+            assetRoot.deleteRecursively()
+            manifestRoot.deleteRecursively()
+        }
+    }
+
+    @Test
     fun verifyDetectsMissingAndCorruptPayloads() {
         val root = Files.createTempDirectory("effectcraft-gc-verify").toFile()
         try {

@@ -276,9 +276,39 @@ class ProjectAssetManifestStore(private val root: File) {
             .sorted()
     }
 
+    /**
+     * Returns the complete media-reference union for garbage collection.
+     *
+     * Unlike [projectIds], this safety-critical scan fails closed: a corrupt
+     * or misnamed manifest must never be silently omitted, because doing so
+     * could make a still-referenced asset appear unreferenced and delete it.
+     */
     @Synchronized
-    fun allReferencedHashes(): Set<String> =
-        projectIds().flatMap { load(it).allHashes() }.toSet()
+    @Throws(IOException::class)
+    fun allReferencedHashes(): Set<String> {
+        if (!root.isDirectory) return emptySet()
+        val files = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }
+            ?: throw IOException("Unable to enumerate project asset manifests")
+        val hashes = linkedSetOf<String>()
+        files.sortedBy { it.name }.forEach { file ->
+            val manifest = try {
+                ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8))
+            } catch (failure: Exception) {
+                throw IOException(
+                    "Refusing media garbage collection: corrupt project asset manifest ${file.name}",
+                    failure
+                )
+            }
+            val expectedName = "${manifest.projectId.sha256()}.json"
+            if (file.name != expectedName) {
+                throw IOException(
+                    "Refusing media garbage collection: manifest filename does not match project ID in ${file.name}"
+                )
+            }
+            hashes += manifest.allHashes()
+        }
+        return hashes
+    }
 
     /** Rewrites [oldHash] as [newHash] in every project manifest; returns entries changed. */
     @Synchronized
