@@ -123,6 +123,44 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private data class ShapePathCanvasMapping(
+    val minX: Double,
+    val minY: Double,
+    val scale: Float,
+    val left: Float,
+    val bottom: Float,
+    val height: Float
+) {
+    fun toCanvas(vertex: CanonicalShapePathDraft.Vertex) = Offset(
+        left + ((vertex.x - minX) * scale).toFloat(),
+        height - bottom - ((vertex.y - minY) * scale).toFloat()
+    )
+
+    fun fromCanvas(point: Offset) = CanonicalShapePathDraft.Vertex(
+        minX + ((point.x - left) / scale).toDouble(),
+        minY + ((height - bottom - point.y) / scale).toDouble()
+    )
+}
+
+private fun shapePathCanvasMapping(
+    vertices: List<CanonicalShapePathDraft.Vertex>,
+    width: Float,
+    height: Float
+): ShapePathCanvasMapping {
+    val minX = vertices.minOf { it.x }
+    val maxX = vertices.maxOf { it.x }
+    val minY = vertices.minOf { it.y }
+    val maxY = vertices.maxOf { it.y }
+    val spanX = (maxX - minX).coerceAtLeast(1.0)
+    val spanY = (maxY - minY).coerceAtLeast(1.0)
+    val availableWidth = (width - 24f).coerceAtLeast(1f)
+    val availableHeight = (height - 24f).coerceAtLeast(1f)
+    val scale = minOf(availableWidth / spanX.toFloat(), availableHeight / spanY.toFloat()).coerceAtLeast(0.001f)
+    val drawnWidth = spanX.toFloat() * scale
+    val drawnHeight = spanY.toFloat() * scale
+    return ShapePathCanvasMapping(minX, minY, scale, (width - drawnWidth) / 2f, (height - drawnHeight) / 2f, height)
+}
+
 private object EditorPalette {
     val background = Color(0xFF0A0C11)
     val panel = Color(0xFF131720)
@@ -2526,6 +2564,76 @@ private fun CanonicalParamGroupRows(
                     decorationBox = { inner -> Box { if (draft.isEmpty()) Text("ShapePath JSON", color = EditorPalette.muted); inner() } }
                 )
                 Text("VERTICES · ${vertices.size}", color = EditorPalette.muted, fontSize = 10.sp)
+                val canvasVerticesState = rememberUpdatedState(vertexDrafts.mapNotNull { it.third })
+                val canvasPathState = rememberUpdatedState(pathForAction)
+                var selectedCanvasVertex by remember(param.uid) { mutableIntStateOf(-1) }
+                val incomingCanvasHandles = CanonicalShapePathDraft.tangentOffsets(pathForAction, "in_tangents").orEmpty()
+                val outgoingCanvasHandles = CanonicalShapePathDraft.tangentOffsets(pathForAction, "out_tangents").orEmpty()
+                if (verticesValid && vertices.size >= 2) {
+                    Canvas(
+                        modifier = Modifier.fillMaxWidth().height(144.dp)
+                            .background(EditorPalette.panelRaised, RoundedCornerShape(6.dp))
+                            .border(1.dp, EditorPalette.border, RoundedCornerShape(6.dp))
+                            .semantics { contentDescription = "Interactive ShapePath vertex canvas ${group.name} ${param.name}" }
+                            .pointerInput(param.uid, editable, verticesValid) {
+                                var dragIndex = -1
+                                var lockedMapping: ShapePathCanvasMapping? = null
+                                detectDragGestures(
+                                    onDragStart = { pointer ->
+                                        val points = canvasVerticesState.value
+                                        if (!editable || points.size < 2) return@detectDragGestures
+                                        val transform = shapePathCanvasMapping(points, size.width.toFloat(), size.height.toFloat())
+                                        dragIndex = points.indices.minByOrNull { index ->
+                                            val mapped = transform.toCanvas(points[index])
+                                            val dx = mapped.x - pointer.x
+                                            val dy = mapped.y - pointer.y
+                                            dx * dx + dy * dy
+                                        } ?: -1
+                                        lockedMapping = transform
+                                        selectedCanvasVertex = dragIndex
+                                    },
+                                    onDragEnd = { dragIndex = -1; lockedMapping = null },
+                                    onDragCancel = { dragIndex = -1; lockedMapping = null }
+                                ) { change, _ ->
+                                    if (dragIndex >= 0 && editable) {
+                                        change.consume()
+                                        val transform = lockedMapping ?: return@detectDragGestures
+                                        val current = canvasVerticesState.value
+                                        if (dragIndex !in current.indices) return@detectDragGestures
+                                        val moved = transform.fromCanvas(change.position)
+                                        CanonicalShapePathDraft.moveVertex(canvasPathState.value, dragIndex, moved)?.let { updated ->
+                                            pathDrafts = pathDrafts + (param.uid to updated)
+                                            pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                        }
+                                    }
+                                }
+                            }
+                    ) {
+                        val points = vertexDrafts.mapNotNull { it.third }
+                        if (points.size >= 2) {
+                            val transform = shapePathCanvasMapping(points, size.width, size.height)
+                            for (index in 0 until points.lastIndex) {
+                                drawLine(EditorPalette.mint, transform.toCanvas(points[index]), transform.toCanvas(points[index + 1]), strokeWidth = 2f)
+                            }
+                            points.forEachIndexed { index, vertex ->
+                                if (index < incomingCanvasHandles.size) {
+                                    val handle = incomingCanvasHandles[index]
+                                    drawLine(EditorPalette.amber, transform.toCanvas(vertex), transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y)), strokeWidth = 1f)
+                                }
+                                if (index < outgoingCanvasHandles.size) {
+                                    val handle = outgoingCanvasHandles[index]
+                                    drawLine(EditorPalette.violet, transform.toCanvas(vertex), transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y)), strokeWidth = 1f)
+                                }
+                                drawCircle(
+                                    color = if (index == selectedCanvasVertex) EditorPalette.amber else EditorPalette.mint,
+                                    radius = if (index == selectedCanvasVertex) 6f else 4.5f,
+                                    center = transform.toCanvas(vertex)
+                                )
+                            }
+                        }
+                    }
+                    Text("Drag a point to edit its composition-space coordinates · selected P${selectedCanvasVertex + 1}", color = EditorPalette.muted, fontSize = 9.sp)
+                }
                 vertices.forEachIndexed { index, vertex ->
                     val (xText, yText, _) = vertexDrafts[index]
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
