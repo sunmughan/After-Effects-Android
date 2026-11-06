@@ -1507,3 +1507,30 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Inspector exposes **Align handles** for the selected vertex; active tangent selection is source, otherwise outgoing. JVM tests verify mirrored offsets, unchanged neighboring handles/metadata and invalid inputs; API30 smoke test selects P2 and invokes the action.
 - Exact-head CI #990 [42289345385](https://github.com/sunmughan/After-Effects-Android/actions/runs/42289345385) is in progress on `317b0443`; runner disk cleanup was active at inspection. Kotlin/JVM/API30/native dual ABI and independent cold APK/native comparison have no verdict yet. No tests were removed or weakened.
 - M4 remains in progress; M0 historical #929 and M1 scoped baseline are not retroactively extended. **Release NOT COMPLETE.**
+
+## Automation Run 11 — CI #994 unit-test import fix + M4 Corner vertex action (2026-11-07)
+
+### Exact failure and correction
+- Inspected PR #1 (Draft/open/unmerged), current branch files and Actions #994 [42298261536](https://github.com/sunmughan/After-Effects-Android/actions/runs/42298261536), job 128169164402. ARM64+x86_64 JNI, Rust 59/59 and debug APK assembly passed; :app:compileDebugUnitTestKotlin failed because the new smoothing regression used JSONArray without importing it (CanonicalShapePathDraftTest.kt:346–370). Emulator and cold rebuild were skipped.
+- Added the missing org.json.JSONArray import, retaining all regression assertions: [13de88c2](https://github.com/sunmughan/After-Effects-Android/commit/13de88c2a00ef9992ee4c288f9ba3d2ab9f5346e). This is a source-level correction, not a test relaxation.
+
+### M4 — Corner vertex editing
+- Native-independent draft operation [6d05c53e](https://github.com/sunmughan/After-Effects-Android/commit/6d05c53ee69db40ab41cd58cc6d000e2f1e64a46) zeros the selected anchor's incoming/outgoing relative handles while preserving every other vertex/handle, closed state and custom metadata; invalid indices or malformed arrays reject.
+- JVM regression [36defb30](https://github.com/sunmughan/After-Effects-Android/commit/36defb3045d8e1a3c7419f89762a781a7f00981c) checks exact zero handles, unchanged neighboring offsets/vertices/metadata and invalid/malformed input.
+- Inspector action Corner vertex [0ae13430](https://github.com/sunmughan/After-Effects-Android/commit/0ae13430c76dddbfdc1268f36aac6b64e8716511) updates local draft and clears stale coordinate/tangent text buffers. API30 action coverage [1589cf20](https://github.com/sunmughan/After-Effects-Android/commit/1589cf204c82c986cc13d193327ebad055e930ad) selects P2, applies Corner vertex and verifies Apply remains available. Canonical persistence still requires explicit Apply/Key.
+
+### Verification checkpoint
+- #994 failed only at JVM test compilation due the missing import; native builds/Rust/APK were green. No test suite verdict or cold reproducibility pass was reached.
+- New exact-head CI is triggered by 1589cf20; inspect jobs/logs and fix any subsequent failure before acceptance. Local Gradle is unavailable in this runtime due repository clone/network restriction; GitHub Actions is the available build environment.
+
+### Acceptance ledger (no premature phase completion)
+- **M0 ACCEPTED historically** at CI #929 SHA dc190940 (Rust 59/59, JVM, API30 157/157, ARM64+x86_64 JNI, APK and independent cold APK/native reproducibility). Current head is not yet revalidated.
+- **M1 scoped baseline ACCEPTED** at #929; full professional parity/device/accessibility acceptance remains open.
+- **M2 PARTIAL:** canonical JSON/XML/BOM, validation/migration and offline asset manifest/GC/relink groundwork; SAF/provider round-trip, external Effekseer fixtures/version compatibility and media decode/import matrix remain open. Adobe .aep proprietary; no licensed parser/native support claim.
+- **M3 PARTIAL:** real Rust CPU/session frames and JNI lifecycle; GPU/Surface presentation, device-loss/recreation, software fallback parity and complete media decoding remain open.
+- **M4 IN PROGRESS:** property/transform/opacity/text/color/path/gradient/Layer Control and discrete key authoring; ShapePath drag/cubic/closure/insert/delete/reverse/align/smooth/corner actions have JVM/API30 coverage. Full upstream effect/interpolation/roving/spatial parity and broad preview acceptance remain open.
+- **M5 PARTIAL:** PNG sequence/MP4 validation, worker/progress/cancel and copy recovery; durable foreground/process-death completion, audio mux/sync, codec/resolution/FPS/device matrix and SAF destinations remain open.
+- **M6 PARTIAL:** journal recovery, offline asset integrity/GC and instrumentation budgets; physical memory/thermal/frame-time, API/ABI/device matrix, long-session leak/crash and TalkBack acceptance remain open.
+- **M7 NOT ACCEPTED:** exact-current-head green CI + cold reproducibility, protected configurable signing, signed APK/AAB artifact, physical install/run, release notes/limitations and authorized merge/release verification outstanding.
+
+**Release NOT COMPLETE.** Next checkpoint: exact-head Actions diagnosis and continued product implementation.
