@@ -40,6 +40,13 @@ class CanonicalProjectDocumentInstrumentedTest {
     }
 
     @Test
+    fun ecprojxAcceptsLegalTrailingWhitespaceAndComments() {
+        val xml = CanonicalProjectDocument.toXml("""{"name":"Whitespace-safe"}""") + "\n<!-- export note -->\n"
+        val restored = JSONObject(CanonicalProjectDocument.toCanonicalJson(xml))
+        assertEquals("Whitespace-safe", restored.getString("name"))
+    }
+
+    @Test
     fun ecprojxRejectsUnsupportedVersionAndTrailingDocumentContent() {
         val unsupported = """<?xml version="1.0"?><EffectCraftProject encoding="json" version="2"><obj/></EffectCraftProject>"""
         val versionError = runCatching { CanonicalProjectDocument.toCanonicalJson(unsupported) }.exceptionOrNull()

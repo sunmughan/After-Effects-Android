@@ -1283,3 +1283,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Test committed in [e90edaa0](https://github.com/sunmughan/After-Effects-Android/commit/e90edaa04dcd64fe1fd96d12ff9455a92cc06756); exact-head CI #863 [42155485298](https://github.com/sunmughan/After-Effects-Android/actions/runs/42155485298) is pending and must compile/run it with the existing emulator suite. CI #862 is already running on preview Canvas semantics source commit `9362af88`; this M2 test is independent, but the subsequent push will supersede that run. **Release NOT COMPLETE.**
 
 - Canvas semantics correction committed [9362af88](https://github.com/sunmughan/After-Effects-Android/commit/9362af88d2071d1fdc1c71317af8214a6eac603e); API30 + cold comparison pending CI #862/#863.
+
+
+### Run 11 M2 parser hardening — legal XML trailing whitespace/comments
+- While adding the Android `.ecprojx` round-trip test, found the parser required the very next pull-parser event after the root END_TAG to be END_DOCUMENT. Valid XML formatting whitespace (and comments) after the root could be rejected as “Unexpected content”. Updated `CanonicalProjectDocument.parseXmlProject` to consume legal whitespace/comments and still reject non-whitespace text or a second root. Added API30 regression that appends whitespace/comment to serializer output and verifies canonical data survives. This is parser compatibility hardening; it does not relax schema/root/version checks.
+- Production/test changes are committed in the following checkpoint; CI #864 is in progress on prior head and will be superseded. Exact-head instrumentation required. **Release NOT COMPLETE.**
