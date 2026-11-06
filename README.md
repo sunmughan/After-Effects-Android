@@ -344,3 +344,8 @@ CI #779 failed before tests because the test called a private production `String
 
 
 **M4 Layer Control editing (Run 11):** static Layer Control parameters now expose canonical layer IDs and can be assigned/cleared from an accessible inspector dropdown (same composition only). Rust/JNI validation, Kotlin metadata, JVM + API30 canonical/preview regression coverage added; exact-head CI pending. Animated Layer Control keys remain explicitly unsupported. See [PHASES.md](PHASES.md). **Release NOT COMPLETE.**
+
+
+### Engineering progress — 2026-11-06
+- M4 Layer Control is now animatable with discrete Hold keys: native/JNI/Kotlin inspector, nullable canonical layer targets, Key/Remove key at playhead, sorted metadata and Rust/JVM/API30 regressions. Commit [dd5b0647](https://github.com/sunmughan/After-Effects-Android/commit/dd5b0647f449d20f6f093e32d83293dc3c64caba). Fresh exact-head CI/cold reproducibility pending.
+- Release remains NOT COMPLETE; see [PHASES.md](./PHASES.md) for M0–M7 acceptance evidence and blockers. Adobe .aep is proprietary; no licensed parser is integrated.

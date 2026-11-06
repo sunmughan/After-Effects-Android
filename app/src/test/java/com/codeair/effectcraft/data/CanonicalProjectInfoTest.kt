@@ -45,6 +45,15 @@ class CanonicalProjectInfoTest {
     }
 
     @Test
+    fun parsesDiscreteLayerReferenceKeysIncludingNone() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Source","source":"Shape","effects":[{"name":"Layer Control","kind":"layerControl","layerRefs":[{"uid":31,"name":"Layer","value":null,"keys":[{"frame":15,"layerId":8},{"frame":0,"layerId":null},{"frame":30,"layerId":null}],"keyframes":[30,0,15]}]}]}]}]}"""
+        val reference = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().effects.single().layerRefs.single()
+        assertEquals(31L, reference.uid)
+        assertEquals(listOf(0, 15, 30), reference.keyframes)
+        assertEquals(listOf(CanonicalLayerRefKey(0, null), CanonicalLayerRefKey(15, 8L), CanonicalLayerRefKey(30, null)), reference.keys)
+    }
+
+    @Test
     fun parsesCompositionLayerAndLinkedMediaInventory() {
         val metadata = """{"valid":true,"schema":1,"itemCount":2,"compositionCount":1,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layerCount":1,"layers":[{"id":2,"name":"Headline","source":"Text","visible":false,"opacityPercent":35.0,"position":[123.5,456.25],"scale":[125.0,80.0],"rotationDegrees":42.5}]}],"items":[{"id":10,"name":"Main","type":"Composition","parentId":null,"media":{}},{"id":20,"name":"Footage","type":"Video","parentId":null,"media":{"path":"content://media/1","width":1920,"height":1080,"hasVideo":true,"hasAudio":true,"missing":false,"sequence":[]}}]}"""
 
