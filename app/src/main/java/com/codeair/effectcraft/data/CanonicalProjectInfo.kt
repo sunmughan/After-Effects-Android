@@ -72,6 +72,15 @@ data class CanonicalLayerRefParam(
     val keyframes: List<Int> = keys.map { it.frame }
 )
 
+/** One editable native ShapePath parameter addressed by stable uid. */
+data class CanonicalPathParam(
+    val uid: Long,
+    val name: String,
+    /** Complete upstream ShapePath JSON, including vertices, tangents, closed and feather data. */
+    val pathJson: String,
+    val keyframes: List<Int> = emptyList()
+)
+
 /** One editable gradient parameter addressed by native uid; its keys interpolate. */
 data class CanonicalGradientParam(
     val uid: Long,
@@ -150,6 +159,7 @@ data class CanonicalParamGroup(
     val vecs: List<CanonicalVecParam> = emptyList(),
     val colors: List<CanonicalColorParam> = emptyList(),
     val gradients: List<CanonicalGradientParam> = emptyList(),
+    val paths: List<CanonicalPathParam> = emptyList(),
     val layerRefs: List<CanonicalLayerRefParam> = emptyList(),
     val bools: List<CanonicalBoolParam> = emptyList(),
     val popups: List<CanonicalPopupParam> = emptyList()
@@ -475,6 +485,17 @@ data class CanonicalProjectInfo(
                         keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
                     )
                 }
+                val pathArray = group.optJSONArray("paths")
+                val paths = (0 until (pathArray?.length() ?: 0)).map { pathIndex ->
+                    val param = pathArray!!.getJSONObject(pathIndex)
+                    val path = param.optJSONObject("path") ?: JSONObject()
+                    CanonicalPathParam(
+                        uid = param.getLong("uid"),
+                        name = param.optString("name", "Path"),
+                        pathJson = path.toString(),
+                        keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
+                    )
+                }
                 val layerRefArray = group.optJSONArray("layerRefs")
                 val layerRefs = (0 until (layerRefArray?.length() ?: 0)).map { refIndex ->
                     val param = layerRefArray!!.getJSONObject(refIndex)
@@ -527,6 +548,7 @@ data class CanonicalProjectInfo(
                         vecs = vecs,
                         colors = colors,
                         gradients = gradients,
+                        paths = paths,
                         layerRefs = layerRefs,
                         bools = bools,
                         popups = popups
