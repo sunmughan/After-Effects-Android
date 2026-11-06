@@ -53,8 +53,13 @@ class CanonicalShapePathDraftTest {
         assertNull(CanonicalShapePathDraft.removeLastVertex(closed))
         val points = CanonicalShapePathDraft.vertices(closed)!!
         assertNull(CanonicalShapePathDraft.setVertices(closed, points + CanonicalShapePathDraft.Vertex(Double.NaN, 0.0)))
-        assertNull(CanonicalShapePathDraft.appendVertex(JSONObject(closed).put("vertices",
-            org.json.JSONArray().also { repeat(CanonicalShapePathDraft.MAX_VERTICES) { i -> it.put(org.json.JSONArray().put(i).put(i)) } }).toString())
+        val full = JSONObject().put("vertices", org.json.JSONArray()).put("in_tangents", org.json.JSONArray()).put("out_tangents", org.json.JSONArray())
+        repeat(CanonicalShapePathDraft.MAX_VERTICES) { i ->
+            full.getJSONArray("vertices").put(org.json.JSONArray().put(i).put(i))
+            full.getJSONArray("in_tangents").put(org.json.JSONArray().put(0).put(0))
+            full.getJSONArray("out_tangents").put(org.json.JSONArray().put(0).put(0))
+        }
+        assertNull(CanonicalShapePathDraft.appendVertex(full.toString()))
         assertNull(CanonicalShapePathDraft.vertices("not-json"))
     }
 }
