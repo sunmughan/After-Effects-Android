@@ -14,6 +14,9 @@ import java.io.InputStream
  * garbage collection — which reads every manifest — may delete payloads.
  */
 object SequenceAssetImport {
+    /** Bound manifest size and per-import work before consuming any frame stream. */
+    const val MAX_SEQUENCE_FRAMES = 10_000
+
     data class FrameInput(val name: String, val input: InputStream, val mimeType: String? = null)
 
     fun importSequence(
@@ -25,6 +28,9 @@ object SequenceAssetImport {
     ): ProjectAssetManifest.Entry {
         ProjectAssetManifest.validateItemId(itemId)
         require(frames.isNotEmpty()) { "An image sequence needs at least one frame" }
+        require(frames.size <= MAX_SEQUENCE_FRAMES) {
+            "Image sequence exceeds $MAX_SEQUENCE_FRAMES frames"
+        }
         frames.forEach { ProjectAssetManifest.validateFrameName(it.name) }
         require(frames.map { it.name }.toSet().size == frames.size) {
             "Image sequence frame names must be unique"
