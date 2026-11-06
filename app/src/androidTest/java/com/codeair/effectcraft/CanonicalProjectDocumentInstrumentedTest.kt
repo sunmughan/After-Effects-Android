@@ -14,6 +14,14 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class CanonicalProjectDocumentInstrumentedTest {
     @Test
+    fun ecprojJsonImportStripsUtf8Bom() {
+        val source = "\uFEFF  \n{\"name\":\"BOM-safe\",\"enabled\":true}"
+        val restored = JSONObject(CanonicalProjectDocument.toCanonicalJson(source))
+        assertEquals("BOM-safe", restored.getString("name"))
+        assertEquals(true, restored.getBoolean("enabled"))
+    }
+
+    @Test
     fun ecprojxRoundTripPreservesNestedCanonicalValuesAndUnicode() {
         val source = JSONObject().apply {
             put("name", "Mobile composition")

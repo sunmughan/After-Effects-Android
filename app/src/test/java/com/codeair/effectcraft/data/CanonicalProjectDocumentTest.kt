@@ -3,9 +3,17 @@ package com.codeair.effectcraft.data
 import java.io.ByteArrayInputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.json.JSONObject
 import org.junit.Test
 
 class CanonicalProjectDocumentTest {
+    @Test
+    fun stripsUtf8BomFromJsonImportAndPreservesLeadingWhitespace() {
+        val source = "\uFEFF  \n{\"project\":\"EffectCraft\"}"
+        val canonical = CanonicalProjectDocument.toCanonicalJson(source)
+        assertEquals("EffectCraft", JSONObject(canonical).getString("project"))
+    }
+
     @Test
     fun readsUtf8DocumentWithinConfiguredLimit() {
         val source = "{\"project\":\"EffectCraft\"}"

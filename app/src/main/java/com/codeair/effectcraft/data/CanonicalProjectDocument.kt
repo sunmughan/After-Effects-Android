@@ -40,11 +40,14 @@ object CanonicalProjectDocument {
 
     /** Normalizes a supported .ecproj JSON or .ecprojx XML document to canonical JSON. */
     fun toCanonicalJson(document: String): String {
-        val probe = document.trimStart('\uFEFF').trimStart()
+        // UTF-8 exports may carry a BOM. Remove only that prefix for JSON;
+        // retain ordinary leading whitespace so the JSON parser handles it.
+        val withoutBom = document.removePrefix("\uFEFF")
+        val probe = withoutBom.trimStart()
         return if (probe.startsWith("<?xml") || probe.startsWith("<$XML_ROOT")) {
             parseXmlProject(probe).toString()
         } else {
-            document
+            withoutBom
         }
     }
 
