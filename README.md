@@ -419,4 +419,4 @@ CI #874 exposed an invalid measured preview size conversion at EditorScreen.kt:1
 
  
 ### M4 — Bezier tangent alignment
-The ShapePath inspector now includes **Align handles** for a selected vertex. It mirrors the opposite tangent offset exactly, with JVM and API30 regression coverage. Changes remain draft-local until Apply/Key. Exact-head CI is pending; see [PHASES.md](./PHASES.md). Release NOT COMPLETE.
+Commit [317b0443](https://github.com/sunmughan/After-Effects-Android/commit/317b0443f3c367dc9d934c3018d5fac72340122f) adds **Align handles** for a selected ShapePath vertex. It mirrors the opposite tangent offset exactly, with JVM and API30 regression coverage. Changes remain draft-local until Apply/Key. CI #990 [42289345385](https://github.com/sunmughan/After-Effects-Android/actions/runs/42289345385) is pending on this exact head; see [PHASES.md](./PHASES.md). Release NOT COMPLETE.
