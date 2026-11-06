@@ -955,7 +955,7 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Select canonical shape path segment start P2 Custom Shape Mask Path")
             .performScrollTo().performClick()
-        compose.onNodeWithContentDescription("Remove selected canonical shape vertex Custom Shape Mask Path")
+        compose.onNodeWithContentDescription("Remove selected canonical shape path vertex Custom Shape Mask Path")
             .performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("VERTICES · 3").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Apply canonical shape path Custom Shape Mask Path")
