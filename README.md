@@ -349,3 +349,7 @@ CI #779 failed before tests because the test called a private production `String
 ### Engineering progress — 2026-11-06
 - M4 Layer Control is now animatable with discrete Hold keys: native/JNI/Kotlin inspector, nullable canonical layer targets, Key/Remove key at playhead, sorted metadata and Rust/JVM/API30 regressions. Commit [dd5b0647](https://github.com/sunmughan/After-Effects-Android/commit/dd5b0647f449d20f6f093e32d83293dc3c64caba). Fresh exact-head CI/cold reproducibility pending.
 - Release remains NOT COMPLETE; see [PHASES.md](./PHASES.md) for M0–M7 acceptance evidence and blockers. Adobe .aep is proprietary; no licensed parser is integrated.
+
+
+### CI correction — 2026-11-06
+CI #874 exposed an invalid measured preview size conversion at EditorScreen.kt:1565. Fixed by converting IntSize pixel width/height to Dp directly under LocalDensity ([2e7f93f3](https://github.com/sunmughan/After-Effects-Android/commit/2e7f93f3d59b223e7ce5fdf1f7c3721d562d4fd1)); exact-head CI pending. Layer Control discrete keyframes (dd5b0647) are implemented with Rust/JVM/API30 regressions. Release NOT COMPLETE; details and M0–M7 blockers in PHASES.md.
