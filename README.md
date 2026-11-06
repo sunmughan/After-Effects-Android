@@ -432,3 +432,8 @@ Commit [317b0443](https://github.com/sunmughan/After-Effects-Android/commit/317b
 
 ### M4 — ShapePath Corner vertex
 Selected ShapePath anchors now have a **Corner vertex** action that zeros both tangent offsets without altering other anchors or metadata. JVM and API30 regressions cover the draft mutation and Apply affordance ([implementation](https://github.com/sunmughan/After-Effects-Android/commit/6d05c53e), [JVM](https://github.com/sunmughan/After-Effects-Android/commit/36defb30), [inspector](https://github.com/sunmughan/After-Effects-Android/commit/0ae13430), [instrumentation](https://github.com/sunmughan/After-Effects-Android/commit/1589cf20)). CI #994's missing JSONArray import in the smoothing test was fixed at [13de88c2](https://github.com/sunmughan/After-Effects-Android/commit/13de88c2). Fresh exact-head CI/cold reproducibility pending; see [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
+
+
+### Engineering Run 12 — CI #1002 precision regression corrected (2026-11-07)
+- CI #1002 completed 322 JVM tests with one failure in smooth-tangent geometry: exact data-class equality exposed a sub-ULP normalization difference (~5e-16). Updated x/y assertions to a tight `1e-9` tolerance while preserving magnitude and metadata assertions ([dc28969f](https://github.com/sunmughan/After-Effects-Android/commit/dc28969f909450fe90f6dbb70feda83befdf1c95)).
+- Native ARM64+x86_64, Rust 59/59, Kotlin compilation and APK assembly passed in #1002; unit suite failed; emulator and cold-rebuild were skipped. Fresh exact-head CI/cold reproducibility pending. Tracker: [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
