@@ -35,6 +35,19 @@ class CanonicalProjectInfoTest {
     }
 
     @Test
+    fun parsesCanonicalMaskShapePathJsonAndKeyFrames() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Shape","source":"Shape","shapeItems":[{"name":"Mask 1","kind":"mask","paths":[{"uid":91,"name":"Mask Path","path":{"vertices":[[10.0,20.0],[40.0,20.0],[25.0,60.0]],"in_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"out_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"closed":false,"feather":[]},"keyframes":[0,15]}]}]}]}]}"""
+        val path = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().shapeItems.single().paths.single()
+        assertEquals(91L, path.uid)
+        assertEquals("Mask Path", path.name)
+        assertEquals(listOf(0, 15), path.keyframes)
+        val json = JSONObject(path.pathJson)
+        assertEquals(3, json.getJSONArray("vertices").length())
+        assertEquals(25.0, json.getJSONArray("vertices").getJSONArray(2).getDouble(0), 0.001)
+        assertFalse(json.getBoolean("closed"))
+    }
+
+    @Test
     fun parsesSourceTextTrackingValuesOnCompositeHoldKeys() {
         val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Title","source":"Text","text":{"uid":7,"text":"Base","font":"Inter","size":32.0,"tracking":0.0,"keys":[{"frame":15,"text":"Frame fifteen","font":"Noto Sans","tracking":42.5},{"frame":0,"text":"Base","font":"Inter","tracking":0.0}]}}]}]}"""
         val text = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().textParams!!
