@@ -143,6 +143,8 @@ fun EditorScreen(
     selectedOpacityKeyframes: List<PropertyKeyframe>,
     canonicalTransformKeyframes: List<Int> = emptyList(),
     canonicalTransformDurationFrames: Int = project.durationFrames,
+    canonicalColorKeys: List<CanonicalCurveKey> = emptyList(),
+    canonicalColorDurationFrames: Int = project.durationFrames,
     isPlaying: Boolean,
     saveMessage: String,
     savedProjects: List<ProjectDocument>,
@@ -424,6 +426,8 @@ fun EditorScreen(
                 selectedOpacityKeyframes = selectedOpacityKeyframes,
                 canonicalTransformKeyframes = canonicalTransformKeyframes,
                 canonicalTransformDurationFrames = canonicalTransformDurationFrames,
+                canonicalColorKeys = canonicalColorKeys,
+                canonicalColorDurationFrames = canonicalColorDurationFrames,
                 isPlaying = isPlaying,
                 onSelectLayer = onSelectLayer,
                 onScrub = onScrub,
@@ -2704,6 +2708,8 @@ private fun TimelinePanel(
     selectedOpacityKeyframes: List<PropertyKeyframe>,
     canonicalTransformKeyframes: List<Int>,
     canonicalTransformDurationFrames: Int,
+    canonicalColorKeys: List<CanonicalCurveKey> = emptyList(),
+    canonicalColorDurationFrames: Int = canonicalTransformDurationFrames,
     isPlaying: Boolean,
     onSelectLayer: (String) -> Unit,
     onScrub: (Int) -> Unit,
@@ -2799,6 +2805,9 @@ private fun TimelinePanel(
             if (canonicalTransformKeyframes.isNotEmpty()) {
                 CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub, onMoveCanonicalTransformKeyframe)
             }
+            if (canonicalColorKeys.isNotEmpty()) {
+                CanonicalColorTrack(canonicalColorKeys, canonicalColorDurationFrames, playheadFrame, onScrub)
+            }
         }
     }
 }
@@ -2871,6 +2880,74 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, c
                         color = EditorPalette.mint,
                         radius = 3.2f,
                         center = androidx.compose.ui.geometry.Offset(x, size.height / 2f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Timeline COLOR lane (owner pick 2026-11-06): one dot per color keyframe
+ * of the selected canonical layer, drawn as a swatch of that key's own
+ * RGBA value. Tap seeks the nearest key, like the TRANSFORM lane. There is
+ * no drag-to-move here yet: moving a color key in time has no native move
+ * path (remove + re-add), so the lane is display + seek only.
+ */
+@Composable
+private fun CanonicalColorTrack(keys: List<CanonicalCurveKey>, durationFrames: Int, currentFrame: Int, onScrub: (Int) -> Unit) {
+    val frames = keys.sortedBy { it.frame }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(27.dp)
+            .padding(horizontal = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("COLOR", modifier = Modifier.width(107.dp), color = EditorPalette.amber, fontSize = 9.sp)
+        Box(
+            modifier = Modifier.weight(1f).height(17.dp)
+                .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
+                .semantics {
+                    contentDescription = "Canonical color keyframes: " + frames.joinToString(", ") {
+                        "${it.frame}: ${com.codeair.effectcraft.data.rgbaToHex(it.components)}"
+                    }
+                    onClick("Seek to nearest color keyframe") {
+                        val target = frames.minByOrNull { kotlin.math.abs(it.frame - currentFrame) }?.frame ?: currentFrame
+                        onScrub(target.coerceIn(0, (durationFrames - 1).coerceAtLeast(0)))
+                        true
+                    }
+                }
+                .pointerInput(frames, durationFrames) {
+                    detectTapGestures { tap ->
+                        val frameRange = (durationFrames - 1).coerceAtLeast(1)
+                        val tappedFrame = (tap.x / size.width.coerceAtLeast(1) * frameRange).roundToInt()
+                        val nearestKey = frames.minByOrNull { kotlin.math.abs(it.frame - tappedFrame) }?.frame ?: tappedFrame
+                        onScrub(nearestKey.coerceIn(0, (durationFrames - 1).coerceAtLeast(0)))
+                    }
+                }
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val frameRange = (durationFrames - 1).coerceAtLeast(1).toFloat()
+                frames.forEach { key ->
+                    val x = key.frame.coerceIn(0, durationFrames - 1).toFloat() / frameRange * size.width
+                    val rgba = key.components
+                    val swatch = Color(
+                        red = rgba.getOrNull(0)?.toFloat()?.coerceIn(0f, 1f) ?: 0f,
+                        green = rgba.getOrNull(1)?.toFloat()?.coerceIn(0f, 1f) ?: 0f,
+                        blue = rgba.getOrNull(2)?.toFloat()?.coerceIn(0f, 1f) ?: 0f,
+                        alpha = rgba.getOrNull(3)?.toFloat()?.coerceIn(0f, 1f) ?: 1f
+                    )
+                    drawCircle(
+                        color = swatch,
+                        radius = 6f,
+                        center = androidx.compose.ui.geometry.Offset(x, size.height / 2f)
+                    )
+                    drawCircle(
+                        color = Color(0xFF0B0E13),
+                        radius = 6f,
+                        center = androidx.compose.ui.geometry.Offset(x, size.height / 2f),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
                     )
                 }
             }

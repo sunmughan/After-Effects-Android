@@ -21,6 +21,7 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.Density
 import java.util.concurrent.CopyOnWriteArrayList
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
+import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.ProjectDocument
@@ -84,6 +85,12 @@ class CanonicalSelectionEditorTest {
                     selectedOpacityKeyframes = emptyList(),
                     canonicalTransformKeyframes = listOf(0, 15, 30),
                     canonicalTransformDurationFrames = 90,
+                    canonicalColorKeys = listOf(
+                        CanonicalCurveKey(frame = 0, value = 1.0, components = listOf(1.0, 0.0, 0.0, 1.0)),
+                        CanonicalCurveKey(frame = 15, value = 0.0, components = listOf(0.0, 1.0, 0.0, 1.0)),
+                        CanonicalCurveKey(frame = 30, value = 0.0, components = listOf(0.0, 0.0, 1.0, 1.0))
+                    ),
+                    canonicalColorDurationFrames = 90,
                     isPlaying = false,
                     saveMessage = "Saved",
                     savedProjects = emptyList(),
@@ -173,6 +180,15 @@ class CanonicalSelectionEditorTest {
         compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
             .assertIsDisplayed().performClick()
         assertEquals(30, workspaceFrame.intValue)
+
+        // The COLOR lane draws one swatch per color keyframe (the key's own
+        // RGBA, not the layer's current color) and seeks the nearest key.
+        compose.onNodeWithContentDescription("Canonical color keyframes: 0: #FF0000, 15: #00FF00, 30: #0000FF")
+            .assertIsDisplayed()
+        workspaceFrame.intValue = 14
+        compose.onNodeWithContentDescription("Canonical color keyframes: 0: #FF0000, 15: #00FF00, 30: #0000FF")
+            .performClick()
+        assertEquals(15, workspaceFrame.intValue)
 
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("CANONICAL .ECPROJ").assertIsDisplayed()

@@ -969,6 +969,10 @@ fn curve_keys_json(
             Value::Scalar(value) => json!(value),
             Value::Vec2(value) => json!(value),
             Value::Vec3(value) => json!(value),
+            // A color key rides as its full RGBA array so the timeline
+            // color lane can draw a swatch at each keyframe from the
+            // key's own value, not the layer's current color.
+            Value::Color(value) => json!(value),
             // Hold-only values have no numeric tween: a bool rides as a
             // JSON boolean and an enum as its 0-based option index, and
             // the Kotlin parser maps both onto the curve value (1.0/0.0
@@ -4374,6 +4378,14 @@ mod tests {
             .iter().find(|item| item["name"] == "Color Tint").unwrap()["colors"].as_array().unwrap()
             .iter().find(|param| param["name"] == "Tint").unwrap();
         assert_eq!(keyed_color["keyframes"], json!([0, 15]));
+        // The curve keys carry each color key's own RGBA so the timeline
+        // color lane can draw a swatch per keyframe.
+        let key_values: Vec<serde_json::Value> = keyed_color["keys"].as_array().unwrap().iter()
+            .map(|key| key["value"].clone()).collect();
+        assert_eq!(key_values, vec![json!([0.4, 0.5, 0.6, 0.7]), json!([0.8, 0.25, 0.5, 1.0])]);
+        let key_frames: Vec<i64> = keyed_color["keys"].as_array().unwrap().iter()
+            .map(|key| key["frame"].as_i64().unwrap()).collect();
+        assert_eq!(key_frames, vec![0, 15]);
         let mut keyed_project: Project = serde_json::from_str(&keyed_tint).unwrap();
         let keyed_property = keyed_project.comp_mut(ItemId(comp_id.0)).unwrap()
             .layers.find_mut(|layer| layer.id == LayerId(null_id)).unwrap()

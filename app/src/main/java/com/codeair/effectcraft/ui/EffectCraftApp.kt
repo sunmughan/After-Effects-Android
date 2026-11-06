@@ -812,6 +812,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         ?.distinct()?.sorted().orEmpty()
     val selectedCanonicalTransformDurationFrames = selectedCanonicalTransformComposition?.durationFrames
         ?: project.durationFrames
+    val selectedCanonicalColorKeys = selectedCanonicalTransformComposition?.layers
+        ?.filter { it.id in canonicalSelectedIds }
+        ?.flatMap { com.codeair.effectcraft.data.colorKeysOf(it) }
+        ?.distinctBy { it.frame to it.components }?.sortedBy { it.frame }.orEmpty()
     /**
      * Commits an already validated canonical project source: inspect, parse,
      * save to the local cache and repository, refresh the render session,
@@ -908,6 +912,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             selectedOpacityKeyframes = selectedOpacityKeyframes,
             canonicalTransformKeyframes = selectedCanonicalTransformKeyframes,
             canonicalTransformDurationFrames = selectedCanonicalTransformDurationFrames,
+            canonicalColorKeys = selectedCanonicalColorKeys,
+            canonicalColorDurationFrames = selectedCanonicalTransformDurationFrames,
             isPlaying = isPlaying,
             saveMessage = saveMessage,
             savedProjects = savedProjects,
