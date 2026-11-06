@@ -31,6 +31,21 @@ class CanonicalShapePathDraftTest {
         assertEquals(1, root.getJSONArray("feather").getJSONObject(0).getInt("segment"))
     }
 
+    @Test fun dragMutationMovesOnlySelectedVertexAndRejectsInvalidCoordinates() {
+        val source = fixture()
+        val moved = JSONObject(CanonicalShapePathDraft.moveVertex(
+            source, 1, CanonicalShapePathDraft.Vertex(-8.0, 19.5)
+        )!!)
+        assertEquals(1.0, moved.getJSONArray("vertices").getJSONArray(0).getDouble(0), 0.0)
+        assertEquals(-8.0, moved.getJSONArray("vertices").getJSONArray(1).getDouble(0), 0.0)
+        assertEquals(19.5, moved.getJSONArray("vertices").getJSONArray(1).getDouble(1), 0.0)
+        assertEquals(5.0, moved.getJSONArray("vertices").getJSONArray(2).getDouble(0), 0.0)
+        assertEquals(3, moved.getJSONArray("in_tangents").length())
+        assertEquals("preserved", moved.getString("custom"))
+        assertNull(CanonicalShapePathDraft.moveVertex(source, -1, CanonicalShapePathDraft.Vertex(0.0, 0.0)))
+        assertNull(CanonicalShapePathDraft.moveVertex(source, 0, CanonicalShapePathDraft.Vertex(Double.NaN, 0.0)))
+    }
+
     @Test fun addAndRemoveVertexKeepTangentsAlignedAndPruneInvalidFeatherSegments() {
         val added = JSONObject(CanonicalShapePathDraft.appendVertex(fixture())!!)
         assertEquals(4, added.getJSONArray("vertices").length())
