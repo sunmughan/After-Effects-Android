@@ -222,4 +222,56 @@ class CanonicalShapePathDraftTest {
         assertNull(CanonicalShapePathDraft.setClosed("not-json", true))
     }
 
+
+    @Test fun removeSelectedOpenVertexDropsCollapsedFeathersAndShiftsUntouchedSegments() {
+        val source = JSONObject(fixture(closed = false)).apply {
+            getJSONArray("vertices").put(org.json.JSONArray().put(7).put(8))
+            getJSONArray("in_tangents").put(org.json.JSONArray().put(3).put(4))
+            getJSONArray("out_tangents").put(org.json.JSONArray().put(5).put(6))
+            put("feather", org.json.JSONArray()
+                .put(JSONObject().put("segment", 0).put("t", 0.25).put("radius", 1))
+                .put(JSONObject().put("segment", 1).put("t", 0.75).put("radius", 2))
+                .put(JSONObject().put("segment", 2).put("t", 0.5).put("radius", 3)))
+        }.toString()
+        assertTrue(CanonicalShapePathDraft.canRemoveVertex(source, 1))
+        val removed = JSONObject(CanonicalShapePathDraft.removeVertex(source, 1)!!)
+        val vertices = CanonicalShapePathDraft.vertices(removed.toString())!!
+        val incoming = CanonicalShapePathDraft.tangentOffsets(removed.toString(), "in_tangents")!!
+        val outgoing = CanonicalShapePathDraft.tangentOffsets(removed.toString(), "out_tangents")!!
+        assertEquals(listOf(1.0, 5.0, 7.0), vertices.map { it.x })
+        assertEquals(listOf(0.0, 0.0, 3.0), incoming.map { it.x })
+        assertEquals(listOf(0.0, 0.0, 5.0), outgoing.map { it.x })
+        val feather = removed.getJSONArray("feather")
+        assertEquals(1, feather.length())
+        assertEquals(1, feather.getJSONObject(0).getInt("segment"))
+        assertEquals(3, feather.getJSONObject(0).getInt("radius"))
+        assertEquals("preserved", removed.getString("custom"))
+        assertNull(CanonicalShapePathDraft.removeVertex(source, -1))
+        assertNull(CanonicalShapePathDraft.removeVertex(source, 4))
+    }
+
+    @Test fun removeClosedPathFirstVertexRemapsWraparoundSegmentsAndHonorsMinimum() {
+        val source = JSONObject(fixture(closed = true)).apply {
+            getJSONArray("vertices").put(org.json.JSONArray().put(7).put(8))
+            getJSONArray("in_tangents").put(org.json.JSONArray().put(3).put(4))
+            getJSONArray("out_tangents").put(org.json.JSONArray().put(5).put(6))
+            put("feather", org.json.JSONArray()
+                .put(JSONObject().put("segment", 0).put("radius", 1))
+                .put(JSONObject().put("segment", 1).put("radius", 2))
+                .put(JSONObject().put("segment", 2).put("radius", 3))
+                .put(JSONObject().put("segment", 3).put("radius", 4)))
+        }.toString()
+        val removed = JSONObject(CanonicalShapePathDraft.removeVertex(source, 0)!!)
+        assertTrue(removed.getBoolean("closed"))
+        assertEquals(3, removed.getJSONArray("vertices").length())
+        assertEquals(3, CanonicalShapePathDraft.tangentOffsets(removed.toString(), "in_tangents")!!.size)
+        val feather = removed.getJSONArray("feather")
+        assertEquals(2, feather.length())
+        assertEquals(0, feather.getJSONObject(0).getInt("segment"))
+        assertEquals(2, feather.getJSONObject(0).getInt("radius"))
+        assertEquals(1, feather.getJSONObject(1).getInt("segment"))
+        assertEquals(3, feather.getJSONObject(1).getInt("radius"))
+        assertFalse(CanonicalShapePathDraft.canRemoveVertex(removed.toString(), 0))
+        assertNull(CanonicalShapePathDraft.removeVertex(removed.toString(), 0))
+    }
 }
