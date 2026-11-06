@@ -262,6 +262,7 @@ class AdaptiveWorkspaceSmokeTest {
         var popupKeyframe: List<Any>? = null
         var roving: List<Any>? = null
         var spatialTangents: List<Any>? = null
+        val renderRequests = java.util.Collections.synchronizedList(mutableListOf<Pair<Long, Long>>())
     }
 
     private fun setCanonicalEditorContent(
@@ -363,7 +364,10 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerBoolKeyframe = onSetBoolKeyframe,
                     onSetCanonicalLayerPopupKeyframe = onSetPopupKeyframe,
                     onRelinkCanonicalAsset = {},
-                    onRenderCanonicalFrame = { _, _ -> frameBytes },
+                    onRenderCanonicalFrame = { compositionId, frame ->
+                        captures.renderRequests.add(compositionId to frame)
+                        frameBytes
+                    },
                     safGrants = emptyList(),
                     missingManifestEntries = 0,
                     onReleaseSafGrant = { _, _ -> },
@@ -724,6 +728,7 @@ class AdaptiveWorkspaceSmokeTest {
             }.isSuccess
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
+        assertEquals(true, captures.renderRequests.any { it == (10L to 0L) })
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithContentDescription("Motion path overlay")
                 .fetchSemanticsNodes().isNotEmpty()
