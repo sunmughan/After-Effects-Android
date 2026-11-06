@@ -51,6 +51,80 @@ object CanonicalShapePathDraft {
         root.toString()
     }.getOrNull()
 
+    /**
+     * Insert a vertex on an existing cubic segment using de Casteljau subdivision.
+     * The original curve is geometrically preserved: both resulting segments
+     * receive the exact split control points, and positional feather metadata
+     * is remapped to the corresponding half of the split segment.
+     *
+     * Segment indices follow vertices: open paths have n-1 segments; closed
+     * paths include the final segment from the last vertex back to vertex 0.
+     * t must be strictly inside (0,1), avoiding zero-length subdivisions.
+     */
+    fun insertVertexOnSegment(pathJson: String, segmentIndex: Int, t: Double): String? = runCatching {
+        require(t.isFinite() && t > 0.0 && t < 1.0)
+        val root = JSONObject(pathJson)
+        val points = vertices(pathJson) ?: error("Invalid ShapePath vertices")
+        require(points.size in 2..MAX_VERTICES)
+        require(points.size < MAX_VERTICES)
+        val closed = root.optBoolean("closed", false)
+        val segmentCount = if (closed) points.size else points.size - 1
+        require(segmentIndex in 0 until segmentCount)
+        val startIndex = segmentIndex
+        val endIndex = (segmentIndex + 1) % points.size
+        val p0 = points[startIndex]
+        val p3 = points[endIndex]
+        val incoming = tangentOffsets(pathJson, "in_tangents") ?: error("Invalid incoming tangents")
+        val outgoing = tangentOffsets(pathJson, "out_tangents") ?: error("Invalid outgoing tangents")
+        val p1 = Vertex(p0.x + outgoing[startIndex].x, p0.y + outgoing[startIndex].y)
+        val p2 = Vertex(p3.x + incoming[endIndex].x, p3.y + incoming[endIndex].y)
+        fun lerp(a: Vertex, b: Vertex, fraction: Double) = Vertex(
+            a.x + (b.x - a.x) * fraction, a.y + (b.y - a.y) * fraction
+        )
+        val a = lerp(p0, p1, t)
+        val b = lerp(p1, p2, t)
+        val c = lerp(p2, p3, t)
+        val d = lerp(a, b, t)
+        val e = lerp(b, c, t)
+        val split = lerp(d, e, t)
+
+        val insertionIndex = segmentIndex + 1
+        val nextPoints = points.toMutableList().apply { add(insertionIndex, split) }
+        val nextIncoming = incoming.toMutableList().apply {
+            this[endIndex] = Vertex(c.x - p3.x, c.y - p3.y)
+            add(insertionIndex, Vertex(d.x - split.x, d.y - split.y))
+        }
+        val nextOutgoing = outgoing.toMutableList().apply {
+            this[startIndex] = Vertex(a.x - p0.x, a.y - p0.y)
+            add(insertionIndex, Vertex(e.x - split.x, e.y - split.y))
+        }
+        root.put("vertices", vertexArray(nextPoints))
+        root.put("in_tangents", vertexArray(nextIncoming))
+        root.put("out_tangents", vertexArray(nextOutgoing))
+
+        root.optJSONArray("feather")?.let { feather ->
+            for (index in 0 until feather.length()) {
+                val point = feather.getJSONObject(index)
+                val oldSegment = point.optInt("segment", -1)
+                when {
+                    oldSegment > segmentIndex -> point.put("segment", oldSegment + 1)
+                    oldSegment == segmentIndex && point.has("t") -> {
+                        val oldT = point.optDouble("t", Double.NaN)
+                        if (oldT.isFinite() && oldT in 0.0..1.0) {
+                            if (oldT > t) {
+                                point.put("segment", segmentIndex + 1)
+                                point.put("t", (oldT - t) / (1.0 - t))
+                            } else {
+                                point.put("t", oldT / t)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        root.toString()
+    }.getOrNull()
+
     fun appendVertex(pathJson: String): String? = runCatching {
         val root = JSONObject(pathJson)
         val points = root.getJSONArray("vertices")
