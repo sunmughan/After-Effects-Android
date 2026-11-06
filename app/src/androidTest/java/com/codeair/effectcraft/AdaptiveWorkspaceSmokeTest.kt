@@ -818,6 +818,37 @@ class AdaptiveWorkspaceSmokeTest {
     }
 
     @Test
+    fun shapePathInspectorRemovesSelectedVertexAndKeepsPathEditable() {
+        val base = canonicalM4Layer(locked = false).compositions.single()
+        val layer = base.layers.first().copy(shapeItems = base.layers.first().shapeItems + CanonicalParamGroup(
+            name = "Custom Shape", kind = "shape", paths = listOf(CanonicalPathParam(
+                uid = 303, name = "Mask Path", pathJson = org.json.JSONObject().apply {
+                    put("vertices", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(80).put(0)).put(org.json.JSONArray().put(40).put(60))
+                        .put(org.json.JSONArray().put(120).put(80)))
+                    put("in_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)))
+                    put("out_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)))
+                    put("closed", false)
+                }.toString()
+            ))
+        ))
+        val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
+        setCanonicalEditorContent(canonical, CanonicalCaptures())
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Select canonical shape path segment start P2 Custom Shape Mask Path")
+            .performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Remove selected canonical shape vertex Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("VERTICES · 3").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply canonical shape path Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun motionPathOverlayDrawsForSpatialPositionTrack() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalRovingLayer(), captures, frameBytes = blackFrameBytes())
