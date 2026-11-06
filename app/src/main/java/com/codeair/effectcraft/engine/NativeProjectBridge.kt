@@ -223,6 +223,13 @@ object NativeProjectBridge {
         return runCatching { setLayerReferencePropertyEcprojNative(json, compositionId, layerId, uid, targetLayerId ?: -1L) }.getOrNull()
     }
 
+    /** Authors a discrete Layer Control hold key at the playhead; null means None. */
+    fun setLayerReferenceKeyframeEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, targetLayerId: Long?): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || frame < 0) return null
+        return runCatching { setLayerReferenceKeyframeEcprojNative(json, compositionId, layerId, uid, frame, targetLayerId ?: -1L) }.getOrNull()
+    }
+
     /** Sets a checkbox (Bool) shape-item or effect parameter by stable native uid. Rejected by native when the parameter already has keys. */
     fun setLayerBoolPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String? {
         ensureLoaded()
@@ -508,6 +515,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerReferencePropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, targetLayerId: Long): String
+
+    @JvmStatic
+    private external fun setLayerReferenceKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, targetLayerId: Long): String
 
     @JvmStatic
     private external fun setLayerBoolPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String

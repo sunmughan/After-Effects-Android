@@ -835,7 +835,18 @@ fn collect_param_items(
                     }));
                 },
                 Value::Layer(value) if matches!(&property.ui, ParamUi::Layer) => {
-                    layer_refs.push(json!({"uid": property.uid, "name": property.name, "value": value}));
+                    let mut keys = property.keys.iter().filter_map(|key| match &key.value {
+                        Value::Layer(target) => Some(json!({
+                            "frame": key.time.to_rational_floor(frame_rate.den, frame_rate.num),
+                            "layerId": target
+                        })),
+                        _ => None,
+                    }).collect::<Vec<_>>();
+                    keys.sort_by_key(|key| key["frame"].as_i64().unwrap_or(0));
+                    layer_refs.push(json!({
+                        "uid": property.uid, "name": property.name, "value": value,
+                        "keys": keys, "keyframes": hold_keyframes(property, frame_rate)
+                    }));
                 },
                 _ => {}
             }
@@ -1871,6 +1882,24 @@ fn set_layer_reference_property(source: &str, composition_id: u64, layer_id: u64
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Authors a discrete Layer Control keyframe at a composition frame.
+fn set_layer_reference_keyframe(source: &str, composition_id: u64, layer_id: u64, uid: u64, frame: i64, target_layer_id: Option<u64>) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let frame_rate = project.comp(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} was not found"))?.frame_rate;
+    if let Some(target) = target_layer_id {
+        let comp = project.comp(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+        if !comp.layers.iter().any(|layer| layer.id.0 == target) { return Err(format!("Layer reference target {target} is not in composition {composition_id}")); }
+    }
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if property.static_only { return Err(format!("Parameter {uid} cannot be keyframed")); }
+    if !matches!(&property.value, Value::Layer(_)) { return Err(format!("Parameter {uid} is not a layer reference")); }
+    property.hold_only = true;
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(Tick::from_rational(frame, frame_rate.den, frame_rate.num), Value::Layer(target_layer_id));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Loads one shape-item or effect parameter for mutation, addressed by
 /// its native uid. Shared by the bool/popup setters so the lookup (and
 /// the locked-layer rejection) lives in exactly one place.
@@ -2438,6 +2467,23 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
         Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
         Err(error) => json!({"valid": false, "error": error}).to_string(),
     };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerReferenceKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, frame: jlong, target_layer_id: jlong,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || frame < 0 || target_layer_id < -1 {
+        Err("Composition, layer, uid and frame must be non-negative; target must be -1 (None) or a layer ID".to_owned())
+    } else {
+        set_layer_reference_keyframe(&source, composition_id as u64, layer_id as u64, uid as u64, frame as i64, if target_layer_id == -1 { None } else { Some(target_layer_id as u64) })
+    };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
@@ -4583,6 +4629,43 @@ mod tests {
         assert!(cleared_meta["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0]["value"].is_null());
         assert!(set_layer_reference_property(&source, comp_id.0, source_id, uid, Some(999_999)).is_err());
         assert!(set_layer_reference_property(&source, comp_id.0, source_id, 999_999, Some(target_id)).is_err());
+    }
+
+    #[test]
+    fn canonical_layer_reference_keyframes_are_discrete_and_serialized() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Node, Value};
+        use effectcraft_project::props::{GroupKind, ParamUi, PropGroup, Property};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let mut source_layer = build::layer(&mut project, &comp, "Source", LayerSource::Shape, (640, 360), None);
+        let source_id = source_layer.id.0;
+        let target_layer = build::layer(&mut project, &comp, "Target", LayerSource::Shape, (640, 360), None);
+        let target_id = target_layer.id.0;
+        source_layer.props.sub_mut("effects").unwrap().children.push(Node::Group(PropGroup {
+            uid: 900_001, match_id: "layerControl".into(), name: "Layer Control".into(),
+            kind: GroupKind::Effect { effect: "ec.control.layer".into() }, enabled: true, label: None,
+            children: vec![Node::Prop(Property::new(900_002, "layer", "Layer", Value::Layer(None)).with_ui(ParamUi::Layer))],
+        }));
+        project.comp_mut(comp_id).unwrap().layers.push(source_layer);
+        project.comp_mut(comp_id).unwrap().layers.push(target_layer);
+        let source = project.to_file_json().unwrap();
+        let keyed = set_layer_reference_keyframe(&source, comp_id.0, source_id, 900_002, 15, Some(target_id)).unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&keyed).unwrap()).unwrap();
+        let control = &metadata["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0];
+        assert_eq!(control["keyframes"], json!([0, 15]));
+        assert!(control["keys"][0]["layerId"].is_null());
+        assert_eq!(control["keys"][1]["layerId"], target_id);
+        let none_key = set_layer_reference_keyframe(&keyed, comp_id.0, source_id, 900_002, 30, None).unwrap();
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&none_key).unwrap()).unwrap();
+        let control = &metadata["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0];
+        assert_eq!(control["keyframes"], json!([0, 15, 30]));
+        assert!(control["keys"][2]["layerId"].is_null());
+        assert!(set_layer_reference_property(&none_key, comp_id.0, source_id, 900_002, Some(target_id)).is_err());
+        assert!(set_layer_reference_keyframe(&source, comp_id.0, source_id, 900_002, -1, Some(target_id)).is_err());
+        assert!(set_layer_reference_keyframe(&source, comp_id.0, source_id, 900_002, 15, Some(999_999)).is_err());
     }
 
     #[test]

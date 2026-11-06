@@ -242,6 +242,7 @@ fun EditorScreen(
     onSetCanonicalLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onSetCanonicalLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerReferenceProperty: (Long, Long, Long, Long?) -> Unit = { _, _, _, _ -> },
+    onSetCanonicalLayerReferenceKeyframe: (Long, Long, Long, Int, Long?, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetCanonicalLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
@@ -2231,6 +2232,9 @@ private fun CanonicalProjectEditor(
                         onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
                         availableLayers = composition.layers,
                         onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
+                        onLayerReferenceKeyframeAction = { uid, frame, targetId, remove ->
+                            onSetCanonicalLayerReferenceKeyframe(composition.id, layer.id, uid, frame, targetId, remove)
+                        },
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
@@ -2366,6 +2370,7 @@ private fun CanonicalParamGroupRows(
     onApplyGradient: (Long, String) -> Unit,
     availableLayers: List<CanonicalLayerInfo>,
     onApplyLayerReference: (Long, Long?) -> Unit,
+    onLayerReferenceKeyframeAction: (Long, Int, Long?, Boolean) -> Unit,
     playheadFrame: Int,
     onColorKeyframeAction: (Long, Int, Double, Double, Double, Double, Boolean) -> Unit,
     onApplyBool: (Long, Boolean) -> Unit,
@@ -2545,23 +2550,40 @@ private fun CanonicalParamGroupRows(
             Text("Gradient · stops 0–1 · RGBA 0–1 per channel · opacity 0–1", color = EditorPalette.muted, fontSize = 9.sp)
         }
         group.layerRefs.forEach { param ->
-            val selected = param.layerId?.let { id -> availableLayers.firstOrNull { it.id == id } }
-            Box {
-                TextButton(enabled = editable, onClick = { expandedLayerRefUid = param.uid }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer reference ${group.name} ${param.name}" }) {
-                    Text("${param.name}: ${selected?.name ?: "None"}", color = EditorPalette.text, fontSize = 11.sp)
-                }
-                DropdownMenu(expanded = expandedLayerRefUid == param.uid, onDismissRequest = { expandedLayerRefUid = null }) {
-                    DropdownMenuItem(text = { Text("None") }, onClick = { expandedLayerRefUid = null; onApplyLayerReference(param.uid, null) }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} None" })
-                    availableLayers.forEach { target ->
-                        DropdownMenuItem(
-                            text = { Text("${target.name} · ${target.id}", modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} ${target.name}" }, color = EditorPalette.text, fontSize = 11.sp) },
-                            onClick = { expandedLayerRefUid = null; onApplyLayerReference(param.uid, target.id) },
-                            modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} ${target.name}" }
-                        )
+            val heldLayerId = param.keys.lastOrNull { it.frame <= playheadFrame }?.layerId ?: param.layerId
+            val selected = heldLayerId?.let { id -> availableLayers.firstOrNull { it.id == id } }
+            val hasKeyAtPlayhead = playheadFrame in param.keyframes
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(modifier = Modifier.weight(1f)) {
+                    TextButton(enabled = editable, onClick = { expandedLayerRefUid = param.uid }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer reference ${group.name} ${param.name}" }) {
+                        Text("${param.name}: ${selected?.name ?: "None"}", color = EditorPalette.text, fontSize = 11.sp)
+                    }
+                    DropdownMenu(expanded = expandedLayerRefUid == param.uid, onDismissRequest = { expandedLayerRefUid = null }) {
+                        DropdownMenuItem(text = { Text("None") }, onClick = {
+                            expandedLayerRefUid = null
+                            if (param.keyframes.isEmpty()) onApplyLayerReference(param.uid, null)
+                            else onLayerReferenceKeyframeAction(param.uid, playheadFrame, null, false)
+                        }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} None" })
+                        availableLayers.forEach { target ->
+                            DropdownMenuItem(
+                                text = { Text("${target.name} · ${target.id}", modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} ${target.name}" }, color = EditorPalette.text, fontSize = 11.sp) },
+                                onClick = {
+                                    expandedLayerRefUid = null
+                                    if (param.keyframes.isEmpty()) onApplyLayerReference(param.uid, target.id)
+                                    else onLayerReferenceKeyframeAction(param.uid, playheadFrame, target.id, false)
+                                },
+                                modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} ${target.name}" }
+                            )
+                        }
                     }
                 }
+                TextButton(
+                    enabled = editable,
+                    onClick = { onLayerReferenceKeyframeAction(param.uid, playheadFrame, heldLayerId, hasKeyAtPlayhead) },
+                    modifier = Modifier.semantics { contentDescription = "Canonical $section layer reference key ${group.name} ${param.name} frame $playheadFrame" }
+                ) { Text(if (hasKeyAtPlayhead) "Remove key" else "Key", color = EditorPalette.amber, fontSize = 10.sp) }
             }
-            Text("Layer Control · static reference · same composition", color = EditorPalette.muted, fontSize = 9.sp)
+            Text("Layer Control · discrete hold keys · same composition", color = EditorPalette.muted, fontSize = 9.sp)
         }
         group.bools.forEach { param ->
             // The checkbox shows the value held at the playhead (last hold

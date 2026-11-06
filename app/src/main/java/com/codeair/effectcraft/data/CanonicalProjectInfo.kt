@@ -60,8 +60,17 @@ data class CanonicalGradientStop(val position: Double, val components: List<Doub
 /** One opacity stop of a gradient parameter: position 0..1 and opacity 0..1. */
 data class CanonicalGradientOpacityStop(val position: Double, val opacity: Double)
 
-/** Static Layer Control value; null means None, otherwise a canonical layer id. */
-data class CanonicalLayerRefParam(val uid: Long, val name: String, val layerId: Long?)
+/** One discrete Layer Control hold key; null means None. */
+data class CanonicalLayerRefKey(val frame: Int, val layerId: Long?)
+
+/** Layer Control value at frame zero and its sorted hold keys. */
+data class CanonicalLayerRefParam(
+    val uid: Long,
+    val name: String,
+    val layerId: Long?,
+    val keys: List<CanonicalLayerRefKey> = emptyList(),
+    val keyframes: List<Int> = keys.map { it.frame }
+)
 
 /** One editable gradient parameter addressed by native uid; its keys interpolate. */
 data class CanonicalGradientParam(
@@ -469,7 +478,21 @@ data class CanonicalProjectInfo(
                 val layerRefArray = group.optJSONArray("layerRefs")
                 val layerRefs = (0 until (layerRefArray?.length() ?: 0)).map { refIndex ->
                     val param = layerRefArray!!.getJSONObject(refIndex)
-                    CanonicalLayerRefParam(param.getLong("uid"), param.optString("name", "Layer"), if (param.isNull("value")) null else param.optLong("value"))
+                    val keyArray = param.optJSONArray("keys")
+                    val keys = (0 until (keyArray?.length() ?: 0)).map { keyIndex ->
+                        val key = keyArray!!.getJSONObject(keyIndex)
+                        CanonicalLayerRefKey(
+                            frame = key.optInt("frame", 0),
+                            layerId = if (key.isNull("layerId")) null else key.optLong("layerId")
+                        )
+                    }.sortedBy { it.frame }
+                    CanonicalLayerRefParam(
+                        uid = param.getLong("uid"),
+                        name = param.optString("name", "Layer"),
+                        layerId = if (param.isNull("value")) null else param.optLong("value"),
+                        keys = keys,
+                        keyframes = parseFrameIndices(param.optJSONArray("keyframes")).ifEmpty { keys.map { it.frame } }
+                    )
                 }
                 val boolArray = group.optJSONArray("bools")
                 val bools = (0 until (boolArray?.length() ?: 0)).map { boolIndex ->

@@ -1529,6 +1529,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical Layer Control updated · saved locally"
                 )
             },
+            onSetCanonicalLayerReferenceKeyframe = { compositionId, layerId, uid, frame, targetLayerId, remove ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else if (remove) {
+                    val envelope = NativeProjectBridge.removeLayerCurveKeyframeEcproj(source, compositionId, layerId, "param:$uid", frame.toLong())
+                    val response = runCatching { JSONObject(envelope ?: "") }.getOrNull()
+                    val valid = response?.optBoolean("valid") == true
+                    val removed = response?.optBoolean("removed") == true
+                    if (!valid) saveMessage = response?.optString("error")?.takeIf { it.isNotBlank() } ?: "Unable to remove Layer Control keyframe"
+                    else if (!removed) saveMessage = "No Layer Control keyframe · frame $frame"
+                    else applyCanonicalEdit(envelope, "Layer Control keyframe removed · frame $frame · saved locally")
+                } else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerReferenceKeyframeEcproj(source, compositionId, layerId, uid, frame.toLong(), targetLayerId),
+                    "Layer Control hold keyframe added · frame $frame · saved locally"
+                )
+            },
             onSetCanonicalLayerColorKeyframe = { compositionId, layerId, uid, frame, red, green, blue, alpha, remove ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
