@@ -429,7 +429,10 @@ class CanonicalEditPreviewSyncTest {
         val path = layer(canonical(edited), fixture.firstId).shapeItems.single { it.kind == "mask" }.paths.single()
         assertEquals(3, JSONObject(path.pathJson).getJSONArray("vertices").length())
         assertTrue(JSONObject(path.pathJson).getBoolean("closed"))
-        assertTrue(previewRenders(before, edited, fixture.compositionId, 0))
+        assertNotNull(
+            "Preview session must render from the path-edited project",
+            previewRenders(before, edited, fixture.compositionId, 0)
+        )
     }
 
     @Test
