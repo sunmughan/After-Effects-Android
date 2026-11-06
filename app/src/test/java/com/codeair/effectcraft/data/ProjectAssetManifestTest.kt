@@ -83,6 +83,26 @@ class ProjectAssetManifestTest {
     }
 
     @Test
+    fun replaceAssetEverywhereFailsBeforeWritesWhenAnyManifestIsCorrupt() {
+        val root = Files.createTempDirectory("effectcraft-manifest-replace-safe").toFile()
+        try {
+            val store = ProjectAssetManifestStore(root)
+            store.load("project-a").also { it.link(1, firstHash) }.let(store::save)
+            File(root, "corrupt.json").writeText("{not-json")
+
+            val failure = runCatching { store.replaceAssetEverywhere(firstHash, secondHash) }.exceptionOrNull()
+            assertTrue(failure is java.io.IOException)
+            assertEquals(firstHash, store.load("project-a").entryFor(1)?.sha256)
+
+            assertTrue(File(root, "corrupt.json").delete())
+            assertEquals(1, store.replaceAssetEverywhere(firstHash, secondHash))
+            assertEquals(secondHash, store.load("project-a").entryFor(1)?.sha256)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun rejectsMalformedManifestsAndInputs() {
         val manifest = ProjectAssetManifest("project-bad")
         assertTrue(runCatching { manifest.link(0, firstHash) }.isFailure)

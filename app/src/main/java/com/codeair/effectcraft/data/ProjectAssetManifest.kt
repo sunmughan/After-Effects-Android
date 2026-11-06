@@ -315,6 +315,10 @@ class ProjectAssetManifestStore(private val root: File) {
     fun replaceAssetEverywhere(oldHash: String, newHash: String): Int {
         ProjectAssetManifest.validateHash(oldHash)
         ProjectAssetManifest.validateHash(newHash)
+        // Validate the complete manifest set before the first write. A
+        // corrupt file must not turn a multi-project replacement into a
+        // silent partial migration.
+        allReferencedHashes()
         var changed = 0
         projectIds().forEach { id ->
             val manifest = load(id)
