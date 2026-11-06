@@ -98,9 +98,16 @@ class EditorRecoveryJournal(private val root: File) {
             file.delete()
             return null
         }
-        if (committed != null && parsed.document.updatedAtEpochMillis <= committed.updatedAtEpochMillis) {
-            file.delete()
-            return null
+        if (committed != null) {
+            // Wall-clock timestamps have millisecond precision. Two edits can
+            // legitimately share a timestamp, so equality alone must not hide
+            // a different journaled document after process death.
+            if (parsed.document.updatedAtEpochMillis < committed.updatedAtEpochMillis ||
+                parsed.document == committed
+            ) {
+                file.delete()
+                return null
+            }
         }
         return parsed.document
     }
