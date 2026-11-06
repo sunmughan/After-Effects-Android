@@ -2269,6 +2269,7 @@ private fun CanonicalProjectEditor(
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
                         onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
                         onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
+                        onApplyPath = { uid, pathJson -> onSetLayerPathProperty(composition.id, layer.id, uid, pathJson) },
                         availableLayers = composition.layers,
                         onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
                         onLayerReferenceKeyframeAction = { uid, frame, targetId, remove ->
