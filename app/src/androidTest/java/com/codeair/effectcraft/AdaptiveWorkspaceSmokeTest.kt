@@ -32,6 +32,7 @@ import com.codeair.effectcraft.data.PropertyKeyframe
 import com.codeair.effectcraft.ui.EditorScreen
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -736,6 +737,43 @@ class AdaptiveWorkspaceSmokeTest {
         // The workspace preview renders the supplied frame, and the selected
         // layer's 3-key position track draws its motion-path overlay over it.
         compose.onNodeWithContentDescription("Motion path overlay").assertIsDisplayed()
+    }
+
+    @Test
+    fun motionPathOverlayMatchesCappedPreviewImageBounds() {
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(canonicalRovingLayer(), captures, frameBytes = blackFrameBytes())
+        // The inspector preview image is capped at 220dp; the overlay over
+        // it must share the image's exact bounds, not the sheet width.
+        compose.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                compose.onNodeWithContentDescription("EffectCraft rendered composition frame").assertIsDisplayed()
+            }.isSuccess
+        }
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithContentDescription("Motion path overlay")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val imageBounds = compose.onNodeWithContentDescription("EffectCraft rendered composition frame")
+            .fetchSemanticsNode().boundsInRoot
+        val overlays = compose.onAllNodesWithContentDescription("Motion path overlay")
+            .fetchSemanticsNodes()
+        val matching = overlays.filter { overlay ->
+            kotlin.math.abs(overlay.boundsInRoot.left - imageBounds.left) <= 1f &&
+                kotlin.math.abs(overlay.boundsInRoot.top - imageBounds.top) <= 1f &&
+                kotlin.math.abs(overlay.boundsInRoot.width - imageBounds.width) <= 1f &&
+                kotlin.math.abs(overlay.boundsInRoot.height - imageBounds.height) <= 1f
+        }
+        assertTrue(
+            "An overlay must sit exactly over the inspector preview image",
+            matching.isNotEmpty()
+        )
+        matching.forEach { overlay ->
+            assertTrue(
+                "Overlay height must not exceed the 220dp preview cap",
+                overlay.boundsInRoot.height <= 220f + 1f
+            )
+        }
     }
 
     @Test

@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -101,6 +100,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.codeair.effectcraft.data.CanonicalGradientParam
@@ -1398,6 +1399,10 @@ private fun CanonicalProjectEditor(
     var surfaceRenderNonce by remember(composition?.id) { mutableIntStateOf(0) }
     val surfacePresentation = remember(composition?.id) { com.codeair.effectcraft.engine.SurfacePresentation() }
     var previewWidthPx by remember { mutableIntStateOf(0) }
+    // The motion-path overlay must sit exactly over the drawn preview
+    // frame: its bounds come from the measured Image, not from the sheet
+    // width, so it stays aligned (and capped at 220dp) on wide screens.
+    var previewImageSize by remember { mutableStateOf(IntSize.Zero) }
     // Read at gesture end, not at detector setup, so a position Apply or a
     // re-parse between gestures never drags from stale layer positions.
     val gestureLayers by rememberUpdatedState(selectedLayers)
@@ -1498,7 +1503,8 @@ private fun CanonicalProjectEditor(
                     Image(
                         bitmap = previewBitmap.asImageBitmap(),
                         contentDescription = "EffectCraft rendered composition frame",
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp)
+                            .onSizeChanged { previewImageSize = it },
                         contentScale = ContentScale.Fit
                     )
                     if (showMotionPath) {
@@ -1509,7 +1515,11 @@ private fun CanonicalProjectEditor(
                             bitmapWidth = previewBitmap.width,
                             bitmapHeight = previewBitmap.height,
                             currentFrame = previewFrame,
-                            modifier = Modifier.fillMaxWidth().aspectRatio(previewBitmap.width.toFloat() / previewBitmap.height.toFloat())
+                            modifier = if (previewImageSize == IntSize.Zero) {
+                                Modifier.fillMaxWidth().heightIn(max = 220.dp)
+                            } else {
+                                with(LocalDensity.current) { Modifier.size(previewImageSize.toDpSize()) }
+                            }
                         )
                     }
                 } else {
