@@ -2823,6 +2823,18 @@ private fun CanonicalParamGroupRows(
                         modifier = Modifier.semantics { contentDescription = "Add canonical $section path vertex ${group.name} ${param.name}" }
                     ) { Text("Add vertex", color = EditorPalette.violet, fontSize = 10.sp) }
                     TextButton(
+                        enabled = editable && editedPath != null && CanonicalShapePathDraft.canRemoveVertex(pathForAction, selectedCanvasVertex),
+                        onClick = {
+                            CanonicalShapePathDraft.removeVertex(pathForAction, selectedCanvasVertex)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                selectedCanvasVertex = minOf(selectedCanvasVertex, CanonicalShapePathDraft.vertices(updated)!!.lastIndex)
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Remove selected canonical $section path vertex ${group.name} ${param.name}" }
+                    ) { Text("Remove selected", color = EditorPalette.amber, fontSize = 10.sp) }
+                    TextButton(
                         enabled = editable && editedPath != null && CanonicalShapePathDraft.canRemoveLastVertex(pathForAction),
                         onClick = {
                             CanonicalShapePathDraft.removeLastVertex(pathForAction)?.let { updated ->
