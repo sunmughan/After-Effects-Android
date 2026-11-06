@@ -304,6 +304,25 @@ object CanonicalShapePathDraft {
             ?: error("Invalid smoothed outgoing handles")
     }.getOrNull()
 
+    /**
+     * Turn one anchor into a corner by zeroing both relative Bezier handles.
+     * Other anchors, path topology and extension metadata are preserved.
+     */
+    fun makeCornerVertex(pathJson: String, index: Int): String? = runCatching {
+        val points = vertices(pathJson) ?: error("Invalid ShapePath vertices")
+        require(index in points.indices)
+        val incoming = tangentOffsets(pathJson, "in_tangents")?.toMutableList()
+            ?: error("Invalid incoming tangent array")
+        val outgoing = tangentOffsets(pathJson, "out_tangents")?.toMutableList()
+            ?: error("Invalid outgoing tangent array")
+        incoming[index] = Vertex(0.0, 0.0)
+        outgoing[index] = Vertex(0.0, 0.0)
+        val withIncoming = setTangentOffsets(pathJson, "in_tangents", incoming)
+            ?: error("Invalid incoming corner handles")
+        setTangentOffsets(withIncoming, "out_tangents", outgoing)
+            ?: error("Invalid outgoing corner handles")
+    }.getOrNull()
+
     fun canRemoveVertex(pathJson: String, index: Int): Boolean = runCatching {
         val root = JSONObject(pathJson)
         val count = root.getJSONArray("vertices").length()
