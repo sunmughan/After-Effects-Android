@@ -1458,3 +1458,33 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - UI commit [7aae588e](https://github.com/sunmughan/After-Effects-Android/commit/7aae588e2201470015be4de91aa64ad5f6ea0d58); API30 custom-`t` regression [06bde801](https://github.com/sunmughan/After-Effects-Android/commit/06bde801d0353eba2fbe16356eb586c2ac89f23b); test replaces the default `0.5` field before entering `0.25` [d8cc9a99](https://github.com/sunmughan/After-Effects-Android/commit/d8cc9a99b6d60230043b1484caaf01edf78bd60c).
 - Latest source/test commit before tracker sync: `d8cc9a99`. CI #975 [42270588285] started on older README SHA `1a9782e4`; new pushes supersede it. A fresh exact-head workflow must finish Kotlin/JVM/API30/native ABI and cold APK/native reproducibility before any acceptance flip.
 - M4 next: multi-segment selection/editing, shape-path key interpolation/roving/spatial parity, and broader native preview update acceptance. M2/M3/M5/M6/M7 remain open per the acceptance ledger above; **Release NOT COMPLETE.**
+
+
+## Automation Run 11 — CI #980 compile correction + M4 ShapePath direction reversal (2026-11-07)
+
+### Exact-head failure diagnosis and fix
+- [CI #980](https://github.com/sunmughan/After-Effects-Android/actions/runs/42270775600) failed :app:compileDebugAndroidTestKotlin in AdaptiveWorkspaceSmokeTest.shapePathInspectorInsertsAtUserSpecifiedParametricT: unresolved click() inside performTouchInput, followed by a receiver mismatch for performTextInput. Production Kotlin, ARM64+x86_64 JNI, Rust bridge, debug APK assembly and JVM tests had passed; emulator tests and independent cold rebuild were skipped after instrumentation compilation failed.
+- Corrected the editable insertion-parameter field to use Compose semantics performClick() before performTextClearance()/performTextInput(). This avoids an unimported touch DSL extension and interacts with the actual text-field semantics node. Test intent/assertions retained. Fix commit [ba20eed0](https://github.com/sunmughan/After-Effects-Android/commit/ba20eed015968a62ef9c20625c4100099dd88dec).
+
+### M4 — Reverse ShapePath direction (new functional editor action)
+- Native-independent canonical draft operation [6b034c70](https://github.com/sunmughan/After-Effects-Android/commit/6b034c70b54531cb4ba26aff711d3b14df5cfe43) reverses vertex order and exchanges/reverses incoming/outgoing tangent arrays so the represented cubic segments retain their geometry while path traversal direction changes.
+- Feather segment indices map to the reversed segment (including closed-path wraparound); valid local t becomes 1-t. Unknown ShapePath JSON metadata is preserved.
+- JVM regression [1d6d99d9](https://github.com/sunmughan/After-Effects-Android/commit/1d6d99d9b81502a53158dfc32a39dc9db19b1451) checks open-path point/handle/feather mapping and closed-path reverse-twice involution.
+- Inspector action [fa6586fc](https://github.com/sunmughan/After-Effects-Android/commit/fa6586fcfe67959577dbc1e78d952794e48cd901) adds Reverse path, preserves local-draft semantics, remaps selected vertex, and invalidates stale coordinate/tangent text drafts. API30 regression [a3cdbdf9](https://github.com/sunmughan/After-Effects-Android/commit/a3cdbdf9ef2ef8a481d3b9e5fdeaad018ece135a) exercises the action and Apply affordance.
+
+### Verification checkpoint
+- Code/test head before docs: a3cdbdf9ef2ef8a481d3b9e5fdeaad018ece135a.
+- CI #980 is a completed failure on old head 3f9d5cdc; it does not include the correction or reversal feature. A new exact-head Actions run must finish Kotlin, JVM, API30, Rust/native dual ABI and independent cold APK/native comparison before acceptance.
+- Local Gradle execution remains unavailable in this automation runtime (clone/network DNS restriction); GitHub Actions is the build/test environment. No assertion has been removed or weakened.
+
+### Phase acceptance ledger (unchanged gates; explicitly carried forward)
+- **M0 ACCEPTED historically** at CI #929 exact SHA dc190940: Rust 59/59, JVM, API30 157/157, ARM64+x86_64 JNI, debug APK, independent cold rebuild and APK/native reproducibility. Current head requires fresh revalidation.
+- **M1 scoped editor baseline ACCEPTED** at #929 SHA; full professional parity, broad device and accessibility acceptance remains open.
+- **M2 PARTIAL:** canonical JSON/XML/BOM, validation/migration and offline asset-manifest/GC/relink groundwork. Full SAF/provider round-trip, external Effekseer fixtures/version compatibility, media decode/import matrix remain open. Adobe .aep is proprietary; no licensed parser, native support not claimed.
+- **M3 PARTIAL:** actual Rust CPU/session preview and JNI lifecycle render real frames. GPU/Surface presentation, device-loss/recreation, software fallback parity and complete media decoder integration remain open.
+- **M4 IN PROGRESS:** native property/transform/opacity/text/color/path/gradient/Layer Control and discrete key authoring; ShapePath vertex/tangent gestures, cubic canvas, closure, exact de Casteljau insertion, selected deletion and direction reversal now have JVM/API30 coverage. Full upstream effect/property/interpolation/roving/spatial/Bezier parity and broad preview acceptance remain open.
+- **M5 PARTIAL:** PNG sequence/MP4 codec-validation, worker/progress/cancel and copy-recovery foundations. Durable foreground/process-death completion, audio mux/sync, codec/resolution/FPS/device matrix and SAF destinations remain open.
+- **M6 PARTIAL:** journal recovery, offline asset integrity/GC and instrumentation/performance budgets. Physical memory/thermal/frame-time, API/ABI/device matrix, long-session leak/crash and TalkBack acceptance remain open.
+- **M7 NOT ACCEPTED:** current-head green CI + cold reproducibility, configurable protected signing, signed APK/AAB artifact, physical install/run, release notes/limitations and authorized merge/release verification remain outstanding.
+
+**Release NOT COMPLETE.** Next checkpoint: inspect the fresh exact-head CI, fix any genuine failures, and continue the next product acceptance criterion.
