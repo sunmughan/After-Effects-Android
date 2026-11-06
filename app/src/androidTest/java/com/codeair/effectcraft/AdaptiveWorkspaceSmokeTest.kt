@@ -906,6 +906,32 @@ class AdaptiveWorkspaceSmokeTest {
     }
 
     @Test
+    fun shapePathInspectorConvertsSelectedVertexToCorner() {
+        val base = canonicalM4Layer(locked = false).compositions.single()
+        val layer = base.layers.first().copy(shapeItems = base.layers.first().shapeItems + CanonicalParamGroup(
+            name = "Custom Shape", kind = "shape", paths = listOf(CanonicalPathParam(
+                uid = 307, name = "Mask Path", pathJson = org.json.JSONObject().apply {
+                    put("vertices", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(80).put(0)).put(org.json.JSONArray().put(40).put(60)))
+                    put("in_tangents", org.json.JSONArray().put(org.json.JSONArray().put(1).put(2))
+                        .put(org.json.JSONArray().put(5).put(6)).put(org.json.JSONArray().put(0).put(0)))
+                    put("out_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(-7).put(8)).put(org.json.JSONArray().put(0).put(0)))
+                    put("closed", false)
+                }.toString()
+            ))
+        ))
+        setCanonicalEditorContent(CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer)))), CanonicalCaptures())
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Select canonical shape path segment start P2 Custom Shape Mask Path")
+            .performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Make canonical shape path vertex 2 a corner Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Apply canonical shape path Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun shapePathInspectorRemovesSelectedVertexAndKeepsPathEditable() {
         val base = canonicalM4Layer(locked = false).compositions.single()
         val layer = base.layers.first().copy(shapeItems = base.layers.first().shapeItems + CanonicalParamGroup(
