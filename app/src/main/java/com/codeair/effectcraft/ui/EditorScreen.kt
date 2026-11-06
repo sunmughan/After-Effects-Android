@@ -241,6 +241,7 @@ fun EditorScreen(
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onSetCanonicalLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
+    onSetCanonicalLayerPathProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerReferenceProperty: (Long, Long, Long, Long?) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerReferenceKeyframe: (Long, Long, Long, Int, Long?, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetCanonicalLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
@@ -807,6 +808,7 @@ fun EditorScreen(
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
                     onSetLayerColorKeyframe = onSetCanonicalLayerColorKeyframe,
                     onSetLayerGradientProperty = onSetCanonicalLayerGradientProperty,
+                    onSetLayerPathProperty = onSetCanonicalLayerPathProperty,
                     onSetLayerReferenceProperty = onSetCanonicalLayerReferenceProperty,
                     onSetLayerReferenceKeyframe = onSetCanonicalLayerReferenceKeyframe,
                     onSetLayerBoolProperty = onSetCanonicalLayerBoolProperty,
@@ -1379,6 +1381,7 @@ private fun CanonicalProjectEditor(
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onSetLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
+    onSetLayerPathProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSetLayerReferenceProperty: (Long, Long, Long, Long?) -> Unit = { _, _, _, _ -> },
     onSetLayerReferenceKeyframe: (Long, Long, Long, Int, Long?, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
@@ -2232,6 +2235,7 @@ private fun CanonicalProjectEditor(
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
                         onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
                         onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
+                        onApplyPath = { uid, pathJson -> onSetLayerPathProperty(composition.id, layer.id, uid, pathJson) },
                         availableLayers = composition.layers,
                         onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
                         onLayerReferenceKeyframeAction = { uid, frame, targetId, remove ->
@@ -2373,6 +2377,7 @@ private fun CanonicalParamGroupRows(
     onApplyVec: (Long, Double, Double, Double) -> Unit,
     onApplyColor: (Long, Double, Double, Double, Double) -> Unit,
     onApplyGradient: (Long, String) -> Unit,
+    onApplyPath: (Long, String) -> Unit,
     availableLayers: List<CanonicalLayerInfo>,
     onApplyLayerReference: (Long, Long?) -> Unit,
     onLayerReferenceKeyframeAction: (Long, Int, Long?, Boolean) -> Unit,
@@ -2388,6 +2393,7 @@ private fun CanonicalParamGroupRows(
     // Raw per-stop text drafts for gradient rows, keyed "<uid>:<stop>" for RGBA
     // and "<uid>:<stop>:op" for opacity; validated on Apply like the color rows.
     var gradientStopDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var pathDrafts by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
         group.scalars.forEach { param ->
@@ -2478,6 +2484,28 @@ private fun CanonicalParamGroupRows(
                 ) { Text(if (hasColorKey) "Remove key" else "Add key", color = if (hasColorKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
             }
             Text("RGBA · 0–1 per channel · key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
+        }
+        group.paths.forEach { param ->
+            val draft = pathDrafts[param.uid] ?: param.pathJson
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(param.name, color = EditorPalette.muted, fontSize = 11.sp)
+                BasicTextField(
+                    value = draft,
+                    onValueChange = { pathDrafts = pathDrafts + (param.uid to it.take(32_768)) },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 10.sp),
+                    modifier = Modifier.fillMaxWidth().height(84.dp)
+                        .background(EditorPalette.panelRaised, RoundedCornerShape(4.dp))
+                        .padding(6.dp)
+                        .semantics { contentDescription = "Canonical $section path JSON \${group.name} \${param.name}" },
+                    decorationBox = { inner -> Box { if (draft.isEmpty()) Text("ShapePath JSON", color = EditorPalette.muted); inner() } }
+                )
+                TextButton(
+                    enabled = editable && draft.isNotBlank(),
+                    onClick = { onApplyPath(param.uid, draft) },
+                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section path \${group.name} \${param.name}" }
+                ) { Text("Apply path", color = EditorPalette.violet, fontSize = 10.sp) }
+                Text("Path · vertices/tangents in composition coordinates · max 4096 vertices", color = EditorPalette.muted, fontSize = 9.sp)
+            }
         }
         group.gradients.forEach { param ->
             val stripColors = param.colors.map { stop ->
