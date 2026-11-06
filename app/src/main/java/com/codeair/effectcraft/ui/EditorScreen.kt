@@ -1199,12 +1199,15 @@ private fun PreviewStage(
                 // container, not on Image's intrinsic/drawn bounds. ContentScale.Fit
                 // still controls pixels; the semantics bounds remain stable when
                 // the frame is letterboxed or the preview is resized.
-                Box(modifier = Modifier.fillMaxSize().semantics {
-                    contentDescription = "Rendered composition frame"
-                }) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Expose the actual drawable Image bounds to accessibility and
+                    // Compose tests. A semantics label on a full-size wrapper can
+                    // report a viewport that is not itself painted/displayed on
+                    // constrained preview layouts, causing false visibility
+                    // failures while the native frame is already decoded.
                     Image(
                         bitmap = bitmap.asImageBitmap(),
-                        contentDescription = null,
+                        contentDescription = "Rendered composition frame",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -2567,6 +2570,7 @@ private fun CanonicalParamGroupRows(
                 val canvasVerticesState = rememberUpdatedState(vertexDrafts.mapNotNull { it.third })
                 val canvasPathState = rememberUpdatedState(pathForAction)
                 var selectedCanvasVertex by remember(param.uid) { mutableIntStateOf(-1) }
+                var selectedCanvasHandle by remember(param.uid) { mutableStateOf<String?>(null) }
                 val incomingCanvasHandles = CanonicalShapePathDraft.tangentOffsets(pathForAction, "in_tangents").orEmpty()
                 val outgoingCanvasHandles = CanonicalShapePathDraft.tangentOffsets(pathForAction, "out_tangents").orEmpty()
                 if (verticesValid && vertices.size >= 2) {
@@ -2577,23 +2581,47 @@ private fun CanonicalParamGroupRows(
                             .semantics { contentDescription = "Interactive ShapePath vertex canvas ${group.name} ${param.name}" }
                             .pointerInput(param.uid, editable, verticesValid) {
                                 var dragIndex = -1
+                                var dragTangentField: String? = null
                                 var lockedMapping: ShapePathCanvasMapping? = null
                                 detectDragGestures(
                                     onDragStart = { pointer ->
                                         val points = canvasVerticesState.value
                                         if (!editable || points.size < 2) return@detectDragGestures
                                         val transform = shapePathCanvasMapping(points, size.width.toFloat(), size.height.toFloat())
-                                        dragIndex = points.indices.minByOrNull { index ->
-                                            val mapped = transform.toCanvas(points[index])
-                                            val dx = mapped.x - pointer.x
-                                            val dy = mapped.y - pointer.y
-                                            dx * dx + dy * dy
-                                        } ?: -1
+                                        var nearestDistance = 18f * 18f
+                                        dragIndex = -1
+                                        dragTangentField = null
+                                        points.forEachIndexed { index, vertex ->
+                                            val anchor = transform.toCanvas(vertex)
+                                            val anchorDx = anchor.x - pointer.x
+                                            val anchorDy = anchor.y - pointer.y
+                                            val anchorDistance = anchorDx * anchorDx + anchorDy * anchorDy
+                                            if (anchorDistance < nearestDistance) {
+                                                nearestDistance = anchorDistance
+                                                dragIndex = index
+                                                dragTangentField = null
+                                            }
+                                            listOf("in_tangents" to incomingCanvasHandles, "out_tangents" to outgoingCanvasHandles)
+                                                .forEach { (field, handles) ->
+                                                    val handle = handles.getOrNull(index) ?: return@forEach
+                                                    if (kotlin.math.hypot(handle.x, handle.y) * transform.scale < 3f) return@forEach
+                                                    val endpoint = transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y))
+                                                    val dx = endpoint.x - pointer.x
+                                                    val dy = endpoint.y - pointer.y
+                                                    val distance = dx * dx + dy * dy
+                                                    if (distance < nearestDistance) {
+                                                        nearestDistance = distance
+                                                        dragIndex = index
+                                                        dragTangentField = field
+                                                    }
+                                                }
+                                        }
                                         lockedMapping = transform
                                         selectedCanvasVertex = dragIndex
+                                        selectedCanvasHandle = dragTangentField?.let { "${it}:${dragIndex}" }
                                     },
-                                    onDragEnd = { dragIndex = -1; lockedMapping = null },
-                                    onDragCancel = { dragIndex = -1; lockedMapping = null }
+                                    onDragEnd = { dragIndex = -1; dragTangentField = null; lockedMapping = null },
+                                    onDragCancel = { dragIndex = -1; dragTangentField = null; lockedMapping = null }
                                 ) { change, _ ->
                                     if (dragIndex >= 0 && editable) {
                                         change.consume()
@@ -2601,8 +2629,19 @@ private fun CanonicalParamGroupRows(
                                         val current = canvasVerticesState.value
                                         if (dragIndex !in current.indices) return@detectDragGestures
                                         val moved = transform.fromCanvas(change.position)
-                                        CanonicalShapePathDraft.moveVertex(canvasPathState.value, dragIndex, moved)?.let { updated ->
-                                            pathDrafts = pathDrafts + (param.uid to updated)
+                                        val path = canvasPathState.value
+                                        val field = dragTangentField
+                                        val updated = if (field == null) {
+                                            CanonicalShapePathDraft.moveVertex(path, dragIndex, moved)
+                                        } else {
+                                            val vertex = current[dragIndex]
+                                            CanonicalShapePathDraft.moveTangentHandle(
+                                                path, field, dragIndex,
+                                                CanonicalShapePathDraft.Vertex(moved.x - vertex.x, moved.y - vertex.y)
+                                            )
+                                        }
+                                        updated?.let { value ->
+                                            pathDrafts = pathDrafts + (param.uid to value)
                                             pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
                                         }
                                     }
@@ -2618,11 +2657,23 @@ private fun CanonicalParamGroupRows(
                             points.forEachIndexed { index, vertex ->
                                 if (index < incomingCanvasHandles.size) {
                                     val handle = incomingCanvasHandles[index]
-                                    drawLine(EditorPalette.amber, transform.toCanvas(vertex), transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y)), strokeWidth = 1f)
+                                    val endpoint = transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y))
+                                    drawLine(EditorPalette.amber, transform.toCanvas(vertex), endpoint, strokeWidth = 1f)
+                                    drawCircle(
+                                        color = if (selectedCanvasHandle == "in_tangents:${index}") EditorPalette.amber else EditorPalette.amber.copy(alpha = 0.75f),
+                                        radius = if (selectedCanvasHandle == "in_tangents:${index}") 5f else 3.5f,
+                                        center = endpoint
+                                    )
                                 }
                                 if (index < outgoingCanvasHandles.size) {
                                     val handle = outgoingCanvasHandles[index]
-                                    drawLine(EditorPalette.violet, transform.toCanvas(vertex), transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y)), strokeWidth = 1f)
+                                    val endpoint = transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y))
+                                    drawLine(EditorPalette.violet, transform.toCanvas(vertex), endpoint, strokeWidth = 1f)
+                                    drawCircle(
+                                        color = if (selectedCanvasHandle == "out_tangents:${index}") EditorPalette.amber else EditorPalette.violet.copy(alpha = 0.75f),
+                                        radius = if (selectedCanvasHandle == "out_tangents:${index}") 5f else 3.5f,
+                                        center = endpoint
+                                    )
                                 }
                                 drawCircle(
                                     color = if (index == selectedCanvasVertex) EditorPalette.amber else EditorPalette.mint,
@@ -2632,7 +2683,7 @@ private fun CanonicalParamGroupRows(
                             }
                         }
                     }
-                    Text("Drag a point to edit its composition-space coordinates · selected P${selectedCanvasVertex + 1}", color = EditorPalette.muted, fontSize = 9.sp)
+                    Text("Drag a point or tangent endpoint · selected P${selectedCanvasVertex + 1}${selectedCanvasHandle?.substringBefore(\u0027:\u0027)?.let { " · $it" } ?: ""}", color = EditorPalette.muted, fontSize = 9.sp)
                 }
                 vertices.forEachIndexed { index, vertex ->
                     val (xText, yText, _) = vertexDrafts[index]
