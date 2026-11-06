@@ -2727,6 +2727,19 @@ private fun CanonicalParamGroupRows(
                     TextButton(
                         enabled = editable && selectedCanvasVertex in vertices.indices,
                         onClick = {
+                            CanonicalShapePathDraft.makeCornerVertex(pathForAction, selectedCanvasVertex)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Make canonical $section path vertex ${selectedCanvasVertex + 1} a corner ${group.name} ${param.name}"
+                        }
+                    ) { Text("Corner vertex", color = EditorPalette.amber, fontSize = 9.sp) }
+                    TextButton(
+                        enabled = editable && selectedCanvasVertex in vertices.indices,
+                        onClick = {
                             val sourceField = selectedCanvasHandle?.substringBefore(':')
                                 ?.takeIf { it == "in_tangents" || it == "out_tangents" } ?: "out_tangents"
                             CanonicalShapePathDraft.alignTangentHandles(pathForAction, selectedCanvasVertex, sourceField)?.let { updated ->
