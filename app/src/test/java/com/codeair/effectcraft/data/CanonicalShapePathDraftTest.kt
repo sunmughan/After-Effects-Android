@@ -375,6 +375,35 @@ class CanonicalShapePathDraftTest {
         assertNull(CanonicalShapePathDraft.smoothTangentHandles("not-json", 0))
     }
 
+    @Test fun makeCornerVertexZerosOnlySelectedHandlesAndPreservesMetadata() {
+        val source = JSONObject(fixture()).apply {
+            put("in_tangents", JSONArray().put(JSONArray().put(1.0).put(2.0))
+                .put(JSONArray().put(3.0).put(4.0)).put(JSONArray().put(5.0).put(6.0)))
+            put("out_tangents", JSONArray().put(JSONArray().put(7.0).put(8.0))
+                .put(JSONArray().put(9.0).put(10.0)).put(JSONArray().put(11.0).put(12.0)))
+        }.toString()
+        val corner = JSONObject(CanonicalShapePathDraft.makeCornerVertex(source, 1)!!)
+        val incoming = CanonicalShapePathDraft.tangentOffsets(corner.toString(), "in_tangents")!!
+        val outgoing = CanonicalShapePathDraft.tangentOffsets(corner.toString(), "out_tangents")!!
+        assertEquals(CanonicalShapePathDraft.Vertex(0.0, 0.0), incoming[1])
+        assertEquals(CanonicalShapePathDraft.Vertex(0.0, 0.0), outgoing[1])
+        assertEquals(CanonicalShapePathDraft.Vertex(1.0, 2.0), incoming[0])
+        assertEquals(CanonicalShapePathDraft.Vertex(5.0, 6.0), incoming[2])
+        assertEquals(CanonicalShapePathDraft.Vertex(7.0, 8.0), outgoing[0])
+        assertEquals(CanonicalShapePathDraft.Vertex(11.0, 12.0), outgoing[2])
+        assertEquals(CanonicalShapePathDraft.vertices(source), CanonicalShapePathDraft.vertices(corner.toString()))
+        assertEquals("preserved", corner.getString("custom"))
+        assertEquals(JSONObject(source).getBoolean("closed"), corner.getBoolean("closed"))
+    }
+
+    @Test fun makeCornerVertexRejectsInvalidVertexAndMalformedTangents() {
+        assertNull(CanonicalShapePathDraft.makeCornerVertex(fixture(), -1))
+        assertNull(CanonicalShapePathDraft.makeCornerVertex(fixture(), 3))
+        val malformed = JSONObject(fixture()).put("in_tangents", JSONArray().put(JSONArray().put(1).put(2))).toString()
+        assertNull(CanonicalShapePathDraft.makeCornerVertex(malformed, 1))
+        assertNull(CanonicalShapePathDraft.makeCornerVertex("not-json", 0))
+    }
+
     @Test fun tangentAlignmentRejectsInvalidFieldAndVertex() {
         val source = fixture()
         assertNull(CanonicalShapePathDraft.alignTangentHandles(source, -1, "out_tangents"))
