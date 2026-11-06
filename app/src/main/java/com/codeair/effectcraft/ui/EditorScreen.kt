@@ -94,6 +94,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -1558,7 +1559,7 @@ private fun CanonicalProjectEditor(
                             modifier = if (previewImageSize == IntSize.Zero) {
                                 Modifier.fillMaxWidth().heightIn(max = 220.dp)
                             } else {
-                                with(LocalDensity.current) { Modifier.size(previewImageSize.toDpSize()) }
+                                with(LocalDensity.current) { Modifier.size(previewImageSize.toSize().toDpSize()) }
                             }
                         )
                     }
@@ -2480,7 +2481,7 @@ private fun CanonicalParamGroupRows(
                 Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 Box(
                     Modifier.weight(1.5f).height(14.dp).clip(RoundedCornerShape(4.dp))
-                        .background(if (stripColors.size > 1) Brush.linearGradient(stripColors) else EditorPalette.panelRaised)
+                        .background(if (stripColors.size > 1) Brush.linearGradient(stripColors) else SolidColor(EditorPalette.panelRaised))
                         .border(BorderStroke(1.dp, EditorPalette.border), RoundedCornerShape(4.dp))
                         .semantics { contentDescription = "Canonical $section gradient preview ${group.name} ${param.name}" }
                 )
