@@ -1,3 +1,5 @@
+**M4 tangent integration regression:** canonical mask-path Apply now has API30 assertions for nonzero incoming/outgoing tangent offsets round-tripping through native project inspection plus a real NativeSession frame. Instrumentation is pending CI; no pass claimed.
+
 **M4 Bezier tangent editing — committed `fc8e12d5`:** incoming/outgoing relative handle X/Y controls are now available per ShapePath vertex; updates are finite-validated, positional, metadata-preserving and feed the canonical Apply/Key/preview path. JVM regressions cover valid values, absent arrays, malformed lengths and non-finite rejection. See [PHASES.md](./PHASES.md) for CI evidence and remaining M4/M0–M7 gates.
 
 **M4 Bezier tangent editing (2026-11-06):** added per-vertex incoming/outgoing handle offset controls and strict canonical JSON validation, with JVM regression coverage. This is numeric handle editing; interactive canvas handles/interpolation parity remain open. Commit and exact-head CI are pending in this run.

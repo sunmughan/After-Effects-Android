@@ -424,11 +424,16 @@ class CanonicalEditPreviewSyncTest {
         val beforePath = layer(canonical(before), fixture.firstId).shapeItems.single { it.kind == "mask" }.paths.single()
         assertEquals(3, JSONObject(beforePath.pathJson).getJSONArray("vertices").length())
 
-        val replacement = """{"vertices":[[15.0,25.0],[50.0,25.0],[30.0,75.0]],"in_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"out_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"closed":true,"feather":[]}"""
+        val replacement = """{"vertices":[[15.0,25.0],[50.0,25.0],[30.0,75.0]],"in_tangents":[[0.0,0.0],[-4.0,8.0],[0.0,0.0]],"out_tangents":[[0.0,0.0],[6.0,-3.0],[0.0,0.0]],"closed":true,"feather":[]}"""
         val edited = applyEdit(NativeProjectBridge.setLayerPathPropertyEcproj(before, fixture.compositionId, fixture.firstId, 90041L, replacement))
         val path = layer(canonical(edited), fixture.firstId).shapeItems.single { it.kind == "mask" }.paths.single()
         assertEquals(3, JSONObject(path.pathJson).getJSONArray("vertices").length())
         assertTrue(JSONObject(path.pathJson).getBoolean("closed"))
+        val canonicalPath = JSONObject(path.pathJson)
+        assertEquals(-4.0, canonicalPath.getJSONArray("in_tangents").getJSONArray(1).getDouble(0), 0.001)
+        assertEquals(8.0, canonicalPath.getJSONArray("in_tangents").getJSONArray(1).getDouble(1), 0.001)
+        assertEquals(6.0, canonicalPath.getJSONArray("out_tangents").getJSONArray(1).getDouble(0), 0.001)
+        assertEquals(-3.0, canonicalPath.getJSONArray("out_tangents").getJSONArray(1).getDouble(1), 0.001)
         assertNotNull(
             "Preview session must render from the path-edited project",
             previewRenders(before, edited, fixture.compositionId, 0)
