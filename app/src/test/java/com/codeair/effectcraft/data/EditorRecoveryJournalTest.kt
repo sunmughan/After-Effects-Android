@@ -98,6 +98,37 @@ class EditorRecoveryJournalTest {
     }
 
     @Test
+    fun sameMillisecondUnsavedRevisionIsRecoveredInsteadOfDiscarded() {
+        val root = Files.createTempDirectory("effectcraft-journal-same-ms").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 42_000L)
+            val journaled = committed.copy(name = "Unsaved edit in same millisecond")
+            EditorRecoveryJournal(root).write(journaled)
+
+            val recovered = EditorRecoveryJournal(root).recover(committed.id, committed)
+            assertNotNull("A different journal snapshot with equal wall-clock time is still unsaved", recovered)
+            assertEquals("Unsaved edit in same millisecond", recovered!!.name)
+            assertEquals(committed.updatedAtEpochMillis, recovered.updatedAtEpochMillis)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun identicalJournalSnapshotIsDiscardedEvenWhenTimestampMatches() {
+        val root = Files.createTempDirectory("effectcraft-journal-identical").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 42_000L)
+            EditorRecoveryJournal(root).write(committed)
+
+            assertNull(EditorRecoveryJournal(root).recover(committed.id, committed))
+            assertTrue(root.listFiles().isNullOrEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun discardAfterSavePreventsResurrection() {
         val root = Files.createTempDirectory("effectcraft-journal-discard").toFile()
         try {
