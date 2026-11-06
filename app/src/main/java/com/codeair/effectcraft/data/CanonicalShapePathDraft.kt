@@ -54,6 +54,38 @@ object CanonicalShapePathDraft {
         root.toString()
     }.getOrNull()
 
+    /**
+     * Returns per-vertex relative handle offsets. Missing arrays are treated as
+     * zero handles (the canonical default); malformed positional arrays fail closed.
+     */
+    fun tangentOffsets(pathJson: String, field: String): List<Vertex>? = runCatching {
+        require(field == "in_tangents" || field == "out_tangents")
+        val root = JSONObject(pathJson)
+        val count = root.getJSONArray("vertices").length()
+        val array = root.optJSONArray(field) ?: return@runCatching List(count) { Vertex(0.0, 0.0) }
+        require(array.length() == count)
+        List(count) { index ->
+            val pair = array.getJSONArray(index)
+            require(pair.length() == 2)
+            val x = pair.getDouble(0)
+            val y = pair.getDouble(1)
+            require(x.isFinite() && y.isFinite())
+            Vertex(x, y)
+        }
+    }.getOrNull()
+
+    /** Updates one tangent array without disturbing vertices or other path metadata. */
+    fun setTangentOffsets(pathJson: String, field: String, offsets: List<Vertex>): String? = runCatching {
+        require(field == "in_tangents" || field == "out_tangents")
+        val root = JSONObject(pathJson)
+        require(offsets.size == root.getJSONArray("vertices").length())
+        require(offsets.all { it.x.isFinite() && it.y.isFinite() })
+        root.put(field, JSONArray().also { array ->
+            offsets.forEach { array.put(JSONArray().put(it.x).put(it.y)) }
+        })
+        root.toString()
+    }.getOrNull()
+
     fun canRemoveLastVertex(pathJson: String): Boolean = runCatching {
         val root = JSONObject(pathJson)
         val count = root.getJSONArray("vertices").length()

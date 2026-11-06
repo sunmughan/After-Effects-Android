@@ -1,3 +1,8 @@
+### Automation Run 9 — M4 editable Bezier handles (2026-11-06)
+- Added finite, positional `in_tangents`/`out_tangents` read/write operations to `CanonicalShapePathDraft`; absent handle arrays resolve to zero offsets and malformed lengths fail closed. Inspector now exposes per-vertex incoming/outgoing handle X/Y fields with an explicit Set action, preserving path metadata and routing edits through existing canonical Apply/Key/session refresh. JVM regressions cover handle values, array alignment, metadata retention, missing arrays and invalid field/length/non-finite rejection.
+- Commit: pending below (this run). CI #918 (`42210849014`) was in progress at native ARM64 build when inspected; #917 (`42205857204`) failed two API30 regressions: motion overlay frame wait and path-key assertion (expected static inspect path instead of serialized frame-15 key). The current #918 head contains corrections; exact-head verdict pending. Cold rebuild is not yet accepted.
+- M4 remains IN PROGRESS; no visual canvas handles yet (numeric tangent editing now available). Release NOT COMPLETE.
+
 ### Automation Run 9 follow-up — ShapePath vertex test correction
 - Source-review caught a regression fixture issue before acceptance: the feather segment initially referenced segment 1, which remains valid after removing the fourth vertex. The test now moves feather to segment 2 (the newly added final segment) before removal and asserts it is pruned; implementation behavior is unchanged.
 - The earlier #912 was cancelled by later branch pushes; #915 is being superseded by this test correction. A fresh exact-head CI is required; no pass claimed.

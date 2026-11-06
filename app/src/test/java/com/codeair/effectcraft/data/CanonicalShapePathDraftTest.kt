@@ -50,6 +50,37 @@ class CanonicalShapePathDraftTest {
         assertEquals(0, removed.getJSONArray("feather").length())
     }
 
+    @Test fun tangentHandleEditsAreFinitePositionalAndPreserveOtherPathData() {
+        val source = fixture(closed = true)
+        val incoming = CanonicalShapePathDraft.tangentOffsets(source, "in_tangents")!!.toMutableList()
+        incoming[1] = CanonicalShapePathDraft.Vertex(-3.25, 7.5)
+        val withIncoming = CanonicalShapePathDraft.setTangentOffsets(source, "in_tangents", incoming)!!
+        val outgoing = CanonicalShapePathDraft.tangentOffsets(withIncoming, "out_tangents")!!.toMutableList()
+        outgoing[1] = CanonicalShapePathDraft.Vertex(8.0, -2.0)
+        val edited = JSONObject(CanonicalShapePathDraft.setTangentOffsets(withIncoming, "out_tangents", outgoing)!!)
+        assertEquals(-3.25, edited.getJSONArray("in_tangents").getJSONArray(1).getDouble(0), 0.0)
+        assertEquals(7.5, edited.getJSONArray("in_tangents").getJSONArray(1).getDouble(1), 0.0)
+        assertEquals(8.0, edited.getJSONArray("out_tangents").getJSONArray(1).getDouble(0), 0.0)
+        assertEquals(-2.0, edited.getJSONArray("out_tangents").getJSONArray(1).getDouble(1), 0.0)
+        assertEquals(3, edited.getJSONArray("vertices").length())
+        assertEquals("preserved", edited.getString("custom"))
+        assertEquals(1, edited.getJSONArray("feather").getJSONObject(0).getInt("segment"))
+    }
+
+    @Test fun tangentEditsRejectWrongFieldLengthAndNonFiniteValues() {
+        val source = fixture()
+        val offsets = CanonicalShapePathDraft.tangentOffsets(source, "in_tangents")!!
+        assertNull(CanonicalShapePathDraft.tangentOffsets(source, "vertices"))
+        assertNull(CanonicalShapePathDraft.setTangentOffsets(source, "vertices", offsets))
+        assertNull(CanonicalShapePathDraft.setTangentOffsets(source, "in_tangents", offsets.dropLast(1)))
+        assertNull(CanonicalShapePathDraft.setTangentOffsets(source, "out_tangents", offsets + offsets.last()))
+        assertNull(CanonicalShapePathDraft.setTangentOffsets(source, "in_tangents", offsets.toMutableList().apply {
+            this[0] = CanonicalShapePathDraft.Vertex(Double.POSITIVE_INFINITY, 0.0)
+        }))
+        val missing = JSONObject(source).apply { remove("in_tangents") }.toString()
+        assertEquals(3, CanonicalShapePathDraft.tangentOffsets(missing, "in_tangents")!!.size)
+    }
+
     @Test fun closedPathsRetainThreeVerticesAndInvalidOrNonFiniteEditsFailClosed() {
         val closed = fixture(closed = true)
         assertFalse(CanonicalShapePathDraft.canRemoveLastVertex(closed))

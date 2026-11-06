@@ -2404,6 +2404,7 @@ private fun CanonicalParamGroupRows(
     var pathDrafts by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     // Per-coordinate text drafts allow transient values such as '-' while typing; commit only finite pairs.
     var pathVertexDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var pathTangentDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
         group.scalars.forEach { param ->
@@ -2515,6 +2516,7 @@ private fun CanonicalParamGroupRows(
                     onValueChange = {
                         pathDrafts = pathDrafts + (param.uid to it.take(32_768))
                         pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                        pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
                     },
                     textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 10.sp),
                     modifier = Modifier.fillMaxWidth().height(84.dp)
@@ -2548,6 +2550,54 @@ private fun CanonicalParamGroupRows(
                         )
                     }
                 }
+                // Editable Bezier handle offsets are stored positionally alongside vertices.
+                listOf("in_tangents" to "IN", "out_tangents" to "OUT").forEach { (field, label) ->
+                    val handleBase = editedPath ?: draft
+                    val handles = CanonicalShapePathDraft.tangentOffsets(handleBase, field).orEmpty()
+                    Text("$label HANDLES · relative offsets", color = EditorPalette.muted, fontSize = 9.sp)
+                    handles.forEachIndexed { index, handle ->
+                        val xKey = "${param.uid}:$field:$index:x"
+                        val yKey = "${param.uid}:$field:$index:y"
+                        val xText = pathTangentDrafts[xKey] ?: handle.x.toString()
+                        val yText = pathTangentDrafts[yKey] ?: handle.y.toString()
+                        val x = xText.toDoubleOrNull()?.takeIf { it.isFinite() }
+                        val y = yText.toDoubleOrNull()?.takeIf { it.isFinite() }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("P${index + 1}", color = EditorPalette.muted, fontSize = 9.sp, modifier = Modifier.width(28.dp))
+                            BasicTextField(
+                                value = xText,
+                                onValueChange = { pathTangentDrafts = pathTangentDrafts + (xKey to it.take(32)) },
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 10.sp),
+                                modifier = Modifier.weight(1f).background(EditorPalette.panelRaised, RoundedCornerShape(4.dp)).padding(4.dp)
+                                    .semantics { contentDescription = "Canonical $section path $label handle ${index + 1} X" },
+                                decorationBox = { inner -> Box { if (xText.isEmpty()) Text("X", color = EditorPalette.muted); inner() } }
+                            )
+                            BasicTextField(
+                                value = yText,
+                                onValueChange = { pathTangentDrafts = pathTangentDrafts + (yKey to it.take(32)) },
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 10.sp),
+                                modifier = Modifier.weight(1f).background(EditorPalette.panelRaised, RoundedCornerShape(4.dp)).padding(4.dp)
+                                    .semantics { contentDescription = "Canonical $section path $label handle ${index + 1} Y" },
+                                decorationBox = { inner -> Box { if (yText.isEmpty()) Text("Y", color = EditorPalette.muted); inner() } }
+                            )
+                            TextButton(
+                                enabled = editable && x != null && y != null && handles.size == vertices.size,
+                                onClick = {
+                                    val base = editedPath ?: draft
+                                    val current = CanonicalShapePathDraft.tangentOffsets(base, field) ?: return@TextButton
+                                    val replacement = current.toMutableList().apply { this[index] = CanonicalShapePathDraft.Vertex(x!!, y!!) }
+                                    CanonicalShapePathDraft.setTangentOffsets(base, field, replacement)?.let { updated ->
+                                        pathDrafts = pathDrafts + (param.uid to updated)
+                                        pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                    }
+                                },
+                                modifier = Modifier.semantics { contentDescription = "Set canonical $section path $label handle ${index + 1}" }
+                            ) { Text("Set", color = EditorPalette.violet, fontSize = 9.sp) }
+                        }
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(
                         enabled = editable && editedPath != null && vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
@@ -2555,6 +2605,7 @@ private fun CanonicalParamGroupRows(
                             CanonicalShapePathDraft.appendVertex(pathForAction)?.let { updated ->
                                 pathDrafts = pathDrafts + (param.uid to updated)
                                 pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
                             }
                         },
                         modifier = Modifier.semantics { contentDescription = "Add canonical $section path vertex ${group.name} ${param.name}" }
@@ -2565,6 +2616,7 @@ private fun CanonicalParamGroupRows(
                             CanonicalShapePathDraft.removeLastVertex(pathForAction)?.let { updated ->
                                 pathDrafts = pathDrafts + (param.uid to updated)
                                 pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
                             }
                         },
                         modifier = Modifier.semantics { contentDescription = "Remove last canonical $section path vertex ${group.name} ${param.name}" }
@@ -2584,7 +2636,7 @@ private fun CanonicalParamGroupRows(
                         }
                     ) { Text(if (hasPathKey) "Remove key" else "Add key", color = if (hasPathKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
                 }
-                Text("Vertex coordinates are composition-space; tangents/feather stay in JSON. Key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
+                Text("Vertices are composition-space; handle offsets are relative. Feather stays in JSON. Key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
             }
         }
         group.gradients.forEach { param ->
