@@ -60,6 +60,9 @@ data class CanonicalGradientStop(val position: Double, val components: List<Doub
 /** One opacity stop of a gradient parameter: position 0..1 and opacity 0..1. */
 data class CanonicalGradientOpacityStop(val position: Double, val opacity: Double)
 
+/** Static Layer Control value; null means None, otherwise a canonical layer id. */
+data class CanonicalLayerRefParam(val uid: Long, val name: String, val layerId: Long?)
+
 /** One editable gradient parameter addressed by native uid; its keys interpolate. */
 data class CanonicalGradientParam(
     val uid: Long,
@@ -138,6 +141,7 @@ data class CanonicalParamGroup(
     val vecs: List<CanonicalVecParam> = emptyList(),
     val colors: List<CanonicalColorParam> = emptyList(),
     val gradients: List<CanonicalGradientParam> = emptyList(),
+    val layerRefs: List<CanonicalLayerRefParam> = emptyList(),
     val bools: List<CanonicalBoolParam> = emptyList(),
     val popups: List<CanonicalPopupParam> = emptyList()
 )
@@ -462,6 +466,11 @@ data class CanonicalProjectInfo(
                         keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
                     )
                 }
+                val layerRefArray = group.optJSONArray("layerRefs")
+                val layerRefs = (0 until (layerRefArray?.length() ?: 0)).map { refIndex ->
+                    val param = layerRefArray!!.getJSONObject(refIndex)
+                    CanonicalLayerRefParam(param.getLong("uid"), param.optString("name", "Layer"), if (param.isNull("value")) null else param.optLong("value"))
+                }
                 val boolArray = group.optJSONArray("bools")
                 val bools = (0 until (boolArray?.length() ?: 0)).map { boolIndex ->
                     val param = boolArray!!.getJSONObject(boolIndex)
@@ -495,6 +504,7 @@ data class CanonicalProjectInfo(
                         vecs = vecs,
                         colors = colors,
                         gradients = gradients,
+                        layerRefs = layerRefs,
                         bools = bools,
                         popups = popups
                     )

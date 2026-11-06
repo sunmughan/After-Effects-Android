@@ -83,6 +83,17 @@ class CanonicalProjectParamsTest {
     }
 
     @Test
+    fun parsesLayerReferenceParametersAndNullTarget() {
+        val json = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":3.0,"layers":[
+            {"id":2,"name":"Source","source":"Shape","visible":true,"opacityPercent":100.0,"position":[0.0,0.0],"scale":[100.0,100.0],"rotationDegrees":0.0,
+             "effects":[{"name":"Layer Control","kind":"layerControl","scalars":[],"vecs":[],"colors":[],"gradients":[],"layerRefs":[{"uid":501,"name":"Layer","value":null}]}]},
+            {"id":3,"name":"Target","source":"Shape","visible":true,"opacityPercent":100.0,"position":[0.0,0.0],"scale":[100.0,100.0],"rotationDegrees":0.0}
+        ]}]}"""
+        val layer = CanonicalProjectInfo.parse(json).compositions.single().layers.first()
+        assertEquals(CanonicalLayerRefParam(501, "Layer", null), layer.effects.single().layerRefs.single())
+    }
+
+    @Test
     fun holdValueAtFollowsLastKeyAtOrBeforePlayhead() {
         val keys = listOf(
             CanonicalCurveKey(frame = 0, value = 0.0),

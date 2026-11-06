@@ -1521,6 +1521,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical gradient parameter updated · saved locally"
                 )
             },
+            onSetCanonicalLayerReferenceProperty = { compositionId, layerId, uid, targetLayerId ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setLayerReferencePropertyEcproj(source, compositionId, layerId, uid, targetLayerId),
+                    "Canonical Layer Control updated · saved locally"
+                )
+            },
             onSetCanonicalLayerColorKeyframe = { compositionId, layerId, uid, frame, red, green, blue, alpha, remove ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

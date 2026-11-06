@@ -438,6 +438,29 @@ class CanonicalEditPreviewSyncTest {
     }
 
     @Test
+    fun layerControlReferenceEditUpdatesCanonicalMetadataAndPreviewSession() {
+        val fixture = baseFixture()
+        val doc = JSONObject(shapedFixture(fixture))
+        val items = doc.getJSONObject("items")
+        val compKey = items.keys().asSequence().first { key -> items.getJSONObject(key).optJSONObject("kind")?.optString("type") == "Comp" }
+        val layers = items.getJSONObject(compKey).getJSONObject("kind").getJSONArray("layers")
+        val title = (0 until layers.length()).map { layers.getJSONObject(it) }.first { it.optString("name") == "Title" }
+        val effects = title.getJSONObject("props").getJSONArray("children").let { children ->
+            (0 until children.length()).map { children.getJSONObject(it) }.first { it.optString("match") == "effects" }.getJSONArray("children")
+        }
+        effects.put(JSONObject("""{"node":"Group","uid":90030,"match":"layerControl","name":"Layer Control","kind":{"kind":"Effect","effect":"ec.control.layer"},"children":[{"node":"Prop","uid":90031,"match":"layer","name":"Layer","value":{"t":"Layer","v":null},"ui":{"kind":"Layer"}}]}"""))
+        val before = doc.toString()
+        val layerControl = layer(canonical(before), fixture.firstId).effects.first { it.kind == "layerControl" }.layerRefs.single()
+        assertNull(layerControl.layerId)
+        val edited = applyEdit(NativeProjectBridge.setLayerReferencePropertyEcproj(before, fixture.compositionId, fixture.firstId, layerControl.uid, fixture.secondId))
+        assertEquals(fixture.secondId, layer(canonical(edited), fixture.firstId).effects.first { it.kind == "layerControl" }.layerRefs.single().layerId)
+        assertNotNull("Preview session must render after Layer Control edit", previewRenders(before, edited, fixture.compositionId, 0))
+        val cleared = applyEdit(NativeProjectBridge.setLayerReferencePropertyEcproj(edited, fixture.compositionId, fixture.firstId, layerControl.uid, null))
+        assertNull(layer(canonical(cleared), fixture.firstId).effects.first { it.kind == "layerControl" }.layerRefs.single().layerId)
+        assertNull(NativeProjectBridge.setLayerReferencePropertyEcproj(before, fixture.compositionId, fixture.firstId, layerControl.uid, 999_999L))
+    }
+
+    @Test
     fun effectScalarEditUpdatesCanonicalDataAndPreviewSession() {
         val fixture = baseFixture()
         val shaped = shapedFixture(fixture)

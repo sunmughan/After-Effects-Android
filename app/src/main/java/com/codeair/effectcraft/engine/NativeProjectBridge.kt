@@ -216,6 +216,13 @@ object NativeProjectBridge {
         return runCatching { setLayerGradientPropertyEcprojNative(json, compositionId, layerId, uid, gradientJson) }.getOrNull()
     }
 
+    /** Sets a static Layer Control reference to another layer in the same composition; null clears it. */
+    fun setLayerReferencePropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, targetLayerId: Long?): String? {
+        ensureLoaded()
+        if (!available || uid < 0) return null
+        return runCatching { setLayerReferencePropertyEcprojNative(json, compositionId, layerId, uid, targetLayerId ?: -1L) }.getOrNull()
+    }
+
     /** Sets a checkbox (Bool) shape-item or effect parameter by stable native uid. Rejected by native when the parameter already has keys. */
     fun setLayerBoolPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String? {
         ensureLoaded()
@@ -498,6 +505,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerGradientPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, gradientJson: String): String
+
+    @JvmStatic
+    private external fun setLayerReferencePropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, targetLayerId: Long): String
 
     @JvmStatic
     private external fun setLayerBoolPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String

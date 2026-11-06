@@ -241,6 +241,7 @@ fun EditorScreen(
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onSetCanonicalLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
+    onSetCanonicalLayerReferenceProperty: (Long, Long, Long, Long?) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
@@ -805,6 +806,7 @@ fun EditorScreen(
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
                     onSetLayerColorKeyframe = onSetCanonicalLayerColorKeyframe,
                     onSetLayerGradientProperty = onSetCanonicalLayerGradientProperty,
+                    onSetLayerReferenceProperty = onSetCanonicalLayerReferenceProperty,
                     onSetLayerBoolProperty = onSetCanonicalLayerBoolProperty,
                     onSetLayerPopupProperty = onSetCanonicalLayerPopupProperty,
                     onSetLayerBoolKeyframe = onSetCanonicalLayerBoolKeyframe,
@@ -1375,6 +1377,7 @@ private fun CanonicalProjectEditor(
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onSetLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
+    onSetLayerReferenceProperty: (Long, Long, Long, Long?) -> Unit = { _, _, _, _ -> },
     onSetLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onSetLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
     onSetLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
@@ -2226,6 +2229,8 @@ private fun CanonicalProjectEditor(
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
                         onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
                         onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
+                        availableLayers = composition.layers,
+                        onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
@@ -2254,6 +2259,8 @@ private fun CanonicalProjectEditor(
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
                         onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
                         onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
+                        availableLayers = composition.layers,
+                        onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
@@ -2357,6 +2364,8 @@ private fun CanonicalParamGroupRows(
     onApplyVec: (Long, Double, Double, Double) -> Unit,
     onApplyColor: (Long, Double, Double, Double, Double) -> Unit,
     onApplyGradient: (Long, String) -> Unit,
+    availableLayers: List<CanonicalLayerInfo>,
+    onApplyLayerReference: (Long, Long?) -> Unit,
     playheadFrame: Int,
     onColorKeyframeAction: (Long, Int, Double, Double, Double, Double, Boolean) -> Unit,
     onApplyBool: (Long, Boolean) -> Unit,
@@ -2365,6 +2374,7 @@ private fun CanonicalParamGroupRows(
     onPopupKeyframeAction: (Long, Int, Int, Boolean) -> Unit
 ) {
     var expandedPopupUid by remember { mutableStateOf<Long?>(null) }
+    var expandedLayerRefUid by remember { mutableStateOf<Long?>(null) }
     // Raw per-stop text drafts for gradient rows, keyed "<uid>:<stop>" for RGBA
     // and "<uid>:<stop>:op" for opacity; validated on Apply like the color rows.
     var gradientStopDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -2533,6 +2543,25 @@ private fun CanonicalParamGroupRows(
                 }
             }
             Text("Gradient · stops 0–1 · RGBA 0–1 per channel · opacity 0–1", color = EditorPalette.muted, fontSize = 9.sp)
+        }
+        group.layerRefs.forEach { param ->
+            val selected = param.layerId?.let { id -> availableLayers.firstOrNull { it.id == id } }
+            Box {
+                TextButton(enabled = editable, onClick = { expandedLayerRefUid = param.uid }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer reference ${group.name} ${param.name}" }) {
+                    Text("${param.name}: ${selected?.name ?: "None"}", color = EditorPalette.text, fontSize = 11.sp)
+                }
+                DropdownMenu(expanded = expandedLayerRefUid == param.uid, onDismissRequest = { expandedLayerRefUid = null }) {
+                    DropdownMenuItem(text = { Text("None") }, onClick = { expandedLayerRefUid = null; onApplyLayerReference(param.uid, null) }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} None" })
+                    availableLayers.forEach { target ->
+                        DropdownMenuItem(
+                            text = { Text("${target.name} · ${target.id}", modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} ${target.name}" }, color = EditorPalette.text, fontSize = 11.sp) },
+                            onClick = { expandedLayerRefUid = null; onApplyLayerReference(param.uid, target.id) },
+                            modifier = Modifier.semantics { contentDescription = "Canonical $section layer option ${group.name} ${param.name} ${target.name}" }
+                        )
+                    }
+                }
+            }
+            Text("Layer Control · static reference · same composition", color = EditorPalette.muted, fontSize = 9.sp)
         }
         group.bools.forEach { param ->
             // The checkbox shows the value held at the playhead (last hold

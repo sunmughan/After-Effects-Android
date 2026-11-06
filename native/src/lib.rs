@@ -760,6 +760,7 @@ fn collect_param_items(
         let mut gradients = Vec::new();
         let mut bools = Vec::new();
         let mut popups = Vec::new();
+        let mut layer_refs = Vec::new();
         for prop_child in &child_group.children {
             let Node::Prop(property) = prop_child else { continue };
             match &property.value {
@@ -833,10 +834,13 @@ fn collect_param_items(
                         "keyframes": hold_keyframes(property, frame_rate)
                     }));
                 },
+                Value::Layer(value) if matches!(&property.ui, ParamUi::Layer) => {
+                    layer_refs.push(json!({"uid": property.uid, "name": property.name, "value": value}));
+                },
                 _ => {}
             }
         }
-        if !scalars.is_empty() || !vecs.is_empty() || !colors.is_empty() || !gradients.is_empty() || !bools.is_empty() || !popups.is_empty() {
+        if !scalars.is_empty() || !vecs.is_empty() || !colors.is_empty() || !gradients.is_empty() || !bools.is_empty() || !popups.is_empty() || !layer_refs.is_empty() {
             out.push(json!({
                 "name": name,
                 "kind": child_group.match_id,
@@ -845,7 +849,8 @@ fn collect_param_items(
                 "colors": colors,
                 "gradients": gradients,
                 "bools": bools,
-                "popups": popups
+                "popups": popups,
+                "layerRefs": layer_refs
             }));
         }
         collect_param_items(child_group, &name, out, frame_rate);
@@ -1848,6 +1853,24 @@ fn set_layer_gradient_property(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Sets a static Layer Control reference. None clears the control; a non-null
+/// target must be a layer in the same composition. Animated Layer controls
+/// are rejected rather than silently replacing their keyframes.
+fn set_layer_reference_property(source: &str, composition_id: u64, layer_id: u64, uid: u64, target_layer_id: Option<u64>) -> Result<String, String> {
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    {
+        let comp = project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+        if let Some(target) = target_layer_id {
+            if !comp.layers.iter().any(|layer| layer.id.0 == target) { return Err(format!("Layer reference target {target} is not in composition {composition_id}")); }
+        }
+    }
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if !matches!(&property.value, Value::Layer(_)) { return Err(format!("Parameter {uid} is not a layer reference")); }
+    if !property.keys.is_empty() { return Err(format!("Parameter {uid} already has keyframes; animated Layer Control editing is not supported yet")); }
+    property.set_value_at(Tick::ZERO, Value::Layer(target_layer_id));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Loads one shape-item or effect parameter for mutation, addressed by
 /// its native uid. Shared by the bool/popup setters so the lookup (and
 /// the locked-layer rejection) lives in exactly one place.
@@ -2393,6 +2416,24 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
     } else {
         set_layer_gradient_property(&source, composition_id as u64, layer_id as u64, uid as u64, &gradient_json)
     };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerReferencePropertyEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, target_layer_id: jlong,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || target_layer_id < -1 {
+        Err("Composition, layer and parameter IDs must be non-negative; target must be -1 (None) or a layer ID".to_owned())
+    } else { set_layer_reference_property(&source, composition_id as u64, layer_id as u64, uid as u64, if target_layer_id == -1 { None } else { Some(target_layer_id as u64) }) };
     let output = match result {
         Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
         Err(error) => json!({"valid": false, "error": error}).to_string(),
@@ -4508,6 +4549,40 @@ mod tests {
         assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid, r#"{"colors": [[2.0, [0.0, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 1.0]]}"#).is_err());
         assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid, r#"{"colors": [[0.0, [0.0, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 2.0]]}"#).is_err());
         assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, 999_999, r#"{"colors": [[0.0, [0.0, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 1.0]]}"#).is_err());
+    }
+
+    #[test]
+    fn canonical_layer_reference_control_updates_and_validates_target() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Node};
+        use effectcraft_project::props::{GroupKind, ParamUi, PropGroup, Property};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let mut source_layer = build::layer(&mut project, &comp, "Source", LayerSource::Shape, (640, 360), None);
+        let source_id = source_layer.id.0;
+        let target_layer = build::layer(&mut project, &comp, "Target", LayerSource::Shape, (640, 360), None);
+        let target_id = target_layer.id.0;
+        source_layer.props.sub_mut("effects").unwrap().children.push(Node::Group(PropGroup {
+            uid: 900_001, match_id: "layerControl".into(), name: "Layer Control".into(),
+            kind: GroupKind::Effect { effect: "ec.control.layer".into() }, enabled: true, label: None,
+            children: vec![Node::Prop(Property::new(900_002, "layer", "Layer", Value::Layer(None)).with_ui(ParamUi::Layer))],
+        }));
+        let uid = 900_002;
+        let comp_mut = project.comp_mut(comp_id).unwrap(); comp_mut.layers.push(source_layer); comp_mut.layers.push(target_layer);
+        let source = project.to_file_json().unwrap();
+        let before: serde_json::Value = serde_json::from_str(&inspect_project(&source).unwrap()).unwrap();
+        let control = &before["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0];
+        assert_eq!(control["uid"], uid); assert!(control["value"].is_null());
+        let selected = set_layer_reference_property(&source, comp_id.0, source_id, uid, Some(target_id)).unwrap();
+        let selected_meta: serde_json::Value = serde_json::from_str(&inspect_project(&selected).unwrap()).unwrap();
+        assert_eq!(selected_meta["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0]["value"], target_id);
+        let cleared = set_layer_reference_property(&selected, comp_id.0, source_id, uid, None).unwrap();
+        let cleared_meta: serde_json::Value = serde_json::from_str(&inspect_project(&cleared).unwrap()).unwrap();
+        assert!(cleared_meta["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0]["value"].is_null());
+        assert!(set_layer_reference_property(&source, comp_id.0, source_id, uid, Some(999_999)).is_err());
+        assert!(set_layer_reference_property(&source, comp_id.0, source_id, 999_999, Some(target_id)).is_err());
     }
 
     #[test]
