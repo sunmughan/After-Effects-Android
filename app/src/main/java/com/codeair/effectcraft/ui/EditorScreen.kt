@@ -2907,7 +2907,8 @@ private fun TimelinePanel(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             project.layers.take(4).forEach { layer ->

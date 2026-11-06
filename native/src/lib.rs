@@ -3083,7 +3083,7 @@ fn remove_curve_keyframe(
     if property.static_only {
         return Err(format!("Curve property {selector} cannot be keyframed"));
     }
-    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) | Value::Color(_) | Value::Bool(_) | Value::Enum(_) | Value::Text(_)) {
+    if !matches!(&property.value, Value::Scalar(_) | Value::Vec2(_) | Value::Vec3(_) | Value::Color(_) | Value::Bool(_) | Value::Enum(_) | Value::Text(_) | Value::Layer(_)) {
         return Err(format!("Curve property {selector} is not animatable"));
     }
     let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
