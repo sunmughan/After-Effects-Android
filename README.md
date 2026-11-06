@@ -365,3 +365,9 @@ CI #874 exposed an invalid measured preview size conversion at EditorScreen.kt:1
 
 ### M4 ShapePath follow-up
 - Wired the effects inspector's Apply path action as well as shape/mask paths through the canonical native setter ([35706a07](https://github.com/sunmughan/After-Effects-Android/commit/35706a07bcc6a970d16c4003ea35f8ad294f4bfe)). Both ShapePath call sites verified. CI #893 is pending; no current-head pass claimed.
+
+
+### M4 — Animated ShapePath keys (Run 9)
+- Path inspector now has Add/Remove key at the playhead for mask/shape/effect ShapePath parameters. Rust validates and writes native `Value::Path` timeline keys, Kotlin/JNI routes the edit through canonical history, and the open render session receives the updated project. Regression coverage asserts frame-0/frame-15 key metadata, geometry and a native preview frame.
+- Commits: [native key authoring](https://github.com/sunmughan/After-Effects-Android/commit/682342c0a1ff0a692c6313039af0225bdbe9e40a), [JNI bridge](https://github.com/sunmughan/After-Effects-Android/commit/5112af824ebe3a526363e8179c21582851e9dcb6), [inspector controls](https://github.com/sunmughan/After-Effects-Android/commit/a6cc5b21317a70d028d20ff0a883a7b9747673cc), [history wiring](https://github.com/sunmughan/After-Effects-Android/commit/5ef4aae0fb21598c74c9bcc6e58d29061eec4915), [end-to-end regression](https://github.com/sunmughan/After-Effects-Android/commit/ec80f89b309b7a6ff0b3eb763806a096545c9455).
+- Exact-head CI #909 [42197069465](https://github.com/sunmughan/After-Effects-Android/actions/runs/42197069465) is pending; no green claim yet. Visual path handles/interpolation parity and M0–M7 remaining release gates are tracked in PHASES.md. **Release NOT COMPLETE.**
