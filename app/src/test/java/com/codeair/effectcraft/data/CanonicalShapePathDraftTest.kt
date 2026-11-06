@@ -355,8 +355,12 @@ class CanonicalShapePathDraftTest {
         val incoming = CanonicalShapePathDraft.tangentOffsets(smoothed.toString(), "in_tangents")!!
         val outgoing = CanonicalShapePathDraft.tangentOffsets(smoothed.toString(), "out_tangents")!!
         val root2 = kotlin.math.sqrt(0.5)
-        assertEquals(CanonicalShapePathDraft.Vertex(-5.0 * root2, -5.0 * root2), incoming[1])
-        assertEquals(CanonicalShapePathDraft.Vertex(10.0 * root2, 10.0 * root2), outgoing[1])
+        // Normalization introduces a few ULPs; compare geometry with a tight
+        // tolerance rather than requiring bit-identical floating-point results.
+        assertEquals(-5.0 * root2, incoming[1].x, 1e-9)
+        assertEquals(-5.0 * root2, incoming[1].y, 1e-9)
+        assertEquals(10.0 * root2, outgoing[1].x, 1e-9)
+        assertEquals(10.0 * root2, outgoing[1].y, 1e-9)
         assertEquals(5.0, kotlin.math.hypot(incoming[1].x, incoming[1].y), 1e-9)
         assertEquals(10.0, kotlin.math.hypot(outgoing[1].x, outgoing[1].y), 1e-9)
         assertEquals(CanonicalShapePathDraft.Vertex(1.0, 2.0), incoming[0])
