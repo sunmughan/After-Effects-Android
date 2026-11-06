@@ -808,6 +808,7 @@ fun EditorScreen(
                     onSetLayerColorKeyframe = onSetCanonicalLayerColorKeyframe,
                     onSetLayerGradientProperty = onSetCanonicalLayerGradientProperty,
                     onSetLayerReferenceProperty = onSetCanonicalLayerReferenceProperty,
+                    onSetLayerReferenceKeyframe = onSetCanonicalLayerReferenceKeyframe,
                     onSetLayerBoolProperty = onSetCanonicalLayerBoolProperty,
                     onSetLayerPopupProperty = onSetCanonicalLayerPopupProperty,
                     onSetLayerBoolKeyframe = onSetCanonicalLayerBoolKeyframe,
@@ -1379,6 +1380,7 @@ private fun CanonicalProjectEditor(
     onSetLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onSetLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSetLayerReferenceProperty: (Long, Long, Long, Long?) -> Unit = { _, _, _, _ -> },
+    onSetLayerReferenceKeyframe: (Long, Long, Long, Int, Long?, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onSetLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
     onSetLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
@@ -2265,6 +2267,9 @@ private fun CanonicalProjectEditor(
                         onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
                         availableLayers = composition.layers,
                         onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
+                        onLayerReferenceKeyframeAction = { uid, frame, targetId, remove ->
+                            onSetLayerReferenceKeyframe(composition.id, layer.id, uid, frame, targetId, remove)
+                        },
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
