@@ -1491,6 +1491,7 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 
  
 ## Automation Run 11 — M4 Bezier tangent alignment
-- Added `CanonicalShapePathDraft.alignTangentHandles(path,index,sourceField)`: aligns the opposite handle collinearly with equal length by negating the selected relative offset; validates field/index/canonical arrays and preserves the source handle, every other vertex, and extension metadata. Draft-only until explicit Apply/Key.
+- Implementation commit [317b0443](https://github.com/sunmughan/After-Effects-Android/commit/317b0443f3c367dc9d934c3018d5fac72340122f) adds `CanonicalShapePathDraft.alignTangentHandles(path,index,sourceField)`: aligns the opposite handle collinearly with equal length by negating the selected relative offset; validates field/index/canonical arrays and preserves the source handle, all other vertices and extension metadata. Draft-only until explicit Apply/Key.
 - Inspector exposes **Align handles** for the selected vertex; active tangent selection is source, otherwise outgoing. JVM tests verify mirrored offsets, unchanged neighboring handles/metadata and invalid inputs; API30 smoke test selects P2 and invokes the action.
-- Exact implementation/test SHAs are this commit; exact-head CI must complete JVM/API30/native dual ABI and independent cold APK/native comparison before acceptance. No tests were removed or weakened. M4 remains in progress; M0 historical #929 and M1 scoped baseline are not retroactively extended. **Release NOT COMPLETE.**
+- Exact-head CI #990 [42289345385](https://github.com/sunmughan/After-Effects-Android/actions/runs/42289345385) is in progress on `317b0443`; runner disk cleanup was active at inspection. Kotlin/JVM/API30/native dual ABI and independent cold APK/native comparison have no verdict yet. No tests were removed or weakened.
+- M4 remains in progress; M0 historical #929 and M1 scoped baseline are not retroactively extended. **Release NOT COMPLETE.**
