@@ -2683,7 +2683,7 @@ private fun CanonicalParamGroupRows(
                                     val handle = incomingCanvasHandles[index]
                                     val endpoint = transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y))
                                     drawLine(EditorPalette.amber, transform.toCanvas(vertex), endpoint, strokeWidth = 1f)
-                    Text("Drag a point or tangent endpoint · selected P${selectedCanvasVertex + 1}${selectedCanvasHandle?.substringBefore(':')?.let { " · $it" } ?: ""}", color = EditorPalette.muted, fontSize = 9.sp)
+                                    drawCircle(
                                         color = if (selectedCanvasHandle == "in_tangents:${index}") EditorPalette.amber else EditorPalette.amber.copy(alpha = 0.75f),
                                         radius = if (selectedCanvasHandle == "in_tangents:${index}") 5f else 3.5f,
                                         center = endpoint
