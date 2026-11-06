@@ -1925,6 +1925,45 @@ fn set_layer_path_property(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Authors a ShapePath key at a composition frame. Path values are kept as native
+/// Value::Path keys (rather than flattening to a static property), so timeline
+/// edits survive canonical serialization and can be evaluated by the renderer.
+fn set_layer_path_keyframe(
+    source: &str, composition_id: u64, layer_id: u64, uid: u64, frame: i64, path_json: &str,
+) -> Result<String, String> {
+    if frame < 0 { return Err("Keyframe frame must be non-negative".into()); }
+    let mut path: ShapePath = serde_json::from_str(path_json)
+        .map_err(|error| format!("Invalid path: {error}"))?;
+    if path.vertices.is_empty() || path.vertices.len() > 4096 {
+        return Err("Path must contain between 1 and 4096 vertices".into());
+    }
+    if path.in_tangents.len() > path.vertices.len() || path.out_tangents.len() > path.vertices.len() {
+        return Err("Path tangent count cannot exceed vertex count".into());
+    }
+    if path.vertices.iter().flatten().chain(path.in_tangents.iter().flatten()).chain(path.out_tangents.iter().flatten()).any(|v| !v.is_finite()) {
+        return Err("Path vertices and tangents must be finite".into());
+    }
+    path.fit_tangents();
+    for feather in &path.feather {
+        if feather.segment >= path.segment_count() || !feather.t.is_finite() || !(0.0..=1.0).contains(&feather.t)
+            || !feather.radius.is_finite() || !feather.tension.is_finite() || !(0.0..=1.0).contains(&feather.tension) {
+            return Err("Path feather points contain an invalid segment, parameter, radius or tension".into());
+        }
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let frame_rate = project.comp(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?.frame_rate;
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if property.static_only { return Err(format!("Parameter {uid} cannot be keyframed")); }
+    if !matches!(&property.ui, ParamUi::Path) || !matches!(&property.value, Value::Path(_)) {
+        return Err(format!("Parameter {uid} is not a Path"));
+    }
+    if property.keys.is_empty() { property.set_animated(true, Tick::ZERO); }
+    property.set_value_at(Tick::from_rational(frame, frame_rate.den, frame_rate.num), Value::Path(path));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Sets a static Layer Control reference. None clears the control; a non-null
 /// target must be a layer in the same composition. Animated Layer controls
 /// are rejected rather than silently replacing their keyframes.
@@ -2530,6 +2569,30 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
         Err("Composition, layer and parameter IDs must be non-negative".to_owned())
     } else {
         set_layer_path_property(&source, composition_id as u64, layer_id as u64, uid as u64, &path_json)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerPathKeyframeEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong, frame: jlong, path_json: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let path_json: String = match env.get_string(&path_json) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 || frame < 0 {
+        Err("Composition, layer, uid and frame must be non-negative".to_owned())
+    } else {
+        set_layer_path_keyframe(&source, composition_id as u64, layer_id as u64, uid as u64, frame as i64, &path_json)
     };
     let output = match result {
         Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
@@ -4730,6 +4793,42 @@ mod tests {
         assert!(set_layer_path_property(&source, comp_id.0, layer_id, path_uid, r#"{"vertices":[],"in_tangents":[],"out_tangents":[],"closed":false}"#).is_err());
         assert!(set_layer_path_property(&source, comp_id.0, layer_id, 999_999, &replacement_json).is_err());
         assert!(set_layer_path_property(&source, comp_id.0, layer_id, path_uid, r#"{"vertices":[[0,0]],"in_tangents":[],"out_tangents":[],"closed":false,"feather":[{"segment":0,"t":2,"radius":1,"tension":0}]}"#).is_err());
+    }
+
+    #[test]
+    fn canonical_shape_path_keyframe_preserves_static_and_timeline_values() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource, Node};
+        use effectcraft_project::props::MaskMode;
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        use effectcraft_project::keyframe::ShapePath;
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let mut layer = build::layer(&mut project, &comp, "Shape", LayerSource::Shape, (640, 360), None);
+        let layer_id = layer.id.0;
+        let mut next_id = 30_000u64;
+        let mut ids = build::Ids(&mut next_id);
+        let mask = build::mask(&mut ids, "Mask 1", ShapePath::rect([100.0, 80.0], 40.0, 30.0), MaskMode::Add, [0xb1, 0xb4, 0x4f]);
+        let uid = mask.children.iter().find_map(|node| match node {
+            Node::Prop(property) if property.match_id == "path" => Some(property.uid), _ => None,
+        }).unwrap();
+        layer.props.sub_mut("masks").unwrap().children.push(mask.into());
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        let source = project.to_file_json().unwrap();
+        let replacement = ShapePath::polygon(&[[10.0, 20.0], [40.0, 20.0], [25.0, 60.0]], false);
+        let keyed = set_layer_path_keyframe(&source, comp_id.0, layer_id, uid, 15, &serde_json::to_string(&replacement).unwrap()).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(&inspect_project(&keyed).unwrap()).unwrap();
+        let path = meta["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap()
+            .iter().find(|group| group["kind"] == "mask").unwrap()["paths"].as_array().unwrap()
+            .iter().find(|entry| entry["uid"] == uid).unwrap();
+        assert_eq!(path["keyframes"], json!([0, 15]));
+        assert_eq!(path["path"]["vertices"], json!([[10.0, 20.0], [40.0, 20.0], [25.0, 60.0]]));
+        assert!(set_layer_path_keyframe(&source, comp_id.0, layer_id, uid, -1, &serde_json::to_string(&replacement).unwrap()).is_err());
+        assert!(set_layer_path_keyframe(&source, comp_id.0, layer_id, 999_999, 15, &serde_json::to_string(&replacement).unwrap()).is_err());
+        let mut invalid = replacement.clone(); invalid.vertices[0][0] = f64::NAN;
+        assert!(set_layer_path_keyframe(&source, comp_id.0, layer_id, uid, 15, &serde_json::to_string(&invalid).unwrap()).is_err());
     }
 
     #[test]
