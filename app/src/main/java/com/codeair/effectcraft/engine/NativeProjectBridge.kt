@@ -223,6 +223,13 @@ object NativeProjectBridge {
         return runCatching { setLayerPathPropertyEcprojNative(json, compositionId, layerId, uid, pathJson) }.getOrNull()
     }
 
+    /** Authors a validated ShapePath value at a timeline frame without replacing its other keys. */
+    fun setLayerPathKeyframeEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, pathJson: String): String? {
+        ensureLoaded()
+        if (!available || uid < 0 || frame < 0) return null
+        return runCatching { setLayerPathKeyframeEcprojNative(json, compositionId, layerId, uid, frame, pathJson) }.getOrNull()
+    }
+
     /** Sets a static Layer Control reference to another layer in the same composition; null clears it. */
     fun setLayerReferencePropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, targetLayerId: Long?): String? {
         ensureLoaded()
@@ -520,6 +527,9 @@ object NativeProjectBridge {
     @JvmStatic
     private external fun setLayerGradientPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, gradientJson: String): String
     private external fun setLayerPathPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, pathJson: String): String
+
+    @JvmStatic
+    private external fun setLayerPathKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, frame: Long, pathJson: String): String
 
     @JvmStatic
     private external fun setLayerReferencePropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, targetLayerId: Long): String
