@@ -4798,6 +4798,13 @@ mod tests {
         let control = &metadata["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0];
         assert_eq!(control["keyframes"], json!([0, 15, 30]));
         assert!(control["keys"][2]["layerId"].is_null());
+        // A Layer reference key created through the keyframe setter must be
+        // removable through the generic curve remover too.
+        let (removed_json, removed) = remove_curve_keyframe(&none_key, comp_id.0, source_id, "param:900002", 15).unwrap();
+        assert!(removed);
+        let removed_meta: serde_json::Value = serde_json::from_str(&inspect_project(&removed_json).unwrap()).unwrap();
+        let removed_control = &removed_meta["compositions"][0]["layers"][0]["effects"][0]["layerRefs"][0];
+        assert_eq!(removed_control["keyframes"], json!([0, 30]));
         assert!(set_layer_reference_property(&none_key, comp_id.0, source_id, 900_002, Some(target_id)).is_err());
         assert!(set_layer_reference_keyframe(&source, comp_id.0, source_id, 900_002, -1, Some(target_id)).is_err());
         assert!(set_layer_reference_keyframe(&source, comp_id.0, source_id, 900_002, 15, Some(999_999)).is_err());
