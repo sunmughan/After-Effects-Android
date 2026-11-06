@@ -781,7 +781,7 @@ class AdaptiveWorkspaceSmokeTest {
         val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
         setCanonicalEditorContent(canonical, CanonicalCaptures())
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
-        val toggle = compose.onNodeWithContentDescription("Toggle canonical shape path closed Shape Custom Shape Mask Path")
+        val toggle = compose.onNodeWithContentDescription("Toggle canonical shape path closed Custom Shape Mask Path")
         toggle.performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Open path").performScrollTo().assertIsDisplayed()
         toggle.performScrollTo().performClick()
