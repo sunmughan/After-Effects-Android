@@ -2803,7 +2803,8 @@ private fun CanonicalParamGroupRows(
                         }
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(
                         enabled = editable && editedPath != null && (pathClosed || vertices.size >= 3),
                         onClick = {
@@ -2827,6 +2828,8 @@ private fun CanonicalParamGroupRows(
                         },
                         modifier = Modifier.semantics { contentDescription = "Reverse canonical ${section} path direction ${group.name} ${param.name}" }
                     ) { Text("Reverse path", color = EditorPalette.amber, fontSize = 10.sp) }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(
                         enabled = editable && editedPath != null && selectedCanvasVertex in 0 until (if (pathClosed) vertices.size else vertices.size - 1) && vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
                         onClick = {
@@ -2850,6 +2853,8 @@ private fun CanonicalParamGroupRows(
                         },
                         modifier = Modifier.semantics { contentDescription = "Add canonical $section path vertex ${group.name} ${param.name}" }
                     ) { Text("Add vertex", color = EditorPalette.violet, fontSize = 10.sp) }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(
                         enabled = editable && editedPath != null && CanonicalShapePathDraft.canRemoveVertex(pathForAction, selectedCanvasVertex),
                         onClick = {
@@ -2873,6 +2878,8 @@ private fun CanonicalParamGroupRows(
                         },
                         modifier = Modifier.semantics { contentDescription = "Remove last canonical $section path vertex ${group.name} ${param.name}" }
                     ) { Text("Remove last", color = EditorPalette.amber, fontSize = 10.sp) }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(
                         enabled = editable && editedPath != null,
                         onClick = { onApplyPath(param.uid, editedPath!!) },
@@ -2887,6 +2894,7 @@ private fun CanonicalParamGroupRows(
                             else "Add canonical $section path keyframe ${group.name} ${param.name} frame $playheadFrame"
                         }
                     ) { Text(if (hasPathKey) "Remove key" else "Add key", color = if (hasPathKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     val insertTText = pathInsertTDrafts[param.uid] ?: "0.5"

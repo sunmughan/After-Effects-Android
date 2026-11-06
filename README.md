@@ -420,3 +420,8 @@ CI #874 exposed an invalid measured preview size conversion at EditorScreen.kt:1
  
 ### M4 — Bezier tangent alignment
 Commit [317b0443](https://github.com/sunmughan/After-Effects-Android/commit/317b0443f3c367dc9d934c3018d5fac72340122f) adds **Align handles** for a selected ShapePath vertex. It mirrors the opposite tangent offset exactly, with JVM and API30 regression coverage. Changes remain draft-local until Apply/Key. CI #990 [42289345385](https://github.com/sunmughan/After-Effects-Android/actions/runs/42289345385) is pending on this exact head; see [PHASES.md](./PHASES.md). Release NOT COMPLETE.
+
+
+### Engineering Run 11 — ShapePath inspector responsive actions (2026-11-07)
+- CI #992 exposed a real narrow-screen layout defect: ShapePath actions overflowed one horizontal Row. Reflowed closure/reversal, insertion, removal and Apply/key into separate responsive rows so all editing actions are reachable. Corrected motion-path smoke test to wait for the actual visible workspace frame semantics, not the inspector-only image.
+- Changes are additive; existing canonical mutations, assertions and native preview checks remain. Fresh exact-head CI/cold reproducibility required. See [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
