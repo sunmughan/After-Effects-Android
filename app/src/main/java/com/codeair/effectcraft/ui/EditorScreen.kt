@@ -15,6 +15,7 @@ import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.SafPermissionRegistry
 
 import android.graphics.Bitmap
+import org.json.JSONObject
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
