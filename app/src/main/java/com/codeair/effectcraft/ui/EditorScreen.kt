@@ -2801,6 +2801,18 @@ private fun CanonicalParamGroupRows(
                         modifier = Modifier.semantics { contentDescription = "Toggle canonical $section path closed ${group.name} ${param.name}" }
                     ) { Text(if (pathClosed) "Open path" else "Close path", color = EditorPalette.violet, fontSize = 10.sp) }
                     TextButton(
+                        enabled = editable && editedPath != null && vertices.size >= 2,
+                        onClick = {
+                            CanonicalShapePathDraft.reversePath(pathForAction)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                selectedCanvasVertex = vertices.lastIndex - selectedCanvasVertex
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Reverse canonical ${section} path direction ${group.name} ${param.name}" }
+                    ) { Text("Reverse path", color = EditorPalette.amber, fontSize = 10.sp) }
+                    TextButton(
                         enabled = editable && editedPath != null && selectedCanvasVertex in 0 until (if (pathClosed) vertices.size else vertices.size - 1) && vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
                         onClick = {
                             CanonicalShapePathDraft.insertVertexOnSegment(pathForAction, selectedCanvasVertex, 0.5)?.let { updated ->
