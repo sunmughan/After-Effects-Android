@@ -1382,6 +1382,7 @@ private fun CanonicalProjectEditor(
     onSetLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onSetLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSetLayerPathProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
+    onSetLayerPathKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetLayerReferenceProperty: (Long, Long, Long, Long?) -> Unit = { _, _, _, _ -> },
     onSetLayerReferenceKeyframe: (Long, Long, Long, Int, Long?, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
@@ -2236,6 +2237,7 @@ private fun CanonicalProjectEditor(
                         onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
                         onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
                         onApplyPath = { uid, pathJson -> onSetLayerPathProperty(composition.id, layer.id, uid, pathJson) },
+                        onPathKeyframeAction = { uid, frame, pathJson, remove -> onSetLayerPathKeyframe(composition.id, layer.id, uid, frame, pathJson, remove) },
                         availableLayers = composition.layers,
                         onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
                         onLayerReferenceKeyframeAction = { uid, frame, targetId, remove ->
@@ -2379,6 +2381,7 @@ private fun CanonicalParamGroupRows(
     onApplyColor: (Long, Double, Double, Double, Double) -> Unit,
     onApplyGradient: (Long, String) -> Unit,
     onApplyPath: (Long, String) -> Unit,
+    onPathKeyframeAction: (Long, Int, String, Boolean) -> Unit,
     availableLayers: List<CanonicalLayerInfo>,
     onApplyLayerReference: (Long, Long?) -> Unit,
     onLayerReferenceKeyframeAction: (Long, Int, Long?, Boolean) -> Unit,
@@ -2500,12 +2503,23 @@ private fun CanonicalParamGroupRows(
                         .semantics { contentDescription = "Canonical $section path JSON ${group.name} ${param.name}" },
                     decorationBox = { inner -> Box { if (draft.isEmpty()) Text("ShapePath JSON", color = EditorPalette.muted); inner() } }
                 )
-                TextButton(
-                    enabled = editable && draft.isNotBlank(),
-                    onClick = { onApplyPath(param.uid, draft) },
-                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section path ${group.name} ${param.name}" }
-                ) { Text("Apply path", color = EditorPalette.violet, fontSize = 10.sp) }
-                Text("Path · vertices/tangents in composition coordinates · max 4096 vertices", color = EditorPalette.muted, fontSize = 9.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(
+                        enabled = editable && draft.isNotBlank(),
+                        onClick = { onApplyPath(param.uid, draft) },
+                        modifier = Modifier.semantics { contentDescription = "Apply canonical $section path ${group.name} ${param.name}" }
+                    ) { Text("Apply path", color = EditorPalette.violet, fontSize = 10.sp) }
+                    val hasPathKey = playheadFrame in param.keyframes
+                    TextButton(
+                        enabled = editable && (hasPathKey || draft.isNotBlank()),
+                        onClick = { onPathKeyframeAction(param.uid, playheadFrame, draft, hasPathKey) },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (hasPathKey) "Remove canonical $section path keyframe ${group.name} ${param.name} frame $playheadFrame"
+                            else "Add canonical $section path keyframe ${group.name} ${param.name} frame $playheadFrame"
+                        }
+                    ) { Text(if (hasPathKey) "Remove key" else "Add key", color = if (hasPathKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Text("Path · vertices/tangents in composition coordinates · max 4096 vertices · key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
             }
         }
         group.gradients.forEach { param ->
