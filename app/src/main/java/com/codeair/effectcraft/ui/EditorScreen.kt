@@ -2550,6 +2550,7 @@ private fun CanonicalParamGroupRows(
             val verticesValid = vertexDrafts.all { it.third != null }
             val editedPath = if (verticesValid) CanonicalShapePathDraft.setVertices(draft, vertexDrafts.map { it.third!! }) else null
             val pathForAction = editedPath ?: draft
+            val pathClosed = runCatching { JSONObject(pathForAction).optBoolean("closed", false) }.getOrDefault(false)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(param.name, color = EditorPalette.muted, fontSize = 11.sp)
                 BasicTextField(
@@ -2782,6 +2783,17 @@ private fun CanonicalParamGroupRows(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(
+                        enabled = editable && editedPath != null && (pathClosed || vertices.size >= 3),
+                        onClick = {
+                            CanonicalShapePathDraft.setClosed(pathForAction, !pathClosed)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Toggle canonical $section path closed ${group.name} ${param.name}" }
+                    ) { Text(if (pathClosed) "Open path" else "Close path", color = EditorPalette.violet, fontSize = 10.sp) }
                     TextButton(
                         enabled = editable && editedPath != null && vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
                         onClick = {
