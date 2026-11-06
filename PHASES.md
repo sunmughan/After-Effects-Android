@@ -1337,3 +1337,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Latest branch/PR head is `0730194048e18f2866ffa0d0969a55004421d47c`; PR #1 remains open/Draft.
 - CI #891 [42177470056](https://github.com/sunmughan/After-Effects-Android/actions/runs/42177470056) is the exact documentation-head run covering ShapePath native/JNI/model/inspector/persistence/JVM/API30 test commits. At latest inspection its Assemble/test job was queued after runner setup; no compile/test conclusion yet. #881 was cancelled by subsequent pushes; #880's single Kotlin callback-scope error was fixed in 0de73bcf.
 - Continue from #891: inspect job logs/results, fix all encountered failures, then require the independent cold rebuild/compare job. No acceptance is inferred from cancelled runs.
+
+
+### Run 11 source-review correction — shape/effect path callback wiring
+- After adding the path editor, source inspection found the CanonicalParamGroupRows effects call site had omitted its required onApplyPath callback (the shape call was wired). Added the same inspector-scoped canonical callback for effects in [35706a07](https://github.com/sunmughan/After-Effects-Android/commit/35706a07bcc6a970d16c4003ea35f8ad294f4bfe); verified both shape and effect call sites now pass it. This prevents a Kotlin compile failure and enables path Apply for effect parameters as intended.
+- CI #893 [42177632293](https://github.com/sunmughan/After-Effects-Android/actions/runs/42177632293) is pending on this code head. #891/#892 were cancelled/superseded by subsequent pushes; no test or cold-repro pass claimed.
