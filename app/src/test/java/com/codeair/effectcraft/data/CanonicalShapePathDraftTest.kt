@@ -314,4 +314,39 @@ class CanonicalShapePathDraftTest {
         assertEquals(JSONObject(source).getJSONArray("feather").toString(), twice.getJSONArray("feather").toString())
     }
 
+    @Test fun aligningBezierHandlesMirrorsSelectedOffsetAndPreservesOtherVertices() {
+        val source = JSONObject(fixture()).apply {
+            put("in_tangents", org.json.JSONArray()
+                .put(org.json.JSONArray().put(1.5).put(-2.0))
+                .put(org.json.JSONArray().put(3.0).put(4.0))
+                .put(org.json.JSONArray().put(5.0).put(6.0)))
+            put("out_tangents", org.json.JSONArray()
+                .put(org.json.JSONArray().put(7.0).put(8.0))
+                .put(org.json.JSONArray().put(-9.0).put(10.0))
+                .put(org.json.JSONArray().put(11.0).put(12.0)))
+            put("custom", "preserved")
+        }.toString()
+        val aligned = JSONObject(CanonicalShapePathDraft.alignTangentHandles(source, 1, "out_tangents")!!)
+        val incoming = CanonicalShapePathDraft.tangentOffsets(aligned.toString(), "in_tangents")!!
+        val outgoing = CanonicalShapePathDraft.tangentOffsets(aligned.toString(), "out_tangents")!!
+        assertEquals(CanonicalShapePathDraft.Vertex(9.0, -10.0), incoming[1])
+        assertEquals(CanonicalShapePathDraft.Vertex(-9.0, 10.0), outgoing[1])
+        assertEquals(CanonicalShapePathDraft.Vertex(1.5, -2.0), incoming[0])
+        assertEquals(CanonicalShapePathDraft.Vertex(5.0, 6.0), incoming[2])
+        assertEquals(CanonicalShapePathDraft.Vertex(7.0, 8.0), outgoing[0])
+        assertEquals(CanonicalShapePathDraft.Vertex(11.0, 12.0), outgoing[2])
+        assertEquals("preserved", aligned.getString("custom"))
+        val reverseAligned = JSONObject(CanonicalShapePathDraft.alignTangentHandles(aligned.toString(), 1, "in_tangents")!!)
+        assertEquals(CanonicalShapePathDraft.Vertex(-9.0, 10.0),
+            CanonicalShapePathDraft.tangentOffsets(reverseAligned.toString(), "out_tangents")!![1])
+    }
+
+    @Test fun tangentAlignmentRejectsInvalidFieldAndVertex() {
+        val source = fixture()
+        assertNull(CanonicalShapePathDraft.alignTangentHandles(source, -1, "out_tangents"))
+        assertNull(CanonicalShapePathDraft.alignTangentHandles(source, 3, "out_tangents"))
+        assertNull(CanonicalShapePathDraft.alignTangentHandles(source, 0, "vertices"))
+        assertNull(CanonicalShapePathDraft.alignTangentHandles("not-json", 0, "out_tangents"))
+    }
+
 }

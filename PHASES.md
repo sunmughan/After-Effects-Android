@@ -1488,3 +1488,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **M7 NOT ACCEPTED:** current-head green CI + cold reproducibility, configurable protected signing, signed APK/AAB artifact, physical install/run, release notes/limitations and authorized merge/release verification remain outstanding.
 
 **Release NOT COMPLETE.** Next checkpoint: inspect the fresh exact-head CI, fix any genuine failures, and continue the next product acceptance criterion.
+
+ 
+## Automation Run 11 — M4 Bezier tangent alignment
+- Added `CanonicalShapePathDraft.alignTangentHandles(path,index,sourceField)`: aligns the opposite handle collinearly with equal length by negating the selected relative offset; validates field/index/canonical arrays and preserves the source handle, every other vertex, and extension metadata. Draft-only until explicit Apply/Key.
+- Inspector exposes **Align handles** for the selected vertex; active tangent selection is source, otherwise outgoing. JVM tests verify mirrored offsets, unchanged neighboring handles/metadata and invalid inputs; API30 smoke test selects P2 and invokes the action.
+- Exact implementation/test SHAs are this commit; exact-head CI must complete JVM/API30/native dual ABI and independent cold APK/native comparison before acceptance. No tests were removed or weakened. M4 remains in progress; M0 historical #929 and M1 scoped baseline are not retroactively extended. **Release NOT COMPLETE.**

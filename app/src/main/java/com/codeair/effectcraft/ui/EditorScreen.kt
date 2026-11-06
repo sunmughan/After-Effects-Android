@@ -2711,6 +2711,21 @@ private fun CanonicalParamGroupRows(
                         }
                     }
                     Text("Drag a point or tangent endpoint · selected P${selectedCanvasVertex + 1}${selectedCanvasHandle?.substringBefore(':')?.let { " · $it" } ?: ""}", color = EditorPalette.muted, fontSize = 9.sp)
+                    TextButton(
+                        enabled = editable && selectedCanvasVertex in vertices.indices,
+                        onClick = {
+                            val sourceField = selectedCanvasHandle?.substringBefore(':')
+                                ?.takeIf { it == "in_tangents" || it == "out_tangents" } ?: "out_tangents"
+                            CanonicalShapePathDraft.alignTangentHandles(pathForAction, selectedCanvasVertex, sourceField)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Align canonical $section path handles at vertex ${selectedCanvasVertex + 1} ${group.name} ${param.name}"
+                        }
+                    ) { Text("Align handles", color = EditorPalette.violet, fontSize = 9.sp) }
                 }
                 vertices.forEachIndexed { index, vertex ->
                     val (xText, yText, _) = vertexDrafts[index]

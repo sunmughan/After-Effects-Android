@@ -237,6 +237,24 @@ object CanonicalShapePathDraft {
         root.toString()
     }.getOrNull()
 
+    /**
+     * Align a vertex's opposite Bezier handle to the selected handle direction.
+     * The opposite handle receives the exact negated offset (collinear and
+     * equal length), while the source handle and every other vertex remain
+     * unchanged. This is a draft-only operation; canonical Apply/Key persists it.
+     */
+    fun alignTangentHandles(pathJson: String, index: Int, sourceField: String): String? = runCatching {
+        require(sourceField == "in_tangents" || sourceField == "out_tangents")
+        val points = vertices(pathJson) ?: error("Invalid ShapePath vertices")
+        require(index in points.indices)
+        val source = tangentOffsets(pathJson, sourceField) ?: error("Invalid source tangent array")
+        val oppositeField = if (sourceField == "in_tangents") "out_tangents" else "in_tangents"
+        val opposite = tangentOffsets(pathJson, oppositeField)?.toMutableList() ?: error("Invalid opposite tangent array")
+        val handle = source[index]
+        opposite[index] = Vertex(-handle.x, -handle.y)
+        setTangentOffsets(pathJson, oppositeField, opposite) ?: error("Invalid aligned tangent replacement")
+    }.getOrNull()
+
     fun canRemoveVertex(pathJson: String, index: Int): Boolean = runCatching {
         val root = JSONObject(pathJson)
         val count = root.getJSONArray("vertices").length()
