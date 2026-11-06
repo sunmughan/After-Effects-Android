@@ -1563,7 +1563,7 @@ private fun CanonicalProjectEditor(
                             modifier = if (previewImageSize == IntSize.Zero) {
                                 Modifier.fillMaxWidth().heightIn(max = 220.dp)
                             } else {
-                                with(LocalDensity.current) { Modifier.size(previewImageSize.toSize().toDpSize()) }
+                                with(LocalDensity.current) { Modifier.size(previewImageSize.width.toDp(), previewImageSize.height.toDp()) }
                             }
                         )
                     }
