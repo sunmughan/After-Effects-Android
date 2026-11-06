@@ -228,6 +228,7 @@ fun EditorScreen(
     onSetCanonicalLayerRotationY: (Long, Long, Double) -> Unit,
     onSetCanonicalLayerLocked: (Long, Long, Boolean) -> Unit,
     onSetCanonicalTextLayerText: (Long, Long, String) -> Unit,
+    onSetCanonicalTextLayerTextWholeLayer: (Long, Long, String) -> Unit = { _, _, _ -> },
     onSetCanonicalTextLayerKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetCanonicalTextLayerSize: (Long, Long, Double) -> Unit,
     onSetCanonicalTextLayerTracking: (Long, Long, Double) -> Unit,
@@ -791,6 +792,7 @@ fun EditorScreen(
                     onSetLayerRotationY = onSetCanonicalLayerRotationY,
                     onSetLayerLocked = onSetCanonicalLayerLocked,
                     onSetTextLayerText = onSetCanonicalTextLayerText,
+                    onSetTextLayerTextWholeLayer = onSetCanonicalTextLayerTextWholeLayer,
                     onSetCanonicalTextLayerKeyframe = onSetCanonicalTextLayerKeyframe,
                     onSetTextLayerSize = onSetCanonicalTextLayerSize,
                     onSetTextLayerTracking = onSetCanonicalTextLayerTracking,
@@ -1360,6 +1362,7 @@ private fun CanonicalProjectEditor(
     onSetLayerRotationY: (Long, Long, Double) -> Unit,
     onSetLayerLocked: (Long, Long, Boolean) -> Unit,
     onSetTextLayerText: (Long, Long, String) -> Unit,
+    onSetTextLayerTextWholeLayer: (Long, Long, String) -> Unit = { _, _, _ -> },
     onSetCanonicalTextLayerKeyframe: (Long, Long, Long, Int, String, Boolean) -> Unit = { _, _, _, _, _, _ -> },
     onSetTextLayerSize: (Long, Long, Double) -> Unit,
     onSetTextLayerTracking: (Long, Long, Double) -> Unit,
@@ -2044,6 +2047,34 @@ private fun CanonicalProjectEditor(
                 }
                 layer.textParams?.let { textParams ->
                     Text("Text · Source Text", color = EditorPalette.text, fontSize = 12.sp)
+                    // After Effects two-mode (owner pick 2026-11-06): keyframes
+                    // OFF means an edit changes the whole layer everywhere
+                    // (keys are dropped, static text set); keyframes ON means
+                    // an edit changes only the hold key at the playhead.
+                    // The mode follows the layer: ON while it has any Source
+                    // Text key, OFF otherwise.
+                    val textKeyframingOn = textParams.keys.isNotEmpty()
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            "Source Text keyframes",
+                            color = EditorPalette.text, fontSize = 12.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = textKeyframingOn,
+                            onCheckedChange = { on ->
+                                if (!editable) return@Switch
+                                if (on) onSetCanonicalTextLayerKeyframe(composition.id, layer.id, textParams.uid, previewFrame, textDraft, false)
+                                else onSetTextLayerTextWholeLayer(composition.id, layer.id, textDraft)
+                            },
+                            modifier = Modifier.semantics { contentDescription = "Toggle Source Text keyframes" }
+                        )
+                    }
+                    Text(
+                        if (textKeyframingOn) "Keyframes on · edits change only the hold key at the playhead."
+                        else "Keyframes off · edits change the whole layer everywhere.",
+                        color = EditorPalette.muted, fontSize = 10.sp
+                    )
                     Text("Font · ${textParams.font}", color = EditorPalette.muted, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         BasicTextField(
@@ -2084,7 +2115,10 @@ private fun CanonicalProjectEditor(
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(
                             enabled = editable,
-                            onClick = { onSetTextLayerText(composition.id, layer.id, textDraft) },
+                            onClick = {
+                                if (textKeyframingOn) onSetCanonicalTextLayerKeyframe(composition.id, layer.id, textParams.uid, previewFrame, textDraft, false)
+                                else onSetTextLayerTextWholeLayer(composition.id, layer.id, textDraft)
+                            },
                             modifier = Modifier.semantics { contentDescription = "Apply canonical text" }
                         ) { Text("Apply text", color = EditorPalette.violet, fontSize = 11.sp) }
                         val hasTextKey = textParams.keys.any { key -> key.frame == previewFrame }

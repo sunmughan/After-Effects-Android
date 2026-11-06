@@ -1546,6 +1546,36 @@ fn set_text_layer_text_keyframe(source: &str, composition_id: u64, layer_id: u64
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Whole-layer Source Text edit (owner pick 2026-11-06, keyframes OFF):
+/// drops every Source Text key and sets the static document text, so the
+/// edit changes the whole layer everywhere. Clearing first matters: a
+/// plain static set on a keyed property would only upsert a frame-0 key
+/// through set_value_at, leaving the other keys in charge of their frames.
+fn set_text_layer_text_whole_layer(source: &str, composition_id: u64, layer_id: u64, text: &str) -> Result<String, String> {
+    if text.chars().count() > 20_000 {
+        return Err("Source Text must be at most 20,000 characters".into());
+    }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let layer = comp.layers.find_mut(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(layer)?;
+    let text_group = layer.props.sub_mut("text")
+        .ok_or_else(|| format!("Layer {layer_id} has no Text group"))?;
+    let property = text_group.prop_mut("sourceText")
+        .ok_or_else(|| format!("Layer {layer_id} has no Source Text property"))?;
+    let mut doc = match &property.value {
+        Value::Text(doc) => (**doc).clone(),
+        _ => return Err(format!("Layer {layer_id} Source Text is not a text document")),
+    };
+    doc.text = text.to_owned();
+    property.set_animated(false, Tick::ZERO);
+    property.set_value_at(Tick::ZERO, Value::Text(Box::new(doc)));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 fn set_text_layer_size(source: &str, composition_id: u64, layer_id: u64, size: f64) -> Result<String, String> {
     if !size.is_finite() || size <= 0.0 || size > 10_000.0 {
         return Err("Text size must be finite and between 0 and 10,000".into());
@@ -2168,6 +2198,24 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
     };
     let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
         else { set_text_layer_text(&source, composition_id as u64, layer_id as u64, &text) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setTextLayerTextWholeLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, text: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let text: String = match env.get_string(&text) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 { Err("Composition and layer IDs must be non-negative".to_owned()) }
+        else { set_text_layer_text_whole_layer(&source, composition_id as u64, layer_id as u64, &text) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -4302,6 +4350,18 @@ mod tests {
             .sub("text").unwrap().prop("sourceText").unwrap();
         assert!(static_property.keys.is_empty(), "last text key removal restores static Source Text");
         assert!(matches!(&static_property.value, Value::Text(doc) if doc.text == seed_text));
+        // The whole-layer edit (keyframes OFF) drops every key and sets the
+        // static text, so the new text holds at every frame.
+        let whole = set_text_layer_text_whole_layer(&keyed, comp_id, layer_id, "Everywhere").unwrap();
+        let whole_project: Project = serde_json::from_str(&whole).unwrap();
+        let whole_property = whole_project.comp(ItemId(comp_id)).unwrap().layers[0].props
+            .sub("text").unwrap().prop("sourceText").unwrap();
+        assert!(whole_property.keys.is_empty(), "whole-layer edit must drop all Source Text keys");
+        assert!(matches!(&whole_property.value, Value::Text(doc) if doc.text == "Everywhere"));
+        let whole_meta: serde_json::Value = serde_json::from_str(&inspect_project(&whole).unwrap()).unwrap();
+        assert_eq!(whole_meta["compositions"][0]["layers"][0]["text"]["keys"].as_array().map(|a| a.len()), Some(0));
+        assert_eq!(whole_meta["compositions"][0]["layers"][0]["text"]["text"], "Everywhere");
+        assert!(set_text_layer_text_whole_layer(&source, comp_id, layer_id, &"x".repeat(20_001)).is_err());
         assert!(set_text_layer_text_keyframe(&source, comp_id, layer_id, -1, "bad").is_err());
         assert!(set_text_layer_text_keyframe(&source, comp_id, layer_id, 0, &"x".repeat(20_001)).is_err());
     }

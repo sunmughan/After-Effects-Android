@@ -1409,6 +1409,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical text updated · saved locally"
                 )
             },
+            onSetCanonicalTextLayerTextWholeLayer = { compositionId, layerId, text ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.setTextLayerTextWholeLayerEcproj(source, compositionId, layerId, text),
+                    "Canonical text updated everywhere · saved locally"
+                )
+            },
             onSetCanonicalTextLayerKeyframe = { compositionId, layerId, uid, frame, text, remove ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

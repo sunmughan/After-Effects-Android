@@ -25,6 +25,7 @@ import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalParamGroup
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalScalarParam
+import com.codeair.effectcraft.data.CanonicalTextKey
 import com.codeair.effectcraft.data.CanonicalTextParams
 import com.codeair.effectcraft.data.CanonicalVecParam
 import com.codeair.effectcraft.data.ProjectDocument
@@ -253,6 +254,8 @@ class AdaptiveWorkspaceSmokeTest {
         var rotationY: List<Any>? = null
         var locked: List<Any>? = null
         var text: List<Any>? = null
+        var textWholeLayer: List<Any>? = null
+        var textKeyframe: List<Any>? = null
         var textSize: List<Any>? = null
         var textTracking: List<Any>? = null
         var scalarProperty: List<Any>? = null
@@ -355,6 +358,8 @@ class AdaptiveWorkspaceSmokeTest {
                     onSetCanonicalLayerRotationY = { c, l, v -> captures.rotationY = listOf(c, l, v) },
                     onSetCanonicalLayerLocked = { c, l, v -> captures.locked = listOf(c, l, v) },
                     onSetCanonicalTextLayerText = { c, l, v -> captures.text = listOf(c, l, v) },
+                    onSetCanonicalTextLayerTextWholeLayer = { c, l, v -> captures.textWholeLayer = listOf(c, l, v) },
+                    onSetCanonicalTextLayerKeyframe = { c, l, uid, f, v, r -> captures.textKeyframe = listOf(c, l, uid, f, v, r) },
                     onSetCanonicalTextLayerSize = { c, l, v -> captures.textSize = listOf(c, l, v) },
                     onSetCanonicalTextLayerTracking = { c, l, v -> captures.textTracking = listOf(c, l, v) },
                     onSetCanonicalLayerScalarProperty = { c, l, uid, v -> captures.scalarProperty = listOf(c, l, uid, v) },
@@ -678,7 +683,9 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Apply canonical rotation Y").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, -30.0), captures.rotationY)
         compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().performClick()
-        assertEquals(listOf<Any>(10L, 2L, "Hello mobile"), captures.text)
+        // No Source Text keys: Apply routes to the whole-layer edit.
+        assertEquals(listOf<Any>(10L, 2L, "Hello mobile"), captures.textWholeLayer)
+        assertEquals(null, captures.textKeyframe)
         compose.onNodeWithContentDescription("Apply canonical text size").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, 48.0), captures.textSize)
         compose.onNodeWithContentDescription("Apply canonical text tracking").performScrollTo().performClick()
@@ -691,6 +698,46 @@ class AdaptiveWorkspaceSmokeTest {
         assertEquals(listOf<Any>(10L, 2L, 201L, 15.0), captures.scalarProperty)
         compose.onNodeWithContentDescription("Canonical layer locked").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, true), captures.locked)
+    }
+
+    @Test
+    fun sourceTextTwoModeRoutesApplyByKeyframing() {
+        // Keyframes OFF (no keys): the toggle is off and Apply edits the
+        // whole layer. Keyframes ON (keys exist): the toggle is on and
+        // Apply edits only the hold key at the playhead.
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(canonicalM4Layer(locked = false), captures)
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Toggle Source Text keyframes").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Keyframes off · edits change the whole layer everywhere.", substring = true)
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "Hello mobile"), captures.textWholeLayer)
+        assertEquals(null, captures.textKeyframe)
+
+        val keyed = canonicalM4Layer(locked = false).compositions.single().layers.first().copy(
+            textParams = CanonicalTextParams(
+                "Hello mobile", "Inter", 48.0, 12.5, uid = 77L,
+                keys = listOf(CanonicalTextKey(0, "Hello mobile"), CanonicalTextKey(15, "Frame fifteen"))
+            )
+        )
+        val keyedCanonical = CanonicalProjectInfo(
+            compositions = listOf(
+                canonicalM4Layer(locked = false).compositions.single().copy(layers = listOf(keyed))
+            )
+        )
+        val keyedCaptures = CanonicalCaptures()
+        setCanonicalEditorContent(keyedCanonical, keyedCaptures, playheadFrame = 15)
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithText("Keyframes on · edits change only the hold key at the playhead.", substring = true)
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, 77L, 15, "Hello mobile", false), keyedCaptures.textKeyframe)
+        assertEquals(null, keyedCaptures.textWholeLayer)
+        // Toggling keyframes off routes the same draft through the
+        // whole-layer edit (keys dropped, static text set).
+        compose.onNodeWithContentDescription("Toggle Source Text keyframes").performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "Hello mobile"), keyedCaptures.textWholeLayer)
     }
 
     @Test

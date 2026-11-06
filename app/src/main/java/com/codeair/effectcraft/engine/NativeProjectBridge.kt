@@ -136,6 +136,13 @@ object NativeProjectBridge {
         return runCatching { setTextLayerTextEcprojNative(json, compositionId, layerId, text) }.getOrNull()
     }
 
+    /** Whole-layer Source Text edit (keyframes OFF): drops every Source Text key and sets the static text. */
+    fun setTextLayerTextWholeLayerEcproj(json: String, compositionId: Long, layerId: Long, text: String): String? {
+        ensureLoaded()
+        if (!available || text.length > 20_000) return null
+        return runCatching { setTextLayerTextWholeLayerEcprojNative(json, compositionId, layerId, text) }.getOrNull()
+    }
+
     /** Authors a native hold Source Text keyframe at a composition frame. */
     fun setTextLayerTextKeyframeEcproj(json: String, compositionId: Long, layerId: Long, frame: Long, text: String): String? {
         ensureLoaded()
@@ -458,6 +465,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setTextLayerTextEcprojNative(json: String, compositionId: Long, layerId: Long, text: String): String
+
+    @JvmStatic
+    private external fun setTextLayerTextWholeLayerEcprojNative(json: String, compositionId: Long, layerId: Long, text: String): String
 
     @JvmStatic
     private external fun setTextLayerTextKeyframeEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long, text: String): String
