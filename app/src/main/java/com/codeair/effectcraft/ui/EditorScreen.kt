@@ -2604,7 +2604,7 @@ private fun CanonicalParamGroupRows(
                                             listOf("in_tangents" to incomingCanvasHandles, "out_tangents" to outgoingCanvasHandles)
                                                 .forEach { (field, handles) ->
                                                     val handle = handles.getOrNull(index) ?: return@forEach
-                                                    if (kotlin.math.hypot(handle.x, handle.y) * transform.scale < 3f) return@forEach
+                                                    if (kotlin.math.hypot(handle.x, handle.y).toFloat() * transform.scale < 3f) return@forEach
                                                     val endpoint = transform.toCanvas(CanonicalShapePathDraft.Vertex(vertex.x + handle.x, vertex.y + handle.y))
                                                     val dx = endpoint.x - pointer.x
                                                     val dy = endpoint.y - pointer.y
