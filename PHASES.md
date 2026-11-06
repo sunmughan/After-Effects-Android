@@ -1,3 +1,7 @@
+### Automation Run 9 follow-up — ShapePath vertex test correction
+- Source-review caught a regression fixture issue before acceptance: the feather segment initially referenced segment 1, which remains valid after removing the fourth vertex. The test now moves feather to segment 2 (the newly added final segment) before removal and asserts it is pruned; implementation behavior is unchanged.
+- The earlier #912 was cancelled by later branch pushes; #915 is being superseded by this test correction. A fresh exact-head CI is required; no pass claimed.
+
 ### Automation Run 9 — M4 ShapePath structured vertex editing (2026-11-06)
 - Inspected PR #1 (Draft/open), branch head `2a8b2406`, PHASES.md/README, latest Actions and exact CI #911 Rust log. #911 (run 42197134925) failed only the new Rust ShapePath key test: it incorrectly expected the frame-15 triangle in the static inspect slot, although the canonical keyframe setter seeds frame 0 and stores the triangle under the frame-15 serialized key. The test now verifies the original static rectangle and recursively reads the serialized key value; correction commit `2a8b2406`.
 - CI #912 (run 42200398994) is pending on that correction; no pass claimed.

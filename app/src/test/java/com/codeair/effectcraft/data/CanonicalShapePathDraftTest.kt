@@ -40,6 +40,9 @@ class CanonicalShapePathDraftTest {
         assertEquals(25.0, point.getDouble(0), 0.0)
         assertEquals(26.0, point.getDouble(1), 0.0)
 
+        // Put feather on the newly-added final segment so removing that
+        // vertex must discard the now-out-of-range feather reference.
+        added.getJSONArray("feather").put(0, JSONObject().put("segment", 2).put("t", 0.5).put("radius", 4).put("tension", 0))
         val removed = JSONObject(CanonicalShapePathDraft.removeLastVertex(added.toString())!!)
         assertEquals(3, removed.getJSONArray("vertices").length())
         assertEquals(3, removed.getJSONArray("in_tangents").length())
