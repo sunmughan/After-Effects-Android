@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.Density
 import com.codeair.effectcraft.data.CanonicalBoolParam
@@ -811,6 +812,38 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Select canonical shape path segment start P1 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Insert canonical shape path vertex after selected point Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("VERTICES · 4").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply canonical shape path Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun shapePathInspectorInsertsAtUserSpecifiedParametricT() {
+        val base = canonicalM4Layer(locked = false).compositions.single()
+        val layer = base.layers.first().copy(shapeItems = base.layers.first().shapeItems + CanonicalParamGroup(
+            name = "Custom Shape", kind = "shape", paths = listOf(CanonicalPathParam(
+                uid = 304, name = "Mask Path", pathJson = org.json.JSONObject().apply {
+                    put("vertices", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(80).put(0)).put(org.json.JSONArray().put(40).put(60)))
+                    put("in_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0)))
+                    put("out_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0)))
+                    put("closed", false)
+                }.toString()
+            ))
+        ))
+        val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
+        setCanonicalEditorContent(canonical, CanonicalCaptures())
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Select canonical shape path segment start P1 Custom Shape Mask Path")
+            .performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Canonical shape path insertion t Custom Shape Mask Path")
+            .performScrollTo().performTouchInput { click() }
+        compose.onNodeWithContentDescription("Canonical shape path insertion t Custom Shape Mask Path")
+            .performTextInput("0.25")
+        compose.onNodeWithContentDescription("Insert canonical shape path vertex at t Custom Shape Mask Path")
             .performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("VERTICES · 4").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Apply canonical shape path Custom Shape Mask Path")
