@@ -341,6 +341,39 @@ class CanonicalShapePathDraftTest {
             CanonicalShapePathDraft.tangentOffsets(reverseAligned.toString(), "out_tangents")!![1])
     }
 
+    @Test fun smoothTangentHandlesFollowsNeighborChordAndPreservesLengths() {
+        val source = JSONObject(fixture()).apply {
+            put("vertices", JSONArray().put(JSONArray().put(0).put(0))
+                .put(JSONArray().put(10).put(0)).put(JSONArray().put(10).put(10)))
+            put("in_tangents", JSONArray().put(JSONArray().put(1.0).put(2.0))
+                .put(JSONArray().put(3.0).put(4.0)).put(JSONArray().put(5.0).put(6.0)))
+            put("out_tangents", JSONArray().put(JSONArray().put(7.0).put(8.0))
+                .put(JSONArray().put(6.0).put(8.0)).put(JSONArray().put(9.0).put(10.0)))
+        }.toString()
+        val smoothed = JSONObject(CanonicalShapePathDraft.smoothTangentHandles(source, 1)!!)
+        val incoming = CanonicalShapePathDraft.tangentOffsets(smoothed.toString(), "in_tangents")!!
+        val outgoing = CanonicalShapePathDraft.tangentOffsets(smoothed.toString(), "out_tangents")!!
+        val root2 = kotlin.math.sqrt(0.5)
+        assertEquals(CanonicalShapePathDraft.Vertex(-5.0 * root2, -5.0 * root2), incoming[1])
+        assertEquals(CanonicalShapePathDraft.Vertex(10.0 * root2, 10.0 * root2), outgoing[1])
+        assertEquals(5.0, kotlin.math.hypot(incoming[1].x, incoming[1].y), 1e-9)
+        assertEquals(10.0, kotlin.math.hypot(outgoing[1].x, outgoing[1].y), 1e-9)
+        assertEquals(CanonicalShapePathDraft.Vertex(1.0, 2.0), incoming[0])
+        assertEquals(CanonicalShapePathDraft.Vertex(5.0, 6.0), incoming[2])
+        assertEquals(CanonicalShapePathDraft.Vertex(7.0, 8.0), outgoing[0])
+        assertEquals(CanonicalShapePathDraft.Vertex(9.0, 10.0), outgoing[2])
+        assertEquals("preserved", smoothed.getString("custom"))
+    }
+
+    @Test fun smoothTangentHandlesRejectsDegenerateAndInvalidInputs() {
+        val degenerate = JSONObject(fixture()).put("vertices", JSONArray()
+            .put(JSONArray().put(0).put(0)).put(JSONArray().put(0).put(0)).put(JSONArray().put(0).put(0))).toString()
+        assertNull(CanonicalShapePathDraft.smoothTangentHandles(degenerate, 1))
+        assertNull(CanonicalShapePathDraft.smoothTangentHandles(fixture(), -1))
+        assertNull(CanonicalShapePathDraft.smoothTangentHandles(fixture(), 3))
+        assertNull(CanonicalShapePathDraft.smoothTangentHandles("not-json", 0))
+    }
+
     @Test fun tangentAlignmentRejectsInvalidFieldAndVertex() {
         val source = fixture()
         assertNull(CanonicalShapePathDraft.alignTangentHandles(source, -1, "out_tangents"))

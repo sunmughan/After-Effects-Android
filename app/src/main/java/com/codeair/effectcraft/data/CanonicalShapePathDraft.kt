@@ -255,6 +255,55 @@ object CanonicalShapePathDraft {
         setTangentOffsets(pathJson, oppositeField, opposite) ?: error("Invalid aligned tangent replacement")
     }.getOrNull()
 
+    /**
+     * Make a vertex's handles follow the local path direction while retaining
+     * each handle's current magnitude. Unlike alignTangentHandles (which
+     * mirrors one selected handle), this derives a tangent from adjacent
+     * anchors and updates both handles, producing a smooth join without
+     * changing their lengths.
+     */
+    fun smoothTangentHandles(pathJson: String, index: Int): String? = runCatching {
+        val root = JSONObject(pathJson)
+        val points = vertices(pathJson) ?: error("Invalid ShapePath vertices")
+        require(points.size in 2..MAX_VERTICES && index in points.indices)
+        val closed = root.optBoolean("closed", false)
+        val previous = when {
+            index > 0 -> points[index - 1]
+            closed -> points.last()
+            else -> points[index]
+        }
+        val next = when {
+            index < points.lastIndex -> points[index + 1]
+            closed -> points.first()
+            else -> points[index]
+        }
+        val center = points[index]
+        val direction = if (index == 0 && !closed) {
+            Vertex(next.x - center.x, next.y - center.y)
+        } else if (index == points.lastIndex && !closed) {
+            Vertex(center.x - previous.x, center.y - previous.y)
+        } else {
+            Vertex(next.x - previous.x, next.y - previous.y)
+        }
+        val magnitude = kotlin.math.hypot(direction.x, direction.y)
+        require(magnitude.isFinite() && magnitude > 1e-12) { "Adjacent anchors do not define a tangent" }
+        val unitX = direction.x / magnitude
+        val unitY = direction.y / magnitude
+        val incoming = tangentOffsets(pathJson, "in_tangents")?.toMutableList()
+            ?: error("Invalid incoming tangent array")
+        val outgoing = tangentOffsets(pathJson, "out_tangents")?.toMutableList()
+            ?: error("Invalid outgoing tangent array")
+        val inLength = kotlin.math.hypot(incoming[index].x, incoming[index].y)
+        val outLength = kotlin.math.hypot(outgoing[index].x, outgoing[index].y)
+        require(inLength.isFinite() && outLength.isFinite())
+        incoming[index] = Vertex(-unitX * inLength, -unitY * inLength)
+        outgoing[index] = Vertex(unitX * outLength, unitY * outLength)
+        val withIncoming = setTangentOffsets(pathJson, "in_tangents", incoming)
+            ?: error("Invalid smoothed incoming handles")
+        setTangentOffsets(withIncoming, "out_tangents", outgoing)
+            ?: error("Invalid smoothed outgoing handles")
+    }.getOrNull()
+
     fun canRemoveVertex(pathJson: String, index: Int): Boolean = runCatching {
         val root = JSONObject(pathJson)
         val count = root.getJSONArray("vertices").length()

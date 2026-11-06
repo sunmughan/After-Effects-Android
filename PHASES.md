@@ -1,5 +1,11 @@
 
 
+## Automation Run 11 follow-up — M4 smooth Bezier tangent authoring (2026-11-07)
+- While exact-head CI #993 runs, added `smoothTangentHandles`: derive the local tangent from adjacent composition-space anchors (including closed-path wrap and open endpoints), make incoming/outgoing handles collinear, and preserve each handle's independent length. Degenerate anchor chords and invalid indices/JSON fail closed; unrelated vertices and ShapePath metadata remain unchanged.
+- Inspector exposes Smooth handles alongside Align handles. JVM tests check direction, both original magnitudes, unaffected vertices/handles, metadata and invalid/degenerate cases; API30 test selects P2, invokes Smooth, and verifies Apply remains available. This is a draft operation; canonical persistence remains explicit Apply/Key.
+- #993 is still running on the preceding action-layout commit; this increment triggers a fresh exact-head workflow. No current-head CI/cold reproducibility pass claimed. **Release NOT COMPLETE.**
+
+
 ## Automation Run 11 — M4 ShapePath action layout + preview semantics correction (2026-11-07)
 - Inspected PR #1 (Draft/open/unmerged), branch head `3d2a03b7e0dab3a9a563fa7cdaa07342e8ccf7b2`, PHASES.md/README, latest Actions #992 [42289577215](https://github.com/sunmughan/After-Effects-Android/actions/runs/42289577215) and exact job 128139242991 logs. ARM64+x86_64 JNI, Rust 59/59, debug APK and JVM tests passed; API30 ran 163 tests and reported 6 failures; cold rebuild was skipped. Five failures were ShapePath inspector actions clipped off the horizontal edge: closure/reverse/insert/add/remove/apply/key buttons shared one unwrapped Row, so Compose could not scroll horizontally to Remove selected or Apply path. The sixth was the motion-path test waiting for the inspector-only image description without opening the inspector, although the visible workspace image is labelled “Rendered composition frame”.
 - Corrected the inspector into four compact action rows (closure/reverse; insertion/add; removal; Apply/key), preserving all controls and callbacks. Corrected the preview test to wait for the actual visible workspace composition Image after it verifies the native render request. Assertions remain; no timeout increase or test removal.

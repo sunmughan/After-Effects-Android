@@ -2714,6 +2714,19 @@ private fun CanonicalParamGroupRows(
                     TextButton(
                         enabled = editable && selectedCanvasVertex in vertices.indices,
                         onClick = {
+                            CanonicalShapePathDraft.smoothTangentHandles(pathForAction, selectedCanvasVertex)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Smooth canonical $section path handles at vertex ${selectedCanvasVertex + 1} ${group.name} ${param.name}"
+                        }
+                    ) { Text("Smooth handles", color = EditorPalette.mint, fontSize = 9.sp) }
+                    TextButton(
+                        enabled = editable && selectedCanvasVertex in vertices.indices,
+                        onClick = {
                             val sourceField = selectedCanvasHandle?.substringBefore(':')
                                 ?.takeIf { it == "in_tangents" || it == "out_tangents" } ?: "out_tangents"
                             CanonicalShapePathDraft.alignTangentHandles(pathForAction, selectedCanvasVertex, sourceField)?.let { updated ->

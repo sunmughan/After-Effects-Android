@@ -425,3 +425,7 @@ Commit [317b0443](https://github.com/sunmughan/After-Effects-Android/commit/317b
 ### Engineering Run 11 — ShapePath inspector responsive actions (2026-11-07)
 - CI #992 exposed a real narrow-screen layout defect: ShapePath actions overflowed one horizontal Row. Reflowed closure/reversal, insertion, removal and Apply/key into separate responsive rows so all editing actions are reachable. Corrected motion-path smoke test to wait for the actual visible workspace frame semantics, not the inspector-only image.
 - Changes are additive; existing canonical mutations, assertions and native preview checks remain. Fresh exact-head CI/cold reproducibility required. See [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
+
+
+### M4 — Smooth Bezier handles (2026-11-07)
+- Added local-tangent smoothing for ShapePath anchors: derive direction from adjacent vertices, align incoming/outgoing handles and preserve each handle length. Degenerate geometry is rejected; metadata remains intact. Accessible inspector action plus JVM/API30 regressions added. Draft-only until Apply/Key. Exact-head CI pending; see [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
