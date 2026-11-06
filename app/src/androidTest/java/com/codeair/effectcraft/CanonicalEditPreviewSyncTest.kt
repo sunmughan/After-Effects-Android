@@ -485,7 +485,11 @@ class CanonicalEditPreviewSyncTest {
         assertNotNull("Preview session must render after Layer Control edit", previewRenders(before, edited, fixture.compositionId, 0))
         val cleared = applyEdit(NativeProjectBridge.setLayerReferencePropertyEcproj(edited, fixture.compositionId, fixture.firstId, layerControl.uid, null))
         assertNull(layer(canonical(cleared), fixture.firstId).effects.first { it.kind == "layerControl" }.layerRefs.single().layerId)
-        assertNull(NativeProjectBridge.setLayerReferencePropertyEcproj(before, fixture.compositionId, fixture.firstId, layerControl.uid, 999_999L))
+        val invalidTarget = JSONObject(
+            NativeProjectBridge.setLayerReferencePropertyEcproj(before, fixture.compositionId, fixture.firstId, layerControl.uid, 999_999L)
+                ?: error("Native bridge returned null; native library unavailable")
+        )
+        assertFalse("Layer reference to a layer outside the composition must be rejected", invalidTarget.optBoolean("valid"))
 
         val keyed = applyEdit(NativeProjectBridge.setLayerReferenceKeyframeEcproj(before, fixture.compositionId, fixture.firstId, layerControl.uid, 15L, fixture.secondId))
         val keyedRef = layer(canonical(keyed), fixture.firstId).effects.first { it.kind == "layerControl" }.layerRefs.single()
@@ -495,7 +499,11 @@ class CanonicalEditPreviewSyncTest {
         val (withoutKey, removed) = removeEdit(NativeProjectBridge.removeLayerCurveKeyframeEcproj(keyed, fixture.compositionId, fixture.firstId, "param:${layerControl.uid}", 15L))
         assertTrue(removed)
         assertEquals(listOf(0), layer(canonical(withoutKey), fixture.firstId).effects.first { it.kind == "layerControl" }.layerRefs.single().keyframes)
-        assertNull(NativeProjectBridge.setLayerReferenceKeyframeEcproj(before, fixture.compositionId, fixture.firstId, layerControl.uid, 15L, 999_999L))
+        val invalidKeyTarget = JSONObject(
+            NativeProjectBridge.setLayerReferenceKeyframeEcproj(before, fixture.compositionId, fixture.firstId, layerControl.uid, 15L, 999_999L)
+                ?: error("Native bridge returned null; native library unavailable")
+        )
+        assertFalse("Layer reference keyframe to a layer outside the composition must be rejected", invalidKeyTarget.optBoolean("valid"))
     }
 
     @Test

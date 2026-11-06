@@ -183,8 +183,10 @@ class CanonicalSelectionEditorTest {
 
         // The COLOR lane draws one swatch per color keyframe (the key's own
         // RGBA, not the layer's current color) and seeks the nearest key.
+        // The lane sits below the transform lane, so scroll it into view
+        // before asserting it is displayed.
         compose.onNodeWithContentDescription("Canonical color keyframes: 0: #FF0000, 15: #00FF00, 30: #0000FF")
-            .assertIsDisplayed()
+            .performScrollTo().assertIsDisplayed()
         workspaceFrame.intValue = 14
         compose.onNodeWithContentDescription("Canonical color keyframes: 0: #FF0000, 15: #00FF00, 30: #0000FF")
             .performClick()

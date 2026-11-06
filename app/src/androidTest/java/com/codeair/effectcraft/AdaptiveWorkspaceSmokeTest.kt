@@ -701,10 +701,9 @@ class AdaptiveWorkspaceSmokeTest {
     }
 
     @Test
-    fun sourceTextTwoModeRoutesApplyByKeyframing() {
+    fun sourceTextTwoModeOffRoutesApplyToWholeLayer() {
         // Keyframes OFF (no keys): the toggle is off and Apply edits the
-        // whole layer. Keyframes ON (keys exist): the toggle is on and
-        // Apply edits only the hold key at the playhead.
+        // whole layer.
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalM4Layer(locked = false), captures)
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
@@ -714,7 +713,12 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().performClick()
         assertEquals(listOf<Any>(10L, 2L, "Hello mobile"), captures.textWholeLayer)
         assertEquals(null, captures.textKeyframe)
+    }
 
+    @Test
+    fun sourceTextTwoModeOnRoutesApplyToPlayheadKey() {
+        // Keyframes ON (keys exist): the toggle is on and Apply edits only
+        // the hold key at the playhead.
         val keyed = canonicalM4Layer(locked = false).compositions.single().layers.first().copy(
             textParams = CanonicalTextParams(
                 "Hello mobile", "Inter", 48.0, 12.5, uid = 77L,
@@ -791,15 +795,22 @@ class AdaptiveWorkspaceSmokeTest {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalRovingLayer(), captures, frameBytes = blackFrameBytes())
         // The inspector preview image is capped at 220dp; the overlay over
-        // it must share the image's exact bounds, not the sheet width.
+        // it must share the image's exact bounds, not the sheet width. The
+        // inspector is a sheet, so open it first; the overlay size follows
+        // the image measurement, so poll until the bounds converge.
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.waitUntil(timeoutMillis = 10_000) {
             runCatching {
-                compose.onNodeWithContentDescription("EffectCraft rendered composition frame").assertIsDisplayed()
-            }.isSuccess
-        }
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithContentDescription("Motion path overlay")
-                .fetchSemanticsNodes().isNotEmpty()
+                val imageBounds = compose.onNodeWithContentDescription("EffectCraft rendered composition frame")
+                    .fetchSemanticsNode().boundsInRoot
+                compose.onAllNodesWithContentDescription("Motion path overlay")
+                    .fetchSemanticsNodes().any { overlay ->
+                        kotlin.math.abs(overlay.boundsInRoot.left - imageBounds.left) <= 1f &&
+                            kotlin.math.abs(overlay.boundsInRoot.top - imageBounds.top) <= 1f &&
+                            kotlin.math.abs(overlay.boundsInRoot.width - imageBounds.width) <= 1f &&
+                            kotlin.math.abs(overlay.boundsInRoot.height - imageBounds.height) <= 1f
+                    }
+            }.getOrDefault(false)
         }
         val imageBounds = compose.onNodeWithContentDescription("EffectCraft rendered composition frame")
             .fetchSemanticsNode().boundsInRoot
