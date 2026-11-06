@@ -2683,7 +2683,7 @@ private fun CanonicalParamGroupRows(
                             }
                         }
                     }
-                    Text("Drag a point or tangent endpoint · selected P${selectedCanvasVertex + 1}${selectedCanvasHandle?.substringBefore(\u0027:\u0027)?.let { " · $it" } ?: ""}", color = EditorPalette.muted, fontSize = 9.sp)
+                    Text("Drag a point or tangent endpoint · selected P${selectedCanvasVertex + 1}${selectedCanvasHandle?.substringBefore(':')?.let { " · $it" } ?: ""}", color = EditorPalette.muted, fontSize = 9.sp)
                 }
                 vertices.forEachIndexed { index, vertex ->
                     val (xText, yText, _) = vertexDrafts[index]
