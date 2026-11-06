@@ -4,6 +4,7 @@ import com.codeair.effectcraft.data.BezierCurveEditor
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
 import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
+import com.codeair.effectcraft.data.CanonicalShapePathDraft
 import com.codeair.effectcraft.data.CanonicalProjectRepository
 import com.codeair.effectcraft.data.CurveHandle
 import com.codeair.effectcraft.data.CurveInterp
@@ -2400,6 +2401,8 @@ private fun CanonicalParamGroupRows(
     // and "<uid>:<stop>:op" for opacity; validated on Apply like the color rows.
     var gradientStopDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var pathDrafts by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    // Per-coordinate text drafts allow transient values such as '-' while typing; commit only finite pairs.
+    var pathVertexDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
         group.scalars.forEach { param ->
@@ -2493,11 +2496,25 @@ private fun CanonicalParamGroupRows(
         }
         group.paths.forEach { param ->
             val draft = pathDrafts[param.uid] ?: param.pathJson
+            val vertices = CanonicalShapePathDraft.vertices(draft).orEmpty()
+            val vertexDrafts = vertices.mapIndexed { index, vertex ->
+                val xText = pathVertexDrafts["${param.uid}:${index}:x"] ?: vertex.x.toString()
+                val yText = pathVertexDrafts["${param.uid}:${index}:y"] ?: vertex.y.toString()
+                val x = xText.toDoubleOrNull()?.takeIf { it.isFinite() }
+                val y = yText.toDoubleOrNull()?.takeIf { it.isFinite() }
+                Triple(xText, yText, if (x != null && y != null) CanonicalShapePathDraft.Vertex(x, y) else null)
+            }
+            val verticesValid = vertexDrafts.all { it.third != null }
+            val editedPath = if (verticesValid) CanonicalShapePathDraft.setVertices(draft, vertexDrafts.map { it.third!! }) else null
+            val pathForAction = editedPath ?: draft
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(param.name, color = EditorPalette.muted, fontSize = 11.sp)
                 BasicTextField(
                     value = draft,
-                    onValueChange = { pathDrafts = pathDrafts + (param.uid to it.take(32_768)) },
+                    onValueChange = {
+                        pathDrafts = pathDrafts + (param.uid to it.take(32_768))
+                        pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                    },
                     textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 10.sp),
                     modifier = Modifier.fillMaxWidth().height(84.dp)
                         .background(EditorPalette.panelRaised, RoundedCornerShape(4.dp))
@@ -2505,23 +2522,68 @@ private fun CanonicalParamGroupRows(
                         .semantics { contentDescription = "Canonical $section path JSON ${group.name} ${param.name}" },
                     decorationBox = { inner -> Box { if (draft.isEmpty()) Text("ShapePath JSON", color = EditorPalette.muted); inner() } }
                 )
+                Text("VERTICES · ${vertices.size}", color = EditorPalette.muted, fontSize = 10.sp)
+                vertices.forEachIndexed { index, vertex ->
+                    val (xText, yText, _) = vertexDrafts[index]
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("P${index + 1}", color = EditorPalette.muted, fontSize = 10.sp, modifier = Modifier.width(28.dp))
+                        BasicTextField(
+                            value = xText,
+                            onValueChange = { pathVertexDrafts = pathVertexDrafts + ("${param.uid}:${index}:x" to it.take(32)) },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 11.sp),
+                            modifier = Modifier.weight(1f).background(EditorPalette.panelRaised, RoundedCornerShape(4.dp)).padding(5.dp)
+                                .semantics { contentDescription = "Canonical $section path vertex ${index + 1} X" },
+                            decorationBox = { inner -> Box { if (xText.isEmpty()) Text("X", color = EditorPalette.muted); inner() } }
+                        )
+                        BasicTextField(
+                            value = yText,
+                            onValueChange = { pathVertexDrafts = pathVertexDrafts + ("${param.uid}:${index}:y" to it.take(32)) },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 11.sp),
+                            modifier = Modifier.weight(1f).background(EditorPalette.panelRaised, RoundedCornerShape(4.dp)).padding(5.dp)
+                                .semantics { contentDescription = "Canonical $section path vertex ${index + 1} Y" },
+                            decorationBox = { inner -> Box { if (yText.isEmpty()) Text("Y", color = EditorPalette.muted); inner() } }
+                        )
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TextButton(
-                        enabled = editable && draft.isNotBlank(),
-                        onClick = { onApplyPath(param.uid, draft) },
+                        enabled = editable && editedPath != null && vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
+                        onClick = {
+                            CanonicalShapePathDraft.appendVertex(pathForAction)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Add canonical $section path vertex ${group.name} ${param.name}" }
+                    ) { Text("Add vertex", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable && editedPath != null && CanonicalShapePathDraft.canRemoveLastVertex(pathForAction),
+                        onClick = {
+                            CanonicalShapePathDraft.removeLastVertex(pathForAction)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Remove last canonical $section path vertex ${group.name} ${param.name}" }
+                    ) { Text("Remove last", color = EditorPalette.amber, fontSize = 10.sp) }
+                    TextButton(
+                        enabled = editable && editedPath != null,
+                        onClick = { onApplyPath(param.uid, editedPath!!) },
                         modifier = Modifier.semantics { contentDescription = "Apply canonical $section path ${group.name} ${param.name}" }
                     ) { Text("Apply path", color = EditorPalette.violet, fontSize = 10.sp) }
                     val hasPathKey = playheadFrame in param.keyframes
                     TextButton(
-                        enabled = editable && (hasPathKey || draft.isNotBlank()),
-                        onClick = { onPathKeyframeAction(param.uid, playheadFrame, draft, hasPathKey) },
+                        enabled = editable && (hasPathKey || editedPath != null),
+                        onClick = { onPathKeyframeAction(param.uid, playheadFrame, pathForAction, hasPathKey) },
                         modifier = Modifier.semantics {
                             contentDescription = if (hasPathKey) "Remove canonical $section path keyframe ${group.name} ${param.name} frame $playheadFrame"
                             else "Add canonical $section path keyframe ${group.name} ${param.name} frame $playheadFrame"
                         }
                     ) { Text(if (hasPathKey) "Remove key" else "Add key", color = if (hasPathKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
                 }
-                Text("Path · vertices/tangents in composition coordinates · max 4096 vertices · key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
+                Text("Vertex coordinates are composition-space; tangents/feather stay in JSON. Key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
             }
         }
         group.gradients.forEach { param ->
