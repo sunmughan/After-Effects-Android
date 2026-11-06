@@ -4795,6 +4795,32 @@ mod tests {
         assert!(set_layer_path_property(&source, comp_id.0, layer_id, path_uid, r#"{"vertices":[[0,0]],"in_tangents":[],"out_tangents":[],"closed":false,"feather":[{"segment":0,"t":2,"radius":1,"tension":0}]}"#).is_err());
     }
 
+    /// Vertices of the frame-15 ShapePath key for the path property with
+    /// `uid`, read back from the serialized project file JSON. The inspect
+    /// metadata exposes only keyframe times for paths (curve keys skip
+    /// Path values), so the stored key value is verified here instead.
+    fn path_key_vertices(project_json: &str, uid: u64) -> serde_json::Value {
+        fn find_path_property(value: &serde_json::Value, uid: u64) -> Option<&serde_json::Value> {
+            match value {
+                serde_json::Value::Object(map) => {
+                    if map.get("uid").and_then(|id| id.as_u64()) == Some(uid)
+                        && map.get("match").and_then(|m| m.as_str()) == Some("path")
+                    {
+                        return Some(value);
+                    }
+                    value.as_object().unwrap().values().find_map(|child| find_path_property(child, uid))
+                }
+                serde_json::Value::Array(items) => items.iter().find_map(|child| find_path_property(child, uid)),
+                _ => None,
+            }
+        }
+        let project: serde_json::Value = serde_json::from_str(project_json).unwrap();
+        let property = find_path_property(&project, uid).expect("mask path property must survive serialization");
+        let keys = property["keys"].as_array().expect("path property must carry its keys");
+        assert_eq!(keys.len(), 2);
+        keys[1]["value"]["v"]["vertices"].clone()
+    }
+
     #[test]
     fn canonical_shape_path_keyframe_preserves_static_and_timeline_values() {
         use effectcraft_project::{build, Comp, ItemKind, LayerSource, Node};
@@ -4824,7 +4850,12 @@ mod tests {
             .iter().find(|group| group["kind"] == "mask").unwrap()["paths"].as_array().unwrap()
             .iter().find(|entry| entry["uid"] == uid).unwrap();
         assert_eq!(path["keyframes"], json!([0, 15]));
-        assert_eq!(path["path"]["vertices"], json!([[10.0, 20.0], [40.0, 20.0], [25.0, 60.0]]));
+        // The static slot keeps the mask's original rect: keying frame 15
+        // seeds a frame-0 key with it and stores the triangle at frame 15,
+        // exactly like the scalar keyframe setter. The triangle lives in
+        // the property's keys, not in the static value.
+        assert_eq!(path["path"]["vertices"], json!([[80.0, 65.0], [120.0, 65.0], [120.0, 95.0], [80.0, 95.0]]));
+        assert_eq!(path_key_vertices(&keyed, uid), json!([[10.0, 20.0], [40.0, 20.0], [25.0, 60.0]]));
         assert!(set_layer_path_keyframe(&source, comp_id.0, layer_id, uid, -1, &serde_json::to_string(&replacement).unwrap()).is_err());
         assert!(set_layer_path_keyframe(&source, comp_id.0, layer_id, 999_999, 15, &serde_json::to_string(&replacement).unwrap()).is_err());
         let mut invalid = replacement.clone(); invalid.vertices[0][0] = f64::NAN;
