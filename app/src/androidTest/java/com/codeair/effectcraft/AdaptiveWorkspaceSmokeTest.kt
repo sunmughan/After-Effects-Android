@@ -841,7 +841,7 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Select canonical shape path segment start P1 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Canonical shape path insertion t Custom Shape Mask Path")
-            .performScrollTo().performTouchInput { click() }
+            .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Canonical shape path insertion t Custom Shape Mask Path")
             .performTextClearance().performTextInput("0.25")
         compose.onNodeWithContentDescription("Insert canonical shape path vertex at t Custom Shape Mask Path")
