@@ -130,6 +130,78 @@ class CanonicalShapePathDraftTest {
         assertNull(CanonicalShapePathDraft.vertices("not-json"))
     }
 
+    @Test fun cubicSegmentSubdivisionPreservesCurveAndRemapsFeatherPositions() {
+        val source = JSONObject(fixture(closed = true)).apply {
+            put("out_tangents", org.json.JSONArray()
+                .put(org.json.JSONArray().put(2.0).put(1.0))
+                .put(org.json.JSONArray().put(0.5).put(-1.0))
+                .put(org.json.JSONArray().put(-1.0).put(0.5)))
+            put("in_tangents", org.json.JSONArray()
+                .put(org.json.JSONArray().put(-0.5).put(1.0))
+                .put(org.json.JSONArray().put(-1.0).put(2.0))
+                .put(org.json.JSONArray().put(1.0).put(-1.0)))
+            put("feather", org.json.JSONArray()
+                .put(JSONObject().put("segment", 0).put("t", 0.25).put("radius", 4))
+                .put(JSONObject().put("segment", 0).put("t", 0.75).put("radius", 5))
+                .put(JSONObject().put("segment", 1).put("t", 0.5).put("radius", 6)))
+        }.toString()
+        val splitAt = 0.4
+        val originalPoints = CanonicalShapePathDraft.vertices(source)!!
+        val originalIn = CanonicalShapePathDraft.tangentOffsets(source, "in_tangents")!!
+        val originalOut = CanonicalShapePathDraft.tangentOffsets(source, "out_tangents")!!
+        fun cubic(p0: CanonicalShapePathDraft.Vertex, p1: CanonicalShapePathDraft.Vertex,
+                  p2: CanonicalShapePathDraft.Vertex, p3: CanonicalShapePathDraft.Vertex, t: Double): CanonicalShapePathDraft.Vertex {
+            val u = 1.0 - t
+            return CanonicalShapePathDraft.Vertex(
+                u*u*u*p0.x + 3*u*u*t*p1.x + 3*u*t*t*p2.x + t*t*t*p3.x,
+                u*u*u*p0.y + 3*u*u*t*p1.y + 3*u*t*t*p2.y + t*t*t*p3.y
+            )
+        }
+        val p0 = originalPoints[0]
+        val p3 = originalPoints[1]
+        val p1 = CanonicalShapePathDraft.Vertex(p0.x + originalOut[0].x, p0.y + originalOut[0].y)
+        val p2 = CanonicalShapePathDraft.Vertex(p3.x + originalIn[1].x, p3.y + originalIn[1].y)
+        val originalCurve = (0..20).map { i -> cubic(p0, p1, p2, p3, i / 20.0) }
+        val split = JSONObject(CanonicalShapePathDraft.insertVertexOnSegment(source, 0, splitAt)!!)
+        val vertices = CanonicalShapePathDraft.vertices(split.toString())!!
+        val incoming = CanonicalShapePathDraft.tangentOffsets(split.toString(), "in_tangents")!!
+        val outgoing = CanonicalShapePathDraft.tangentOffsets(split.toString(), "out_tangents")!!
+        assertEquals(4, vertices.size)
+        assertEquals(4, incoming.size)
+        assertEquals(4, outgoing.size)
+        val inserted = vertices[1]
+        val leftP1 = CanonicalShapePathDraft.Vertex(vertices[0].x + outgoing[0].x, vertices[0].y + outgoing[0].y)
+        val leftP2 = CanonicalShapePathDraft.Vertex(inserted.x + incoming[1].x, inserted.y + incoming[1].y)
+        val rightP1 = CanonicalShapePathDraft.Vertex(inserted.x + outgoing[1].x, inserted.y + outgoing[1].y)
+        val rightP2 = CanonicalShapePathDraft.Vertex(vertices[2].x + incoming[2].x, vertices[2].y + incoming[2].y)
+        originalCurve.forEachIndexed { i, expected ->
+            val u = i / 20.0
+            val actual = if (u <= splitAt) cubic(vertices[0], leftP1, leftP2, inserted, u / splitAt)
+                else cubic(inserted, rightP1, rightP2, vertices[2], (u - splitAt) / (1.0 - splitAt))
+            assertEquals(expected.x, actual.x, 1e-9)
+            assertEquals(expected.y, actual.y, 1e-9)
+        }
+        val feather = split.getJSONArray("feather")
+        assertEquals(0, feather.getJSONObject(0).getInt("segment"))
+        assertEquals(0.625, feather.getJSONObject(0).getDouble("t"), 1e-12)
+        assertEquals(1, feather.getJSONObject(1).getInt("segment"))
+        assertEquals(0.5833333333333334, feather.getJSONObject(1).getDouble("t"), 1e-12)
+        assertEquals(2, feather.getJSONObject(2).getInt("segment"))
+        assertEquals("preserved", split.getString("custom"))
+    }
+
+    @Test fun cubicSubdivisionRejectsInvalidSegmentAndBoundaryParameters() {
+        val source = fixture()
+        assertNull(CanonicalShapePathDraft.insertVertexOnSegment(source, -1, 0.5))
+        assertNull(CanonicalShapePathDraft.insertVertexOnSegment(source, 2, 0.5))
+        assertNull(CanonicalShapePathDraft.insertVertexOnSegment(source, 0, 0.0))
+        assertNull(CanonicalShapePathDraft.insertVertexOnSegment(source, 0, 1.0))
+        assertNull(CanonicalShapePathDraft.insertVertexOnSegment(source, 0, Double.NaN))
+        val full = JSONObject().put("vertices", org.json.JSONArray())
+        repeat(CanonicalShapePathDraft.MAX_VERTICES) { i -> full.getJSONArray("vertices").put(org.json.JSONArray().put(i).put(i)) }
+        assertNull(CanonicalShapePathDraft.insertVertexOnSegment(full.toString(), 0, 0.5))
+    }
+
     @Test fun closureTogglePreservesGeometryAndRejectsTooFewVertices() {
         val source = fixture(closed = false)
         val closed = JSONObject(CanonicalShapePathDraft.setClosed(source, true)!!)
