@@ -274,4 +274,44 @@ class CanonicalShapePathDraftTest {
         assertFalse(CanonicalShapePathDraft.canRemoveVertex(removed.toString(), 0))
         assertNull(CanonicalShapePathDraft.removeVertex(removed.toString(), 0))
     }
+
+    @Test fun reversingOpenPathSwapsHandlesAndRemapsFeatherOrientation() {
+        val source = JSONObject(fixture()).apply {
+            put("in_tangents", org.json.JSONArray().put(org.json.JSONArray().put(1).put(2))
+                .put(org.json.JSONArray().put(3).put(4)).put(org.json.JSONArray().put(5).put(6)))
+            put("out_tangents", org.json.JSONArray().put(org.json.JSONArray().put(7).put(8))
+                .put(org.json.JSONArray().put(9).put(10)).put(org.json.JSONArray().put(11).put(12)))
+            put("feather", org.json.JSONArray().put(JSONObject().put("segment", 1).put("t", 0.25).put("radius", 4)))
+        }.toString()
+        val reversed = JSONObject(CanonicalShapePathDraft.reversePath(source)!!)
+        val points = reversed.getJSONArray("vertices")
+        assertEquals(5.0, points.getJSONArray(0).getDouble(0), 0.0)
+        assertEquals(1.0, points.getJSONArray(2).getDouble(0), 0.0)
+        assertEquals(11.0, reversed.getJSONArray("in_tangents").getJSONArray(0).getDouble(0), 0.0)
+        assertEquals(5.0, reversed.getJSONArray("out_tangents").getJSONArray(0).getDouble(0), 0.0)
+        val feather = reversed.getJSONArray("feather").getJSONObject(0)
+        assertEquals(0, feather.getInt("segment"))
+        assertEquals(0.75, feather.getDouble("t"), 0.0)
+        assertEquals("preserved", reversed.getString("custom"))
+    }
+
+    @Test fun reversingClosedPathWrapsFeatherSegmentsAndIsAnInvolution() {
+        val source = JSONObject(fixture(closed = true)).apply {
+            put("feather", org.json.JSONArray()
+                .put(JSONObject().put("segment", 0).put("t", 0.2))
+                .put(JSONObject().put("segment", 2).put("t", 0.8)))
+        }.toString()
+        val once = JSONObject(CanonicalShapePathDraft.reversePath(source)!!)
+        val feather = once.getJSONArray("feather")
+        assertEquals(1, feather.getJSONObject(0).getInt("segment"))
+        assertEquals(0.8, feather.getJSONObject(0).getDouble("t"), 0.0)
+        assertEquals(2, feather.getJSONObject(1).getInt("segment"))
+        assertEquals(0.2, feather.getJSONObject(1).getDouble("t"), 0.0)
+        val twice = JSONObject(CanonicalShapePathDraft.reversePath(once.toString())!!)
+        assertEquals(JSONObject(source).getJSONArray("vertices").toString(), twice.getJSONArray("vertices").toString())
+        assertEquals(JSONObject(source).getJSONArray("in_tangents").toString(), twice.getJSONArray("in_tangents").toString())
+        assertEquals(JSONObject(source).getJSONArray("out_tangents").toString(), twice.getJSONArray("out_tangents").toString())
+        assertEquals(JSONObject(source).getJSONArray("feather").toString(), twice.getJSONArray("feather").toString())
+    }
+
 }
