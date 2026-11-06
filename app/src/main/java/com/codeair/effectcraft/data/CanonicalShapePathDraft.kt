@@ -42,6 +42,15 @@ object CanonicalShapePathDraft {
         root.toString()
     }.getOrNull()
 
+    /** Toggle path closure without rewriting vertices, tangents, feather or extension metadata. */
+    fun setClosed(pathJson: String, closed: Boolean): String? = runCatching {
+        val root = JSONObject(pathJson)
+        val count = root.getJSONArray("vertices").length()
+        require(count >= if (closed) 3 else 2) { "A closed ShapePath requires at least three vertices" }
+        root.put("closed", closed)
+        root.toString()
+    }.getOrNull()
+
     fun appendVertex(pathJson: String): String? = runCatching {
         val root = JSONObject(pathJson)
         val points = root.getJSONArray("vertices")
