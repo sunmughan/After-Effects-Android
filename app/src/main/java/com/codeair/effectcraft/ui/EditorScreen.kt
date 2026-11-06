@@ -2235,7 +2235,7 @@ private fun CanonicalProjectEditor(
                         availableLayers = composition.layers,
                         onApplyLayerReference = { uid, targetId -> onSetLayerReferenceProperty(composition.id, layer.id, uid, targetId) },
                         onLayerReferenceKeyframeAction = { uid, frame, targetId, remove ->
-                            onSetCanonicalLayerReferenceKeyframe(composition.id, layer.id, uid, frame, targetId, remove)
+                            onSetLayerReferenceKeyframe(composition.id, layer.id, uid, frame, targetId, remove)
                         },
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
