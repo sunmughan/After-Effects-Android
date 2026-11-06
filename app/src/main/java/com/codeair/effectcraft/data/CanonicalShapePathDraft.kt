@@ -188,40 +188,69 @@ object CanonicalShapePathDraft {
         root.toString()
     }.getOrNull()
 
-    fun canRemoveLastVertex(pathJson: String): Boolean = runCatching {
+    fun canRemoveVertex(pathJson: String, index: Int): Boolean = runCatching {
         val root = JSONObject(pathJson)
         val count = root.getJSONArray("vertices").length()
-        count > if (root.optBoolean("closed", false)) 3 else 2
+        val minimum = if (root.optBoolean("closed", false)) 3 else 2
+        count > minimum && index in 0 until count
     }.getOrDefault(false)
 
-    fun removeLastVertex(pathJson: String): String? = runCatching {
+    fun canRemoveLastVertex(pathJson: String): Boolean =
+        vertices(pathJson)?.lastIndex?.let { canRemoveVertex(pathJson, it) } ?: false
+
+    /**
+     * Remove one anchor while keeping positional tangent arrays aligned.
+     * Feather points on the two segments that collapse into a new bridge
+     * are discarded (their original parametric geometry no longer exists);
+     * untouched segment references are shifted deterministically.
+     */
+    fun removeVertex(pathJson: String, index: Int): String? = runCatching {
         val root = JSONObject(pathJson)
-        val points = root.getJSONArray("vertices")
+        val points = vertices(pathJson) ?: error("Invalid ShapePath vertices")
         val closed = root.optBoolean("closed", false)
-        require(points.length() > if (closed) 3 else 2)
-        val updated = vertices(pathJson)!!.dropLast(1)
+        val minimum = if (closed) 3 else 2
+        require(points.size > minimum && index in points.indices)
+        val oldSegmentCount = if (closed) points.size else points.size - 1
+        val updated = points.toMutableList().apply { removeAt(index) }
         root.put("vertices", vertexArray(updated))
+
         listOf("in_tangents", "out_tangents").forEach { key ->
             root.optJSONArray(key)?.let { tangents ->
-                require(tangents.length() == points.length())
+                require(tangents.length() == points.size)
                 root.put(key, JSONArray().also { trimmed ->
-                    for (index in 0 until tangents.length() - 1) trimmed.put(tangents.get(index))
+                    for (vertexIndex in 0 until tangents.length()) {
+                        if (vertexIndex != index) trimmed.put(tangents.get(vertexIndex))
+                    }
                 })
             }
         }
-        // Feather points must reference a segment that still exists.
+
         root.optJSONArray("feather")?.let { feather ->
-            val segmentCount = if (closed) updated.size else updated.size - 1
+            val affected = if (closed && index == 0) setOf(oldSegmentCount - 1, 0)
+                else setOf(index - 1, index).filter { it in 0 until oldSegmentCount }.toSet()
+            val newSegmentCount = if (closed) updated.size else updated.size - 1
             root.put("feather", JSONArray().also { kept ->
-                for (index in 0 until feather.length()) {
-                    val point = feather.getJSONObject(index)
-                    if (point.optInt("segment", -1) in 0 until segmentCount) kept.put(point)
+                for (featherIndex in 0 until feather.length()) {
+                    val point = feather.getJSONObject(featherIndex)
+                    val oldSegment = point.optInt("segment", -1)
+                    if (oldSegment !in 0 until oldSegmentCount || oldSegment in affected) continue
+                    val newSegment = when {
+                        closed && index == 0 -> oldSegment - 1
+                        oldSegment > index -> oldSegment - 1
+                        else -> oldSegment
+                    }
+                    if (newSegment in 0 until newSegmentCount) {
+                        point.put("segment", newSegment)
+                        kept.put(point)
+                    }
                 }
             })
         }
         root.toString()
     }.getOrNull()
 
+    fun removeLastVertex(pathJson: String): String? =
+        vertices(pathJson)?.lastIndex?.let { removeVertex(pathJson, it) }
     private fun vertexArray(vertices: List<Vertex>) = JSONArray().also { array ->
         vertices.forEach { array.put(JSONArray().put(it.x).put(it.y)) }
     }
