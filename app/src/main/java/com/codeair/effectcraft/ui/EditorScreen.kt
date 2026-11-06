@@ -1100,19 +1100,11 @@ private fun PreviewStage(
             contentAlignment = Alignment.Center
         ) {
             if (bitmap != null) {
-                // Fit the frame against BOTH available axes. A height-first
-                // fillMaxHeight().aspectRatio() can request a width far beyond
-                // a narrow workspace column (especially on portrait/tablet
-                // layouts), leaving the Image semantics node outside the
-                // visible viewport and misaligning the motion-path overlay.
-                val frameAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
-                val frameWidth = if (maxHeight > 0.dp && maxWidth / maxHeight > frameAspect) {
-                    maxHeight * frameAspect
-                } else {
-                    maxWidth
-                }
-                val frameHeight = frameWidth / frameAspect
-                Box(modifier = Modifier.width(frameWidth).height(frameHeight)) {
+                // Keep the Image semantics node inside the visible preview
+                // viewport even when the composition is letterboxed. Image
+                // ContentScale.Fit and MotionPathOverlay use the same contain
+                // geometry, so the frame is never height-first oversized.
+                Box(modifier = Modifier.fillMaxSize()) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Rendered composition frame",
@@ -1130,8 +1122,7 @@ private fun PreviewStage(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                }
-            } else {
+                }            } else {
                 Column(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
