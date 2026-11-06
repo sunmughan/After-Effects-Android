@@ -990,4 +990,30 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Show motion path overlay")
             .performScrollTo().assertIsDisplayed().performClick()
     }
+
+    @Test
+    fun shapePathInspectorReversesDirectionAndKeepsPathEditable() {
+        val base = canonicalM4Layer(locked = false).compositions.single()
+        val layer = base.layers.first().copy(shapeItems = base.layers.first().shapeItems + CanonicalParamGroup(
+            name = "Custom Shape", kind = "shape", paths = listOf(CanonicalPathParam(
+                uid = 305, name = "Mask Path", pathJson = org.json.JSONObject().apply {
+                    put("vertices", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(80).put(0)).put(org.json.JSONArray().put(40).put(60)))
+                    put("in_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0)))
+                    put("out_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0)))
+                    put("closed", false)
+                }.toString()
+            ))
+        ))
+        setCanonicalEditorContent(CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer)))), CanonicalCaptures())
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Reverse canonical shape path direction Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("VERTICES · 3").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply canonical shape path Custom Shape Mask Path")
+            .performScrollTo().assertIsDisplayed()
+    }
+
 }
