@@ -784,7 +784,7 @@ class AdaptiveWorkspaceSmokeTest {
         // second once the emulator is warm.
         compose.waitUntil(timeoutMillis = 60_000) {
             runCatching {
-                compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
+                compose.onNodeWithContentDescription("EffectCraft rendered composition frame").assertIsDisplayed()
             }.isSuccess
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
