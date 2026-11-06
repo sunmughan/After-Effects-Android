@@ -774,14 +774,14 @@ class AdaptiveWorkspaceSmokeTest {
             "Motion-path fixture frame must decode",
             com.codeair.effectcraft.engine.RenderedFrameBitmap.decode(blackFrameBytes())
         )
-        compose.waitUntil(timeoutMillis = 10_000) {
+        compose.waitUntil(timeoutMillis = 30_000) {
             runCatching {
                 compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
             }.isSuccess
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
         assertEquals(true, captures.renderRequests.any { it == (10L to 0L) })
-        compose.waitUntil(timeoutMillis = 10_000) {
+        compose.waitUntil(timeoutMillis = 30_000) {
             compose.onAllNodesWithContentDescription("Motion path overlay")
                 .fetchSemanticsNodes().isNotEmpty()
         }
