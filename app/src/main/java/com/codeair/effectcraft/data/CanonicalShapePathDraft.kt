@@ -83,6 +83,16 @@ object CanonicalShapePathDraft {
         }
     }.getOrNull()
 
+    /** Move one visible Bezier handle endpoint relative to its owning vertex. */
+    fun moveTangentHandle(pathJson: String, field: String, index: Int, offset: Vertex): String? = runCatching {
+        require(offset.x.isFinite() && offset.y.isFinite())
+        val points = vertices(pathJson) ?: error("Invalid ShapePath vertices")
+        require(index in points.indices)
+        val offsets = tangentOffsets(pathJson, field)?.toMutableList() ?: error("Invalid tangent array")
+        offsets[index] = offset
+        setTangentOffsets(pathJson, field, offsets) ?: error("Invalid tangent replacement")
+    }.getOrNull()
+
     /** Updates one tangent array without disturbing vertices or other path metadata. */
     fun setTangentOffsets(pathJson: String, field: String, offsets: List<Vertex>): String? = runCatching {
         require(field == "in_tangents" || field == "out_tangents")
