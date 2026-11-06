@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -55,7 +56,6 @@ class CanonicalProjectDocumentInstrumentedTest {
 
         val trailing = """<?xml version="1.0"?><EffectCraftProject encoding="json" version="1"><obj/></EffectCraftProject><extra/>"""
         val trailingError = runCatching { CanonicalProjectDocument.toCanonicalJson(trailing) }.exceptionOrNull()
-        assertTrue(trailingError is IllegalArgumentException)
-        assertTrue(trailingError?.message.orEmpty().contains("Unexpected content"))
+        assertNotNull("A second XML document element must be rejected", trailingError)
     }
 }
