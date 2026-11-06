@@ -2447,6 +2447,7 @@ private fun CanonicalParamGroupRows(
     // Per-coordinate text drafts allow transient values such as '-' while typing; commit only finite pairs.
     var pathVertexDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var pathTangentDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var pathInsertTDrafts by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
         group.scalars.forEach { param ->
@@ -2859,6 +2860,34 @@ private fun CanonicalParamGroupRows(
                             else "Add canonical $section path keyframe ${group.name} ${param.name} frame $playheadFrame"
                         }
                     ) { Text(if (hasPathKey) "Remove key" else "Add key", color = if (hasPathKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val insertTText = pathInsertTDrafts[param.uid] ?: "0.5"
+                    val insertT = insertTText.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 && it < 1.0 }
+                    BasicTextField(
+                        value = insertTText,
+                        onValueChange = { pathInsertTDrafts = pathInsertTDrafts + (param.uid to it.take(32)) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 10.sp),
+                        modifier = Modifier.width(72.dp).background(EditorPalette.panelRaised, RoundedCornerShape(4.dp)).padding(5.dp)
+                            .semantics { contentDescription = "Canonical $section path insertion t ${group.name} ${param.name}" },
+                        decorationBox = { inner -> Box { if (insertTText.isEmpty()) Text("t (0–1)", color = EditorPalette.muted); inner() } }
+                    )
+                    TextButton(
+                        enabled = editable && editedPath != null && insertT != null &&
+                            selectedCanvasVertex in 0 until (if (pathClosed) vertices.size else vertices.size - 1) &&
+                            vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
+                        onClick = {
+                            CanonicalShapePathDraft.insertVertexOnSegment(pathForAction, selectedCanvasVertex, insertT!!)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                selectedCanvasVertex += 1
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Insert canonical $section path vertex at t ${group.name} ${param.name}" }
+                    ) { Text("Insert at t", color = EditorPalette.violet, fontSize = 10.sp) }
+                    Text("0 < t < 1", color = EditorPalette.muted, fontSize = 9.sp)
                 }
                 Text("Vertices are composition-space; handle offsets are relative. Feather stays in JSON. Key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
             }
