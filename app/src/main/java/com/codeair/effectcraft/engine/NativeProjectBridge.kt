@@ -216,6 +216,13 @@ object NativeProjectBridge {
         return runCatching { setLayerGradientPropertyEcprojNative(json, compositionId, layerId, uid, gradientJson) }.getOrNull()
     }
 
+    /** Replaces a native ShapePath parameter using its full upstream ShapePath JSON. */
+    fun setLayerPathPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, pathJson: String): String? {
+        ensureLoaded()
+        if (!available || uid < 0) return null
+        return runCatching { setLayerPathPropertyEcprojNative(json, compositionId, layerId, uid, pathJson) }.getOrNull()
+    }
+
     /** Sets a static Layer Control reference to another layer in the same composition; null clears it. */
     fun setLayerReferencePropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, targetLayerId: Long?): String? {
         ensureLoaded()
@@ -512,6 +519,7 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerGradientPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, gradientJson: String): String
+    private external fun setLayerPathPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, pathJson: String): String
 
     @JvmStatic
     private external fun setLayerReferencePropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, targetLayerId: Long): String
