@@ -437,3 +437,7 @@ Selected ShapePath anchors now have a **Corner vertex** action that zeros both t
 ### Engineering Run 12 — CI #1002 precision regression corrected (2026-11-07)
 - CI #1002 completed 322 JVM tests with one failure in smooth-tangent geometry: exact data-class equality exposed a sub-ULP normalization difference (~5e-16). Updated x/y assertions to a tight `1e-9` tolerance while preserving magnitude and metadata assertions ([dc28969f](https://github.com/sunmughan/After-Effects-Android/commit/dc28969f909450fe90f6dbb70feda83befdf1c95)).
 - Native ARM64+x86_64, Rust 59/59, Kotlin compilation and APK assembly passed in #1002; unit suite failed; emulator and cold-rebuild were skipped. Fresh exact-head CI/cold reproducibility pending. Tracker: [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
+
+
+### M2 — Bounded image-sequence import
+`SequenceAssetImport` now rejects more than 10,000 frames before reading any frame stream or changing the project manifest. Regression coverage confirms an oversized import leaves the prior entry and offline payload store untouched ([implementation](https://github.com/sunmughan/After-Effects-Android/commit/12fe8269), [test](https://github.com/sunmughan/After-Effects-Android/commit/0e9e9d0d)). Exact-head CI and cold reproducibility pending; see [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
