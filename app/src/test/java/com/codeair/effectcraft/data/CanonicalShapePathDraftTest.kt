@@ -129,4 +129,25 @@ class CanonicalShapePathDraftTest {
         assertNull(CanonicalShapePathDraft.appendVertex(full.toString()))
         assertNull(CanonicalShapePathDraft.vertices("not-json"))
     }
+
+    @Test fun closureTogglePreservesGeometryAndRejectsTooFewVertices() {
+        val source = fixture(closed = false)
+        val closed = JSONObject(CanonicalShapePathDraft.setClosed(source, true)!!)
+        assertTrue(closed.getBoolean("closed"))
+        assertEquals(3, closed.getJSONArray("vertices").length())
+        assertEquals(3, closed.getJSONArray("in_tangents").length())
+        assertEquals(3, closed.getJSONArray("out_tangents").length())
+        assertEquals("preserved", closed.getString("custom"))
+        assertEquals(1, closed.getJSONArray("feather").getJSONObject(0).getInt("segment"))
+        val opened = JSONObject(CanonicalShapePathDraft.setClosed(closed.toString(), false)!!)
+        assertFalse(opened.getBoolean("closed"))
+        assertEquals(closed.getJSONArray("vertices").toString(), opened.getJSONArray("vertices").toString())
+        val twoVertices = JSONObject(source).apply {
+            put("vertices", org.json.JSONArray().put(getJSONArray("vertices").get(0)).put(getJSONArray("vertices").get(1)))
+        }.toString()
+        assertNull(CanonicalShapePathDraft.setClosed(twoVertices, true))
+        assertNotNull(CanonicalShapePathDraft.setClosed(twoVertices, false))
+        assertNull(CanonicalShapePathDraft.setClosed("not-json", true))
+    }
+
 }
