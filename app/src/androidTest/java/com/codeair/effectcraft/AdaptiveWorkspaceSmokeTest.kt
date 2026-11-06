@@ -762,6 +762,33 @@ class AdaptiveWorkspaceSmokeTest {
     // --- M4-L10 Gap 1: roving/spatial path interpolation ---
 
     @Test
+    fun shapePathInspectorCanCloseAndReopenPathWithoutLosingDraft() {
+        val base = canonicalM4Layer(locked = false).compositions.single()
+        val layer = base.layers.first().copy(shapeItems = base.layers.first().shapeItems + CanonicalParamGroup(
+            name = "Custom Shape", kind = "shape", paths = listOf(CanonicalPathParam(
+                uid = 301, name = "Mask Path", pathJson = org.json.JSONObject().apply {
+                    put("vertices", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(80).put(0)).put(org.json.JSONArray().put(40).put(60)))
+                    put("in_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0)))
+                    put("out_tangents", org.json.JSONArray().put(org.json.JSONArray().put(0).put(0))
+                        .put(org.json.JSONArray().put(0).put(0)).put(org.json.JSONArray().put(0).put(0)))
+                    put("closed", false)
+                    put("custom", "preserved")
+                }.toString()
+            ))
+        )
+        val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
+        setCanonicalEditorContent(canonical, CanonicalCaptures())
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        val toggle = compose.onNodeWithContentDescription("Toggle canonical shape path closed Shape Custom Shape Mask Path")
+        toggle.performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Open path").performScrollTo().assertIsDisplayed()
+        toggle.performScrollTo().performClick()
+        compose.onNodeWithText("Close path").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun motionPathOverlayDrawsForSpatialPositionTrack() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalRovingLayer(), captures, frameBytes = blackFrameBytes())
