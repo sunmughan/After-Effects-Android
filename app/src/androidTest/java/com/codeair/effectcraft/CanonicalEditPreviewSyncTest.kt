@@ -453,7 +453,12 @@ class CanonicalEditPreviewSyncTest {
         val edited = applyEdit(NativeProjectBridge.setLayerPathKeyframeEcproj(source, fixture.compositionId, fixture.firstId, 90041L, 15L, replacement))
         val path = layer(canonical(edited), fixture.firstId).shapeItems.single { it.kind == "mask" }.paths.single()
         assertEquals(listOf(0, 15), path.keyframes)
-        assertEquals(15.0, JSONObject(path.pathJson).getJSONArray("vertices").getJSONArray(0).getDouble(0), 0.001)
+        // The static slot keeps the mask's original path: keying frame 15
+        // seeds a frame-0 key with it and stores the replacement at frame
+        // 15, exactly like the scalar keyframe setter. The replacement
+        // lives in the stored key, read back from the edited project.
+        assertEquals(10.0, JSONObject(path.pathJson).getJSONArray("vertices").getJSONArray(0).getDouble(0), 0.001)
+        assertEquals(15.0, pathKeyFirstVertex(edited, 90041L), 0.001)
         assertNotNull("Preview session must render the keyed ShapePath at frame 15", previewRenders(source, edited, fixture.compositionId, 15))
         assertNull("Negative frame must be rejected before JNI", NativeProjectBridge.setLayerPathKeyframeEcproj(source, fixture.compositionId, fixture.firstId, 90041L, -1L, replacement))
     }
@@ -1035,6 +1040,39 @@ class CanonicalEditPreviewSyncTest {
     private fun positionTrack(project: String, layerId: Long): List<CanonicalCurveKey> {
         return canonical(project).compositions.single().layers.first { it.id == layerId }.transformCurves["position"]
             ?: throw AssertionError("No position track in canonical metadata")
+    }
+
+    /**
+     * First vertex x of the frame-15 ShapePath key for the path property
+     * with [uid], read back from the serialized project file JSON. The
+     * inspect metadata exposes only keyframe times for paths (curve keys
+     * skip Path values), so the stored key value is verified here instead.
+     * Values serialize tagged as {"t":"Path","v":{...ShapePath...}}.
+     */
+    private fun pathKeyFirstVertex(project: String, uid: Long): Double {
+        fun findPathProperty(node: Any?): JSONObject? {
+            when (node) {
+                is JSONObject -> {
+                    if (node.optLong("uid", -1L) == uid && node.optString("match") == "path") return node
+                    val keys = node.keys()
+                    while (keys.hasNext()) {
+                        findPathProperty(node.opt(keys.next()))?.let { return it }
+                    }
+                }
+                is JSONArray -> {
+                    for (i in 0 until node.length()) {
+                        findPathProperty(node.opt(i))?.let { return it }
+                    }
+                }
+            }
+            return null
+        }
+        val property = findPathProperty(JSONObject(project))
+            ?: throw AssertionError("Mask path property must survive serialization")
+        val keys = property.getJSONArray("keys")
+        assertEquals(2, keys.length())
+        return keys.getJSONObject(1).getJSONObject("value").getJSONObject("v")
+            .getJSONArray("vertices").getJSONArray(0).getDouble(0)
     }
 
     /** Centroid of the bright (white-glyph) pixels of a rendered frame. */

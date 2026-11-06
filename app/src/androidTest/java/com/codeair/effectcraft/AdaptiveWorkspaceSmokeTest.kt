@@ -775,6 +775,14 @@ class AdaptiveWorkspaceSmokeTest {
             com.codeair.effectcraft.engine.RenderedFrameBitmap.decode(blackFrameBytes())
         )
         compose.waitUntil(timeoutMillis = 30_000) {
+            captures.renderRequests.any { it == (10L to 0L) }
+        }
+        // The first full EditorScreen composition on a cold CI emulator
+        // (first JIT of the workspace, first native session frame) can
+        // take far longer than the decode itself, so the frame gets a
+        // 60s budget; the fast path still resolves in well under a
+        // second once the emulator is warm.
+        compose.waitUntil(timeoutMillis = 60_000) {
             runCatching {
                 compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
             }.isSuccess
