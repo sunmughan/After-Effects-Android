@@ -6,6 +6,7 @@ import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
+import java.util.concurrent.CancellationException
 import java.nio.file.Files
 
 class SequenceAssetImportTest {
@@ -66,6 +67,37 @@ class SequenceAssetImportTest {
             // The frame imported before the failure stays in the content-addressed
             // store: deleting it could remove a payload another project references,
             // so garbage collection (not rollback) owns its cleanup.
+            assertEquals(1, store.list().size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cancelledSequenceRestoresPreviousEntryAndRetainsImportedPayloads() {
+        val root = Files.createTempDirectory("effectcraft-sequence-cancel").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val manifest = ProjectAssetManifest("seq-cancel")
+            val previousHash = "e".repeat(64)
+            manifest.link(13, previousHash)
+            var cancellationChecks = 0
+            val failure = runCatching {
+                SequenceAssetImport.importSequence(
+                    store,
+                    manifest,
+                    13,
+                    listOf(
+                        SequenceAssetImport.FrameInput("first.png", ByteArrayInputStream(byteArrayOf(31))),
+                        SequenceAssetImport.FrameInput("second.png", ByteArrayInputStream(byteArrayOf(32)))
+                    ),
+                    cancelRequested = { ++cancellationChecks >= 2 }
+                )
+            }.exceptionOrNull()
+            assertTrue(failure is CancellationException)
+            assertEquals(previousHash, manifest.entryFor(13)?.sha256)
+            // Cancellation rolls back only the manifest; an already imported
+            // content-addressed payload remains safe for other project references.
             assertEquals(1, store.list().size)
         } finally {
             root.deleteRecursively()

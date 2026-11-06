@@ -441,3 +441,6 @@ Selected ShapePath anchors now have a **Corner vertex** action that zeros both t
 
 ### M2 — Bounded image-sequence import
 `SequenceAssetImport` now rejects more than 10,000 frames before reading any frame stream or changing the project manifest. Regression coverage confirms an oversized import leaves the prior entry and offline payload store untouched ([implementation](https://github.com/sunmughan/After-Effects-Android/commit/12fe8269), [test](https://github.com/sunmughan/After-Effects-Android/commit/0e9e9d0d)). Exact-head CI and cold reproducibility pending; see [PHASES.md](./PHASES.md). **Release NOT COMPLETE.**
+
+
+**Automation Run 11 follow-up (2026-11-07):** CI #1009's sole API30 failure was a stale accessibility selector in the selected ShapePath vertex removal regression; the production button was present with the correct “shape path vertex” label. Test selector corrected (no assertion removed) in [cd4fbd0d](https://github.com/sunmughan/After-Effects-Android/commit/cd4fbd0dd8f3f993e174b54f7c64811a0bf94015); exact-head CI #1010 pending. M2 image-sequence import now supports cooperative cancellation between frames with manifest rollback/content-addressed payload retention; JVM cancellation regression added. See PHASES.md for evidence and remaining M0–M7 gates. **Release NOT COMPLETE.**

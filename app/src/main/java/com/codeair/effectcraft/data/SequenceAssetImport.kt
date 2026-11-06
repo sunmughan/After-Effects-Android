@@ -1,6 +1,7 @@
 package com.codeair.effectcraft.data
 
 import java.io.InputStream
+import java.util.concurrent.CancellationException
 
 /**
  * Imports an image sequence as one logical manifest entry: every frame is
@@ -24,7 +25,8 @@ object SequenceAssetImport {
         manifest: ProjectAssetManifest,
         itemId: Long,
         frames: List<FrameInput>,
-        lastKnownPath: String? = null
+        lastKnownPath: String? = null,
+        cancelRequested: () -> Boolean = { false }
     ): ProjectAssetManifest.Entry {
         ProjectAssetManifest.validateItemId(itemId)
         require(frames.isNotEmpty()) { "An image sequence needs at least one frame" }
@@ -38,6 +40,7 @@ object SequenceAssetImport {
         val previous = manifest.entryFor(itemId)
         try {
             val imported = frames.map { frame ->
+                if (cancelRequested()) throw CancellationException("Image sequence import cancelled")
                 ProjectAssetManifest.Frame(frame.name, store.import(frame.input, frame.name, frame.mimeType).sha256)
             }
             return manifest.linkSequence(itemId, imported, lastKnownPath)
