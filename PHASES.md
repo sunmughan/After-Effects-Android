@@ -1539,3 +1539,24 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - [Actions #1001](https://github.com/sunmughan/After-Effects-Android/actions/runs/42302988405) is running on branch head `88cfb22c986d3788738874245c6ffd5d45deb613` (README checkpoint). Checkout succeeded; hosted-runner disk reclamation is the active step at last inspection. No Kotlin/JVM/API30/Rust/native/cold-repro verdict yet.
 - #994 is a completed JVM-test compilation failure (missing JSONArray import) and is not a pass; correction [13de88c2](https://github.com/sunmughan/After-Effects-Android/commit/13de88c2a00ef9992ee4c288f9ba3d2ab9f5346e) and the Corner vertex implementation/tests are on #1001. #995–#1000 were cancelled/superseded by pushes; cancellation is not acceptance.
 - PR #1 remains Draft/open/unmerged. M0 historical acceptance and M1 scoped acceptance are not silently widened to current head. **Release NOT COMPLETE.**
+
+
+## Automation Run 12 — Smooth tangent regression precision correction (2026-11-07)
+
+### CI #1002 failure diagnosis
+- Inspected PR #1 (open/Draft) and Actions run [#1002](https://github.com/sunmughan/After-Effects-Android/actions/runs/42303068209), job 128185550656, plus its uploaded JUnit artifact. ARM64+x86_64 JNI, Rust 59/59, debug APK assembly and Kotlin compilation passed; unit tests completed 322 with one failure; emulator and independent cold rebuild were skipped.
+- Failure: `CanonicalShapePathDraftTest.smoothTangentHandlesFollowsNeighborChordAndPreservesLengths` line 358 compared normalized floating-point coordinates using data-class exact equality. Actual `-3.5355339059327373` differed from expected `-3.5355339059327378` by ~5e-16 (normalization ULP), not a geometry defect.
+- Corrected test to compare x/y components with tight `1e-9` tolerance; magnitude checks and neighboring metadata/handle assertions remain. No test removed or relaxed beyond appropriate floating-point precision. Commit [dc28969f](https://github.com/sunmughan/After-Effects-Android/commit/dc28969f909450fe90f6dbb70feda83befdf1c95).
+- Fresh exact-head CI is required; #1002 is a failure, not acceptance. Local Gradle remains unavailable in this runtime (network/clone restriction); Actions is the build environment.
+
+### Current acceptance ledger
+- M0: historical exact-head accepted at CI #929 SHA `dc190940`; current branch needs fresh all-green/cold-repro evidence.
+- M1: scoped editor foundation accepted historically; complete professional parity, device matrix and accessibility still open.
+- M2: JSON/XML/BOM, validation/migration and offline assets groundwork; SAF/provider, Effekseer fixtures/version compatibility and media decode/import acceptance open. Adobe `.aep` proprietary; no licensed parser.
+- M3: real Rust CPU/session frames and JNI lifecycle; GPU/Surface/device loss/recreation/software fallback parity and full media decode open.
+- M4: extensive property, transform, opacity, text, color, path/gradient and discrete Layer Control authoring; ShapePath interactive vertex/tangent operations and regressions. Full upstream interpolation/roving/spatial/effect parity and device preview acceptance remain open.
+- M5: PNG/MP4 validation/worker/progress/cancel foundations; durable process-death completion, audio mux/sync, codec/resolution/FPS/device budget and SAF destinations open.
+- M6: journal recovery/offline integrity and instrumentation budgets; physical memory/thermal/frame-time, long-session leaks/crashes, API/ABI/device and TalkBack matrix open.
+- M7: NOT accepted—current-head CI+cold reproducibility, protected signing, signed APK/AAB artifact, physical install/run, release notes/limitations and authorized merge open.
+
+**Release NOT COMPLETE.** Next checkpoint: CI triggered by `dc28969f`, inspect exact jobs/logs, fix any failure, and continue product implementation.
