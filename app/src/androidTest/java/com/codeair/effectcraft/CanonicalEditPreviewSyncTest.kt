@@ -408,6 +408,31 @@ class CanonicalEditPreviewSyncTest {
     }
 
     @Test
+    fun maskPathEditUpdatesCanonicalDataAndPreviewSession() {
+        val fixture = baseFixture()
+        val doc = JSONObject(fixture.project)
+        val items = doc.getJSONObject("items")
+        val compKey = items.keys().asSequence().first { key ->
+            items.getJSONObject(key).optJSONObject("kind")?.optString("type") == "Comp"
+        }
+        val layers = items.getJSONObject(compKey).getJSONObject("kind").getJSONArray("layers")
+        val title = (0 until layers.length()).map { layers.getJSONObject(it) }.first { it.optString("name") == "Title" }
+        val children = title.getJSONObject("props").getJSONArray("children")
+        val masks = (0 until children.length()).map { children.getJSONObject(it) }.first { it.optString("match") == "masks" }.getJSONArray("children")
+        masks.put(JSONObject("""{"node":"Group","uid":90040,"match":"mask","name":"Mask 1","children":[{"node":"Prop","uid":90041,"match":"path","name":"Mask Path","value":{"t":"Path","v":{"vertices":[[10.0,20.0],[40.0,20.0],[25.0,60.0]],"in_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"out_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"closed":false,"feather":[]}},"ui":{"kind":"Path"}}]}"""))
+        val before = doc.toString()
+        val beforePath = layer(canonical(before), fixture.firstId).shapeItems.single { it.kind == "mask" }.paths.single()
+        assertEquals(3, JSONObject(beforePath.pathJson).getJSONArray("vertices").length())
+
+        val replacement = """{"vertices":[[15.0,25.0],[50.0,25.0],[30.0,75.0]],"in_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"out_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"closed":true,"feather":[]}"""
+        val edited = applyEdit(NativeProjectBridge.setLayerPathPropertyEcproj(before, fixture.compositionId, fixture.firstId, 90041L, replacement))
+        val path = layer(canonical(edited), fixture.firstId).shapeItems.single { it.kind == "mask" }.paths.single()
+        assertEquals(3, JSONObject(path.pathJson).getJSONArray("vertices").length())
+        assertTrue(JSONObject(path.pathJson).getBoolean("closed"))
+        assertTrue(previewRenders(before, edited, fixture.compositionId, 0))
+    }
+
+    @Test
     fun shapeScalarEditUpdatesCanonicalDataAndPreviewSession() {
         val fixture = baseFixture()
         val shaped = shapedFixture(fixture)
