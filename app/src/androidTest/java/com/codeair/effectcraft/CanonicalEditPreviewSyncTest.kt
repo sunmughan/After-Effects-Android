@@ -436,6 +436,29 @@ class CanonicalEditPreviewSyncTest {
     }
 
     @Test
+    fun maskPathKeyframePersistsAtPlayheadAndRendersNativeFrame() {
+        val fixture = baseFixture()
+        val doc = JSONObject(fixture.project)
+        val items = doc.getJSONObject("items")
+        val compKey = items.keys().asSequence().first { key ->
+            items.getJSONObject(key).optJSONObject("kind")?.optString("type") == "Comp"
+        }
+        val layers = items.getJSONObject(compKey).getJSONObject("kind").getJSONArray("layers")
+        val title = (0 until layers.length()).map { layers.getJSONObject(it) }.first { it.optString("name") == "Title" }
+        val children = title.getJSONObject("props").getJSONArray("children")
+        val masks = (0 until children.length()).map { children.getJSONObject(it) }.first { it.optString("match") == "masks" }.getJSONArray("children")
+        masks.put(JSONObject("""{"node":"Group","uid":90040,"match":"mask","name":"Mask 1","children":[{"node":"Prop","uid":90041,"match":"path","name":"Mask Path","value":{"t":"Path","v":{"vertices":[[10.0,20.0],[40.0,20.0],[25.0,60.0]],"in_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"out_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"closed":false,"feather":[]}},"ui":{"kind":"Path"}}]}"""))
+        val source = doc.toString()
+        val replacement = """{"vertices":[[15.0,25.0],[50.0,25.0],[30.0,75.0]],"in_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"out_tangents":[[0.0,0.0],[0.0,0.0],[0.0,0.0]],"closed":true,"feather":[]}"""
+        val edited = applyEdit(NativeProjectBridge.setLayerPathKeyframeEcproj(source, fixture.compositionId, fixture.firstId, 90041L, 15L, replacement))
+        val path = layer(canonical(edited), fixture.firstId).shapeItems.single { it.kind == "mask" }.paths.single()
+        assertEquals(listOf(0, 15), path.keyframes)
+        assertEquals(15.0, JSONObject(path.pathJson).getJSONArray("vertices").getJSONArray(0).getDouble(0), 0.001)
+        assertNotNull("Preview session must render the keyed ShapePath at frame 15", previewRenders(source, edited, fixture.compositionId, 15))
+        assertNull("Negative frame must be rejected before JNI", NativeProjectBridge.setLayerPathKeyframeEcproj(source, fixture.compositionId, fixture.firstId, 90041L, -1L, replacement))
+    }
+
+    @Test
     fun shapeScalarEditUpdatesCanonicalDataAndPreviewSession() {
         val fixture = baseFixture()
         val shaped = shapedFixture(fixture)
