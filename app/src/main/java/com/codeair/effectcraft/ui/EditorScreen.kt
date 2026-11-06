@@ -1104,10 +1104,16 @@ private fun PreviewStage(
                 // viewport even when the composition is letterboxed. Image
                 // ContentScale.Fit and MotionPathOverlay use the same contain
                 // geometry, so the frame is never height-first oversized.
-                Box(modifier = Modifier.fillMaxSize()) {
+                // Put the preview's accessible node on a full-viewport layout
+                // container, not on Image's intrinsic/drawn bounds. ContentScale.Fit
+                // still controls pixels; the semantics bounds remain stable when
+                // the frame is letterboxed or the preview is resized.
+                Box(modifier = Modifier.fillMaxSize().semantics {
+                    contentDescription = "Rendered composition frame"
+                }) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Rendered composition frame",
+                        contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize()
                     )
