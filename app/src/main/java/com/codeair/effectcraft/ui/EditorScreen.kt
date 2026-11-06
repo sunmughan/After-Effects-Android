@@ -1095,12 +1095,24 @@ private fun PreviewStage(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Box(
+        BoxWithConstraints(
             modifier = Modifier.fillMaxSize().padding(top = 32.dp, bottom = 20.dp),
             contentAlignment = Alignment.Center
         ) {
             if (bitmap != null) {
-                Box(modifier = Modifier.fillMaxHeight().aspectRatio(bitmap.width.toFloat() / bitmap.height.toFloat())) {
+                // Fit the frame against BOTH available axes. A height-first
+                // fillMaxHeight().aspectRatio() can request a width far beyond
+                // a narrow workspace column (especially on portrait/tablet
+                // layouts), leaving the Image semantics node outside the
+                // visible viewport and misaligning the motion-path overlay.
+                val frameAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
+                val frameWidth = if (maxHeight > 0.dp && maxWidth / maxHeight > frameAspect) {
+                    maxHeight * frameAspect
+                } else {
+                    maxWidth
+                }
+                val frameHeight = frameWidth / frameAspect
+                Box(modifier = Modifier.width(frameWidth).height(frameHeight)) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Rendered composition frame",
