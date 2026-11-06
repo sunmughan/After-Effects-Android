@@ -1534,3 +1534,8 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - **M7 NOT ACCEPTED:** exact-current-head green CI + cold reproducibility, protected configurable signing, signed APK/AAB artifact, physical install/run, release notes/limitations and authorized merge/release verification outstanding.
 
 **Release NOT COMPLETE.** Next checkpoint: exact-head Actions diagnosis and continued product implementation.
+
+### Latest exact-head workflow — CI #1001
+- [Actions #1001](https://github.com/sunmughan/After-Effects-Android/actions/runs/42302988405) is running on branch head `88cfb22c986d3788738874245c6ffd5d45deb613` (README checkpoint). Checkout succeeded; hosted-runner disk reclamation is the active step at last inspection. No Kotlin/JVM/API30/Rust/native/cold-repro verdict yet.
+- #994 is a completed JVM-test compilation failure (missing JSONArray import) and is not a pass; correction [13de88c2](https://github.com/sunmughan/After-Effects-Android/commit/13de88c2a00ef9992ee4c288f9ba3d2ab9f5346e) and the Corner vertex implementation/tests are on #1001. #995–#1000 were cancelled/superseded by pushes; cancellation is not acceptance.
+- PR #1 remains Draft/open/unmerged. M0 historical acceptance and M1 scoped acceptance are not silently widened to current head. **Release NOT COMPLETE.**
