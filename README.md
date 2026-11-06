@@ -353,3 +353,9 @@ CI #779 failed before tests because the test called a private production `String
 
 ### CI correction — 2026-11-06
 CI #874 exposed an invalid measured preview size conversion at EditorScreen.kt:1565. Fixed by converting IntSize pixel width/height to Dp directly under LocalDensity ([2e7f93f3](https://github.com/sunmughan/After-Effects-Android/commit/2e7f93f3d59b223e7ce5fdf1f7c3721d562d4fd1)); exact-head CI pending. Layer Control discrete keyframes (dd5b0647) are implemented with Rust/JVM/API30 regressions. Release NOT COMPLETE; details and M0–M7 blockers in PHASES.md.
+
+
+### M4 engineering progress — canonical ShapePath editing (2026-11-06)
+- Shape/mask/effect Path parameters now expose upstream vertices, tangents, closed and feather metadata; the Android inspector can edit the complete ShapePath JSON and apply it through validated Rust/JNI canonical persistence and native preview-session refresh.
+- Regression coverage: Rust geometry/validation/metadata, JVM ShapePath parsing, API 30 canonical edit + NativeSession render. Visual vertex/Bezier handle manipulation and animated Path keys remain future work; exact-head CI is pending.
+- CI #880's Kotlin callback-scope compile failure was fixed in #0de73bcf; #881 was superseded before a verdict. New path commits require fresh CI and cold APK/native comparison. Release NOT COMPLETE; see PHASES.md for M0–M7 gates and blockers.
