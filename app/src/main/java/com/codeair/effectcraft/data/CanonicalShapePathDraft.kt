@@ -125,6 +125,43 @@ object CanonicalShapePathDraft {
         root.toString()
     }.getOrNull()
 
+    /**
+     * Reverse path direction without changing the represented cubic geometry.
+     * Vertex order is reversed and incoming/outgoing handles are exchanged;
+     * feather segment indices and local t coordinates follow the reversed
+     * segment orientation. Unknown JSON metadata is preserved.
+     */
+    fun reversePath(pathJson: String): String? = runCatching {
+        val root = JSONObject(pathJson)
+        val points = vertices(pathJson) ?: error("Invalid ShapePath vertices")
+        require(points.size in 2..MAX_VERTICES)
+        val closed = root.optBoolean("closed", false)
+        val incoming = tangentOffsets(pathJson, "in_tangents") ?: error("Invalid incoming tangents")
+        val outgoing = tangentOffsets(pathJson, "out_tangents") ?: error("Invalid outgoing tangents")
+        root.put("vertices", vertexArray(points.reversed()))
+        root.put("in_tangents", vertexArray(outgoing.reversed()))
+        root.put("out_tangents", vertexArray(incoming.reversed()))
+        val segmentCount = if (closed) points.size else points.size - 1
+        root.optJSONArray("feather")?.let { feather ->
+            for (index in 0 until feather.length()) {
+                val point = feather.getJSONObject(index)
+                val oldSegment = point.optInt("segment", -1)
+                if (oldSegment !in 0 until segmentCount) continue
+                val newSegment = if (closed) {
+                    ((points.size - 2 - oldSegment) % points.size + points.size) % points.size
+                } else {
+                    points.size - 2 - oldSegment
+                }
+                point.put("segment", newSegment)
+                if (point.has("t")) {
+                    val oldT = point.optDouble("t", Double.NaN)
+                    if (oldT.isFinite() && oldT in 0.0..1.0) point.put("t", 1.0 - oldT)
+                }
+            }
+        }
+        root.toString()
+    }.getOrNull()
+
     fun appendVertex(pathJson: String): String? = runCatching {
         val root = JSONObject(pathJson)
         val points = root.getJSONArray("vertices")
