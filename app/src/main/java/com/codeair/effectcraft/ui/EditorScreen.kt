@@ -2651,9 +2651,33 @@ private fun CanonicalParamGroupRows(
                         val points = vertexDrafts.mapNotNull { it.third }
                         if (points.size >= 2) {
                             val transform = shapePathCanvasMapping(points, size.width, size.height)
-                            for (index in 0 until points.lastIndex) {
-                                drawLine(EditorPalette.mint, transform.toCanvas(points[index]), transform.toCanvas(points[index + 1]), strokeWidth = 2f)
+                            val curve = androidx.compose.ui.graphics.Path().apply {
+                                val first = transform.toCanvas(points.first())
+                                moveTo(first.x, first.y)
+                                for (index in 0 until points.lastIndex) {
+                                    val start = points[index]
+                                    val end = points[index + 1]
+                                    val outgoing = outgoingCanvasHandles.getOrNull(index) ?: CanonicalShapePathDraft.Vertex(0.0, 0.0)
+                                    val incoming = incomingCanvasHandles.getOrNull(index + 1) ?: CanonicalShapePathDraft.Vertex(0.0, 0.0)
+                                    val control1 = transform.toCanvas(CanonicalShapePathDraft.Vertex(start.x + outgoing.x, start.y + outgoing.y))
+                                    val control2 = transform.toCanvas(CanonicalShapePathDraft.Vertex(end.x + incoming.x, end.y + incoming.y))
+                                    val endpoint = transform.toCanvas(end)
+                                    cubicTo(control1.x, control1.y, control2.x, control2.y, endpoint.x, endpoint.y)
+                                }
+                                val closed = runCatching { org.json.JSONObject(pathForAction).optBoolean("closed", false) }.getOrDefault(false)
+                                if (closed && points.size > 2) {
+                                    val start = points.last()
+                                    val end = points.first()
+                                    val outgoing = outgoingCanvasHandles.lastOrNull() ?: CanonicalShapePathDraft.Vertex(0.0, 0.0)
+                                    val incoming = incomingCanvasHandles.firstOrNull() ?: CanonicalShapePathDraft.Vertex(0.0, 0.0)
+                                    val control1 = transform.toCanvas(CanonicalShapePathDraft.Vertex(start.x + outgoing.x, start.y + outgoing.y))
+                                    val control2 = transform.toCanvas(CanonicalShapePathDraft.Vertex(end.x + incoming.x, end.y + incoming.y))
+                                    val endpoint = transform.toCanvas(end)
+                                    cubicTo(control1.x, control1.y, control2.x, control2.y, endpoint.x, endpoint.y)
+                                    close()
+                                }
                             }
+                            drawPath(curve, EditorPalette.mint, style = Stroke(width = 2f))
                             points.forEachIndexed { index, vertex ->
                                 if (index < incomingCanvasHandles.size) {
                                     val handle = incomingCanvasHandles[index]
