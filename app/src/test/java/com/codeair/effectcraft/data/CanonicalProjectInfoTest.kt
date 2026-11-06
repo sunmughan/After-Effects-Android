@@ -1,5 +1,6 @@
 package com.codeair.effectcraft.data
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,6 +16,22 @@ class CanonicalProjectInfoTest {
         assertEquals(listOf(0.1, 0.2, 0.3, 0.4), color.components)
         assertTrue(color.keys.isEmpty())
         assertEquals(listOf(0, 15), color.keyframes)
+    }
+
+    @Test
+    fun parsesGradientFillParametersAndRoundTripsStops() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"layers":[{"id":2,"name":"Shape","source":"Shape","shapeItems":[{"name":"Gradient Fill 1","kind":"gfill","scalars":[],"vecs":[],"colors":[],"gradients":[{"uid":77,"name":"Colors","colors":[[0.0,[1.0,0.0,0.0,1.0]],[1.0,[0.0,0.0,1.0,1.0]]],"opacities":[[0.0,1.0],[1.0,0.5]],"keys":[],"keyframes":[]}]}]}]}]}"""
+        val gradient = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single().shapeItems.single().gradients.single()
+        assertEquals(77L, gradient.uid)
+        assertEquals("Colors", gradient.name)
+        assertEquals(listOf(0.0, 1.0), gradient.colors.map { it.position })
+        assertEquals(listOf(1.0, 0.0, 0.0, 1.0), gradient.colors[0].components)
+        assertEquals(listOf(0.0, 0.0, 1.0, 1.0), gradient.colors[1].components)
+        assertEquals(listOf(0.0, 1.0), gradient.opacities.map { it.position })
+        assertEquals(listOf(1.0, 0.5), gradient.opacities.map { it.opacity })
+        val roundTripped = JSONObject(gradient.toJson())
+        assertEquals(2, roundTripped.getJSONArray("colors").length())
+        assertEquals(0.5, roundTripped.getJSONArray("opacities").getJSONArray(1).getDouble(1), 0.001)
     }
 
     @Test

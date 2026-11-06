@@ -103,6 +103,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.codeair.effectcraft.data.CanonicalGradientParam
 import com.codeair.effectcraft.data.CanonicalParamGroup
 import com.codeair.effectcraft.data.holdValueAt
 import com.codeair.effectcraft.data.CanonicalProjectInfo
@@ -233,6 +234,7 @@ fun EditorScreen(
     onSetCanonicalLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetCanonicalLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
+    onSetCanonicalLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
     onSetCanonicalLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
@@ -761,6 +763,7 @@ fun EditorScreen(
                     onSetLayerVecProperty = onSetCanonicalLayerVecProperty,
                     onSetLayerColorProperty = onSetCanonicalLayerColorProperty,
                     onSetLayerColorKeyframe = onSetCanonicalLayerColorKeyframe,
+                    onSetLayerGradientProperty = onSetCanonicalLayerGradientProperty,
                     onSetLayerBoolProperty = onSetCanonicalLayerBoolProperty,
                     onSetLayerPopupProperty = onSetCanonicalLayerPopupProperty,
                     onSetLayerBoolKeyframe = onSetCanonicalLayerBoolKeyframe,
@@ -1329,6 +1332,7 @@ private fun CanonicalProjectEditor(
     onSetLayerVecProperty: (Long, Long, Long, Double, Double, Double) -> Unit,
     onSetLayerColorProperty: (Long, Long, Long, Double, Double, Double, Double) -> Unit,
     onSetLayerColorKeyframe: (Long, Long, Long, Int, Double, Double, Double, Double, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
+    onSetLayerGradientProperty: (Long, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSetLayerBoolProperty: (Long, Long, Long, Boolean) -> Unit = { _, _, _, _ -> },
     onSetLayerPopupProperty: (Long, Long, Long, Int) -> Unit = { _, _, _, _ -> },
     onSetLayerBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { _, _, _, _, _, _ -> },
@@ -2139,6 +2143,7 @@ private fun CanonicalProjectEditor(
                         onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
                         onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
+                        onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
@@ -2166,6 +2171,7 @@ private fun CanonicalProjectEditor(
                         onApplyScalar = { uid, value -> onSetLayerScalarProperty(composition.id, layer.id, uid, value) },
                         onApplyVec = { uid, x, y, z -> onSetLayerVecProperty(composition.id, layer.id, uid, x, y, z) },
                         onApplyColor = { uid, r, g, b, a -> onSetLayerColorProperty(composition.id, layer.id, uid, r, g, b, a) },
+                        onApplyGradient = { uid, gradientJson -> onSetLayerGradientProperty(composition.id, layer.id, uid, gradientJson) },
                         playheadFrame = previewFrame,
                         onColorKeyframeAction = { uid, frame, r, g, b, a, remove ->
                             onSetLayerColorKeyframe(composition.id, layer.id, uid, frame, r, g, b, a, remove)
@@ -2268,6 +2274,7 @@ private fun CanonicalParamGroupRows(
     onApplyScalar: (Long, Double) -> Unit,
     onApplyVec: (Long, Double, Double, Double) -> Unit,
     onApplyColor: (Long, Double, Double, Double, Double) -> Unit,
+    onApplyGradient: (Long, String) -> Unit,
     playheadFrame: Int,
     onColorKeyframeAction: (Long, Int, Double, Double, Double, Double, Boolean) -> Unit,
     onApplyBool: (Long, Boolean) -> Unit,
@@ -2276,6 +2283,9 @@ private fun CanonicalParamGroupRows(
     onPopupKeyframeAction: (Long, Int, Int, Boolean) -> Unit
 ) {
     var expandedPopupUid by remember { mutableStateOf<Long?>(null) }
+    // Raw per-stop text drafts for gradient rows, keyed "<uid>:<stop>" for RGBA
+    // and "<uid>:<stop>:op" for opacity; validated on Apply like the color rows.
+    var gradientStopDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     groups.forEach { group ->
         Text(group.name, color = EditorPalette.text, fontSize = 12.sp)
         group.scalars.forEach { param ->
@@ -2366,6 +2376,81 @@ private fun CanonicalParamGroupRows(
                 ) { Text(if (hasColorKey) "Remove key" else "Add key", color = if (hasColorKey) EditorPalette.amber else EditorPalette.violet, fontSize = 10.sp) }
             }
             Text("RGBA · 0–1 per channel · key at frame $playheadFrame", color = EditorPalette.muted, fontSize = 9.sp)
+        }
+        group.gradients.forEach { param ->
+            val stripColors = param.colors.map { stop ->
+                val c = stop.components
+                Color(c[0].toFloat(), c[1].toFloat(), c[2].toFloat(), c[3].toFloat())
+            }
+            val stopRgba = param.colors.mapIndexed { index, stop ->
+                val text = gradientStopDrafts["${param.uid}:$index"] ?: stop.components.joinToString(", ")
+                val parsed = text.split(",").map { it.trim().toDoubleOrNull() }
+                val valid = parsed.size == 4 && parsed.all { channel -> channel?.isFinite() == true && channel in 0.0..1.0 }
+                Triple(text, parsed, valid)
+            }
+            val stopOpacity = param.opacities.mapIndexed { index, stop ->
+                val text = gradientStopDrafts["${param.uid}:$index:op"] ?: stop.opacity.toString()
+                val parsed = text.trim().toDoubleOrNull()
+                val valid = parsed?.isFinite() == true && parsed in 0.0..1.0
+                Triple(text, parsed, valid)
+            }
+            val allValid = stopRgba.all { it.third } && stopOpacity.all { it.third }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(param.name, color = EditorPalette.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Box(
+                    Modifier.weight(1.5f).height(14.dp).clip(RoundedCornerShape(4.dp))
+                        .background(if (stripColors.size > 1) Brush.linearGradient(stripColors) else EditorPalette.panelRaised)
+                        .border(BorderStroke(1.dp, EditorPalette.border), RoundedCornerShape(4.dp))
+                        .semantics { contentDescription = "Canonical $section gradient preview ${group.name} ${param.name}" }
+                )
+                TextButton(
+                    enabled = editable && allValid,
+                    onClick = {
+                        val updated = CanonicalGradientParam(
+                            uid = param.uid,
+                            name = param.name,
+                            colors = param.colors.mapIndexed { index, stop ->
+                                stop.copy(components = stopRgba[index].second.map { it!! })
+                            },
+                            opacities = param.opacities.mapIndexed { index, stop ->
+                                stop.copy(opacity = stopOpacity[index].second!!)
+                            },
+                            keys = param.keys,
+                            keyframes = param.keyframes
+                        )
+                        onApplyGradient(param.uid, updated.toJson())
+                    },
+                    modifier = Modifier.semantics { contentDescription = "Apply canonical $section gradient parameter ${group.name} ${param.name}" }
+                ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+            }
+            param.colors.forEachIndexed { index, stop ->
+                val swatch = stop.components
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        Modifier.size(22.dp).clip(RoundedCornerShape(4.dp))
+                            .background(Color(swatch[0].toFloat(), swatch[1].toFloat(), swatch[2].toFloat(), swatch[3].toFloat()))
+                            .border(BorderStroke(1.dp, EditorPalette.border), RoundedCornerShape(4.dp))
+                    )
+                    Text("@${"%.2f".format(stop.position)}", color = EditorPalette.muted, fontSize = 11.sp)
+                    BasicTextField(
+                        value = stopRgba[index].first,
+                        onValueChange = { gradientStopDrafts = gradientStopDrafts + ("${param.uid}:$index" to it.take(48)) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "Canonical $section gradient stop ${group.name} ${param.name} $index RGBA" },
+                        decorationBox = { inner -> Box { if (stopRgba[index].first.isEmpty()) Text("R, G, B, A", color = EditorPalette.muted); inner() } }
+                    )
+                    BasicTextField(
+                        value = stopOpacity.getOrNull(index)?.first ?: "",
+                        onValueChange = { gradientStopDrafts = gradientStopDrafts + ("${param.uid}:$index:op" to it.take(8)) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                        modifier = Modifier.weight(0.5f).semantics { contentDescription = "Canonical $section gradient stop ${group.name} ${param.name} $index opacity" },
+                        decorationBox = { inner -> Box { if ((stopOpacity.getOrNull(index)?.first ?: "").isEmpty()) Text("Op", color = EditorPalette.muted); inner() } }
+                    )
+                }
+            }
+            Text("Gradient · stops 0–1 · RGBA 0–1 per channel · opacity 0–1", color = EditorPalette.muted, fontSize = 9.sp)
         }
         group.bools.forEach { param ->
             // The checkbox shows the value held at the playhead (last hold

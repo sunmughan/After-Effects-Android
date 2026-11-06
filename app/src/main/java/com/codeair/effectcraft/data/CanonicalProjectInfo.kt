@@ -1,5 +1,6 @@
 package com.codeair.effectcraft.data
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -52,6 +53,35 @@ data class CanonicalColorParam(
     val keys: List<CanonicalCurveKey> = emptyList(),
     val keyframes: List<Int> = emptyList()
 )
+
+/** One color stop of a gradient parameter: position 0..1 and straight RGBA 0..1. */
+data class CanonicalGradientStop(val position: Double, val components: List<Double>)
+
+/** One opacity stop of a gradient parameter: position 0..1 and opacity 0..1. */
+data class CanonicalGradientOpacityStop(val position: Double, val opacity: Double)
+
+/** One editable gradient parameter addressed by native uid; its keys interpolate. */
+data class CanonicalGradientParam(
+    val uid: Long,
+    val name: String,
+    val colors: List<CanonicalGradientStop>,
+    val opacities: List<CanonicalGradientOpacityStop>,
+    val keys: List<CanonicalCurveKey> = emptyList(),
+    val keyframes: List<Int> = emptyList()
+) {
+    /** Serializes the current stops back to the gradient JSON the native setter accepts. */
+    fun toJson(): String {
+        val colorsJson = JSONArray()
+        colors.forEach { stop ->
+            colorsJson.put(JSONArray().put(stop.position).put(JSONArray().apply {
+                stop.components.forEach { put(it) }
+            }))
+        }
+        val opacitiesJson = JSONArray()
+        opacities.forEach { stop -> opacitiesJson.put(JSONArray().put(stop.position).put(stop.opacity)) }
+        return JSONObject().put("colors", colorsJson).put("opacities", opacitiesJson).toString()
+    }
+}
 
 /** One editable checkbox (Bool) parameter addressed by native uid; its keys are hold keys. */
 data class CanonicalBoolParam(
@@ -107,6 +137,7 @@ data class CanonicalParamGroup(
     val scalars: List<CanonicalScalarParam> = emptyList(),
     val vecs: List<CanonicalVecParam> = emptyList(),
     val colors: List<CanonicalColorParam> = emptyList(),
+    val gradients: List<CanonicalGradientParam> = emptyList(),
     val bools: List<CanonicalBoolParam> = emptyList(),
     val popups: List<CanonicalPopupParam> = emptyList()
 )
@@ -401,6 +432,36 @@ data class CanonicalProjectInfo(
                         keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
                     )
                 }
+                val gradientArray = group.optJSONArray("gradients")
+                val gradients = (0 until (gradientArray?.length() ?: 0)).map { gradientIndex ->
+                    val param = gradientArray!!.getJSONObject(gradientIndex)
+                    val stopArray = param.optJSONArray("colors")
+                    val stops = (0 until (stopArray?.length() ?: 0)).mapNotNull { stopIndex ->
+                        val stop = stopArray!!.optJSONArray(stopIndex) ?: return@mapNotNull null
+                        val componentsArray = stop.optJSONArray(1)
+                        val components = (0 until (componentsArray?.length() ?: 0)).map { componentsArray!!.getDouble(it) }
+                        if (components.size != 4) null else CanonicalGradientStop(
+                            position = stop.optDouble(0, 0.0),
+                            components = components
+                        )
+                    }
+                    val opacityArray = param.optJSONArray("opacities")
+                    val opacityStops = (0 until (opacityArray?.length() ?: 0)).map { opacityIndex ->
+                        val stop = opacityArray!!.optJSONArray(opacityIndex)
+                        CanonicalGradientOpacityStop(
+                            position = stop?.optDouble(0, 0.0) ?: 0.0,
+                            opacity = stop?.optDouble(1, 1.0) ?: 1.0
+                        )
+                    }
+                    CanonicalGradientParam(
+                        uid = param.getLong("uid"),
+                        name = param.optString("name", "Gradient"),
+                        colors = stops,
+                        opacities = opacityStops,
+                        keys = parseCurveKeys(param.optJSONArray("keys")),
+                        keyframes = parseFrameIndices(param.optJSONArray("keyframes"))
+                    )
+                }
                 val boolArray = group.optJSONArray("bools")
                 val bools = (0 until (boolArray?.length() ?: 0)).map { boolIndex ->
                     val param = boolArray!!.getJSONObject(boolIndex)
@@ -433,6 +494,7 @@ data class CanonicalProjectInfo(
                         scalars = scalars,
                         vecs = vecs,
                         colors = colors,
+                        gradients = gradients,
                         bools = bools,
                         popups = popups
                     )

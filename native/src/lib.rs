@@ -5,7 +5,7 @@ use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use serde_json::json;
 use effectcraft_project::{ItemId, ItemKind, LayerId, Node, Value};
-use effectcraft_project::keyframe::{retime_roving, Ease, Interp};
+use effectcraft_project::keyframe::{retime_roving, Ease, Gradient, Interp};
 use effectcraft_gpu::Gpu;
 use effectcraft_media::MediaPool;
 use effectcraft_render::{Accelerator, Backend, LayerCache, RenderOpts, Renderer};
@@ -757,6 +757,7 @@ fn collect_param_items(
         let mut scalars = Vec::new();
         let mut vecs = Vec::new();
         let mut colors = Vec::new();
+        let mut gradients = Vec::new();
         let mut bools = Vec::new();
         let mut popups = Vec::new();
         for prop_child in &child_group.children {
@@ -794,6 +795,21 @@ fn collect_param_items(
                         "keyframes": keyframes
                     }));
                 },
+                Value::Gradient(value) => {
+                    let mut keyframes = property.keys.iter()
+                        .map(|key| key.time.to_rational_floor(frame_rate.den, frame_rate.num))
+                        .collect::<Vec<_>>();
+                    keyframes.sort_unstable();
+                    keyframes.dedup();
+                    gradients.push(json!({
+                        "uid": property.uid,
+                        "name": property.name,
+                        "colors": value.colors.iter().map(|(position, rgba)| json!([position, rgba])).collect::<Vec<_>>(),
+                        "opacities": value.opacities.iter().map(|(position, opacity)| json!([position, opacity])).collect::<Vec<_>>(),
+                        "keys": curve_keys_json(property, frame_rate),
+                        "keyframes": keyframes
+                    }));
+                },
                 Value::Bool(value) if matches!(&property.ui, ParamUi::Checkbox) && !property.static_only => {
                     bools.push(json!({
                         "uid": property.uid,
@@ -820,13 +836,14 @@ fn collect_param_items(
                 _ => {}
             }
         }
-        if !scalars.is_empty() || !vecs.is_empty() || !colors.is_empty() || !bools.is_empty() || !popups.is_empty() {
+        if !scalars.is_empty() || !vecs.is_empty() || !colors.is_empty() || !gradients.is_empty() || !bools.is_empty() || !popups.is_empty() {
             out.push(json!({
                 "name": name,
                 "kind": child_group.match_id,
                 "scalars": scalars,
                 "vecs": vecs,
                 "colors": colors,
+                "gradients": gradients,
                 "bools": bools,
                 "popups": popups
             }));
@@ -1716,6 +1733,87 @@ fn set_layer_color_keyframe(
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Parses a gradient JSON object `{"colors": [[position, [r, g, b, a]], ...],
+/// "opacities": [[position, opacity], ...]}` into an upstream `Gradient`.
+/// Positions and opacities must be finite and within 0..=1, color channels
+/// finite and within 0..=1, and both stop lists non-empty. Stops are sorted
+/// by position so the stored gradient is deterministic.
+fn parse_gradient_json(value: &serde_json::Value) -> Result<Gradient, String> {
+    let colors_value = value.get("colors").and_then(|v| v.as_array())
+        .ok_or_else(|| "Gradient must have a \"colors\" array".to_owned())?;
+    if colors_value.is_empty() {
+        return Err("Gradient must have at least one color stop".into());
+    }
+    let mut colors: Vec<(f64, [f32; 4])> = Vec::with_capacity(colors_value.len());
+    for stop in colors_value {
+        let pair = stop.as_array().ok_or_else(|| "Gradient color stop must be [position, [r, g, b, a]]".to_owned())?;
+        if pair.len() != 2 {
+            return Err("Gradient color stop must be [position, [r, g, b, a]]".into());
+        }
+        let position = pair[0].as_f64().ok_or_else(|| "Gradient stop position must be a number".to_owned())?;
+        if !position.is_finite() || !(0.0..=1.0).contains(&position) {
+            return Err("Gradient stop position must be finite and between 0 and 1".into());
+        }
+        let channels = pair[1].as_array().ok_or_else(|| "Gradient color stop must be [position, [r, g, b, a]]".to_owned())?;
+        if channels.len() != 4 {
+            return Err("Gradient color stop must carry four channels".into());
+        }
+        let mut rgba = [0.0f32; 4];
+        for (index, channel) in channels.iter().enumerate() {
+            let component = channel.as_f64().ok_or_else(|| "Gradient color channels must be numbers".to_owned())?;
+            if !component.is_finite() || !(0.0..=1.0).contains(&component) {
+                return Err("Gradient color components must be finite and between 0 and 1".into());
+            }
+            rgba[index] = component as f32;
+        }
+        colors.push((position, rgba));
+    }
+    let opacities_value = value.get("opacities").and_then(|v| v.as_array())
+        .ok_or_else(|| "Gradient must have an \"opacities\" array".to_owned())?;
+    if opacities_value.is_empty() {
+        return Err("Gradient must have at least one opacity stop".into());
+    }
+    let mut opacities: Vec<(f64, f32)> = Vec::with_capacity(opacities_value.len());
+    for stop in opacities_value {
+        let pair = stop.as_array().ok_or_else(|| "Gradient opacity stop must be [position, opacity]".to_owned())?;
+        if pair.len() != 2 {
+            return Err("Gradient opacity stop must be [position, opacity]".into());
+        }
+        let position = pair[0].as_f64().ok_or_else(|| "Gradient stop position must be a number".to_owned())?;
+        let opacity = pair[1].as_f64().ok_or_else(|| "Gradient opacity must be a number".to_owned())?;
+        if !position.is_finite() || !(0.0..=1.0).contains(&position) {
+            return Err("Gradient stop position must be finite and between 0 and 1".into());
+        }
+        if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+            return Err("Gradient opacity must be finite and between 0 and 1".into());
+        }
+        opacities.push((position, opacity as f32));
+    }
+    colors.sort_by(|a, b| a.0.total_cmp(&b.0));
+    opacities.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Ok(Gradient { colors, opacities })
+}
+
+/// Sets the static value of a gradient (Gradient) parameter from its JSON
+/// object (see `parse_gradient_json`). Mirrors `set_layer_color_property`:
+/// the whole gradient is replaced at frame zero.
+fn set_layer_gradient_property(
+    source: &str, composition_id: u64, layer_id: u64, uid: u64,
+    gradient_json: &str,
+) -> Result<String, String> {
+    let parsed: serde_json::Value = serde_json::from_str(gradient_json)
+        .map_err(|error| format!("Invalid gradient: {error}"))?;
+    let gradient = parse_gradient_json(&parsed)?;
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let property = load_param_property_mut(&mut project, composition_id, layer_id, uid)?;
+    if !matches!(&property.value, Value::Gradient(_)) {
+        return Err(format!("Parameter {uid} is not a gradient"));
+    }
+    property.set_value_at(Tick::ZERO, Value::Gradient(gradient));
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 /// Loads one shape-item or effect parameter for mutation, addressed by
 /// its native uid. Shared by the bool/popup setters so the lookup (and
 /// the locked-layer rejection) lives in exactly one place.
@@ -2217,6 +2315,31 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_s
     } else {
         set_layer_color_property(&source, composition_id as u64, layer_id as u64, uid as u64,
             red as f64, green as f64, blue as f64, alpha as f64)
+    };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerGradientPropertyEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, uid: jlong,
+    gradient_json: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let gradient_json: String = match env.get_string(&gradient_json) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || uid < 0 {
+        Err("Composition, layer and parameter IDs must be non-negative".to_owned())
+    } else {
+        set_layer_gradient_property(&source, composition_id as u64, layer_id as u64, uid as u64, &gradient_json)
     };
     let output = match result {
         Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
@@ -4263,6 +4386,56 @@ mod tests {
         assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, size_uid, 10.0).is_err());
         assert!(set_layer_vec_property(&source, comp_id.0, shape_id, roundness_uid, 1.0, 2.0, 0.0).is_err());
         assert!(set_layer_scalar_property(&source, comp_id.0, shape_id, 999_999, 10.0).is_err());
+    }
+
+    #[test]
+    fn canonical_gradient_params_exposed_and_updated_by_property_uid() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource};
+        use effectcraft_project::keyframe::Gradient;
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let mut shape_layer = build::layer(&mut project, &comp, "Shape", LayerSource::Shape, (640, 360), None);
+        let shape_id = shape_layer.id.0;
+        let mut next_id = 10_000u64;
+        let mut ids = build::Ids(&mut next_id);
+        let gradient = Gradient {
+            colors: vec![(0.0, [1.0, 0.0, 0.0, 1.0]), (1.0, [0.0, 0.0, 1.0, 1.0])],
+            opacities: vec![(0.0, 1.0), (1.0, 0.5)],
+        };
+        let gfill = build::shape_gradient_fill(&mut ids, false, [0.0, 0.0], [200.0, 0.0], gradient);
+        shape_layer.props.sub_mut("contents").unwrap().children.push(gfill.into());
+        project.comp_mut(comp_id).unwrap().layers.push(shape_layer);
+        let source = project.to_file_json().unwrap();
+
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&source).unwrap()).unwrap();
+        let shape_meta = &metadata["compositions"][0]["layers"][0];
+        let gfill_item = shape_meta["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "gfill").expect("gradient fill shape item must be exposed");
+        let colors_param = gfill_item["gradients"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Colors").expect("gradient Colors param must be exposed");
+        let colors_uid = colors_param["uid"].as_u64().unwrap();
+        assert_eq!(colors_param["colors"], json!([[0.0, [1.0, 0.0, 0.0, 1.0]], [1.0, [0.0, 0.0, 1.0, 1.0]]]));
+        assert_eq!(colors_param["opacities"], json!([[0.0, 1.0], [1.0, 0.5]]));
+
+        let updated = set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid,
+            r#"{"colors": [[0.0, [0.0, 1.0, 0.0, 1.0]], [0.5, [1.0, 1.0, 0.0, 1.0]], [1.0, [0.0, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 1.0], [1.0, 1.0]]}"#).unwrap();
+        let updated_meta: serde_json::Value = serde_json::from_str(&inspect_project(&updated).unwrap()).unwrap();
+        let updated_param = updated_meta["compositions"][0]["layers"][0]["shapeItems"].as_array().unwrap().iter()
+            .find(|item| item["kind"] == "gfill").unwrap()["gradients"].as_array().unwrap().iter()
+            .find(|param| param["name"] == "Colors").unwrap();
+        assert_eq!(updated_param["colors"], json!([[0.0, [0.0, 1.0, 0.0, 1.0]], [0.5, [1.0, 1.0, 0.0, 1.0]], [1.0, [0.0, 0.0, 0.0, 1.0]]]));
+        assert_eq!(updated_param["opacities"], json!([[0.0, 1.0], [1.0, 1.0]]));
+
+        assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid, "not json").is_err());
+        assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid, r#"{"colors": [], "opacities": []}"#).is_err());
+        assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid, r#"{"colors": [[0.0, [1.5, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 1.0]]}"#).is_err());
+        assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid, r#"{"colors": [[2.0, [0.0, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 1.0]]}"#).is_err());
+        assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, colors_uid, r#"{"colors": [[0.0, [0.0, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 2.0]]}"#).is_err());
+        assert!(set_layer_gradient_property(&source, comp_id.0, shape_id, 999_999, r#"{"colors": [[0.0, [0.0, 0.0, 0.0, 1.0]]], "opacities": [[0.0, 1.0]]}"#).is_err());
     }
 
     #[test]

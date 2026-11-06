@@ -202,6 +202,13 @@ object NativeProjectBridge {
         return runCatching { setLayerColorPropertyEcprojNative(json, compositionId, layerId, uid, red, green, blue, alpha) }.getOrNull()
     }
 
+    /** Sets a gradient (Gradient) shape-item or effect parameter by stable native uid; the gradient is a JSON object. Rejected by native when the parameter is not a gradient or the JSON is invalid. */
+    fun setLayerGradientPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, gradientJson: String): String? {
+        ensureLoaded()
+        if (!available || uid < 0) return null
+        return runCatching { setLayerGradientPropertyEcprojNative(json, compositionId, layerId, uid, gradientJson) }.getOrNull()
+    }
+
     /** Sets a checkbox (Bool) shape-item or effect parameter by stable native uid. Rejected by native when the parameter already has keys. */
     fun setLayerBoolPropertyEcproj(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String? {
         ensureLoaded()
@@ -478,6 +485,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun setLayerColorPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, red: Double, green: Double, blue: Double, alpha: Double): String
+
+    @JvmStatic
+    private external fun setLayerGradientPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, gradientJson: String): String
 
     @JvmStatic
     private external fun setLayerBoolPropertyEcprojNative(json: String, compositionId: Long, layerId: Long, uid: Long, value: Boolean): String
