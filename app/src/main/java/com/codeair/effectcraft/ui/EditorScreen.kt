@@ -2796,6 +2796,18 @@ private fun CanonicalParamGroupRows(
                         modifier = Modifier.semantics { contentDescription = "Toggle canonical $section path closed ${group.name} ${param.name}" }
                     ) { Text(if (pathClosed) "Open path" else "Close path", color = EditorPalette.violet, fontSize = 10.sp) }
                     TextButton(
+                        enabled = editable && editedPath != null && selectedCanvasVertex in 0 until (if (pathClosed) vertices.size else vertices.size - 1) && vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
+                        onClick = {
+                            CanonicalShapePathDraft.insertVertexOnSegment(pathForAction, selectedCanvasVertex, 0.5)?.let { updated ->
+                                pathDrafts = pathDrafts + (param.uid to updated)
+                                selectedCanvasVertex += 1
+                                pathVertexDrafts = pathVertexDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                                pathTangentDrafts = pathTangentDrafts.filterNot { entry -> entry.key.startsWith("${param.uid}:") }
+                            }
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Insert canonical $section path vertex after selected point ${group.name} ${param.name}" }
+                    ) { Text("Insert midpoint", color = EditorPalette.violet, fontSize = 10.sp) }
+                    TextButton(
                         enabled = editable && editedPath != null && vertices.size < CanonicalShapePathDraft.MAX_VERTICES,
                         onClick = {
                             CanonicalShapePathDraft.appendVertex(pathForAction)?.let { updated ->
