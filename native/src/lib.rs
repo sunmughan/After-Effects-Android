@@ -891,6 +891,20 @@ fn layer_param_items(
     items
 }
 
+/// Shape-item groups for the inspector: the "contents" groups plus the
+/// "masks" groups, so mask paths (Value::Path) are exposed and editable
+/// in the same list. Masks live in their own top-level group upstream,
+/// so contents alone never sees them; without this merge the mask path
+/// test finds no mask group in shapeItems at all.
+fn layer_shape_items(
+    layer: &effectcraft_project::Layer,
+    frame_rate: effectcraft_time::FrameRate,
+) -> Vec<serde_json::Value> {
+    let mut items = layer_param_items(layer, "contents", frame_rate);
+    items.extend(layer_param_items(layer, "masks", frame_rate));
+    items
+}
+
 fn layer_text_params(layer: &effectcraft_project::Layer, frame_rate: effectcraft_time::FrameRate) -> Option<serde_json::Value> {
     let text_group = layer.props.sub("text")?;
     let property = text_group.prop("sourceText")?;
@@ -1102,7 +1116,7 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "locked": layer.switches.locked,
                 "threeD": layer.switches.three_d,
                 "text": layer_text_params(layer, comp.frame_rate),
-                "shapeItems": layer_param_items(layer, "contents", comp.frame_rate),
+                "shapeItems": layer_shape_items(layer, comp.frame_rate),
                 "effects": layer_param_items(layer, "effects", comp.frame_rate)
             })).collect();
             json!({
