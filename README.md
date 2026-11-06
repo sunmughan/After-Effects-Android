@@ -1,3 +1,5 @@
+**M4 Bezier tangent editing — committed `fc8e12d5`:** incoming/outgoing relative handle X/Y controls are now available per ShapePath vertex; updates are finite-validated, positional, metadata-preserving and feed the canonical Apply/Key/preview path. JVM regressions cover valid values, absent arrays, malformed lengths and non-finite rejection. See [PHASES.md](./PHASES.md) for CI evidence and remaining M4/M0–M7 gates.
+
 **M4 Bezier tangent editing (2026-11-06):** added per-vertex incoming/outgoing handle offset controls and strict canonical JSON validation, with JVM regression coverage. This is numeric handle editing; interactive canvas handles/interpolation parity remain open. Commit and exact-head CI are pending in this run.
 
 **M4 ShapePath vertex-test refinement:** corrected the feather regression to target the segment created by the appended final vertex, so removal must actually prune it. The implementation is unchanged; a fresh exact-head CI is pending (previous queued run superseded).
