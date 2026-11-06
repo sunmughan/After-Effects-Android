@@ -21,6 +21,15 @@ object CanonicalShapePathDraft {
         }
     }.getOrNull()
 
+    /** Move one vertex while preserving positional tangent and feather metadata. */
+    fun moveVertex(pathJson: String, index: Int, vertex: Vertex): String? = runCatching {
+        require(vertex.x.isFinite() && vertex.y.isFinite())
+        val current = vertices(pathJson)!!.toMutableList()
+        require(index in current.indices)
+        current[index] = vertex
+        setVertices(pathJson, current) ?: error("Invalid ShapePath vertex replacement")
+    }.getOrNull()
+
     fun setVertices(pathJson: String, vertices: List<Vertex>): String? = runCatching {
         require(vertices.isNotEmpty() && vertices.size <= MAX_VERTICES)
         require(vertices.all { it.x.isFinite() && it.y.isFinite() })
