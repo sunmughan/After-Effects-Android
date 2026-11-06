@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.Density
 import com.codeair.effectcraft.data.CanonicalBoolParam
@@ -842,7 +843,7 @@ class AdaptiveWorkspaceSmokeTest {
         compose.onNodeWithContentDescription("Canonical shape path insertion t Custom Shape Mask Path")
             .performScrollTo().performTouchInput { click() }
         compose.onNodeWithContentDescription("Canonical shape path insertion t Custom Shape Mask Path")
-            .performTextInput("0.25")
+            .performTextClearance().performTextInput("0.25")
         compose.onNodeWithContentDescription("Insert canonical shape path vertex at t Custom Shape Mask Path")
             .performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("VERTICES · 4").performScrollTo().assertIsDisplayed()
