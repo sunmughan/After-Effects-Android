@@ -73,6 +73,29 @@ class SequenceAssetImportTest {
     }
 
     @Test
+    fun rejectsOversizedSequenceBeforeConsumingAnyFrames() {
+        val root = Files.createTempDirectory("effectcraft-sequence-limit").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val manifest = ProjectAssetManifest("seq-limit")
+            val previousHash = "a".repeat(64)
+            manifest.link(7, previousHash)
+            val frames = (0..SequenceAssetImport.MAX_SEQUENCE_FRAMES).map { index ->
+                SequenceAssetImport.FrameInput("frame-$index.png", ByteArrayInputStream(byteArrayOf(index.toByte())))
+            }
+            val failure = runCatching {
+                SequenceAssetImport.importSequence(store, manifest, 7, frames)
+            }.exceptionOrNull()
+            assertTrue(failure is IllegalArgumentException)
+            assertTrue(failure?.message.orEmpty().contains("${SequenceAssetImport.MAX_SEQUENCE_FRAMES} frames"))
+            assertEquals(previousHash, manifest.entryFor(7)?.sha256)
+            assertTrue(store.list().isEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun rejectsEmptyOrDuplicateFrameNamesBeforeImporting() {
         val root = Files.createTempDirectory("effectcraft-sequence-bad").toFile()
         try {
