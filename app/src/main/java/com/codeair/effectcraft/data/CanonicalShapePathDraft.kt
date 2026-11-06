@@ -2,6 +2,7 @@ package com.codeair.effectcraft.data
 
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.roundToLong
 
 /**
  * Safe, local ShapePath vertex-list operations for the canonical inspector.
@@ -126,6 +127,17 @@ object CanonicalShapePathDraft {
     }.getOrNull()
 
     /**
+     * Mirror a 0..1 segment parameter. 1.0 - t is not exact in binary
+     * floating point (1.0 - 0.8 == 0.19999999999999996), which breaks the
+     * documented lossless-reversal guarantee: reversing twice must return
+     * the original JSON. Normalising to 9 decimal places restores an exact
+     * round-trip for all realistic inputs while staying far below any UI
+     * or rendering precision.
+     */
+    private fun mirroredT(t: Double): Double =
+        ((1.0 - t) * 1_000_000_000.0).roundToLong() / 1_000_000_000.0
+
+    /**
      * Reverse path direction without changing the represented cubic geometry.
      * Vertex order is reversed and incoming/outgoing handles are exchanged;
      * feather segment indices and local t coordinates follow the reversed
@@ -155,7 +167,7 @@ object CanonicalShapePathDraft {
                 point.put("segment", newSegment)
                 if (point.has("t")) {
                     val oldT = point.optDouble("t", Double.NaN)
-                    if (oldT.isFinite() && oldT in 0.0..1.0) point.put("t", 1.0 - oldT)
+                    if (oldT.isFinite() && oldT in 0.0..1.0) point.put("t", mirroredT(oldT))
                 }
             }
         }
