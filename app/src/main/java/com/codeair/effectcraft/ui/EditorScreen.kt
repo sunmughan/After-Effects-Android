@@ -2714,7 +2714,11 @@ private fun CanonicalParamGroupRows(
                 vertices.forEachIndexed { index, vertex ->
                     val (xText, yText, _) = vertexDrafts[index]
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("P${index + 1}", color = EditorPalette.muted, fontSize = 10.sp, modifier = Modifier.width(28.dp))
+                        Text(
+                            "P${index + 1}", color = EditorPalette.muted, fontSize = 10.sp,
+                            modifier = Modifier.width(28.dp).clickable(enabled = editable) { selectedCanvasVertex = index }
+                                .semantics { contentDescription = "Select canonical $section path segment start P${index + 1} ${group.name} ${param.name}" }
+                        )
                         BasicTextField(
                             value = xText,
                             onValueChange = { pathVertexDrafts = pathVertexDrafts + ("${param.uid}:${index}:x" to it.take(32)) },
