@@ -22,6 +22,7 @@ import com.codeair.effectcraft.data.CanonicalCompositionInfo
 import com.codeair.effectcraft.data.CanonicalPopupParam
 import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
+import com.codeair.effectcraft.data.CanonicalPathParam
 import com.codeair.effectcraft.data.CanonicalParamGroup
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalScalarParam
@@ -777,7 +778,7 @@ class AdaptiveWorkspaceSmokeTest {
                     put("custom", "preserved")
                 }.toString()
             ))
-        )
+        ))
         val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
         setCanonicalEditorContent(canonical, CanonicalCaptures())
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
@@ -803,7 +804,7 @@ class AdaptiveWorkspaceSmokeTest {
                     put("closed", false)
                 }.toString()
             ))
-        )
+        ))
         val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
         setCanonicalEditorContent(canonical, CanonicalCaptures())
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
