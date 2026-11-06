@@ -1560,3 +1560,9 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - M7: NOT accepted—current-head CI+cold reproducibility, protected signing, signed APK/AAB artifact, physical install/run, release notes/limitations and authorized merge open.
 
 **Release NOT COMPLETE.** Next checkpoint: CI triggered by `dc28969f`, inspect exact jobs/logs, fix any failure, and continue product implementation.
+
+
+### Run 12 follow-up — M2 bounded image-sequence import
+- Added `SequenceAssetImport.MAX_SEQUENCE_FRAMES = 10_000`; reject oversized sequence lists before validating/consuming any stream or mutating the manifest. This bounds per-import manifest/work overhead and avoids partial payload ingestion for obviously unbounded sequence input. Implementation [12fe8269](https://github.com/sunmughan/After-Effects-Android/commit/12fe826969566ba6da261a015bc4caa1143cd5e8).
+- JVM regression builds 10,001 named frames and verifies rejection, previous manifest entry preservation and empty payload store (no frame stream consumed/imported): [0e9e9d0d](https://github.com/sunmughan/After-Effects-Android/commit/0e9e9d0dd06f72365484c5b7a2be927064be0b07). This is a conservative offline asset safety bound, not a format compatibility claim.
+- Latest source head `0e9e9d0d`; fresh exact-head CI and independent cold APK/native comparison pending. Earlier #1002 failed only a precision-sensitive smoothing test, corrected in [dc28969f](https://github.com/sunmughan/After-Effects-Android/commit/dc28969f909450fe90f6dbb70feda83befdf1c95); #1003/#1005 were superseded or remain in progress on older heads, not current acceptance.
