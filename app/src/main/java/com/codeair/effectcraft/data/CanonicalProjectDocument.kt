@@ -72,7 +72,6 @@ object CanonicalProjectDocument {
 
     private fun parseXmlProject(xml: String): JSONObject {
         val parser = KXmlParser()
-        parser.setFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL, false)
         parser.setInput(StringReader(xml))
         parser.nextTag()
         require(parser.eventType == XmlPullParser.START_TAG && parser.name == XML_ROOT) {
