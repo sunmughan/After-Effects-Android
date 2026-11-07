@@ -9,6 +9,16 @@ Last updated: 2026-11-02
 - A starter 1080 × 1920 composition with selectable layer rows.
 - Working layer add/select/remove/reorder interactions, visibility toggle, and editable opacity property.
 - Timeline scrubbing and a lightweight transport/playhead simulation.
+- Clip trim and split on the draft timeline: each layer holds clips
+  (`ClipDocument`: half-open timeline `[start, end)` plus source
+  in/out points, timeline length always equal to the source span).
+  Trimming a timeline end shifts the matching source point; splitting
+  at the playhead divides one clip into two preserving coverage
+  exactly. Clips serialize into `.efx-draft` documents and the
+  recovery journal, and trim/split go through the draft undo stack.
+  A layer with no clips covers the full composition (legacy
+  documents). A frame no visible layer covers is a gap: exports
+  render it as the background/empty frame, never a stale frame.
 - Local draft persistence in app-private storage with temp-file replacement.
 - No network permission and no cloud dependency.
 
