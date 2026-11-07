@@ -1081,7 +1081,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "Cancel the frame export before starting a sequence"
                 } else {
                     runCatching {
-                        val settings = RenderQueueSettings(width, height, fps, startFrame, endFrame)
+                        // PNG ZIP is an explicit choice here, never the
+                        // app-wide default: the default is MP4 H.264.
+                        val settings = RenderQueueSettings(
+                            width, height, fps, startFrame, endFrame, RenderOutputFormat.PNG_SEQUENCE_ZIP
+                        )
                         RenderQueuePlan.create(settings, composition.durationFrames)
                         pendingSequenceSettings = settings
                         pendingSequenceCompositionId = composition.id

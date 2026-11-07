@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import com.codeair.effectcraft.MainActivity
 import com.codeair.effectcraft.data.EcprojDocumentStore
 import com.codeair.effectcraft.data.ForegroundPngSequenceExport
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
 import com.codeair.effectcraft.data.SafDocumentWriter
@@ -81,12 +82,15 @@ class PngSequenceExportService : Service() {
                 if (isRunning) return START_NOT_STICKY
                 val destination = intent.getStringExtra(EXTRA_DESTINATION)?.let(Uri::parse)
                 val compositionId = intent.getLongExtra(EXTRA_COMPOSITION_ID, -1L)
+                // This service exports PNG sequences only, so the format is
+                // explicit here: the app-wide default is MP4 H.264.
                 val settings = RenderQueueSettings(
                     width = intent.getIntExtra(EXTRA_WIDTH, 0),
                     height = intent.getIntExtra(EXTRA_HEIGHT, 0),
                     frameRate = intent.getIntExtra(EXTRA_FPS, 0),
                     startFrame = intent.getIntExtra(EXTRA_START_FRAME, 0),
-                    endFrame = intent.getIntExtra(EXTRA_END_FRAME, -1)
+                    endFrame = intent.getIntExtra(EXTRA_END_FRAME, -1),
+                    outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP
                 )
                 val compositionFrames = intent.getIntExtra(EXTRA_COMPOSITION_FRAMES, 0)
                 if (destination == null || compositionId < 0L) {

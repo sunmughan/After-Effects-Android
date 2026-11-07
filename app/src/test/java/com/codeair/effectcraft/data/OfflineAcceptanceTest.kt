@@ -50,7 +50,8 @@ class OfflineAcceptanceTest {
 
             // Export: a 3-frame sequence writes a local ZIP only.
             val settings = RenderQueueSettings(
-                width = 320, height = 180, frameRate = 30, startFrame = 0, endFrame = 2
+                width = 320, height = 180, frameRate = 30, startFrame = 0, endFrame = 2,
+                outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP
             )
             val plan = RenderQueuePlan.create(settings)
             val output = ByteArrayOutputStream()

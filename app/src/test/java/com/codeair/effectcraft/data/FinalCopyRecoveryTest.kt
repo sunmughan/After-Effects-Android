@@ -29,7 +29,7 @@ import org.junit.Test
  */
 class FinalCopyRecoveryTest {
     private fun plan(start: Int = 0, end: Int = 2) =
-        RenderQueuePlan.create(RenderQueueSettings(320, 320, 24, start, end))
+        RenderQueuePlan.create(RenderQueueSettings(320, 320, 24, start, end, RenderOutputFormat.PNG_SEQUENCE_ZIP))
 
     private fun png(width: Int = 320, height: Int = 320): ByteArray =
         ByteArray(24).also { bytes ->

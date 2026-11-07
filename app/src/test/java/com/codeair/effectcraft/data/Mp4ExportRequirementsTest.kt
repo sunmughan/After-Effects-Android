@@ -34,7 +34,7 @@ class Mp4ExportRequirementsTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             Mp4ExportRequirements.checkPlan(
-                RenderQueuePlan.create(RenderQueueSettings(1280, 720, 30, 0, 29))
+                RenderQueuePlan.create(RenderQueueSettings(1280, 720, 30, 0, 29, RenderOutputFormat.PNG_SEQUENCE_ZIP))
             )
         }
     }
