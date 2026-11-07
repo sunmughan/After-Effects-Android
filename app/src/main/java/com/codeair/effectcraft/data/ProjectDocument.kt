@@ -10,6 +10,8 @@ data class ProjectDocument(
     val frameRate: Int,
     val durationFrames: Int,
     val layers: List<LayerDocument>,
+    /** Audio tracks on this composition. Empty means the legacy behaviour: no editor audio clips. */
+    val audioTracks: List<AudioTrackDocument> = emptyList(),
     val updatedAtEpochMillis: Long = System.currentTimeMillis()
 ) {
     /** Returns all editor-model invariant violations; an empty list means saveable. */
@@ -31,6 +33,12 @@ data class ProjectDocument(
             }
             ClipTimeline.validateClips(layer.clips, durationFrames).forEach { error ->
                 add("Layer ${index + 1}: $error")
+            }
+        }
+        if (audioTracks.map { it.id }.toSet().size != audioTracks.size) add("Audio track IDs must be unique")
+        audioTracks.forEachIndexed { index, track ->
+            track.validationErrors(durationFrames).forEach { error ->
+                add("Audio track ${index + 1}: $error")
             }
         }
     }

@@ -57,6 +57,10 @@ class AudioTrackSelectionTest {
             "video-only — no compatible AAC audio track",
             AudioStatus.AUDIO_TRACK_UNSUPPORTED.describe()
         )
+        assertEquals(
+            "video-only — no audible audio clip covers the export range",
+            AudioStatus.AUDIO_CLIPS_SILENT.describe()
+        )
     }
 
     @Test
