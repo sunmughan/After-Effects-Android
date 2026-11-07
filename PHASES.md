@@ -2,8 +2,8 @@
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1)  
-Last checked: 2026-11-08 00:44 IST  
-Latest implementation commits: keyframe store `542c1785`, regression `faf1d30c`; M2 manifest root-lock implementation/test `a5cfbe18`, shared-lock correction `bd3861f3`, Unit-contract correction `5392b24a`; PHASES final sync `a7dc0c39`, README sync `6cd172bf`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
+Last checked: 2026-11-08 01:46 IST  
+Latest implementation commits: canonical repository root lock `d967e7d3`, independent-update regression `3e96834f`; manifest rollback test explicit Callable/diagnostics `61a41e92`; prior manifest transaction fix `5392b24a`. Documentation sync `91295e3a`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
 
 > This file is the durable acceptance ledger, not a chronological automation transcript. Keep one concise entry per phase and link implementation/test commits. Do not append repeated run summaries; update this ledger in place.
 
