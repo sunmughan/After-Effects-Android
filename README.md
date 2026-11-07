@@ -1,3 +1,5 @@
+**Automation run 11 (2026-11-07):** CI #1025 failed Android-test compilation because two PNG-sequence tests used a trailing lambda that bound to the helper's final zero-argument parameter instead of required `onExport`. Fixed with explicit named callback arguments (no assertions changed): [2551868d](https://github.com/sunmughan/After-Effects-Android/commit/2551868d7e6bb2ca3ae7fd2a38baf035aa68ed8c). M2 offline asset references now fail closed on malformed item keys/hashes instead of silently omitting references (GC safety), with JVM regressions [d43133b6](https://github.com/sunmughan/After-Effects-Android/commit/d43133b66d84f3bd73cb7f9d374b9c8385697df4), [0498abb6](https://github.com/sunmughan/After-Effects-Android/commit/0498abb620c2995a3516736f1b935847215d4064). Exact-head CI pending; see [PHASES.md](PHASES.md). **Release NOT COMPLETE.**
+
 
 **M2 import atomicity follow-up:** cancellation of an older picker job no longer clears a newer import's state; repository/cache publication rolls back the new repository record on cache-save failure and only clears offline references after both stores succeed. Exact-head CI pending. **Release NOT COMPLETE.**
 
