@@ -163,13 +163,32 @@ jobs:
             exit 1
           fi
 
+      # CI 42353512019 diagnosis (head 8df81a9): the emulator died mid-run,
+      # not the app. The in-flight test
+      # AdaptiveWorkspaceSmokeTest.canonical3dTransformKeyframeControlsTargetSelectedLayerAndCurrentFrame
+      # was marked FAILED with NO assertion error; the log shows only
+      # "device offline" while retrieving its outputs, then
+      # "device 'emulator-5554' not found", "Test run failed to complete.
+      # Expected 167 tests, received 2", and the runner's own
+      # `adb emu kill` failing with "Connection refused" — the emulator
+      # process itself was gone. A test cannot kill the emulator process;
+      # this is host/infra flakiness. So the suite is retried ONCE on a
+      # FRESH emulator (full 167-test run, nothing skipped, nothing
+      # weakened) and the job only fails if both attempts fail. The AVD
+      # also gets more guest RAM than the pixel_2 default (1536M) to
+      # reduce memory-pressure kills.
       - name: Run Android emulator smoke tests (M1)
+        id: smoke
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          ram-size: 4096M
+          heap-size: 512M
+          disk-size: 4096M
           emulator-options: -no-window -no-audio -no-boot-anim -camera-back none
           disable-animations: true
           disable-linux-hw-accel: false
@@ -180,6 +199,41 @@ jobs:
             timeout 60 bash -c 'until adb shell cmd package list packages >/dev/null 2>&1; do sleep 2; done'
             adb shell settings put global animator_duration_scale 0
             $GRADLE_CMD --no-daemon :app:connectedDebugAndroidTest
+
+      # Retry the FULL suite on a fresh emulator when the first attempt
+      # failed (emulator death or a genuine failure — the retry changes
+      # no test and re-runs all 167). The gate step below fails the job
+      # unless at least one attempt passed, so a real test failure still
+      # fails CI; only an infra death on attempt 1 followed by a green
+      # attempt 2 goes green.
+      - name: Retry Android emulator smoke tests on a fresh emulator (M1)
+        id: smoke-retry
+        if: steps.smoke.outcome == 'failure'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          ram-size: 4096M
+          heap-size: 512M
+          disk-size: 4096M
+          emulator-options: -no-window -no-audio -no-boot-anim -camera-back none
+          disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 900
+          script: |
+            adb wait-for-device
+            timeout 240 bash -c 'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" == "1" ]]; do sleep 3; done'
+            timeout 60 bash -c 'until adb shell cmd package list packages >/dev/null 2>&1; do sleep 2; done'
+            adb shell settings put global animator_duration_scale 0
+            $GRADLE_CMD --no-daemon :app:connectedDebugAndroidTest
+
+      - name: Fail if emulator smoke tests failed on both attempts
+        if: steps.smoke.outcome == 'failure' && steps.smoke-retry.outcome != 'success'
+        run: |
+          echo "::error::Emulator smoke tests failed on both attempts (first: ${{ steps.smoke.outcome }}, retry: ${{ steps.smoke-retry.outcome }}). See the connected-test reports."
+          exit 1
 
       - name: Upload Android build and audit reports
         uses: actions/upload-artifact@v4
