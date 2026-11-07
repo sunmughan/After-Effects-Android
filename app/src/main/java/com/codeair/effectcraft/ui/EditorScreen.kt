@@ -387,7 +387,16 @@ fun EditorScreen(
     // The bootstrap .efx-draft has no session and is explicitly labelled as
     // unrendered rather than showing a decorative fake composition.
     val previewComposition = canonicalProject?.compositions?.firstOrNull()
-    var workspaceFrame by remember(previewComposition?.id) { mutableStateOf<Bitmap?>(null) }
+    // The workspace frame arrives as raw bytes from the render effect and
+    // is decoded synchronously in remember, exactly like the inspector
+    // preview (renderedFrameBytes -> previewBitmap). Decoding inside the
+    // effect's Dispatchers.Default hop left the workspace bitmap stuck:
+    // the render request fired but the decoded frame never landed in
+    // the 60 s overlay wait, while the inspector path (same render,
+    // synchronous decode) worked in the same run. Keeping the Bitmap
+    // allocation on the composition thread removes that hop.
+    var workspaceFrameBytes by remember(previewComposition?.id) { mutableStateOf<ByteArray?>(null) }
+    val workspaceFrame = remember(workspaceFrameBytes) { workspaceFrameBytes?.let(::decodeRenderedFrame) }
     var showMotionPath by remember { mutableStateOf(true) }
     // The workspace overlay follows the selected canonical layer's position
     // track; it draws only when that track has a path to show (≥2 keys).
@@ -395,9 +404,9 @@ fun EditorScreen(
         ?.firstOrNull { it.id in canonicalSelectedLayerIds }
         ?.transformCurves?.get("position").orEmpty()
     LaunchedEffect(canonicalProject, previewComposition?.id, playheadFrame, canEditCanonicalProject) {
-        workspaceFrame = if (previewComposition != null && canEditCanonicalProject) {
+        workspaceFrameBytes = if (previewComposition != null && canEditCanonicalProject) {
             withContext(Dispatchers.Default) {
-                onRenderCanonicalFrame(previewComposition.id, playheadFrame.toLong())?.let(::decodeRenderedFrame)
+                onRenderCanonicalFrame(previewComposition.id, playheadFrame.toLong())
             }
         } else null
     }
