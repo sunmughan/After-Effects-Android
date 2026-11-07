@@ -8,6 +8,7 @@ import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalShapePathDraft
 import com.codeair.effectcraft.data.CanonicalProjectRepository
+import com.codeair.effectcraft.data.ClipDocument
 import com.codeair.effectcraft.data.CurveHandle
 import com.codeair.effectcraft.data.CurveInterp
 import com.codeair.effectcraft.data.CurveKey
@@ -239,6 +240,10 @@ fun EditorScreen(
     onOpacityChange: (Float) -> Unit,
     onTrimLayer: (Int, Int?) -> Unit = { _, _ -> },
     onClearTrim: () -> Unit = {},
+    selectedClipId: String? = null,
+    onSelectClip: (String) -> Unit = {},
+    onTrimClip: (Int, Int) -> Unit = { _, _ -> },
+    onSplitClipAtPlayhead: () -> Unit = {},
     onScrub: (Int) -> Unit,
     onAddOpacityKeyframe: () -> Unit,
     onRemoveOpacityKeyframe: () -> Unit,
@@ -490,6 +495,10 @@ fun EditorScreen(
                 project = project,
                 selectedLayerId = selectedLayerId,
                 playheadFrame = playheadFrame,
+                selectedClipId = selectedClipId,
+                onSelectClip = onSelectClip,
+                onTrimClip = onTrimClip,
+                onSplitClipAtPlayhead = onSplitClipAtPlayhead,
                 selectedOpacityKeyframes = selectedOpacityKeyframes,
                 canonicalTransformKeyframes = canonicalTransformKeyframes,
                 canonicalTransformDurationFrames = canonicalTransformDurationFrames,
@@ -3392,6 +3401,10 @@ private fun TimelinePanel(
     project: ProjectDocument,
     selectedLayerId: String,
     playheadFrame: Int,
+    selectedClipId: String? = null,
+    onSelectClip: (String) -> Unit = {},
+    onTrimClip: (Int, Int) -> Unit = { _, _ -> },
+    onSplitClipAtPlayhead: () -> Unit = {},
     selectedOpacityKeyframes: List<PropertyKeyframe>,
     canonicalTransformKeyframes: List<Int>,
     canonicalTransformDurationFrames: Int,
@@ -3485,11 +3498,27 @@ private fun TimelinePanel(
                     keyframeFrames = if (layer.id == selectedLayerId) selectedOpacityKeyframes.map { it.frame } else emptyList(),
                     durationFrames = project.durationFrames,
                     playheadFrame = playheadFrame,
+                    clips = layer.clips,
+                    selectedClipId = selectedClipId,
+                    onSelectClip = onSelectClip,
                     onClick = { onSelectLayer(layer.id) }
                 )
             }
             if (project.layers.size > 4) {
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
+            }
+            val selectedClipLayer = project.layers.firstOrNull { layer ->
+                layer.clips.any { it.id == selectedClipId }
+            }
+            val selectedClip = selectedClipLayer?.clips?.firstOrNull { it.id == selectedClipId }
+            if (selectedClip != null && selectedClipLayer != null) {
+                ClipInspector(
+                    clip = selectedClip,
+                    layerName = selectedClipLayer.name,
+                    playheadFrame = playheadFrame,
+                    onTrimClip = onTrimClip,
+                    onSplitClipAtPlayhead = onSplitClipAtPlayhead
+                )
             }
             if (canonicalTransformKeyframes.isNotEmpty()) {
                 CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub, onMoveCanonicalTransformKeyframe)
@@ -4145,6 +4174,85 @@ private fun curveCurrentValue(layer: CanonicalLayerInfo, selector: String): Trip
     }
 }
 
+/**
+ * Trim/split controls for the selected clip. Numeric in/out frames are
+ * the trim input: applying them trims the timeline bounds and shifts
+ * the matching source point, through the same undo/journal path as
+ * every other edit. Split divides the clip at the playhead and is only
+ * enabled while the playhead is strictly inside the clip.
+ */
+@Composable
+private fun ClipInspector(
+    clip: ClipDocument,
+    layerName: String,
+    playheadFrame: Int,
+    onTrimClip: (Int, Int) -> Unit,
+    onSplitClipAtPlayhead: () -> Unit
+) {
+    var startText by remember(clip.id, clip.startFrame) { mutableStateOf(clip.startFrame.toString()) }
+    var endText by remember(clip.id, clip.endFrame) { mutableStateOf(clip.endFrame.toString()) }
+    val canSplit = playheadFrame > clip.startFrame && playheadFrame < clip.endFrame
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(Color(0xFF202633))
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "CLIP · $layerName",
+                color = EditorPalette.text,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.1.sp
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "src ${clip.sourceStartFrame}–${clip.sourceEndFrame} / ${clip.sourceLengthFrames}",
+                color = EditorPalette.muted,
+                fontSize = 9.sp
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 4.dp)
+        ) {
+            OutlinedTextField(
+                value = startText,
+                onValueChange = { startText = it.filter { char -> char.isDigit() } },
+                label = { Text("In · frame", fontSize = 9.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(96.dp).semantics { contentDescription = "Clip in frame" }
+            )
+            OutlinedTextField(
+                value = endText,
+                onValueChange = { endText = it.filter { char -> char.isDigit() } },
+                label = { Text("Out · frame", fontSize = 9.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(96.dp).semantics { contentDescription = "Clip out frame" }
+            )
+            TextButton(
+                onClick = {
+                    val start = startText.toIntOrNull()
+                    val end = endText.toIntOrNull()
+                    if (start != null && end != null) onTrimClip(start, end)
+                },
+                modifier = Modifier.height(32.dp).semantics { contentDescription = "Apply clip trim" }
+            ) { Text("Trim", color = EditorPalette.violet, fontSize = 10.sp) }
+            TextButton(
+                onClick = onSplitClipAtPlayhead,
+                enabled = canSplit,
+                modifier = Modifier.height(32.dp).semantics { contentDescription = "Split clip at playhead" }
+            ) { Text("Split", color = if (canSplit) EditorPalette.mint else EditorPalette.muted, fontSize = 10.sp) }
+        }
+    }
+}
+
 @Composable
 private fun LayerTrack(
     layer: LayerDocument,
@@ -4152,6 +4260,9 @@ private fun LayerTrack(
     keyframeFrames: List<Int>,
     durationFrames: Int,
     playheadFrame: Int = 0,
+    clips: List<ClipDocument> = emptyList(),
+    selectedClipId: String? = null,
+    onSelectClip: (String) -> Unit = {},
     onClick: () -> Unit
 ) {
     // The bar spans only the clip's trimmed range, and dims when the
@@ -4202,17 +4313,53 @@ private fun LayerTrack(
                     )
                 }
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(spanWidth)
-                    .offset(x = maxWidth * spanStart)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(
-                        if (selected) EditorPalette.violet.copy(alpha = if (activeAtPlayhead) 0.9f else 0.3f)
-                        else Color(0xFF62708B).copy(alpha = if (activeAtPlayhead) 0.85f else 0.3f)
-                    )
-            )
+            if (clips.isEmpty()) {
+                // No clips: single span from the legacy in/out trim
+                // (effectiveInFrame/effectiveOutFrame already fall back
+                // to inFrame/outFrame), dimmed outside the active range.
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(spanWidth)
+                        .offset(x = maxWidth * spanStart)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(
+                            if (selected) EditorPalette.violet.copy(alpha = if (activeAtPlayhead) 0.9f else 0.3f)
+                            else Color(0xFF62708B).copy(alpha = if (activeAtPlayhead) 0.85f else 0.3f)
+                        )
+                )
+            } else {
+                // One block per clip, gaps left empty: the track shows
+                // exactly what the render coverage computes. Tapping a
+                // block selects that clip (and its layer).
+                Row(Modifier.fillMaxSize()) {
+                    var cursor = 0
+                    clips.sortedBy { it.startFrame }.forEach { clip ->
+                        if (clip.startFrame > cursor) {
+                            Spacer(Modifier.weight((clip.startFrame - cursor).toFloat()))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight((clip.endFrame - clip.startFrame).toFloat().coerceAtLeast(1f))
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(
+                                    if (clip.id == selectedClipId) EditorPalette.violet
+                                    else if (selected) EditorPalette.violet.copy(alpha = 0.9f)
+                                    else Color(0xFF62708B).copy(alpha = 0.85f)
+                                )
+                                .clickable { onSelectClip(clip.id) }
+                                .semantics {
+                                    contentDescription = "Clip ${clip.startFrame} to ${clip.endFrame} on ${layer.name}"
+                                }
+                        )
+                        cursor = clip.endFrame
+                    }
+                    if (cursor < durationFrames) {
+                        Spacer(Modifier.weight((durationFrames - cursor).toFloat()))
+                    }
+                }
+            }
         }
     }
 }

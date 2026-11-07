@@ -313,4 +313,58 @@ class EditorRecoveryJournalTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun trimmedAndSplitClipsSurviveJournalRoundTrip() {
+        val root = Files.createTempDirectory("effectcraft-journal-clips").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(updatedAtEpochMillis = 1_000L)
+            val layer = committed.layers.first()
+            val trimmed = ClipTimeline.trimClip(layer.clips, layer.clips.single().id, 10, 120, committed.durationFrames)
+            val split = ClipTimeline.splitClip(
+                (trimmed as ClipEditOutcome.Changed).clips, layer.clips.single().id, 60, committed.durationFrames
+            ) { "split-clip" }
+            val editedClips = (split as ClipEditOutcome.Changed).clips
+            val edited = committed.copy(
+                layers = listOf(layer.copy(clips = editedClips)) + committed.layers.drop(1),
+                updatedAtEpochMillis = 2_000L
+            )
+            EditorRecoveryJournal(root).write(edited)
+
+            val recovered = EditorRecoveryJournal(root).recover(committed.id, committed)
+            assertNotNull(recovered)
+            assertEquals(editedClips, recovered!!.layers.first().clips)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun journalWithoutClipsDecodesToEmptyClipLists() {
+        val root = Files.createTempDirectory("effectcraft-journal-noclips").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(updatedAtEpochMillis = 1_000L)
+            val journal = EditorRecoveryJournal(root)
+            journal.write(committed)
+            val journalFile = root.listFiles()!!.single { it.name.endsWith(".journal") }
+            val envelope = JSONObject(journalFile.readText(Charsets.UTF_8))
+            // Strip the clips arrays (old documents never had them) and
+            // re-sign the envelope so the checksum still verifies.
+            val document = JSONObject(envelope.getString("document"))
+            val layers = document.getJSONArray("layers")
+            for (index in 0 until layers.length()) layers.getJSONObject(index).remove("clips")
+            envelope.put("document", document.toString())
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(document.toString().toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+            envelope.put("checksum", digest)
+            journalFile.writeText(envelope.toString(), Charsets.UTF_8)
+
+            val recovered = EditorRecoveryJournal(root).recover(committed.id, committed)
+            assertNotNull(recovered)
+            assertTrue(recovered!!.layers.all { it.clips.isEmpty() })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }

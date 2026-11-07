@@ -32,6 +32,9 @@ import com.codeair.effectcraft.data.CanonicalLayerSelection
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalProjectDocument
 import com.codeair.effectcraft.data.CanonicalProjectRepository
+import com.codeair.effectcraft.data.ClipEditOutcome
+import com.codeair.effectcraft.data.ClipRenderCoverage
+import com.codeair.effectcraft.data.ClipTimeline
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.EcprojDocumentStore
 import com.codeair.effectcraft.data.EditorRecoveryJournal
@@ -190,6 +193,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 ?: project.layers.firstOrNull()?.id.orEmpty()
         )
     }
+    var selectedClipId by remember { mutableStateOf<String?>(null) }
     var playheadFrame by remember { mutableIntStateOf(recoveredSession?.state?.playheadFrame ?: 0) }
     var isPlaying by remember { mutableStateOf(false) }
     var saveMessage by remember {
@@ -293,6 +297,37 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         redoStack = emptyList()
         project = next
         saveMessage = message
+    }
+
+    /**
+     * Applies a clip trim/split outcome through the same undo system as
+     * every other draft edit: a change pushes the pre-edit snapshot and
+     * clears redo (and is journaled by the LaunchedEffect on [project]),
+     * while a refusal only reports its reason. This is the draft
+     * editor's undo; CanonicalEditHistory governs canonical JSON edits,
+     * which clips never touch.
+     */
+    fun applyClipEdit(outcome: ClipEditOutcome, layerId: String, successMessage: String): Boolean {
+        return when (outcome) {
+            is ClipEditOutcome.Changed -> {
+                val layers = project.layers.map { layer ->
+                    if (layer.id == layerId) layer.copy(clips = outcome.clips) else layer
+                }
+                applyProjectChange(project.copy(layers = layers), successMessage)
+                true
+            }
+            is ClipEditOutcome.Unchanged -> {
+                saveMessage = outcome.reason
+                false
+            }
+        }
+    }
+
+    /** Drops the clip selection when its clip no longer exists in [project]. */
+    fun pruneClipSelection() {
+        selectedClipId = selectedClipId?.takeIf { id ->
+            project.layers.any { layer -> layer.clips.any { it.id == id } }
+        }
     }
 
     val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -399,13 +434,24 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     try {
                         saveMessage = "Rendering frame $frame at full resolution…"
                         val rendered = withContext(Dispatchers.IO) {
-                            val session = NativeSession.open(source, 0)
-                                ?: error("Native renderer unavailable for this project")
-                            try {
-                                session.render(composition.id, frame.toLong())
-                                    ?: error("Native renderer did not return a frame")
-                            } finally {
-                                session.close()
+                            // A gap frame in the draft timeline renders as the
+                            // background frame without opening the native
+                            // session at all; see ClipRenderCoverage. Only
+                            // when the draft timeline and this composition
+                            // share a duration do the clips describe it.
+                            if (ClipRenderCoverage.appliesTo(project, composition.durationFrames) &&
+                                !ClipRenderCoverage.isFrameCovered(project, frame)
+                            ) {
+                                ClipRenderCoverage.backgroundFrame(composition.width, composition.height)
+                            } else {
+                                val session = NativeSession.open(source, 0)
+                                    ?: error("Native renderer unavailable for this project")
+                                try {
+                                    session.render(composition.id, frame.toLong())
+                                        ?: error("Native renderer did not return a frame")
+                                } finally {
+                                    session.close()
+                                }
                             }
                         }
                         currentCoroutineContext().ensureActive()
@@ -573,7 +619,13 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val composition = canonicalProjectInfo?.compositions
                         ?.firstOrNull { it.id == compositionId }
                         ?: error("Canonical composition is no longer available")
-                    val plan = RenderQueuePlan.create(settings, composition.durationFrames)
+                    // When the draft timeline and this composition share a
+                    // duration, the draft clips describe the export: the
+                    // plan is clip-validated and gap frames render as
+                    // background. Otherwise the export is exactly as before.
+                    val clipsApply = ClipRenderCoverage.appliesTo(project, composition.durationFrames)
+                    val plan = if (clipsApply) RenderQueuePlan.createForClips(settings, project)
+                    else RenderQueuePlan.create(settings, composition.durationFrames)
                     saveMessage = "Rendering H.264 MP4 · 0/${plan.frameCount} (0%)"
                     val staged = File(context.cacheDir, "effectcraft-video-${System.nanoTime()}.mp4")
                     stagedMp4 = staged
@@ -589,14 +641,20 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             verifyPayload = { sha256, _ -> offlineAssetStore.verify(sha256) },
                             fileFor = { sha256 -> offlineAssetStore.fileFor(sha256) }
                         )
+                        val nativeRender: (Int) -> ByteArray = { frame ->
+                            if (exportJob?.isActive != true) throw CancellationException("MP4 export cancelled")
+                            session?.render(compositionId, frame.toLong())
+                                ?: error("Native renderer returned no frame at $frame")
+                        }
+                        val renderRgba = if (clipsApply) {
+                            ClipRenderCoverage.clipAwareRenderRgba(project, settings.width, settings.height, nativeRender)
+                        } else {
+                            nativeRender
+                        }
                         Mp4ExportWorker.exportToStaged(
                             plan = plan,
                             stagedFile = staged,
-                            renderRgba = { frame ->
-                                if (exportJob?.isActive != true) throw CancellationException("MP4 export cancelled")
-                                session?.render(compositionId, frame.toLong())
-                                    ?: error("Native renderer returned no frame at $frame")
-                            },
+                            renderRgba = renderRgba,
                             audioFile = audio.file,
                             hasAudioItems = audio.hasAudioItems,
                             compositionFrameRateNum = composition.frameRateNum,
@@ -1082,6 +1140,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     selectedLayerId = previous.selectedLayerId
                         .takeIf { id -> project.layers.any { it.id == id } }
                         ?: project.layers.firstOrNull()?.id.orEmpty()
+                    pruneClipSelection()
                     playheadFrame = previous.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     undoStack = undoStack.dropLast(1)
                     saveMessage = "Undo · unsaved"
@@ -1095,6 +1154,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     selectedLayerId = next.selectedLayerId
                         .takeIf { id -> project.layers.any { it.id == id } }
                         ?: project.layers.firstOrNull()?.id.orEmpty()
+                    pruneClipSelection()
                     playheadFrame = next.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     redoStack = redoStack.dropLast(1)
                     saveMessage = "Redo · unsaved"
@@ -1108,6 +1168,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     project = opened
                     projectKeyframeTracks = projectKeyframeStore.load(opened.id)
                     selectedLayerId = opened.layers.firstOrNull()?.id.orEmpty()
+                    selectedClipId = null
                     playheadFrame = 0
                     isPlaying = false
                     undoStack = emptyList()
@@ -1225,6 +1286,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 applyProjectChange(ProjectDocument.starter(), "New offline composition")
                 projectKeyframeTracks = emptyList()
                 selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
+                selectedClipId = null
                 playheadFrame = 0
                 isPlaying = false
             },
@@ -1239,6 +1301,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val (remainingLayers, nextSelection) = ProjectEditorActions.deleteLayerAndSelection(project.layers, selectedLayer.id)
                     applyProjectChange(project.copy(layers = remainingLayers), "Layer removed · unsaved")
                     selectedLayerId = nextSelection.orEmpty()
+                    selectedClipId = null
                 } else {
                     saveMessage = "A composition must keep at least one layer"
                 }
@@ -1266,6 +1329,45 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 val cleared = ProjectEditorActions.clearTrim(project.layers, selectedLayerId)
                 if (cleared != project.layers) applyProjectChange(project.copy(layers = cleared), "Clip trim cleared · unsaved")
             },
+            selectedClipId = selectedClipId,
+            onSelectClip = { clipId ->
+                val layer = project.layers.firstOrNull { l -> l.clips.any { it.id == clipId } }
+                if (layer != null) {
+                    selectedLayerId = layer.id
+                    selectedClipId = clipId
+                }
+            },
+            onTrimClip = { newStart, newEnd ->
+                val layer = project.layers.firstOrNull { it.id == selectedLayerId }
+                val clipId = selectedClipId
+                if (layer == null || clipId == null) {
+                    saveMessage = "Select a clip before trimming"
+                } else {
+                    applyClipEdit(
+                        ClipTimeline.trimClip(layer.clips, clipId, newStart, newEnd, project.durationFrames),
+                        layer.id,
+                        "Clip trimmed · unsaved"
+                    )
+                }
+            },
+            onSplitClipAtPlayhead = {
+                val layer = project.layers.firstOrNull { it.id == selectedLayerId }
+                if (layer == null) {
+                    saveMessage = "Select a layer before splitting"
+                } else {
+                    val target = selectedClipId?.let { id -> layer.clips.firstOrNull { it.id == id } }
+                        ?: ClipTimeline.clipAt(layer.clips, playheadFrame)
+                    if (target == null) {
+                        saveMessage = "No clip under the playhead on the selected layer"
+                    } else {
+                        applyClipEdit(
+                            ClipTimeline.splitClip(layer.clips, target.id, playheadFrame, project.durationFrames),
+                            layer.id,
+                            "Clip split at frame $playheadFrame · unsaved"
+                        )
+                    }
+                }
+            },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
             onAddOpacityKeyframe = {
                 val layer = project.layers.firstOrNull { it.id == selectedLayerId }
@@ -1286,10 +1388,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onTogglePlayback = { isPlaying = !isPlaying },
             onApplyComposition = { width, height, fps, duration ->
                 if (width in 320..3840 && height in 320..3840 && fps in 1..120 && duration in 1..3600) {
+                    // A shorter composition trims clips that ran past it and
+                    // drops clips that started at or after the new end, so
+                    // the project stays valid after the change.
+                    val layers = project.layers.map { layer ->
+                        layer.copy(clips = ClipTimeline.clampToDuration(layer.clips, duration))
+                    }
                     applyProjectChange(
-                        project.copy(width = width, height = height, frameRate = fps, durationFrames = duration),
+                        project.copy(width = width, height = height, frameRate = fps, durationFrames = duration, layers = layers),
                         "Composition updated · unsaved"
                     )
+                    pruneClipSelection()
                     playheadFrame = playheadFrame.coerceIn(0, duration - 1)
                 } else {
                     saveMessage = "Composition settings outside supported limits"

@@ -317,6 +317,7 @@ class EditorRecoveryJournal(private val root: File) {
                     put("visible", layer.visible)
                     put("inFrame", layer.inFrame)
                     if (layer.outFrame != null) put("outFrame", layer.outFrame)
+                    put("clips", ClipJson.encode(layer.clips))
                 })
             }
         })
@@ -338,7 +339,8 @@ class EditorRecoveryJournal(private val root: File) {
                         tint = layer.optLong("tint", 0xFF9278F6),
                         visible = layer.optBoolean("visible", true),
                         inFrame = layer.optInt("inFrame", 0),
-                        outFrame = layer.optInt("outFrame", -1).takeIf { it >= 0 }
+                        outFrame = layer.optInt("outFrame", -1).takeIf { it >= 0 },
+                        clips = ClipJson.decode(layer.optJSONArray("clips"))
                     )
                 )
             }

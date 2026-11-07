@@ -29,6 +29,9 @@ data class ProjectDocument(
             if (outFrame != null && outFrame !in layer.inFrame until durationFrames) {
                 add("Layer ${index + 1} trim out-frame must be at or after its in-frame and within the composition")
             }
+            ClipTimeline.validateClips(layer.clips, durationFrames).forEach { error ->
+                add("Layer ${index + 1}: $error")
+            }
         }
     }
 
@@ -46,21 +49,24 @@ data class ProjectDocument(
                     name = "Background",
                     kind = "Footage",
                     opacity = 1f,
-                    tint = 0xFF56647A
+                    tint = 0xFF56647A,
+                    clips = listOf(ClipDocument.fullRange(150))
                 ),
                 LayerDocument(
                     id = UUID.randomUUID().toString(),
                     name = "Title / Main",
                     kind = "Text",
                     opacity = 1f,
-                    tint = 0xFF9278F6
+                    tint = 0xFF9278F6,
+                    clips = listOf(ClipDocument.fullRange(150))
                 ),
                 LayerDocument(
                     id = UUID.randomUUID().toString(),
                     name = "Accent Shapes",
                     kind = "Shape",
                     opacity = 0.82f,
-                    tint = 0xFF45C8B5
+                    tint = 0xFF45C8B5,
+                    clips = listOf(ClipDocument.fullRange(150))
                 )
             )
         )
@@ -82,27 +88,35 @@ data class LayerDocument(
     val opacity: Float,
     val tint: Long,
     val visible: Boolean = true,
+    /** Legacy single-range trim (HEAD): first/last visible frame. Used when [clips] is empty. */
     val inFrame: Int = 0,
-    val outFrame: Int? = null
+    val outFrame: Int? = null,
+    /** Clips on this layer's timeline. Empty means the legacy behaviour: the layer follows [inFrame]/[outFrame] (see [ClipTimeline.layerCoverage]). */
+    val clips: List<ClipDocument> = emptyList()
 ) {
-    /** First visible frame, clamped into a composition of [durationFrames] frames. */
+    /** First visible frame, clamped into a composition of [durationFrames] frames. Clips win when present, else the legacy in-frame. */
     fun effectiveInFrame(durationFrames: Int): Int =
-        if (durationFrames <= 0) 0 else inFrame.coerceIn(0, durationFrames - 1)
+        if (durationFrames <= 0) 0
+        else if (clips.isNotEmpty()) clips.minOf { it.startFrame }.coerceIn(0, durationFrames - 1)
+        else inFrame.coerceIn(0, durationFrames - 1)
 
-    /** Last visible frame, clamped into a composition of [durationFrames] frames. */
+    /** Last visible frame, clamped into a composition of [durationFrames] frames. Clips win when present, else the legacy out-frame. */
     fun effectiveOutFrame(durationFrames: Int): Int {
         if (durationFrames <= 0) return 0
+        if (clips.isNotEmpty()) return (clips.maxOf { it.endFrame } - 1).coerceIn(0, durationFrames - 1)
         val end = outFrame ?: durationFrames - 1
         return end.coerceIn(0, durationFrames - 1)
     }
 
-    /** True when the clip shows at [frame] in a composition of [durationFrames] frames. */
+    /** True when the clip shows at [frame] in a composition of [durationFrames] frames. Clips win when present, else the legacy range. */
     fun isActiveAt(frame: Int, durationFrames: Int): Boolean =
-        frame >= effectiveInFrame(durationFrames) && frame <= effectiveOutFrame(durationFrames)
+        if (clips.isNotEmpty()) ClipTimeline.clipAt(clips, frame) != null
+        else frame >= effectiveInFrame(durationFrames) && frame <= effectiveOutFrame(durationFrames)
 
     /** Visible frame count in a composition of [durationFrames] frames; zero when the trim is degenerate. */
     fun trimmedDurationFrames(durationFrames: Int): Int =
-        (effectiveOutFrame(durationFrames) - effectiveInFrame(durationFrames) + 1).coerceAtLeast(0)
+        if (clips.isNotEmpty()) clips.sumOf { it.timelineLength }.coerceAtLeast(0)
+        else (effectiveOutFrame(durationFrames) - effectiveInFrame(durationFrames) + 1).coerceAtLeast(0)
 
     /** True when the clip is trimmed away from the full composition range. */
     fun isTrimmed(durationFrames: Int): Boolean =
