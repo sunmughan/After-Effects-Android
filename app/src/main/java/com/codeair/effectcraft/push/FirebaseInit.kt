@@ -6,16 +6,17 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 
 /**
- * Guards every Firebase touch so the app runs fully offline without
- * google-services.json (which does not exist yet: the app is registered
- * in Firebase later and a final rebuild accepts the file).
+ * Guards every Firebase touch so the app runs fully offline when no
+ * config is present. The app IS registered now (google-services.json
+ * ships in the repo), so the normal path is: a default FirebaseApp
+ * exists, FCM auto-init is switched on (the manifest keeps it off by
+ * default) and the current token is fetched once and stored (see
+ * [fetchAndStoreToken]).
  *
  * Without the config file, [FirebaseApp.initializeApp] returns null and
  * this returns false; no Firebase API is then called, so nothing can
  * throw an "uninitialized FirebaseApp" crash. Returns true only when a
- * default FirebaseApp actually exists, in which case FCM auto-init is
- * switched on (the manifest keeps it off by default) and the current
- * token is fetched once and stored (see [fetchAndStoreToken]).
+ * default FirebaseApp actually exists.
  * Both paths log at info level so logcat shows plainly whether push is
  * on or off; the unconfigured path is expected, not an error.
  */

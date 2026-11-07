@@ -150,7 +150,8 @@ class EditorSmokeTest {
         // The inspector now has three text fields (layer name, trim in,
         // trim out): address the rename field by its description instead
         // of assuming it is the only editable field, and the rename Apply
-        // by its description (the trim row has its own Apply button).
+        // by its description (the trim row has its own Apply button, so a
+        // bare onNodeWithText("Apply") matches two nodes, not one).
         compose.onNodeWithContentDescription("Layer name").performTextClearance()
         compose.onNodeWithContentDescription("Layer name").performTextInput("Mobile title")
         compose.onNodeWithContentDescription("Apply layer rename").performClick()
@@ -293,7 +294,8 @@ class EditorSmokeTest {
         // tapping it, exactly as a user would.
         compose.onNodeWithText("Accent Shapes").performScrollTo().performClick()
         compose.onNodeWithText("Props").performClick()
-        compose.onNodeWithText("82%").assertIsDisplayed()
+        // The inspector scrolls; the opacity row may sit below the fold.
+        compose.onNodeWithText("82%").performScrollTo().assertIsDisplayed()
     }
 
     @Test
