@@ -22,61 +22,161 @@ import java.security.MessageDigest
  * keyframe stores. A crash during the write therefore leaves either the
  * previous complete journal or a leftover temp, never a half-promoted journal.
  *
- * How recovery replays or discards it: [recover] returns the journaled
- * document only when it is strictly newer than the committed draft; the
- * caller uses it as the working project and the committed draft stays
+ * Envelope version 2: the document plus the canonical undo/redo history
+ * ([CanonicalEditSnapshot] entries, bounded to [CanonicalEditHistory.MAX_ENTRIES]),
+ * the canonical layer selection, and the playhead frame, all covered by one
+ * SHA-256 checksum over the exact stored strings ([checksumV2]). When the
+ * caller also journals the full [EditorSessionState] — both draft undo/redo
+ * stacks, the current draft selection and playhead, and both canonical
+ * stacks plus the canonical selection — it is stored as an extra `session`
+ * field, also covered by the checksum, and the v2 history fields are
+ * derived from that same state, so the two views of one journal never
+ * disagree. A journal written before session state existed has no session
+ * field and recovers with the state derived from the v2 fields.
+ *
+ * How recovery replays or discards it: [recoverFull] returns the journaled
+ * document with its undo/redo stacks, selection, and playhead only when the
+ * document is strictly newer than the committed draft; [recoverSession]
+ * additionally returns the full session state (draft stacks included when
+ * the journal carries them), validated against the recovered document. The
+ * caller restores all of it in memory and the committed draft stays
  * untouched until the next explicit save. A journal that is older than or
- * equal to the committed draft is stale and is deleted. [recoverNewest]
- * covers a project that was never saved at all. Recovery never writes the
- * committed draft: replay is in-memory restoration, and only an explicit
- * save persists it.
+ * equal to the committed draft is stale and is deleted. [recoverNewestFull]
+ * and [recoverNewestSession] cover a project that was never saved at all.
+ * Recovery never writes the committed draft: replay is in-memory
+ * restoration, and only an explicit save persists it. A recovered journal
+ * is kept until [discard] so a second crash before an explicit save can
+ * still recover the same edits.
  *
- * How a torn journal is handled: the envelope carries a SHA-256 checksum
- * over the exact document string (plus the session string when session
- * state is present). A checksum mismatch, a truncated file, a format or
- * version mismatch, or a document that fails project validation
- * means the journal is torn or tampered with: it is deleted and recovery
- * returns null, leaving the committed draft untouched. A leftover write
- * temp is deleted during recovery without touching the last complete journal.
+ * How a torn journal is handled: the envelope carries a SHA-256 checksum.
+ * Version 1 covered the document string only (or document plus session,
+ * for journals written with session state); version 2 covers the document
+ * string plus the exact stored undo text, redo text, selection text, and
+ * playhead frame — and the session text when one is stored — so tampering
+ * with any journaled field is detected. A checksum mismatch, a truncated
+ * file, a format or version mismatch, a missing v2 field, a history entry
+ * whose project source is not a JSON object, a negative playhead, or a
+ * document that fails project validation means the journal is torn or
+ * tampered with: it is deleted and recovery returns null, leaving the
+ * committed draft untouched. A leftover write temp is deleted during
+ * recovery without touching the last complete journal.
  *
- * What this journal covers beyond the document: [EditorSessionState] —
- * both draft undo/redo stacks, the current draft selection and playhead,
- * and both canonical undo/redo stacks plus the canonical selection — is
- * stored in the same envelope and covered by the same checksum and the
- * same atomic fsync-then-rename write, so document and session state are
- * never torn apart from each other. A journal written before session
- * state existed has no session field and recovers with [EditorSessionState.EMPTY].
+ * Version 1 journals stay readable: [parse] migrates them on read, returning
+ * the document with empty undo/redo stacks, an empty selection, and playhead
+ * frame 0 (plus the decoded session state when a v1 journal carries one),
+ * since v1 never stored the v2 history fields. All new writes use version 2.
+ *
+ * What this journal does not cover: keyframe tracks are in-memory or
+ * separately stored state and are not journaled.
  */
 class EditorRecoveryJournal(private val root: File) {
-    private data class Parsed(val projectId: String, val document: ProjectDocument, val state: EditorSessionState)
+    /**
+     * Everything one recovery restores: the document plus the editor state
+     * that belonged to it. The undo/redo entries are [CanonicalEditSnapshot]
+     * values, so undo and redo keep working after restore exactly as they
+     * did before the crash: each entry's project source is committed back
+     * through the same canonical path the editor uses live.
+     */
+    data class RestoredEditorState(
+        val document: ProjectDocument,
+        val undoStack: List<CanonicalEditSnapshot>,
+        val redoStack: List<CanonicalEditSnapshot>,
+        val selectedLayerIds: Set<Long>,
+        val playheadFrame: Int
+    )
 
     /** A recovered journal entry: the document plus the session state stored with it. */
     data class RecoveredSession(val document: ProjectDocument, val state: EditorSessionState)
 
+    private data class Parsed(
+        val projectId: String,
+        val document: ProjectDocument,
+        val state: EditorSessionState,
+        val full: RestoredEditorState
+    )
+
+    /** Writes the document with empty history, selection, and playhead 0. */
     @Synchronized
     @Throws(IOException::class)
-    fun write(project: ProjectDocument) = write(project, null)
+    fun write(project: ProjectDocument) {
+        writeFull(project, emptyList(), emptyList(), emptySet(), 0)
+    }
 
+    /**
+     * Writes the document together with the full session state: both draft
+     * undo/redo stacks, the current draft selection and playhead, and both
+     * canonical stacks plus the canonical selection. The canonical parts
+     * are also stored as the v2 history fields, so [recoverFull] works on
+     * the same journal. A null [sessionState] writes the document with
+     * empty history, like [write].
+     */
     @Synchronized
     @Throws(IOException::class)
     fun write(project: ProjectDocument, sessionState: EditorSessionState?) {
+        if (sessionState == null) {
+            writeFull(project, emptyList(), emptyList(), emptySet(), 0)
+            return
+        }
+        writeEnvelope(
+            project = project,
+            undoStack = sessionState.canonicalUndoStack,
+            redoStack = sessionState.canonicalRedoStack,
+            selectedLayerIds = sessionState.canonicalSelectedIds,
+            playheadFrame = sessionState.playheadFrame,
+            sessionText = encodeSession(sessionState).toString()
+        )
+    }
+
+    /**
+     * Writes the document together with its canonical undo/redo history,
+     * selection, and playhead frame. The stacks are capped at
+     * [CanonicalEditHistory.MAX_ENTRIES] on write, newest entries kept.
+     */
+    @Synchronized
+    @Throws(IOException::class)
+    fun writeFull(
+        project: ProjectDocument,
+        undoStack: List<CanonicalEditSnapshot>,
+        redoStack: List<CanonicalEditSnapshot>,
+        selectedLayerIds: Set<Long>,
+        playheadFrame: Int
+    ) {
+        writeEnvelope(project, undoStack, redoStack, selectedLayerIds, playheadFrame, sessionText = null)
+    }
+
+    @Throws(IOException::class)
+    private fun writeEnvelope(
+        project: ProjectDocument,
+        undoStack: List<CanonicalEditSnapshot>,
+        redoStack: List<CanonicalEditSnapshot>,
+        selectedLayerIds: Set<Long>,
+        playheadFrame: Int,
+        sessionText: String?
+    ) {
         val validationErrors = project.validationErrors()
         require(validationErrors.isEmpty()) { validationErrors.joinToString("; ") }
+        require(playheadFrame >= 0) { "Playhead frame cannot be negative" }
         if (!root.exists() && !root.mkdirs()) throw IOException("Unable to create the recovery journal directory")
         if (!root.isDirectory) throw IOException("Recovery journal path is not a directory")
         val documentText = encode(project).toString()
-        val sessionText = sessionState?.let { encodeSession(it).toString() } ?: ""
+        val undoText = encodeSnapshots(undoStack).toString()
+        val redoText = encodeSnapshots(redoStack).toString()
+        val selectionText = JSONArray().apply { selectedLayerIds.forEach { put(it) } }.toString()
         val envelope = JSONObject().apply {
             put("format", FORMAT)
             put("version", VERSION)
             put("projectId", project.id)
             put("updatedAtEpochMillis", project.updatedAtEpochMillis)
-            put("checksum", checksumFor(documentText, sessionText, hasSession = sessionState != null))
-            // Stored as a string, not a nested object, so the checksum is
+            put("checksum", checksumV2(documentText, undoText, redoText, selectionText, playheadFrame, sessionText))
+            // Stored as strings, not nested objects, so the checksum is
             // verified over the exact bytes that were written: re-serializing
             // a parsed object could reorder keys and break the check.
             put("document", documentText)
-            if (sessionState != null) put("session", sessionText)
+            put("undoStack", undoText)
+            put("redoStack", redoText)
+            put("selection", selectionText)
+            put("playheadFrame", playheadFrame)
+            if (sessionText != null) put("session", sessionText)
         }
         val target = fileFor(project.id)
         val temporary = File(root, "${target.name}.tmp")
@@ -95,22 +195,22 @@ class EditorRecoveryJournal(private val root: File) {
     /**
      * Returns the journaled document when it is strictly newer than
      * [committed], or null when there is no journal, it is torn, or it is
-     * stale. Torn and stale journals are deleted. A recovered journal is
-     * kept until [discard] so a second crash before an explicit save can
-     * still recover the same edits.
+     * stale. Torn and stale journals are deleted. See [recoverFull] and
+     * [recoverSession] for the full restored state.
      */
     @Synchronized
     fun recover(projectId: String, committed: ProjectDocument?): ProjectDocument? =
-        recoverSession(projectId, committed)?.document
+        recoverFull(projectId, committed)?.document
 
     /**
-     * Like [recover], but also returns the session state journaled with the
-     * document (undo/redo stacks, selection, playhead), validated against
-     * the recovered document. A journal written before session state
-     * existed recovers with [EditorSessionState.EMPTY].
+     * Returns the journaled document with its undo/redo stacks, selection,
+     * and playhead when it is strictly newer than [committed], or null when
+     * there is no journal, it is torn, or it is stale. Torn and stale
+     * journals are deleted. A recovered journal is kept until [discard] so
+     * a second crash before an explicit save can still recover the same edits.
      */
     @Synchronized
-    fun recoverSession(projectId: String, committed: ProjectDocument?): RecoveredSession? {
+    fun recoverFull(projectId: String, committed: ProjectDocument?): RestoredEditorState? {
         discardLeftoverTemp(projectId)
         val file = fileFor(projectId)
         if (!file.isFile) return null
@@ -133,11 +233,72 @@ class EditorRecoveryJournal(private val root: File) {
                 return null
             }
         }
+        return parsed.full
+    }
+
+    /**
+     * Like [recover], but also returns the session state journaled with the
+     * document (undo/redo stacks, selection, playhead), validated against
+     * the recovered document. A journal written without session state
+     * recovers with the state derived from its v2 history fields (empty
+     * draft stacks); a journal written before session state existed
+     * recovers with [EditorSessionState.EMPTY].
+     */
+    @Synchronized
+    fun recoverSession(projectId: String, committed: ProjectDocument?): RecoveredSession? {
+        discardLeftoverTemp(projectId)
+        val file = fileFor(projectId)
+        if (!file.isFile) return null
+        val parsed = parse(file) ?: run {
+            file.delete()
+            return null
+        }
+        if (parsed.projectId != projectId || parsed.document.id != projectId) {
+            file.delete()
+            return null
+        }
+        if (committed != null) {
+            if (parsed.document.updatedAtEpochMillis < committed.updatedAtEpochMillis ||
+                parsed.document == committed
+            ) {
+                file.delete()
+                return null
+            }
+        }
         return RecoveredSession(parsed.document, parsed.state.validatedAgainst(parsed.document))
     }
 
+    /**
+     * Returns the newest valid journaled document across projects, deleting
+     * torn journals as they are found. The editor uses this when no committed
+     * draft exists, or when the newest journal is newer than the latest
+     * committed draft, so a never-saved project still survives process death.
+     */
     @Synchronized
-    fun recoverNewest(): ProjectDocument? = recoverNewestSession()?.document
+    fun recoverNewest(): ProjectDocument? = recoverNewestFull()?.document
+
+    /**
+     * Returns the newest valid journaled state across projects, deleting
+     * torn journals as they are found. See [recoverNewest].
+     */
+    @Synchronized
+    fun recoverNewestFull(): RestoredEditorState? {
+        if (!root.isDirectory) return null
+        var newest: RestoredEditorState? = null
+        root.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(SUFFIX) }
+            .orEmpty()
+            .forEach { file ->
+                val parsed = parse(file)
+                if (parsed == null) {
+                    file.delete()
+                } else if (newest == null || parsed.document.updatedAtEpochMillis > newest!!.document.updatedAtEpochMillis) {
+                    newest = parsed.full
+                }
+            }
+        root.listFiles()?.filter { it.isFile && it.name.endsWith(".tmp") }?.forEach { it.delete() }
+        return newest
+    }
 
     /**
      * Like [recoverNewest], but also returns the session state journaled
@@ -192,28 +353,125 @@ class EditorRecoveryJournal(private val root: File) {
     private fun parse(file: File): Parsed? = runCatching {
         val envelope = JSONObject(file.readText(Charsets.UTF_8))
         require(envelope.optString("format") == FORMAT) { "Unsupported journal format" }
-        require(envelope.optInt("version", -1) == VERSION) { "Unsupported journal version" }
+        val version = envelope.optInt("version", -1)
+        require(version == 1 || version == VERSION) { "Unsupported journal version" }
         val projectId = envelope.getString("projectId")
         val documentText = envelope.getString("document")
-        val hasSession = envelope.has("session")
-        val sessionText = if (hasSession) envelope.getString("session") else ""
-        require(envelope.getString("checksum") == checksumFor(documentText, sessionText, hasSession)) { "Journal checksum mismatch" }
-        val document = decode(JSONObject(documentText))
-        // A session that fails to decode must not kill document recovery:
-        // the checksum already proved the bytes are as written, so a bad
-        // session is a writer bug, not torn storage; fall back to empty state.
-        val state = if (hasSession) decodeSession(sessionText) else EditorSessionState.EMPTY
-        Parsed(projectId, document, state)
+        if (version == 1) {
+            // Version 1 checksummed the document string only, or document
+            // plus session for journals written with session state, and
+            // stored no history: migrate on read with empty editor state
+            // (plus the decoded session when one was stored).
+            val hasSession = envelope.has("session")
+            val sessionText = if (hasSession) envelope.getString("session") else ""
+            require(
+                envelope.getString("checksum") == checksumFor(documentText, sessionText, hasSession)
+            ) { "Journal checksum mismatch" }
+            val document = decode(JSONObject(documentText))
+            val state = if (hasSession) decodeSession(sessionText) else EditorSessionState.EMPTY
+            val full = RestoredEditorState(
+                document,
+                state.canonicalUndoStack,
+                state.canonicalRedoStack,
+                state.canonicalSelectedIds,
+                state.playheadFrame
+            )
+            Parsed(projectId, document, state, full)
+        } else {
+            require(
+                envelope.has("undoStack") && envelope.has("redoStack") &&
+                    envelope.has("selection") && envelope.has("playheadFrame")
+            ) { "Journal v2 envelope is missing history fields" }
+            val undoText = envelope.getString("undoStack")
+            val redoText = envelope.getString("redoStack")
+            val selectionText = envelope.getString("selection")
+            val playheadFrame = envelope.getInt("playheadFrame")
+            require(playheadFrame >= 0) { "Journal playhead frame is negative" }
+            val sessionText = if (envelope.has("session")) envelope.getString("session") else null
+            require(
+                envelope.getString("checksum") ==
+                    checksumV2(documentText, undoText, redoText, selectionText, playheadFrame, sessionText)
+            ) { "Journal checksum mismatch" }
+            val document = decode(JSONObject(documentText))
+            val undoStack = decodeSnapshots(JSONArray(undoText))
+            val redoStack = decodeSnapshots(JSONArray(redoText))
+            val selectionArray = JSONArray(selectionText)
+            val selection = (0 until selectionArray.length()).map { selectionArray.getLong(it) }.toSet()
+            val full = RestoredEditorState(document, undoStack, redoStack, selection, playheadFrame)
+            // A session that fails to decode must not kill document recovery:
+            // the checksum already proved the bytes are as written, so a bad
+            // session is a writer bug, not torn storage; fall back to the
+            // state derived from the v2 fields.
+            val state = if (sessionText != null) {
+                decodeSession(sessionText)
+            } else {
+                EditorSessionState(
+                    playheadFrame = playheadFrame,
+                    canonicalUndoStack = undoStack,
+                    canonicalRedoStack = redoStack,
+                    canonicalSelectedIds = selection
+                )
+            }
+            Parsed(projectId, document, state, full)
+        }
     }.getOrNull()
 
     /**
-     * Session-state checksum. Journals written before session state existed
-     * carry no session field and keep the original document-only checksum,
-     * so they still verify; journals with session state checksum the
-     * document and session strings together, so tampering with either is torn.
+     * Session-state checksum for version 1 journals. Journals written
+     * before session state existed carry no session field and keep the
+     * original document-only checksum, so they still verify; journals with
+     * session state checksum the document and session strings together, so
+     * tampering with either is torn.
      */
     private fun checksumFor(documentText: String, sessionText: String, hasSession: Boolean): String =
         if (hasSession) "$documentText\n$sessionText".sha256() else documentText.sha256()
+
+    private fun encodeSnapshots(stack: List<CanonicalEditSnapshot>): JSONArray = JSONArray().apply {
+        stack.takeLast(CanonicalEditHistory.MAX_ENTRIES).forEach { snapshot ->
+            put(JSONObject().apply {
+                put("projectJson", snapshot.projectJson)
+                put("selectedLayerIds", JSONArray().apply {
+                    snapshot.selectedLayerIds.forEach { put(it) }
+                })
+            })
+        }
+    }
+
+    private fun decodeSnapshots(array: JSONArray): List<CanonicalEditSnapshot> {
+        val snapshots = (0 until array.length()).map { index ->
+            val entry = array.getJSONObject(index)
+            val projectJson = entry.getString("projectJson")
+            require(projectJson.isNotBlank()) { "Journal history entry has no project source" }
+            // A history entry is only re-appliable when its source is a JSON
+            // object: anything else is torn, not a snapshot to undo into.
+            JSONObject(projectJson)
+            val idsArray = entry.optJSONArray("selectedLayerIds") ?: JSONArray()
+            val ids = (0 until idsArray.length()).map { idsArray.getLong(it) }.toSet()
+            CanonicalEditSnapshot(projectJson, ids)
+        }
+        return snapshots.takeLast(CanonicalEditHistory.MAX_ENTRIES)
+    }
+
+    /**
+     * Version 2 checksum over the exact stored strings, in field order,
+     * joined with a separator that cannot appear in JSON text. Any change
+     * to the document, either history stack, the selection, or the playhead
+     * — or the session text when one is stored — breaks it. A null
+     * [sessionText] reproduces the session-less v2 checksum exactly, so
+     * journals written without session state verify unchanged.
+     */
+    private fun checksumV2(
+        documentText: String,
+        undoText: String,
+        redoText: String,
+        selectionText: String,
+        playheadFrame: Int,
+        sessionText: String? = null
+    ): String {
+        val joined = documentText + "\u0000" + undoText + "\u0000" + redoText + "\u0000" +
+            selectionText + "\u0000" + playheadFrame
+        return (if (sessionText == null) joined else joined + "\u0000" + sessionText).sha256()
+    }
 
     private fun encodeSession(state: EditorSessionState): JSONObject = JSONObject().apply {
         fun snapshots(stack: List<EditorSessionSnapshot>) = JSONArray().apply {
@@ -368,7 +626,7 @@ class EditorRecoveryJournal(private val root: File) {
 
     companion object {
         private const val FORMAT = "effectcraft-android-recovery-journal"
-        private const val VERSION = 1
+        private const val VERSION = 2
         private const val SUFFIX = ".journal"
     }
 }

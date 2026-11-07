@@ -82,6 +82,8 @@ class PngSequenceExportService : Service() {
                 if (isRunning) return START_NOT_STICKY
                 val destination = intent.getStringExtra(EXTRA_DESTINATION)?.let(Uri::parse)
                 val compositionId = intent.getLongExtra(EXTRA_COMPOSITION_ID, -1L)
+                // This service exports PNG sequences only, so the format is
+                // explicit here: the app-wide default is MP4 H.264.
                 val settings = RenderQueueSettings(
                     width = intent.getIntExtra(EXTRA_WIDTH, 0),
                     height = intent.getIntExtra(EXTRA_HEIGHT, 0),

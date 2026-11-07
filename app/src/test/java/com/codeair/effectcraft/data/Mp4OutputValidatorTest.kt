@@ -3,14 +3,18 @@ package com.codeair.effectcraft.data
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.nio.file.Files
 
 /**
  * JVM tests for the pure plan gate of [Mp4OutputValidator]. The gate is
  * Android-free by design so these cases run without MediaExtractor: an
- * HEVC plan is rejected with a named HEVC error, any other non-MP4 plan
- * with the generic H.264 error, and an H.264 plan passes. The file-side
- * HEVC track scan in `inspect` needs a real container and is covered by
- * codec instrumentation, not here.
+ * H.264 plan and an HEVC plan both pass (HEVC is an explicit opt-in after
+ * the hardware probe, and the production export path validates the final
+ * copy with this validator, so an H.264-only gate would fail every HEVC
+ * export the app itself offers); any non-MP4 plan fails with a named MP4
+ * error. The file-side MIME match in `inspect` needs a real container and
+ * is covered by codec instrumentation, not here.
  */
 class Mp4OutputValidatorTest {
     private fun plan(format: RenderOutputFormat) =
@@ -20,23 +24,40 @@ class Mp4OutputValidatorTest {
 
     @Test
     fun h264PlanPassesTheGate() {
-        Mp4OutputValidator.requireH264Plan(plan(RenderOutputFormat.MP4_H264))
+        Mp4OutputValidator.requireMp4Plan(plan(RenderOutputFormat.MP4_H264))
     }
 
     @Test
-    fun hevcPlanIsRejectedWithNamedHevcError() {
-        val failure = assertThrows(IllegalArgumentException::class.java) {
-            Mp4OutputValidator.requireH264Plan(plan(RenderOutputFormat.MP4_HEVC))
-        }
-        assertTrue(failure.message!!.contains("HEVC"))
-        assertTrue(failure.message!!.contains("H.264 MP4 only"))
+    fun hevcPlanPassesTheGate() {
+        Mp4OutputValidator.requireMp4Plan(plan(RenderOutputFormat.MP4_HEVC))
     }
 
     @Test
-    fun pngPlanIsRejectedAsNotH264() {
+    fun pngPlanIsRejectedAsNotMp4() {
         val failure = assertThrows(IllegalArgumentException::class.java) {
-            Mp4OutputValidator.requireH264Plan(plan(RenderOutputFormat.PNG_SEQUENCE_ZIP))
+            Mp4OutputValidator.requireMp4Plan(plan(RenderOutputFormat.PNG_SEQUENCE_ZIP))
         }
-        assertTrue(failure.message!!.contains("H.264 MP4"))
+        assertTrue(failure.message!!.contains("MP4"))
+    }
+
+    @Test
+    fun pngPlanIsRejectedByValidateFileBeforeAnyExtractorWork() {
+        // The format gate runs before MediaExtractor touches the file: a
+        // PNG plan fails with the format error even when the file exists
+        // and is not a video at all (mimeFor throws for a non-MP4 plan
+        // before requireMp4Plan runs).
+        val root = Files.createTempDirectory("effectcraft-validator-gate").toFile()
+        try {
+            val file = File(root, "not-a-video.mp4").apply { writeText("not a video") }
+            val failure = assertThrows(IllegalArgumentException::class.java) {
+                Mp4OutputValidator.validateFile(file, plan(RenderOutputFormat.PNG_SEQUENCE_ZIP))
+            }
+            assertTrue(
+                "A PNG plan must fail the format gate, not the extractor: ${failure.message}",
+                failure.message!!.contains("PNG")
+            )
+        } finally {
+            root.deleteRecursively()
+        }
     }
 }

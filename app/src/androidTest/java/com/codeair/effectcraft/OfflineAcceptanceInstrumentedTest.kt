@@ -12,6 +12,7 @@ import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.PngSequenceZipExporter
 import com.codeair.effectcraft.data.ProjectDocument
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueueSettings

@@ -65,6 +65,7 @@ import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.Mp4ExportWorker
 import com.codeair.effectcraft.export.PngSequenceExportService
 import com.codeair.effectcraft.data.Mp4OutputValidator
+import com.codeair.effectcraft.data.Mp4SequenceExporter
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
@@ -160,10 +161,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
     // Crash recovery: the autosave journal holds edits that never reached
-    // an explicit save. A journal for the latest committed project wins when
-    // it is newer; otherwise the newest journal overall wins when it is newer
-    // than the latest committed draft, which is how a never-saved project
-    // survives process death. Torn and stale journals are deleted by recovery.
+    // an explicit save, together with the canonical undo/redo history, the
+    // selection, and the playhead frame that belonged to them. A journal for
+    // the latest committed project wins when it is newer; otherwise the
+    // newest journal overall wins when it is newer than the latest committed
+    // draft, which is how a never-saved project survives process death.
+    // Torn and stale journals are deleted by recovery.
     val recoveryJournal = remember(context) { EditorRecoveryJournal(File(context.filesDir, "recovery-journal")) }
     val committedDraft = projectStore.loadLatest()
     // The journal entry carries the session state journaled with the
@@ -201,10 +204,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         )
     }
     var selectedClipId by remember { mutableStateOf<String?>(null) }
-    var selectedClipId by remember { mutableStateOf<String?>(null) }
     var selectedAudioClipId by remember { mutableStateOf<String?>(null) }
     var playheadFrame by remember { mutableIntStateOf(recoveredSession?.state?.playheadFrame ?: 0) }
     var isPlaying by remember { mutableStateOf(false) }
+
     var saveMessage by remember {
         mutableStateOf(if (recoveredDraft != null) "Recovered unsaved changes" else "Stored on this device")
     }
@@ -794,7 +797,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             isCancelled = { exportJob?.isActive != true },
                             onProgress = { completed, percent ->
                                 mp4ExportProgress = percent
-                                saveMessage = "Rendering H.264 MP4 · $completed/${plan.frameCount} ($percent%)"
+                                saveMessage = "Rendering $codecLabel MP4 · $completed/${plan.frameCount} ($percent%)"
                             }
                         )
                     }
@@ -860,7 +863,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         stagedResult.audioFirstPtsUs != null && stagedResult.audioLastPtsUs != null) {
                         " · AAC PTS ${stagedResult.audioFirstPtsUs / 1_000}–${stagedResult.audioLastPtsUs / 1_000} ms"
                     } else ""
-                    saveMessage = "Exported & verified ${verified.frameCount} H.264 frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}$audioTiming"
+                    saveMessage = "Exported & verified ${verified.frameCount} $codecLabel frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}$audioTiming"
                 } catch (cancelled: CancellationException) {
                     saveMessage = "MP4 export cancelled"
                     throw cancelled
@@ -1033,12 +1036,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // process death. The journal entry carries the whole session state with
     // the document — both undo/redo stacks, the current selection and
     // playhead, and the canonical stacks and selection — in the same atomic
-    // fsynced envelope, so a crash restores the session, not just the
+    // fsynced v2 envelope, so a crash restores the session, not just the
     // document. The effect keys on every piece of that state because
     // scrubbing the playhead or picking a layer changes no document.
     // A journal failure must never break editing, so it is
     // swallowed here; the committed draft remains the fallback. Journals for
     // abandoned projects are pruned so they can never resurrect later.
+    // One writer for one file: the canonical-only writeFull effect from
+    // feat/ec-recovery-export is intentionally not kept alongside this one —
+    // the session write already carries the canonical stacks, and a second
+    // writer would clobber the draft stacks. writeFull stays available
+    // (and tested) for callers that only have canonical state.
     LaunchedEffect(project, selectedLayerId, playheadFrame, undoStack, redoStack, canonicalSelectedIds, canonicalUndoStack, canonicalRedoStack) {
         runCatching {
             withContext(Dispatchers.IO) {
@@ -1354,6 +1362,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     saveMessage = "Cancel the frame export before starting a sequence"
                 } else {
                     runCatching {
+                        // PNG ZIP is an explicit choice here, never the
+                        // app-wide default: the default is MP4 H.264.
                         val settings = RenderQueueSettings(width, height, fps, startFrame, endFrame, RenderOutputFormat.PNG_SEQUENCE_ZIP)
                         RenderQueuePlan.create(settings, composition.durationFrames)
                         pendingSequenceSettings = settings

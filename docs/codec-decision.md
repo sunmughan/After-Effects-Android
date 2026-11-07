@@ -122,9 +122,10 @@ gap remains. Missing means no code exists.
 
 ### Missing
 
-- No HEVC, AV1, VP9, ProRes, or any other video codec code exists. A
-  repository search for HEVC, AV1, ProRes, VP9, crop, and letterbox
-  finds no such implementation.
+- HEVC exists and is implemented (see section 5): probe, gate, plan
+  format, exporter, both validators, box inspector, and dialog gate.
+  No AV1, VP9, or ProRes codec code exists: a repository search for
+  AV1, VP9, and ProRes finds no such implementation.
 - Audio transcoding now exists for editor audio clips (see the
   "Editor audio editing" bullet under Partial): WAV, MP3, FLAC and
   Opus sources decode to PCM and re-encode to AAC in the mixdown
@@ -295,9 +296,9 @@ both padded and cropped output dimensions and content.
   the opt-in. The export dialog shows the H.265 button disabled with a
   stated reason when no hardware encoder exists. `RenderOutputFormat.MP4_HEVC`
   shares the MP4 dimension and bitrate rules; `Mp4SequenceExporter`,
-  `Mp4ExportValidator`, and `Mp4BoxInspector` accept the HEVC track
-  (hev1/hvc1). Full HEVC encode is proven only on a device with a
-  hardware HEVC encoder; CI emulator coverage is the probe's
+  `Mp4ExportValidator`, `Mp4OutputValidator`, and `Mp4BoxInspector`
+  accept the HEVC track (hev1/hvc1). Full HEVC encode is proven only on a
+  device with a hardware HEVC encoder; CI emulator coverage is the probe's
   self-consistency test, not an encode.
 - Audio: AAC LC passthrough for the legacy path (first AAC track
   only, composition-FPS range shift plus trimming to the range,

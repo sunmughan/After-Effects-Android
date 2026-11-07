@@ -8,18 +8,21 @@ import java.io.File
 import java.nio.ByteBuffer
 
 /**
- * Validates a completed H.264 MP4 against the exact render queue that produced it.
+ * Validates a completed H.264 or HEVC MP4 against the exact render queue
+ * that produced it. The expected video track is the plan's format: H.264
+ * plans expect `video/avc`, HEVC plans expect `video/hevc`. A non-MP4
+ * plan (PNG sequence) is rejected before any extractor work.
  *
  * Validation is performed after the muxer and output descriptor are closed:
  * MediaExtractor must see a finalized container, not an in-flight file.
  * A failure means the caller must not report success and should remove the
  * partial/invalid SAF document.
  *
- * HEVC is always rejected, never silently validated as H.264: an HEVC plan
- * fails in [requireH264Plan], and an HEVC track inside the file fails in
- * [inspect] even when the plan says H.264 (a mismatched or mislabelled
- * file). HEVC remains an explicit opt-in only, after the hardware probe
- * confirms an encoder (see docs/codec-decision.md).
+ * HEVC is an explicit opt-in only, after the hardware probe confirms an
+ * encoder (see docs/codec-decision.md): the app-wide default stays H.264,
+ * and an HEVC plan is validated as HEVC, never silently as H.264. A file
+ * whose video track MIME does not match the plan's format fails with a
+ * named missing-track error (a mismatched or mislabelled file).
  */
 object Mp4OutputValidator {
     data class Report(
@@ -35,29 +38,37 @@ object Mp4OutputValidator {
     )
 
     /**
-     * Pure plan gate: the only format this validator accepts is H.264 MP4.
-     * An HEVC plan is rejected with a named error instead of the generic
-     * "not configured for H.264" message, so a caller (or a test) can tell
-     * an HEVC rejection apart from any other wrong format. Kept free of
-     * Android calls so JVM unit tests can exercise it directly.
+     * Pure plan gate: the only formats this validator accepts are the MP4
+     * ones, H.264 and HEVC. A PNG plan is rejected with a named error
+     * instead of reaching the extractor. Kept free of Android calls so JVM
+     * unit tests can exercise it directly.
+     *
+     * Why both MP4 codecs pass: the export UI offers HEVC only as an
+     * explicit opt-in after the hardware probe, the exporter encodes it
+     * with a hardware-only encoder, and the production export path
+     * validates the final copy with this validator — an H.264-only gate
+     * here would fail every HEVC export the app itself offers. The
+     * default stays H.264; this gate only ever admits an explicitly
+     * chosen MP4 codec.
      */
-    fun requireH264Plan(plan: RenderQueuePlan) {
-        require(plan.settings.outputFormat != RenderOutputFormat.MP4_HEVC) {
-            "HEVC output is rejected: Mp4OutputValidator validates H.264 MP4 only. " +
-                "HEVC is an explicit opt-in after a hardware encoder probe (see docs/codec-decision.md) " +
-                "and must not be validated as H.264."
-        }
-        require(plan.settings.outputFormat == RenderOutputFormat.MP4_H264) {
-            "Render queue is not configured for H.264 MP4"
+    fun requireMp4Plan(plan: RenderQueuePlan) {
+        require(
+            plan.settings.outputFormat == RenderOutputFormat.MP4_H264 ||
+                plan.settings.outputFormat == RenderOutputFormat.MP4_HEVC
+        ) {
+            "Render queue is not configured for MP4 (H.264 or HEVC)"
         }
     }
 
     fun validate(context: Context, uri: Uri, plan: RenderQueuePlan, expectAudio: Boolean = false): Report {
-        requireH264Plan(plan)
+        requireMp4Plan(plan)
+        // Throws for a non-MP4 plan before any extractor work, and selects
+        // the video MIME the plan's format must carry.
+        val expectedMime = Mp4SequenceExporter.mimeFor(plan.settings.outputFormat)
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
-            return inspect(extractor, plan, expectAudio)
+            return inspect(extractor, plan, expectAudio, expectedMime)
         } finally {
             extractor.release()
         }
@@ -65,33 +76,28 @@ object Mp4OutputValidator {
 
     /** File-backed variant used by codec instrumentation; production uses the SAF Uri overload. */
     fun validateFile(file: File, plan: RenderQueuePlan, expectAudio: Boolean = false): Report {
+        val expectedMime = Mp4SequenceExporter.mimeFor(plan.settings.outputFormat)
         require(file.isFile && file.length() > 0L) { "MP4 output is missing or empty" }
-        requireH264Plan(plan)
+        requireMp4Plan(plan)
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(file.absolutePath)
-            return inspect(extractor, plan, expectAudio)
+            return inspect(extractor, plan, expectAudio, expectedMime)
         } finally {
             extractor.release()
         }
     }
 
-    private fun inspect(extractor: MediaExtractor, plan: RenderQueuePlan, expectAudio: Boolean): Report {
-        // Reject an HEVC file outright, even when the plan says H.264: a
-        // mismatched or mislabelled file must fail with a named HEVC error,
-        // not with a confusing "no H.264 track" message.
-        val hevcTrack = (0 until extractor.trackCount).firstOrNull { index ->
-            extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
-                ?.equals(Mp4SequenceExporter.HEVC_MIME, ignoreCase = true) == true
-        }
-        require(hevcTrack == null) {
-            "MP4 contains an HEVC (video/hevc) video track; Mp4OutputValidator accepts " +
-                "H.264 (video/avc) only — HEVC output is rejected"
-        }
+    private fun inspect(extractor: MediaExtractor, plan: RenderQueuePlan, expectAudio: Boolean, expectedMime: String): Report {
+        // The video track must carry the plan's MIME: a file whose codec
+        // does not match the plan (H.264 file for an HEVC plan, or vice
+        // versa) fails here with a named missing-track error below, never
+        // silently validated as the other codec.
+        val label = Mp4SequenceExporter.codecLabel(plan.settings.outputFormat)
         val track = (0 until extractor.trackCount).firstOrNull { index ->
             extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
-                ?.equals(Mp4SequenceExporter.MIME, ignoreCase = true) == true
-        } ?: error("MP4 has no H.264 video track")
+                ?.equals(expectedMime, ignoreCase = true) == true
+        } ?: error("MP4 has no $label video track")
         val format = extractor.getTrackFormat(track)
         val width = format.getInteger(MediaFormat.KEY_WIDTH)
         val height = format.getInteger(MediaFormat.KEY_HEIGHT)
@@ -190,7 +196,7 @@ object Mp4OutputValidator {
             height = height,
             frameCount = count,
             durationUs = trackDurationUs,
-            mime = format.getString(MediaFormat.KEY_MIME) ?: Mp4SequenceExporter.MIME,
+            mime = format.getString(MediaFormat.KEY_MIME) ?: expectedMime,
             audioSamples = audioSamples,
             audioFirstPtsUs = audioFirstPtsUs,
             audioLastPtsUs = audioLastPtsUs,
