@@ -32,9 +32,9 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 |---|---|---|
 | M0 | CI #1124 exact SHA green (61 Rust, 175 API30, JVM, dual ABI, cold APK compare) | Re-run after latest M4 source changes; current merge SHA #1125 cold comparison pending |
 | M1 | Scoped editor foundation; corrected workspace test passed API30 175/175 in #1124 | Full professional parity, accessibility and physical device UX |
-| M2 | Partial; canonical import/save + offline media foundations | Broader Effekseer compatibility, provider/relink matrix |
+| M2 | Partial; canonical import/save + offline media foundations; cross-instance manifest rollback/save serialization committed (`a5cfbe18`, `bd3861f3`, `5392b24a`) | CI #1131 queued; broader Effekseer compatibility, provider/relink matrix |
 | M3 | Partial; real Rust CPU/session preview | Physical GPU/Surface/device-loss/media qualification |
-| M4 | In progress; transform/keyframe/ShapePath editing; keyframe store now cross-instance serialized (`542c1785`) with 120-update regression (`faf1d30c`) | CI #1128 pending; full upstream effects/interpolation/roving/spatial parity |
+| M4 | In progress; transform/keyframe/ShapePath editing; keyframe store cross-instance serialized (`542c1785`) with 120-update regression (`faf1d30c`) | #1128 superseded; full upstream effects/interpolation/roving/spatial parity |
 | M5 | Partial; PNG/MP4/audio export foundations | Long-run recovery, device codec/audio/output validation |
 | M6 | Partial; cache/recovery/memory safeguards | Physical performance, thermal, low-memory and accessibility matrix |
 | M7 | Not accepted | Protected signing, signed artifacts, physical install/run and release gates |
@@ -44,7 +44,8 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 - [CI #1124](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220) **passed** exact source SHA `814dd66e`: Rust 61/61, JVM, dual ABI, unsigned APK/AAB, API30 instrumentation 175/175, and independent cold debug-APK byte comparison.
 - The Compose motion-path overlay synchronization correction [814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e65989137dd80d554ebf9c38b158edbf5) is verified; the prior #1122 timeout is resolved.
 - [CI #1125](https://github.com/sunmughan/After-Effects-Android/actions/runs/42399063894) on merge SHA `4ae22776` has a successful assemble/test job (61 Rust, 175 API30); its independent cold rebuild/compare remains in progress.
-- [CI #1128](https://github.com/sunmughan/After-Effects-Android/actions/runs/42402625642) is in progress for the new M4 concurrent keyframe-store regression (`faf1d30c`). #1127 was cancelled/superseded before testing.
+- CI #1128 (M4 concurrent keyframe regression) was cancelled by subsequent source commits; no result is claimed.
+- [CI #1131](https://github.com/sunmughan/After-Effects-Android/actions/runs/42405449095) is queued on M2 shared-manifest transaction fix SHA `5392b24a`; #1130 was superseded. Its exact test/build verdict is pending.
 
 ## Format and release limitations
 
