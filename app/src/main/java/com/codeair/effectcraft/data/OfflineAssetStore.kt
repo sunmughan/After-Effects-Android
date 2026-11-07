@@ -10,6 +10,8 @@ import java.util.Properties
 import java.util.UUID
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.file.AtomicMoveNotSupportedException
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Content-addressed, app-private media library for offline project assets.
@@ -37,15 +39,22 @@ class OfflineAssetStore(
         require(maxLibraryBytes > 0) { "Media library size limit must be positive" }
     }
 
+    private val rootLock = sharedRootLock(root)
     private val indexFile get() = File(root, "assets.properties")
 
-    @Synchronized
     @Throws(IOException::class)
     fun import(
         input: InputStream,
         displayName: String,
         mimeType: String? = null,
         cancelRequested: () -> Boolean = { false }
+    ): Asset = synchronized(rootLock) { importLocked(input, displayName, mimeType, cancelRequested) }
+
+    private fun importLocked(
+        input: InputStream,
+        displayName: String,
+        mimeType: String?,
+        cancelRequested: () -> Boolean
     ): Asset {
         val name = displayName.trim()
         require(name.isNotEmpty() && name.length <= 255) { "Asset name must contain 1–255 characters" }
@@ -121,8 +130,7 @@ class OfflineAssetStore(
      * silently dropping an entry: GC and verification must never treat a
      * malformed record as an unreferenced asset.
      */
-    @Synchronized
-    fun list(): List<Asset> = readIndex().entries
+    fun list(): List<Asset> = synchronized(rootLock) { readIndex().entries
         .map { entry ->
             val hash = (entry.key as? String)?.decodeHash()
                 ?: throw IllegalStateException("Offline asset catalog contains a non-string hash key")
@@ -131,40 +139,34 @@ class OfflineAssetStore(
             record.decodeRecord(hash)
         }
         .sortedWith(compareBy<Asset> { it.displayName.lowercase() }.thenBy { it.sha256 })
+    }
 
-    @Synchronized
-    fun get(sha256: String): Asset? {
+    fun get(sha256: String): Asset? = synchronized(rootLock) {
         val hash = sha256.decodeHash()
-        return readIndex().getProperty(hash)?.decodeRecord(hash)
+        readIndex().getProperty(hash)?.decodeRecord(hash)
     }
 
     /** Returns the immutable app-private payload path for native relinking. */
-    @Synchronized
-    fun fileFor(sha256: String): File? {
+    fun fileFor(sha256: String): File? = synchronized(rootLock) {
         val hash = sha256.decodeHash()
-        if (readIndex().getProperty(hash) == null) return null
-        val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: return null
-        return payloadFile(hash, asset.extension).takeIf(File::isFile)
+        val asset = readIndex().getProperty(hash)?.decodeRecord(hash)
+        asset?.let { payloadFile(hash, it.extension).takeIf(File::isFile) }
     }
 
-    @Synchronized
     @Throws(IOException::class)
-    fun open(sha256: String): InputStream {
+    fun open(sha256: String): InputStream = synchronized(rootLock) {
         val hash = sha256.decodeHash()
-        if (readIndex().getProperty(hash) == null) throw IOException("Asset $hash is not in the offline library")
         val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: throw IOException("Asset $hash is not in the offline library")
         val payload = payloadFile(hash, asset.extension)
         if (!payload.isFile()) throw IOException("Offline asset payload is missing: $hash")
-        return FileInputStream(payload)
+        FileInputStream(payload)
     }
 
     /** Recomputes the payload digest and size and compares them to the index record. */
-    @Synchronized
-    fun verify(sha256: String): Boolean {
+    fun verify(sha256: String): Boolean = synchronized(rootLock) {
         val hash = sha256.decodeHash()
-        val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: return false
-        val payload = payloadFile(hash, asset.extension)
-        return payloadMatches(payload, hash, asset.sizeBytes)
+        val asset = readIndex().getProperty(hash)?.decodeRecord(hash) ?: return@synchronized false
+        payloadMatches(payloadFile(hash, asset.extension), hash, asset.sizeBytes)
     }
 
     private fun payloadMatches(payload: File, expectedHash: String, expectedSize: Long): Boolean {
@@ -182,8 +184,7 @@ class OfflineAssetStore(
     }
 
     /** Indexed assets whose payload is missing, resized or digest-mismatched. */
-    @Synchronized
-    fun verifyAll(): List<Asset> = list().filterNot { verify(it.sha256) }
+    fun verifyAll(): List<Asset> = synchronized(rootLock) { list().filterNot { verify(it.sha256) } }
 
     data class GcResult(
         val deleted: List<Asset>,
@@ -202,13 +203,12 @@ class OfflineAssetStore(
      * Safe project-aware collection. Reference enumeration is fail-closed,
      * so corrupt manifests abort collection before any asset is deleted.
      */
-    @Synchronized
     @Throws(IOException::class)
-    fun collectGarbage(manifests: ProjectAssetManifestStore): GcResult =
+    fun collectGarbage(manifests: ProjectAssetManifestStore): GcResult = synchronized(rootLock) {
         collectGarbage(manifests.allReferencedHashes())
+    }
 
-    @Synchronized
-    fun collectGarbage(referencedHashes: Set<String>): GcResult {
+    fun collectGarbage(referencedHashes: Set<String>): GcResult = synchronized(rootLock) {
         val referenced = referencedHashes.map { it.decodeHash() }.toSet()
         val deleted = mutableListOf<Asset>()
         val failed = mutableListOf<String>()
@@ -226,21 +226,20 @@ class OfflineAssetStore(
                 if (orphan.delete()) orphans++ else failed += orphan.name
             }
         }
-        return GcResult(deleted, orphans, failed)
+        GcResult(deleted, orphans, failed)
     }
 
-    @Synchronized
     @Throws(IOException::class)
-    fun delete(sha256: String): Boolean {
+    fun delete(sha256: String): Boolean = synchronized(rootLock) {
         val hash = sha256.decodeHash()
         val properties = readIndex()
-        val record = properties.getProperty(hash) ?: return false
+        val record = properties.getProperty(hash) ?: return@synchronized false
         val asset = record.decodeRecord(hash)
         properties.remove(hash)
         writeIndex(properties)
         val payload = payloadFile(hash, asset.extension)
         if (payload.exists() && !payload.delete()) throw IOException("Asset index removed but payload could not be deleted: $hash")
-        return true
+        true
     }
 
     private fun ensureDirectory() {
@@ -266,7 +265,7 @@ class OfflineAssetStore(
     private fun moveReplacing(source: File, target: File) {
         try {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: AtomicMoveNotSupportedException) {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
@@ -299,6 +298,14 @@ class OfflineAssetStore(
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     companion object {
+        private val rootLocks = ConcurrentHashMap<String, Any>()
+
+        private fun sharedRootLock(root: File): Any {
+            val key = runCatching { root.canonicalFile.toPath().normalize().toString() }
+                .getOrElse { root.absoluteFile.toPath().normalize().toString() }
+            return rootLocks.computeIfAbsent(key) { Any() }
+        }
+
         const val DEFAULT_MAX_ASSET_BYTES: Long = 512L * 1024L * 1024L
         const val DEFAULT_MAX_LIBRARY_BYTES: Long = 2L * 1024L * 1024L * 1024L
     }

@@ -9,6 +9,9 @@ import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class OfflineAssetStoreTest {
     @Test
@@ -273,6 +276,40 @@ class OfflineAssetStoreTest {
             }.isFailure)
             assertTrue("The indexed payload must survive fail-closed GC", payload.isFile)
         } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun independentStoresSerializeConcurrentIndexUpdatesWithoutLostAssets() {
+        val root = Files.createTempDirectory("effectcraft-assets-concurrent-stores").toFile()
+        val workers = 6
+        val writesPerWorker = 20
+        val executor = Executors.newFixedThreadPool(workers)
+        val start = CountDownLatch(1)
+        try {
+            val stores = List(workers) { OfflineAssetStore(File(root, "shared")) }
+            val futures = stores.mapIndexed { worker, store ->
+                executor.submit {
+                    assertTrue(start.await(5, TimeUnit.SECONDS))
+                    repeat(writesPerWorker) { index ->
+                        val bytes = "worker-$worker-asset-$index".toByteArray()
+                        store.import(ByteArrayInputStream(bytes), "w$worker-$index.bin")
+                    }
+                }
+            }
+            start.countDown()
+            futures.forEach { it.get(30, TimeUnit.SECONDS) }
+
+            val reopened = OfflineAssetStore(File(root, "shared"))
+            val assets = reopened.list()
+            assertEquals(workers * writesPerWorker, assets.size)
+            assertEquals(workers * writesPerWorker, assets.map { it.sha256 }.toSet().size)
+            assertTrue("Every committed payload must verify", reopened.verifyAll().isEmpty())
+            assertFalse(File(root, "shared/assets.properties.tmp").exists())
+            assertFalse(File(root, "shared").listFiles()!!.any { it.name.startsWith(".import-") })
+        } finally {
+            executor.shutdownNow()
             root.deleteRecursively()
         }
     }
