@@ -158,6 +158,14 @@ class NativeSession private constructor(
             runCatching { renderSessionFrameNative(sessionHandle, compositionId, frame) }
                 .getOrNull()?.takeIf { it.size >= 8 }
         }
+        // A project update can race a render that captured the previous
+        // snapshot. Never return that frame, and remove any old-revision cache
+        // entry the in-flight render may have inserted after updateProject's
+        // first eviction pass.
+        if (projectSnapshot.digest != snapshot.digest) {
+            RenderedFrameCache.removeProjectDigest(snapshot.digest)
+            return null
+        }
         // A cancellation racing a cache hit/render must not publish a stale frame.
         return rendered?.takeUnless { cancelled }
     }
@@ -176,7 +184,12 @@ class NativeSession private constructor(
         // Hash the canonical document once per accepted edit, never once per preview frame.
         val next = ProjectSnapshot.create(json)
         val accepted = runCatching { updateSessionProjectNative(sessionHandle, json) }.getOrDefault(false)
-        if (accepted) projectSnapshot = next
+        if (accepted) {
+            projectSnapshot = next
+            if (current.digest != next.digest) {
+                RenderedFrameCache.removeProjectDigest(current.digest)
+            }
+        }
         return accepted
     }
 
