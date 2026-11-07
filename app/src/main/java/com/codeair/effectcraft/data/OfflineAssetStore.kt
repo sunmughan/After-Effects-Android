@@ -116,13 +116,19 @@ class OfflineAssetStore(
         }
     }
 
+    /**
+     * Lists every indexed asset. Catalog corruption is fail-closed rather than
+     * silently dropping an entry: GC and verification must never treat a
+     * malformed record as an unreferenced asset.
+     */
     @Synchronized
     fun list(): List<Asset> = readIndex().entries
-        .mapNotNull { entry ->
-            runCatching {
-                val hash = (entry.key as String).decodeHash()
-                (entry.value as String).decodeRecord(hash)
-            }.getOrNull()
+        .map { entry ->
+            val hash = (entry.key as? String)?.decodeHash()
+                ?: throw IllegalStateException("Offline asset catalog contains a non-string hash key")
+            val record = entry.value as? String
+                ?: throw IllegalStateException("Offline asset catalog contains a non-string record for $hash")
+            record.decodeRecord(hash)
         }
         .sortedWith(compareBy<Asset> { it.displayName.lowercase() }.thenBy { it.sha256 })
 
