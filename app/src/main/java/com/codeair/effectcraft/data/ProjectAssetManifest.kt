@@ -253,12 +253,29 @@ class ProjectAssetManifestStore(
         if (!root.exists() && !root.mkdirs()) throw IOException("Unable to create asset manifest directory")
         if (!root.isDirectory) throw IOException("Asset manifest path is not a directory")
         val target = fileFor(manifest.projectId)
-        val temporary = File(root, "${target.name}.tmp")
-        temporary.writeText(manifest.toJson(), Charsets.UTF_8)
+        // Unique staging files allow independent store instances/processes to
+        // save the same project without sharing or truncating a fixed ".tmp".
+        // Sync the complete JSON before publishing it; readers see either the
+        // previous manifest or the new one, never a partially-written file.
+        val temporary = File(root, "${target.name}.tmp-${java.util.UUID.randomUUID()}")
         try {
-            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
-            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            java.io.FileOutputStream(temporary).use { output ->
+                output.write(manifest.toJson().toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            try {
+                Files.move(
+                    temporary.toPath(), target.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                // Only lack of atomic-move support permits the fallback. Real
+                // I/O/permission failures must propagate rather than be retried
+                // as a potentially destructive non-atomic replacement.
+                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
+            temporary.delete()
         }
     }
 
