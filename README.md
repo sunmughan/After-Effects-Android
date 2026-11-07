@@ -471,3 +471,6 @@ Selected ShapePath anchors now have a **Corner vertex** action that zeros both t
 
 
 **Automation run 11 (2026-11-07):** CI #1046 passed at exact head `d5b851e2`, including API30 instrumentation and independent cold APK/native reproducibility. M2 offline asset references now serialize concurrent updates across independent instances with durable UUID staging/fsync/atomic replacement; regression covers 8 workers/160 references. Fresh exact-head CI is pending. Details and acceptance ledger: [PHASES.md](PHASES.md). **Release NOT COMPLETE.**
+
+
+**Run 11 CI correction (2026-11-07):** CI #1048 failed one new M2 concurrency test (330/331 passed). The test expected 160 from `referencedAssetIds()`, which is correctly a distinct-hash set of size 2. Corrected it to assert 2 hashes, 80 references per hash, and every one of 160 item mappings. [f13226a9](https://github.com/sunmughan/After-Effects-Android/commit/f13226a9038afe454a9be0b20d72c499a12476ba). Fresh exact-head CI pending; no product test weakened. **Release NOT COMPLETE.**
