@@ -58,6 +58,19 @@ class RenderQueuePlanTest {
     }
 
     @Test
+    fun defaultExportFormatIsMp4H264AndPngRemainsSelectable() {
+        assertEquals(
+            RenderOutputFormat.MP4_H264,
+            RenderQueueSettings(640, 360, 30, 0, 29).outputFormat
+        )
+        val png = RenderQueueSettings(
+            width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29,
+            outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP
+        )
+        assertEquals(30, RenderQueuePlan.create(png).frameCount)
+    }
+
+    @Test
     fun mp4PlanRequiresEvenYuv420DimensionsAndBoundedBitrate() {
         val mp4 = RenderQueueSettings(
             width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29,
