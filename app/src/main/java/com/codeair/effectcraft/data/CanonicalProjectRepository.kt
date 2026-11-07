@@ -34,7 +34,7 @@ import java.util.UUID
 class CanonicalProjectRepository(private val root: File) {
     // A repository instance monitor cannot protect the two-file update/recovery
     // transaction from another instance opened for the same offline workspace.
-    private val rootLock = locks.computeIfAbsent(root.absoluteFile.toPath().normalize().toString()) { Any() }
+    private val rootLock = lockFor(root)
     data class Metadata(
         val id: String,
         val displayName: String,
@@ -431,6 +431,14 @@ class CanonicalProjectRepository(private val root: File) {
 
     companion object {
         private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+        /** Canonicalize symlink aliases so separate handles share the two-file transaction lock. */
+        private fun lockFor(root: File): Any {
+            val key = runCatching { root.canonicalPath }
+                .getOrElse { root.absoluteFile.normalize().path }
+            return locks.computeIfAbsent(key) { Any() }
+        }
+
         const val CURRENT_SCHEMA_VERSION = 1
         const val FORMAT_ECPROJ = "ecproj"
         const val FORMAT_ECPROJX = "ecprojx"
