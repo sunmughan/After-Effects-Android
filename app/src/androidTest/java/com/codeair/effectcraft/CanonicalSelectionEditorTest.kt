@@ -182,7 +182,7 @@ class CanonicalSelectionEditorTest {
         // below already does this).
         workspaceFrame.intValue = 29 // accessible activation seeks the key nearest the current playhead
         compose.onNodeWithTag("timeline-track-list")
-            .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(Offset(0f, 500f)) }
+            .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, 500f) }
         compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
             .performScrollTo().assertIsDisplayed().performClick()
         assertEquals(30, workspaceFrame.intValue)
