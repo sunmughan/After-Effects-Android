@@ -105,7 +105,8 @@ class AudioMixdownInstrumentedTest {
             sourceLengthFrames = 30
         ),
         sourcePath = wav.absolutePath,
-        sourceMime = "audio/x-wav",
+        // What the import probe stores: Android reports WAV as audio/raw.
+        sourceMime = "audio/raw",
         sourceDurationUs = 1_000_000L,
         gain = gain,
         muted = muted

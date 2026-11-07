@@ -3369,6 +3369,10 @@ private fun TimelinePanel(
                 onClick = onRemoveOpacityKeyframe,
                 modifier = Modifier.height(28.dp).semantics { contentDescription = "Remove opacity keyframe" }
             ) { Text("K−", color = EditorPalette.amber, fontSize = 9.sp) }
+            TextButton(
+                onClick = onAddAudioClip,
+                modifier = Modifier.height(28.dp).semantics { contentDescription = "Add audio clip" }
+            ) { Text("+ Audio", color = EditorPalette.mint, fontSize = 9.sp) }
             Text(
                 timecode(playheadFrame, project.frameRate),
                 color = EditorPalette.mint,
@@ -3431,18 +3435,8 @@ private fun TimelinePanel(
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
             }
             // Audio lanes: one row per audio track, clips as blocks like
-            // the layer tracks, plus an add button. Audio lives below the
-            // video layers so the two timelines never share a row.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("AUDIO", color = EditorPalette.muted, fontSize = 8.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
-                TextButton(
-                    onClick = onAddAudioClip,
-                    modifier = Modifier.height(28.dp).semantics { contentDescription = "Add audio clip" }
-                ) { Text("+ Audio", color = EditorPalette.mint, fontSize = 9.sp) }
-                if (audioTracks.isEmpty()) {
-                    Text("No audio clips yet", color = EditorPalette.muted, fontSize = 9.sp)
-                }
-            }
+            // the layer tracks. With no audio tracks nothing renders here,
+            // so the timeline is pixel-identical to the pre-audio layout.
             audioTracks.forEach { track ->
                 AudioTrackLane(
                     track = track,

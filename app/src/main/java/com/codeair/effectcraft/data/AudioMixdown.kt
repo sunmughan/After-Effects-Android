@@ -16,7 +16,8 @@ import java.util.concurrent.CancellationException
  * 1. Decide by MIME ([AudioTranscodeDecision]): AAC may pass through
  *    only on the legacy single-track path — a mix always decodes to PCM
  *    first, because gain, fades and placement need samples. WAV, MP3,
- *    FLAC and Opus decode through MediaCodec and re-encode to AAC.
+ *    FLAC and Opus decode and re-encode to AAC (WAV arrives from the
+ *    extractor as `audio/raw` PCM, so it needs no codec).
  *    Any other format fails the export with a clear reason.
  * 2. Decode only the clip's source in/out window ([AudioDecoder]).
  * 3. Resample to 44.1 kHz stereo ([AudioMixMath]) — the mix's single

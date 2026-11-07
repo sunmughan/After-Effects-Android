@@ -115,7 +115,8 @@ gap remains. Missing means no code exists.
   finds no such implementation.
 - Audio transcoding now exists for editor audio clips (see the
   "Editor audio editing" bullet under Partial): WAV, MP3, FLAC and
-  Opus sources decode to PCM and re-encode to AAC in the mixdown. A
+  Opus sources decode to PCM and re-encode to AAC in the mixdown
+  (Android reports WAV as `audio/raw` PCM, which needs no codec). A
   non-AAC source on the legacy path (no editor audio clips) still
   exports video-only with the unsupported reason. No time-stretch, no
   synthesized audio, and no drift detection or correction exist.

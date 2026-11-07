@@ -5,9 +5,11 @@ package com.codeair.effectcraft.data
  * alone. AAC in MP4 is the only passthrough mime: its samples are
  * already in the export codec. WAV, MP3, FLAC and Opus are decoded to
  * PCM (MediaExtractor/MediaCodec) and re-encoded to AAC at export —
- * they are never silently dropped to video-only. Anything else is
- * unsupported and the export fails closed with a reason instead of
- * faking or synthesizing audio.
+ * they are never silently dropped to video-only. On Android, WAV is
+ * reported by MediaExtractor as `audio/raw` (raw PCM, no codec), and
+ * that mime transcodes too. Anything else is unsupported and the
+ * export fails closed with a reason instead of faking or synthesizing
+ * audio.
  */
 enum class AudioSourceDecision {
     PASSTHROUGH,
@@ -21,6 +23,10 @@ object AudioTranscodeDecision {
     private val transcodeMimes = setOf(
         "audio/x-wav",
         "audio/wav",
+        // Android's WAV extractor reports WAV as audio/raw: the samples
+        // are raw PCM and need no codec, but they still go through the
+        // decode/resample/re-encode path (see AudioDecoder).
+        "audio/raw",
         "audio/mpeg",
         "audio/flac",
         "audio/opus",

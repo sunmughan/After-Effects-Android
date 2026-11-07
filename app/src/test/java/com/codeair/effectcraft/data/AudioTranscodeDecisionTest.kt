@@ -27,6 +27,8 @@ class AudioTranscodeDecisionTest {
     fun wavMp3FlacAndOpusTranscode() {
         assertEquals(AudioSourceDecision.TRANSCODE, AudioTranscodeDecision.decide("audio/x-wav"))
         assertEquals(AudioSourceDecision.TRANSCODE, AudioTranscodeDecision.decide("audio/wav"))
+        // Android reports WAV as audio/raw: raw PCM, still transcoded.
+        assertEquals(AudioSourceDecision.TRANSCODE, AudioTranscodeDecision.decide("audio/raw"))
         assertEquals(AudioSourceDecision.TRANSCODE, AudioTranscodeDecision.decide("audio/mpeg"))
         assertEquals(AudioSourceDecision.TRANSCODE, AudioTranscodeDecision.decide("audio/flac"))
         assertEquals(AudioSourceDecision.TRANSCODE, AudioTranscodeDecision.decide("audio/opus"))

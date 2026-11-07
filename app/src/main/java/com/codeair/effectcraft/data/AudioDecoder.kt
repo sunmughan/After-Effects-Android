@@ -21,7 +21,9 @@ import java.nio.ByteOrder
  * source in/out window instead of a whole (possibly hour-long) file.
  * MP3-style decoder priming samples at the start of a stream are kept
  * as decoded (a ~12 ms offset at most); they are real decoded samples,
- * not an invented delay compensation.
+ * not an invented delay compensation. WAV is special: Android reports
+ * it as `audio/raw`, whose samples are already PCM — [decodeRange]
+ * reads those straight from the extractor with no codec.
  */
 class AudioDecodeException(message: String, cause: Throwable? = null) :
     IllegalStateException(message, cause)
@@ -57,6 +59,8 @@ data class DecodedAudio(
 
 object AudioDecoder {
     private const val TIMEOUT_US = 10_000L
+    /** The MIME Android's WAV extractor reports: raw PCM, no codec. */
+    const val RAW_MIME = "audio/raw"
 
     /**
      * The first audio track of [file], or null when the file has none or
@@ -118,6 +122,12 @@ object AudioDecoder {
                 throw AudioDecodeException("Audio file ${file.name} holds no audio track")
             }
             val mime = format.getString(MediaFormat.KEY_MIME)!!
+            if (mime == RAW_MIME) {
+                // Android's WAV extractor reports WAV as audio/raw: the
+                // samples are already raw PCM, so there is no codec to
+                // open — read them straight from the extractor.
+                return decodeRaw(extractor, trackIndex, format, startUs, endUs, file.name)
+            }
             val decoder = try {
                 MediaCodec.createDecoderByType(mime)
             } catch (failure: Exception) {
@@ -127,6 +137,56 @@ object AudioDecoder {
         } finally {
             runCatching { extractor.release() }
         }
+    }
+
+    /**
+     * Reads raw PCM samples straight from the extractor for an
+     * [RAW_MIME] track (Android WAV): no MediaCodec decoder exists for
+     * raw PCM because there is nothing to decode. Only 16-bit PCM is
+     * supported; any other WAV encoding fails closed with its reason.
+     * Range trimming reuses [appendInRange], so a clip reads only its
+     * source in/out window.
+     */
+    private fun decodeRaw(
+        extractor: MediaExtractor,
+        trackIndex: Int,
+        format: MediaFormat,
+        startUs: Long,
+        endUs: Long,
+        fileName: String
+    ): DecodedAudio {
+        val sampleRateHz = format.getIntegerOrDefault(MediaFormat.KEY_SAMPLE_RATE, 0)
+        val channelCount = format.getIntegerOrDefault(MediaFormat.KEY_CHANNEL_COUNT, 0)
+        if (sampleRateHz <= 0 || channelCount <= 0) {
+            throw AudioDecodeException("Audio file $fileName reports no sample rate or channel count")
+        }
+        val pcmEncoding = format.getIntegerOrDefault(
+            MediaFormat.KEY_PCM_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT
+        )
+        if (pcmEncoding != android.media.AudioFormat.ENCODING_PCM_16BIT) {
+            throw AudioDecodeException(
+                "Audio file $fileName is not 16-bit PCM (encoding $pcmEncoding); only 16-bit WAV is supported"
+            )
+        }
+        extractor.selectTrack(trackIndex)
+        extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+        val samples = ArrayList<Short>()
+        val buffer = ByteBuffer.allocate(1024 * 1024)
+        val info = MediaCodec.BufferInfo()
+        while (true) {
+            val size = extractor.readSampleData(buffer, 0)
+            if (size < 0) break
+            val pts = extractor.sampleTime
+            extractor.advance()
+            if (pts >= endUs) break
+            info.set(0, size, pts, 0)
+            appendInRange(buffer, info, sampleRateHz, channelCount, startUs, endUs, samples)
+        }
+        if (samples.isEmpty()) {
+            throw AudioDecodeException("Audio file $fileName decoded to no samples in the requested range")
+        }
+        val decodedUs = samples.size.toLong() * 1_000_000L / (sampleRateHz * channelCount)
+        return DecodedAudio(sampleRateHz, channelCount, samples.toShortArray(), decodedUs)
     }
 
     private fun decodeWith(
