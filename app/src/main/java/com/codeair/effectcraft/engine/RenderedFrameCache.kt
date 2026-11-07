@@ -53,10 +53,16 @@ internal object RenderedFrameCache {
     @Synchronized
     internal fun stats(): Pair<Int, Int> = entries.size to retainedBytes
 
-    internal fun key(projectJson: String, compositionId: Long, frame: Long, maxSide: Int): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest(projectJson.toByteArray(Charsets.UTF_8))
-            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-        return "$digest:$compositionId:$frame:$maxSide"
+    internal fun projectDigest(projectJson: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(projectJson.toByteArray(Charsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+
+    internal fun keyFromDigest(projectDigest: String, compositionId: Long, frame: Long, maxSide: Int): String {
+        require(projectDigest.matches(Regex("[0-9a-f]{64}"))) { "Project digest must be lowercase SHA-256" }
+        require(compositionId >= 0 && frame >= 0 && maxSide >= 0) { "Frame cache coordinates must be non-negative" }
+        return "$projectDigest:$compositionId:$frame:$maxSide"
     }
+
+    internal fun key(projectJson: String, compositionId: Long, frame: Long, maxSide: Int): String =
+        keyFromDigest(projectDigest(projectJson), compositionId, frame, maxSide)
 }
