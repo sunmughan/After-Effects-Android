@@ -143,20 +143,22 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
     // Crash recovery: the autosave journal holds edits that never reached
-    // an explicit save. A journal for the latest committed project wins when
-    // it is newer; otherwise the newest journal overall wins when it is newer
-    // than the latest committed draft, which is how a never-saved project
-    // survives process death. Torn and stale journals are deleted by recovery.
+    // an explicit save, together with the canonical undo/redo history, the
+    // selection, and the playhead frame that belonged to them. A journal for
+    // the latest committed project wins when it is newer; otherwise the
+    // newest journal overall wins when it is newer than the latest committed
+    // draft, which is how a never-saved project survives process death.
+    // Torn and stale journals are deleted by recovery.
     val recoveryJournal = remember(context) { EditorRecoveryJournal(File(context.filesDir, "recovery-journal")) }
     val committedDraft = projectStore.loadLatest()
-    val recoveredDraft = runCatching {
-        val forCommitted = committedDraft?.let { recoveryJournal.recover(it.id, it) }
+    val recoveredState = runCatching {
+        val forCommitted = committedDraft?.let { recoveryJournal.recoverFull(it.id, it) }
         if (forCommitted != null) {
             forCommitted
         } else {
-            val newest = recoveryJournal.recoverNewest()
+            val newest = recoveryJournal.recoverNewestFull()
             if (committedDraft != null && newest != null &&
-                newest.updatedAtEpochMillis <= committedDraft.updatedAtEpochMillis
+                newest.document.updatedAtEpochMillis <= committedDraft.updatedAtEpochMillis
             ) {
                 null
             } else {
@@ -164,6 +166,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             }
         }
     }.getOrNull()
+    val recoveredDraft = recoveredState?.document
     var project by remember {
         mutableStateOf(recoveredDraft ?: committedDraft ?: ProjectDocument.starter())
     }
@@ -177,6 +180,20 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
     var playheadFrame by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
+
+    // Restores the journaled editor state once, on first composition: the
+    // canonical undo/redo stacks (entries stay re-appliable through
+    // CanonicalEditHistory), the selection, and the playhead, clamped to
+    // the recovered project's length. The draft single-layer selection is
+    // a different id space and keeps its own first-layer default.
+    LaunchedEffect(Unit) {
+        recoveredState?.let { state ->
+            canonicalUndoStack = state.undoStack
+            canonicalRedoStack = state.redoStack
+            canonicalSelectedIds = state.selectedLayerIds
+            playheadFrame = state.playheadFrame.coerceIn(0, project.durationFrames - 1)
+        }
+    }
     var saveMessage by remember {
         mutableStateOf(if (recoveredDraft != null) "Recovered unsaved changes" else "Stored on this device")
     }
@@ -757,13 +774,21 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
 
     // Autosave journal: every working-project change is journaled off the UI
     // thread before the user can be interrupted by a crash, rotation, or
-    // process death. A journal failure must never break editing, so it is
-    // swallowed here; the committed draft remains the fallback. Journals for
-    // abandoned projects are pruned so they can never resurrect later.
-    LaunchedEffect(project) {
+    // process death. Canonical history and selection changes re-journal too,
+    // so the restored undo stack belongs to the restored document; the
+    // playhead is journaled at the last such change, not on every playback
+    // frame, so playback never pays a disk write per frame. A journal
+    // failure must never break editing, so it is swallowed here; the
+    // committed draft remains the fallback. Journals for abandoned projects
+    // are pruned so they can never resurrect later. Clearing the canonical
+    // stacks (project switch or import) re-journals empty stacks through
+    // these same keys, so a stale history can never resurrect either.
+    LaunchedEffect(project, canonicalUndoStack, canonicalRedoStack, canonicalSelectedIds) {
         runCatching {
             withContext(Dispatchers.IO) {
-                recoveryJournal.write(project)
+                recoveryJournal.writeFull(
+                    project, canonicalUndoStack, canonicalRedoStack, canonicalSelectedIds, playheadFrame
+                )
                 recoveryJournal.discardAllExcept(project.id)
             }
         }
