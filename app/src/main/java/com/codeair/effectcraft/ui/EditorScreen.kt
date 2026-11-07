@@ -249,6 +249,7 @@ fun EditorScreen(
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
+    onSplitCanonicalLayer: (Long, Long, Int) -> Unit = { _, _, _ -> },
     onSetCanonicalLayerOpacity: (Long, Long, Double) -> Unit,
     onAddCanonicalLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddCanonicalLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit = { _, _, _, _, _, _, _ -> },
@@ -819,6 +820,7 @@ fun EditorScreen(
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
+                    onSplitLayer = onSplitCanonicalLayer,
                     onSetLayerOpacity = onSetCanonicalLayerOpacity,
                     onAddLayerOpacityKeyframe = onAddCanonicalLayerOpacityKeyframe,
                     onAddLayerTransformKeyframe = onAddCanonicalLayerTransformKeyframe,
@@ -1404,6 +1406,7 @@ private fun CanonicalProjectEditor(
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
+    onSplitLayer: (Long, Long, Int) -> Unit = { _, _, _ -> },
     onSetLayerOpacity: (Long, Long, Double) -> Unit,
     onAddLayerOpacityKeyframe: (Long, Long, Int, Double) -> Unit,
     onAddLayerTransformKeyframe: (Long, Long, String, Int, Double, Double, Double) -> Unit,
@@ -2356,9 +2359,20 @@ private fun CanonicalProjectEditor(
                 } else {
                     Text("No effects on this layer.", color = EditorPalette.muted, fontSize = 11.sp)
                 }
+                Text(
+                    "Clip · frames ${layer.inPointFrame}–${layer.outPointFrame - 1}",
+                    color = EditorPalette.muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.semantics { contentDescription = "Canonical layer clip range" }
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(enabled = editable, onClick = { onMoveLayer(composition.id, layer.id, -1) }) { Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp) }
                     TextButton(enabled = editable, onClick = { onMoveLayer(composition.id, layer.id, 1) }) { Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp) }
+                    TextButton(
+                        enabled = editable && layer.canSplitAt(previewFrame),
+                        onClick = { onSplitLayer(composition.id, layer.id, previewFrame) },
+                        modifier = Modifier.semantics { contentDescription = "Split canonical layer at playhead" }
+                    ) { Text("Split · frame $previewFrame", color = EditorPalette.violet, fontSize = 11.sp) }
                     TextButton(
                         enabled = editable,
                         onClick = {

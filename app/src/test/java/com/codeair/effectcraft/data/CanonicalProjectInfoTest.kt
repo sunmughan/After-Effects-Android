@@ -199,4 +199,32 @@ class CanonicalProjectInfoTest {
     fun rejectsInvalidNativeMetadataEnvelope() {
         CanonicalProjectInfo.parse("""{"valid":false,"error":"invalid project"}""")
     }
+
+    @Test
+    fun parsesLayerClipRangeFramesAndSplitAvailability() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":5.0,"layers":[{"id":2,"name":"Title","source":"Text","inPointFrame":0,"outPointFrame":150,"startTimeFrame":0},{"id":3,"name":"Title (2)","source":"Text","inPointFrame":45,"outPointFrame":150,"startTimeFrame":0}]}]}"""
+        val layers = CanonicalProjectInfo.parse(metadata).compositions.single().layers
+        assertEquals(0, layers[0].inPointFrame)
+        assertEquals(150, layers[0].outPointFrame)
+        assertEquals(0, layers[0].startTimeFrame)
+        assertEquals(45, layers[1].inPointFrame)
+        assertEquals(150, layers[1].outPointFrame)
+        // Only a strictly interior frame yields two non-empty clips.
+        assertFalse(layers[0].canSplitAt(0))
+        assertTrue(layers[0].canSplitAt(45))
+        assertTrue(layers[0].canSplitAt(149))
+        assertFalse(layers[0].canSplitAt(150))
+        assertFalse(layers[1].canSplitAt(45))
+        assertTrue(layers[1].canSplitAt(100))
+    }
+
+    @Test
+    fun clipRangeDefaultsToFullCompositionWhenMetadataLacksFrames() {
+        val metadata = """{"valid":true,"compositions":[{"id":10,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":5.0,"layers":[{"id":2,"name":"Title","source":"Text"}]}]}"""
+        val layer = CanonicalProjectInfo.parse(metadata).compositions.single().layers.single()
+        assertEquals(0, layer.inPointFrame)
+        assertEquals(150, layer.outPointFrame)
+        assertEquals(0, layer.startTimeFrame)
+        assertTrue(layer.canSplitAt(75))
+    }
 }
