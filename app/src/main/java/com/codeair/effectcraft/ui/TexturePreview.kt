@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.viewinterop.AndroidView
-import com.codeair.effectcraft.engine.RenderedFrameBitmap
+import com.codeair.effectcraft.engine.RenderedFrameBitmapCache
 import com.codeair.effectcraft.engine.SurfacePresentation
 
 /**
