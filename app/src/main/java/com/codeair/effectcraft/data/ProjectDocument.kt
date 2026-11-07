@@ -24,6 +24,9 @@ data class ProjectDocument(
         layers.forEachIndexed { index, layer ->
             if (layer.name.isBlank()) add("Layer ${index + 1} name must not be blank")
             if (!layer.opacity.isFinite() || layer.opacity !in 0f..1f) add("Layer ${index + 1} opacity must be finite and normalized")
+            ClipTimeline.validateClips(layer.clips, durationFrames).forEach { error ->
+                add("Layer ${index + 1}: $error")
+            }
         }
     }
 
@@ -41,21 +44,24 @@ data class ProjectDocument(
                     name = "Background",
                     kind = "Footage",
                     opacity = 1f,
-                    tint = 0xFF56647A
+                    tint = 0xFF56647A,
+                    clips = listOf(ClipDocument.fullRange(150))
                 ),
                 LayerDocument(
                     id = UUID.randomUUID().toString(),
                     name = "Title / Main",
                     kind = "Text",
                     opacity = 1f,
-                    tint = 0xFF9278F6
+                    tint = 0xFF9278F6,
+                    clips = listOf(ClipDocument.fullRange(150))
                 ),
                 LayerDocument(
                     id = UUID.randomUUID().toString(),
                     name = "Accent Shapes",
                     kind = "Shape",
                     opacity = 0.82f,
-                    tint = 0xFF45C8B5
+                    tint = 0xFF45C8B5,
+                    clips = listOf(ClipDocument.fullRange(150))
                 )
             )
         )
@@ -68,7 +74,9 @@ data class LayerDocument(
     val kind: String,
     val opacity: Float,
     val tint: Long,
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    /** Clips on this layer's timeline. Empty means the legacy behaviour: the layer covers the full composition (see [ClipTimeline.layerCoverage]). */
+    val clips: List<ClipDocument> = emptyList()
 ) {
     companion object {
         fun newShape(index: Int): LayerDocument = LayerDocument(

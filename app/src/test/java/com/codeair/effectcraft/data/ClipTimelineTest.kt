@@ -58,7 +58,7 @@ class ClipTimelineTest {
     fun sourceSpanMustMatchTimelineSpan() {
         // Timeline length 100 but only 90 source frames: coverage is inconsistent.
         assertTrue(ClipTimeline.validateClips(listOf(clip(0, 100, 0, 90)), 100).isNotEmpty())
-        assertTrue(ClipTimeline.validateClips(listOf(clip(0, 100, 10, 110)), 100).isEmpty())
+        assertTrue(ClipTimeline.validateClips(listOf(clip(0, 100, 10, 110, 150)), 100).isEmpty())
     }
 
     @Test
