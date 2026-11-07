@@ -139,6 +139,7 @@ class DraftProjectStore(context: Context) {
         put("frameRate", project.frameRate)
         put("durationFrames", project.durationFrames)
         put("updatedAtEpochMillis", project.updatedAtEpochMillis)
+        put("audioTracks", AudioTrackJson.encode(project.audioTracks))
         put("layers", JSONArray().apply {
             project.layers.forEach { layer ->
                 put(JSONObject().apply {
@@ -186,6 +187,7 @@ class DraftProjectStore(context: Context) {
             frameRate = json.optInt("frameRate", 30),
             durationFrames = json.optInt("durationFrames", 150),
             layers = layers,
+            audioTracks = AudioTrackJson.decode(json.optJSONArray("audioTracks")),
             updatedAtEpochMillis = json.optLong("updatedAtEpochMillis", 0L)
         )
         val validationErrors = project.validationErrors()

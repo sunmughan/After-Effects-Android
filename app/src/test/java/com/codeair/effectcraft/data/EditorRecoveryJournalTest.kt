@@ -245,4 +245,52 @@ class EditorRecoveryJournalTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun journaledAudioClipsAreRecoveredWithAllSettings() {
+        val root = Files.createTempDirectory("effectcraft-journal-audio").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 1_000L)
+            val audioClip = AudioClipDocument(
+                clip = ClipDocument(
+                    id = "audio-clip-1", startFrame = 10, endFrame = 70,
+                    sourceStartFrame = 5, sourceEndFrame = 65, sourceLengthFrames = 200
+                ),
+                sourcePath = "/audio/voice.wav",
+                sourceMime = "audio/x-wav",
+                sourceDurationUs = 6_666_666L,
+                gain = 1.25f,
+                fadeInFrames = 6,
+                fadeOutFrames = 12,
+                muted = false
+            )
+            val editedProject = committed.copy(
+                name = "Unsaved audio edit",
+                audioTracks = listOf(AudioTrackDocument(id = "track-1", name = "Voiceover", clips = listOf(audioClip))),
+                updatedAtEpochMillis = committed.updatedAtEpochMillis + 60_000L
+            )
+            EditorRecoveryJournal(root).write(editedProject)
+
+            val recovered = EditorRecoveryJournal(root).recover(committed.id, committed)
+            assertNotNull(recovered)
+            assertEquals(listOf(audioClip), recovered!!.audioTracks.single().clips)
+            assertEquals("Voiceover", recovered.audioTracks.single().name)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun journalWithoutAudioTracksRecoversAsNoAudioTracks() {
+        val root = Files.createTempDirectory("effectcraft-journal-noaudio").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 1_000L)
+            EditorRecoveryJournal(root).write(edited(committed, "Unsaved revision", false))
+            val recovered = EditorRecoveryJournal(root).recover(committed.id, committed)
+            assertNotNull(recovered)
+            assertEquals(emptyList<AudioTrackDocument>(), recovered!!.audioTracks)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }
