@@ -488,3 +488,13 @@ Selected ShapePath anchors now have a **Corner vertex** action that zeros both t
 
 
 **M5 export cancellation correction (2026-11-07):** Optional audio mix/remux fallback previously caught `CancellationException` via `runCatching`, risking a cancelled export being reported as video-only. `runAudioFallback` now recovers ordinary audio failures but propagates cancellation unchanged in both mix and mux/validate fallback; JVM tests cover success, recoverable failure and cancellation identity. CI #1079's six JVM failures were separately diagnosed as stale legacy trim-vs-clip state plus empty-selection recovery; production fix [c4a4fd58](https://github.com/sunmughan/After-Effects-Android/commit/c4a4fd58926d395757b911dcd01c3a2fa2ae813c) is under exact-head CI #1080. Fresh CI for cancellation commits pending. **Release NOT COMPLETE.** See [PHASES.md](PHASES.md).
+
+
+## Automation execution 11 follow-up — CI #1090 duplicate instrumentation imports fixed (2026-11-07)
+
+- CI #1090 [42366418111](https://github.com/sunmughan/After-Effects-Android/actions/runs/42366418111) failed at Android-test Kotlin compilation after ARM64/x86_64 JNI, Rust, debug APK, JVM suite, unsigned release APK+AAB and no-debug-key verification had passed. Exact retry job log identified duplicate `RenderOutputFormat` imports in `OfflineAcceptanceInstrumentedTest.kt` and `PngSequenceExportServiceInstrumentedTest.kt` (introduced by the upstream merge commit `382546a7`). Removed only the duplicate import in each file; no tests or assertions changed.
+- M6 cache hashing optimization is now fully wired: `RenderedFrameCache.projectDigest/keyFromDigest` validates and reuses a SHA-256 digest; `NativeSession` stores an immutable JSON/digest snapshot and refreshes it only after accepted project edits. JVM test uses valid canonical JSON and verifies digest/key equivalence and rejection of malformed digest.
+- The failed #1090 exact-head run is not a pass. New source/test/docs head needs full ARM64+x86_64, Rust, JVM, API30 and independent cold APK/native reproducibility. **Release NOT COMPLETE.**
+
+
+**CI #1090 import-fix follow-up:** the two `RenderOutputFormat` imports were separated by `RenderQueuePlan`, so the prior adjacent-line dedupe did not actually remove them. This commit filters each instrumentation file to one import occurrence; all test bodies are unchanged. The preview-digest source/test commits are `087704fd` (NativeSession snapshot), `f828bed2` (cache key API + import correction), and `71fe705a` (digest regression). Fresh exact-head CI remains mandatory. **Release NOT COMPLETE.**
