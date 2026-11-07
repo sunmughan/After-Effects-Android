@@ -55,11 +55,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Tune
@@ -560,14 +562,18 @@ fun EditorScreen(
                             Text("No saved drafts yet. Save a composition to open it later.", color = EditorPalette.muted)
                         } else {
                             savedProjects.forEach { saved ->
-                                TextButton(
-                                    onClick = {
-                                        showProjectPicker = false
-                                        onOpenProject(saved.id)
-                                    },
+                                Row(
                                     modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            showProjectPicker = false
+                                            onOpenProject(saved.id)
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                                        .semantics { contentDescription = "Open project ${saved.name}" },
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(Modifier.fillMaxWidth()) {
+                                    Column(Modifier.weight(1f)) {
                                         Text(saved.name, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Text("${saved.width}×${saved.height} · ${saved.frameRate} FPS · ${saved.layers.size} layers",
                                             color = EditorPalette.muted, fontSize = 11.sp)
@@ -593,14 +599,18 @@ fun EditorScreen(
                             Text("No canonical projects saved yet. Import a .ecproj or .ecprojx to add one.", color = EditorPalette.muted)
                         } else {
                             repositoryProjects.forEach { entry ->
-                                TextButton(
-                                    onClick = {
-                                        showRepositoryPicker = false
-                                        onOpenRepositoryProject(entry.id)
-                                    },
+                                Row(
                                     modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            showRepositoryPicker = false
+                                            onOpenRepositoryProject(entry.id)
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                                        .semantics { contentDescription = "Open canonical project ${entry.displayName}" },
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(Modifier.fillMaxWidth()) {
+                                    Column(Modifier.weight(1f)) {
                                         Text(entry.displayName, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Text(
                                             "${entry.format} · schema v${entry.schemaVersion}" + if (entry.id == activeRepositoryProjectId) " · Current" else "",
@@ -741,7 +751,7 @@ fun EditorScreen(
                             color = EditorPalette.muted,
                             fontSize = 12.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP }) { Text("PNG ZIP") }
                             TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 }) { Text("MP4 H.264") }
                             TextButton(
@@ -1001,11 +1011,14 @@ private fun HeaderBar(
         // measured to zero and never displayed. Narrower windows use the
         // two-row header, where the status has its own full-width row.
         if (maxWidth < 840.dp) {
-            // Two compact rows prevent the project status from being squeezed to zero
-            // width by the desktop-style action bar on phones.
-            Column(Modifier.fillMaxWidth().height(88.dp)) {
+            // Three compact rows on phones: the title row, the status on
+            // its own full-width line, and the action bar as a scrollable
+            // row. Eight 48dp action buttons cannot share one row with the
+            // status on a 360dp phone, and squeezing the status to zero
+            // width hid it entirely (see the old 620dp threshold bug).
+            Column(Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -1027,49 +1040,58 @@ private fun HeaderBar(
                         Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
                             color = EditorPalette.mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
                     }
-                    IconButton(onClick = onSave, modifier = Modifier.size(34.dp)) {
+                    IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
                     }
-                    TextButton(onClick = onNewProject) {
+                    TextButton(onClick = onNewProject, modifier = Modifier.height(48.dp)) {
                         Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
                     }
                 }
+                // Status on its own full-width line: it is never squeezed
+                // by the action bar, and it stays a single ellipsized line.
+                Text(
+                    saveMessage,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
+                        .semantics { contentDescription = "Editor status: $saveMessage" },
+                    color = EditorPalette.mint,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // Action bar: every button is a full 48dp target. Eight
+                // 48dp buttons do not fit a 360dp phone side by side, so
+                // this row scrolls horizontally instead of squeezing or
+                // clipping any action.
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        saveMessage,
-                        modifier = Modifier.weight(1f).semantics { contentDescription = "Editor status: $saveMessage" },
-                        color = EditorPalette.mint,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    IconButton(onClick = onOpenProject, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onOpenProject, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = "Open offline project", tint = EditorPalette.mint)
                     }
-                    IconButton(onClick = onOpenMediaLibrary, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Offline media library", tint = EditorPalette.violet)
+                    IconButton(onClick = onOpenMediaLibrary, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet)
                     }
-                    IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj, modifier = Modifier.size(32.dp)) {
-                        Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.FolderOpen,
+                    IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj, modifier = Modifier.size(48.dp)) {
+                        Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.Description,
                             contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
                             tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
                     }
-                    IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
                     }
-                    IconButton(onClick = onExportEcproj, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onExportEcproj, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
                     }
-                    IconButton(onClick = onExportEcprojx, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onExportEcprojx, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint)
                     }
                     IconButton(
                         onClick = if (isExportingFrame) onCancelFrameExport else onExportRenderedFrame,
                         enabled = isExportingFrame || hasCanonicalProject,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
@@ -1080,7 +1102,7 @@ private fun HeaderBar(
                     IconButton(
                         onClick = if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport else onExportPngSequence,
                         enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
@@ -1125,9 +1147,9 @@ private fun HeaderBar(
                     Text("OFFLINE", modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                         color = EditorPalette.mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
-                IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Offline media library", tint = EditorPalette.violet) }
+                IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet) }
                 IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj) {
-                    Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.FolderOpen,
+                    Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.Description,
                         contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
                         tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
                 }
@@ -1403,9 +1425,6 @@ private fun InspectorPanel(
                 Switch(checked = layer.visible, onCheckedChange = onVisibilityChange, modifier = Modifier.semantics { contentDescription = "Layer visibility" })
             }
             Spacer(Modifier.height(12.dp))
-            PropertyLine("Transform", "›")
-            PropertyValueLine("Position", "540, 960")
-            PropertyValueLine("Scale", "100%")
             Spacer(Modifier.height(18.dp))
             PropertyLine("Appearance", "⌄")
             Spacer(Modifier.height(12.dp))
@@ -1491,7 +1510,8 @@ private fun InspectorPanel(
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onDeleteLayer, modifier = Modifier.semantics { contentDescription = "Delete selected layer" }) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Color(0xFFFF858D))
-                Text("  Remove layer", color = Color(0xFFFF858D), fontSize = 12.sp)
+                Spacer(Modifier.width(6.dp))
+                Text("Remove layer", color = Color(0xFFFF858D), fontSize = 12.sp)
             }
         }
 
@@ -2397,7 +2417,7 @@ private fun CanonicalProjectEditor(
                     fontSize = 11.sp,
                     modifier = Modifier.semantics { contentDescription = "Canonical opacity keys" }
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(
                         enabled = editable,
                         onClick = { onAddLayerOpacityKeyframe(composition.id, layer.id, previewFrame, opacityDraft.toDouble()) },
@@ -2485,7 +2505,7 @@ private fun CanonicalProjectEditor(
                     fontSize = 11.sp,
                     modifier = Modifier.semantics { contentDescription = "Canonical layer clip range" }
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(enabled = editable, onClick = { onMoveLayer(composition.id, layer.id, -1) }) { Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp) }
                     TextButton(enabled = editable, onClick = { onMoveLayer(composition.id, layer.id, 1) }) { Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp) }
                     TextButton(
@@ -2907,11 +2927,14 @@ private fun CanonicalParamGroupRows(
                 vertices.forEachIndexed { index, vertex ->
                     val (xText, yText, _) = vertexDrafts[index]
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            "P${index + 1}", color = EditorPalette.muted, fontSize = 10.sp,
-                            modifier = Modifier.width(28.dp).clickable(enabled = editable) { selectedCanvasVertex = index }
-                                .semantics { contentDescription = "Select canonical $section path segment start P${index + 1} ${group.name} ${param.name}" }
-                        )
+                        Box(
+                            modifier = Modifier.width(28.dp).height(48.dp)
+                                .clickable(enabled = editable) { selectedCanvasVertex = index }
+                                .semantics { contentDescription = "Select canonical $section path segment start P${index + 1} ${group.name} ${param.name}" },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("P${index + 1}", color = EditorPalette.muted, fontSize = 10.sp)
+                        }
                         BasicTextField(
                             value = xText,
                             onValueChange = { pathVertexDrafts = pathVertexDrafts + ("${param.uid}:${index}:x" to it.take(32)) },
@@ -3186,7 +3209,7 @@ private fun CanonicalParamGroupRows(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
                     TextButton(enabled = editable, onClick = { expandedLayerRefUid = param.uid }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer reference ${group.name} ${param.name}" }) {
-                        Text("${param.name}: ${selected?.name ?: "None"}", color = EditorPalette.text, fontSize = 11.sp)
+                        Text("${param.name}: ${selected?.name ?: "None"}", color = EditorPalette.text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     DropdownMenu(expanded = expandedLayerRefUid == param.uid, onDismissRequest = { expandedLayerRefUid = null }) {
                         DropdownMenuItem(text = { Text("None") }, onClick = {
@@ -3257,7 +3280,7 @@ private fun CanonicalParamGroupRows(
                         enabled = editable,
                         onClick = { expandedPopupUid = param.uid },
                         modifier = Modifier.semantics { contentDescription = "Canonical $section popup parameter ${group.name} ${param.name}" }
-                    ) { Text(heldOption, color = EditorPalette.text, fontSize = 11.sp) }
+                    ) { Text(heldOption, color = EditorPalette.text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     DropdownMenu(
                         expanded = expandedPopupUid == param.uid,
                         onDismissRequest = { expandedPopupUid = null }
@@ -3344,20 +3367,6 @@ private fun PropertyLine(title: String, trailing: String) {
         Text(title, color = EditorPalette.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.weight(1f))
         Text(trailing, color = EditorPalette.muted, fontSize = 14.sp)
-    }
-}
-
-@Composable
-private fun PropertyValueLine(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp, top = 8.dp, bottom = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, color = EditorPalette.muted, fontSize = 11.sp)
-        Spacer(Modifier.weight(1f))
-        Text(value, color = EditorPalette.text, fontSize = 11.sp)
     }
 }
 
@@ -3468,15 +3477,15 @@ private fun TimelinePanel(
             Spacer(Modifier.weight(1f))
             TextButton(
                 onClick = onAddOpacityKeyframe,
-                modifier = Modifier.height(28.dp).semantics { contentDescription = "Add opacity keyframe" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add opacity keyframe" }
             ) { Text("K+", color = EditorPalette.violet, fontSize = 9.sp) }
             TextButton(
                 onClick = onRemoveOpacityKeyframe,
-                modifier = Modifier.height(28.dp).semantics { contentDescription = "Remove opacity keyframe" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove opacity keyframe" }
             ) { Text("K−", color = EditorPalette.amber, fontSize = 9.sp) }
             TextButton(
                 onClick = onAddAudioClip,
-                modifier = Modifier.height(28.dp).semantics { contentDescription = "Add audio clip" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add audio clip" }
             ) { Text("+ Audio", color = EditorPalette.mint, fontSize = 9.sp) }
             Text(
                 timecode(playheadFrame, project.frameRate),
@@ -3484,7 +3493,7 @@ private fun TimelinePanel(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
-            IconButton(onClick = onTogglePlayback, modifier = Modifier.size(34.dp)) {
+            IconButton(onClick = onTogglePlayback, modifier = Modifier.size(48.dp)) {
                 Icon(
                     if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
                     contentDescription = if (isPlaying) "Pause timeline" else "Play timeline",
@@ -3596,13 +3605,13 @@ private fun CanonicalTransformTrack(keyframes: List<Int>, durationFrames: Int, c
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(27.dp)
+            .height(48.dp)
             .padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("TRANSFORM", modifier = Modifier.width(107.dp), color = EditorPalette.mint, fontSize = 9.sp)
         Box(
-            modifier = Modifier.weight(1f).height(17.dp)
+            modifier = Modifier.weight(1f).height(48.dp)
                 .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
                 .semantics {
                     contentDescription = "Canonical transform keyframes: ${frames.joinToString(", ")}"
@@ -3678,13 +3687,13 @@ private fun CanonicalColorTrack(keys: List<CanonicalCurveKey>, durationFrames: I
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(27.dp)
+            .height(48.dp)
             .padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("COLOR", modifier = Modifier.width(107.dp), color = EditorPalette.amber, fontSize = 9.sp)
         Box(
-            modifier = Modifier.weight(1f).height(17.dp)
+            modifier = Modifier.weight(1f).height(48.dp)
                 .clip(RoundedCornerShape(5.dp)).background(Color(0xFF202633))
                 .semantics {
                     contentDescription = "Canonical color keyframes: " + frames.joinToString(", ") {
@@ -4286,7 +4295,7 @@ private fun ClipInspector(
                 label = { Text("In · frame", fontSize = 9.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(96.dp).semantics { contentDescription = "Clip in frame" }
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Clip in frame" }
             )
             OutlinedTextField(
                 value = endText,
@@ -4294,7 +4303,7 @@ private fun ClipInspector(
                 label = { Text("Out · frame", fontSize = 9.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(96.dp).semantics { contentDescription = "Clip out frame" }
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Clip out frame" }
             )
             TextButton(
                 onClick = {
@@ -4302,12 +4311,12 @@ private fun ClipInspector(
                     val end = endText.toIntOrNull()
                     if (start != null && end != null) onTrimClip(start, end)
                 },
-                modifier = Modifier.height(32.dp).semantics { contentDescription = "Apply clip trim" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Apply clip trim" }
             ) { Text("Trim", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
                 onClick = onSplitClipAtPlayhead,
                 enabled = canSplit,
-                modifier = Modifier.height(32.dp).semantics { contentDescription = "Split clip at playhead" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Split clip at playhead" }
             ) { Text("Split", color = if (canSplit) EditorPalette.mint else EditorPalette.muted, fontSize = 10.sp) }
         }
     }
@@ -4323,7 +4332,7 @@ private fun AudioTrackLane(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(27.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(7.dp))
             .padding(horizontal = 5.dp)
             .semantics { contentDescription = "Audio track: ${track.name}" },
@@ -4340,7 +4349,7 @@ private fun AudioTrackLane(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(17.dp)
+                .height(48.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(Color(0xFF202633))
         ) {
@@ -4453,7 +4462,7 @@ private fun AudioClipInspector(
             )
             TextButton(
                 onClick = { onSetAudioMuted(!clip.muted) },
-                modifier = Modifier.height(32.dp).semantics { contentDescription = if (clip.muted) "Unmute audio clip" else "Mute audio clip" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = if (clip.muted) "Unmute audio clip" else "Mute audio clip" }
             ) { Text(if (clip.muted) "Unmute" else "Mute", color = if (clip.muted) EditorPalette.amber else EditorPalette.mint, fontSize = 10.sp) }
         }
         Row(
@@ -4466,7 +4475,7 @@ private fun AudioClipInspector(
                 label = { Text("Fade in · frames", fontSize = 9.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(104.dp).semantics { contentDescription = "Audio fade in frames" }
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Audio fade in frames" }
             )
             OutlinedTextField(
                 value = fadeOutText,
@@ -4474,7 +4483,7 @@ private fun AudioClipInspector(
                 label = { Text("Fade out · frames", fontSize = 9.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(104.dp).semantics { contentDescription = "Audio fade out frames" }
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Audio fade out frames" }
             )
             TextButton(
                 onClick = {
@@ -4482,7 +4491,7 @@ private fun AudioClipInspector(
                     val fadeOut = fadeOutText.toIntOrNull()
                     if (fadeIn != null && fadeOut != null) onSetAudioFades(fadeIn, fadeOut)
                 },
-                modifier = Modifier.height(32.dp).semantics { contentDescription = "Apply audio fades" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Apply audio fades" }
             ) { Text("Fades", color = EditorPalette.violet, fontSize = 10.sp) }
         }
         Row(
@@ -4496,7 +4505,7 @@ private fun AudioClipInspector(
                 label = { Text("In · frame", fontSize = 9.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(96.dp).semantics { contentDescription = "Audio clip in frame" }
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Audio clip in frame" }
             )
             OutlinedTextField(
                 value = endText,
@@ -4504,7 +4513,7 @@ private fun AudioClipInspector(
                 label = { Text("Out · frame", fontSize = 9.sp) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(96.dp).semantics { contentDescription = "Audio clip out frame" }
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Audio clip out frame" }
             )
             TextButton(
                 onClick = {
@@ -4512,12 +4521,12 @@ private fun AudioClipInspector(
                     val end = endText.toIntOrNull()
                     if (start != null && end != null) onTrimAudioClip(start, end)
                 },
-                modifier = Modifier.height(32.dp).semantics { contentDescription = "Apply audio clip trim" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Apply audio clip trim" }
             ) { Text("Trim", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
                 onClick = onSplitAudioClipAtPlayhead,
                 enabled = canSplit,
-                modifier = Modifier.height(32.dp).semantics { contentDescription = "Split audio clip at playhead" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Split audio clip at playhead" }
             ) { Text("Split", color = if (canSplit) EditorPalette.mint else EditorPalette.muted, fontSize = 10.sp) }
         }
     }
@@ -4541,7 +4550,7 @@ private fun LayerTrack(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(27.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(7.dp))
             .background(if (selected) Color(0xFF20283A) else Color.Transparent)
             .clickable(onClick = onClick)
@@ -4566,7 +4575,7 @@ private fun LayerTrack(
         BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
-                .height(17.dp)
+                .height(48.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(Color(0xFF202633))
         ) {
