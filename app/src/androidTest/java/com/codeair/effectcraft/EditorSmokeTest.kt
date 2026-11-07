@@ -15,6 +15,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.codeair.effectcraft.ui.EditorScreen
@@ -152,8 +154,8 @@ class EditorSmokeTest {
         // of assuming it is the only editable field, and the rename Apply
         // by its description (the trim row has its own Apply button, so a
         // bare onNodeWithText("Apply") matches two nodes, not one).
-        compose.onNodeWithContentDescription("Layer name").performTextClearance()
-        compose.onNodeWithContentDescription("Layer name").performTextInput("Mobile title")
+        compose.onNodeWithTag("layer-name-field").performTextClearance()
+        compose.onNodeWithTag("layer-name-field").performTextInput("Mobile title")
         compose.onNodeWithContentDescription("Apply layer rename").performClick()
         assertTrue("Renamed layer should appear in timeline and inspector", compose.onAllNodesWithText("Mobile title").fetchSemanticsNodes().size >= 2)
     }
@@ -295,7 +297,8 @@ class EditorSmokeTest {
         compose.onNodeWithText("Accent Shapes").performScrollTo().performClick()
         compose.onNodeWithText("Props").performClick()
         // The inspector scrolls; the opacity row may sit below the fold.
-        compose.onNodeWithText("82%").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("layer-opacity-value")
+            .performScrollTo().assertIsDisplayed().assertTextContains("82%")
     }
 
     @Test
