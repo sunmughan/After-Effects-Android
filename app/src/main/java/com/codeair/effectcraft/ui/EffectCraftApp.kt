@@ -24,13 +24,13 @@ import java.io.File
 import java.io.FileOutputStream
 import com.codeair.effectcraft.data.AudioClipDocument
 import com.codeair.effectcraft.data.AudioClipEditOutcome
+import com.codeair.effectcraft.data.AudioClipTimeline
 import com.codeair.effectcraft.data.AudioDecoder
 import com.codeair.effectcraft.data.AudioSourceDecision
 import com.codeair.effectcraft.data.AudioTimeline
 import com.codeair.effectcraft.data.AudioTrackDocument
 import com.codeair.effectcraft.data.AudioTranscodeDecision
 import com.codeair.effectcraft.data.AudioStatus
-import com.codeair.effectcraft.data.AudioTimeline
 import com.codeair.effectcraft.data.AudioTimelineStore
 import com.codeair.effectcraft.data.MediaCodecAudioDecoder
 import com.codeair.effectcraft.data.CanonicalEditHistory
@@ -742,6 +742,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     val clipsApply = ClipRenderCoverage.appliesTo(project, composition.durationFrames)
                     val plan = if (clipsApply) RenderQueuePlan.createForClips(settings, project)
                     else RenderQueuePlan.create(settings, composition.durationFrames)
+                    val codecLabel = Mp4SequenceExporter.codecLabel(settings.outputFormat)
                     saveMessage = "Rendering H.264 MP4 · 0/${plan.frameCount} (0%)"
                     val staged = File(context.cacheDir, "effectcraft-video-${System.nanoTime()}.mp4")
                     stagedMp4 = staged
@@ -1520,7 +1521,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     selectedClipId = null
                 }
             },
-            onAddAudioClip = { audioImportLauncher.launch(arrayOf("audio/*")) },
+            onAddAudioTrackClip = { audioImportLauncher.launch(arrayOf("audio/*")) },
             onTrimAudioClip = { newStart, newEnd ->
                 val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
                 val clipId = selectedAudioClipId
