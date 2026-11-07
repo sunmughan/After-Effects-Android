@@ -74,6 +74,24 @@ class RenderedFrameCacheTest {
         }
     }
 
+
+    @Test fun projectDigestCanBeReusedForEveryFrameKey() {
+        val project = "{\\\"version\\\":3,\\\"layers\\\":[1,2,3]}"
+        val digest = RenderedFrameCache.projectDigest(project)
+        assertEquals(64, digest.length)
+        assertEquals(
+            RenderedFrameCache.key(project, 7, 24, 320),
+            RenderedFrameCache.keyFromDigest(digest, 7, 24, 320),
+        )
+        assertEquals(
+            RenderedFrameCache.keyFromDigest(digest, 7, 25, 320),
+            RenderedFrameCache.keyFromDigest(digest, 7, 25, 320),
+        )
+        org.junit.Assert.assertNotEquals(digest, RenderedFrameCache.projectDigest(project + " "))
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            RenderedFrameCache.keyFromDigest("invalid", 7, 24, 320)
+        }
+    }
     @Test fun oversizedFramesAreNotRetainedAndClearResetsBudget() {
         RenderedFrameCache.put("large", ByteArray(12 * 1024 * 1024 + 1))
         assertNull(RenderedFrameCache.get("large"))

@@ -32,9 +32,15 @@ import org.json.JSONObject
  * as a session: draft-only state keeps its explicit "Draft preview not
  * rendered" label instead of a faked frame.
  */
+private data class ProjectSnapshot(val json: String, val digest: String) {
+    companion object {
+        fun create(json: String) = ProjectSnapshot(json, RenderedFrameCache.projectDigest(json))
+    }
+}
+
 class NativeSession private constructor(
     @Volatile private var handle: Long,
-    @Volatile private var projectJson: String,
+    @Volatile private var projectSnapshot: ProjectSnapshot,
     @Volatile private var maxSide: Int,
 ) : AutoCloseable {
 
@@ -52,7 +58,7 @@ class NativeSession private constructor(
             val handle = runCatching { createSessionNative(projectJson, maxSide.toLong()) }.getOrNull()
                 ?: return null
             if (handle <= 0L) return null
-            return NativeSession(handle, projectJson, maxSide)
+            return NativeSession(handle, ProjectSnapshot.create(projectJson), maxSide)
         }
 
         @JvmStatic
@@ -146,7 +152,8 @@ class NativeSession private constructor(
         val sessionHandle = handle
         if (sessionHandle == 0L || cancelled || compositionId < 0 || frame < 0) return null
         RenderBudget.checkPreviewMaxSide(maxSide)
-        val key = RenderedFrameCache.key(projectJson, compositionId, frame, maxSide)
+        val snapshot = projectSnapshot
+        val key = RenderedFrameCache.keyFromDigest(snapshot.digest, compositionId, frame, maxSide)
         val rendered = RenderedFrameCache.getOrRender(key) {
             runCatching { renderSessionFrameNative(sessionHandle, compositionId, frame) }
                 .getOrNull()?.takeIf { it.size >= 8 }
@@ -164,9 +171,12 @@ class NativeSession private constructor(
     fun updateProject(json: String): Boolean {
         val sessionHandle = handle
         if (sessionHandle == 0L || cancelled) return false
-        if (json == projectJson) return true
+        val current = projectSnapshot
+        if (json == current.json) return true
+        // Hash the canonical document once per accepted edit, never once per preview frame.
+        val next = ProjectSnapshot.create(json)
         val accepted = runCatching { updateSessionProjectNative(sessionHandle, json) }.getOrDefault(false)
-        if (accepted) projectJson = json
+        if (accepted) projectSnapshot = next
         return accepted
     }
 
