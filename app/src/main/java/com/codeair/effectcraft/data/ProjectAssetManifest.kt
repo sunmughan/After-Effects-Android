@@ -241,7 +241,7 @@ class ProjectAssetManifestStore(
 ) {
     // Instance monitors cannot coordinate a save with a rollback-capable batch
     // in another store instance. Serialize every operation sharing this root.
-    private val lock = locks.computeIfAbsent(root.absoluteFile.toPath().normalize().toString()) { Any() }
+    private val lock = lockFor(root)
 
     fun load(projectId: String): ProjectAssetManifest = synchronized(lock) {
         val id = ProjectAssetManifest.validateProjectId(projectId)
@@ -415,6 +415,13 @@ class ProjectAssetManifestStore(
 
     companion object {
         private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+        /** Resolve symlink aliases so every handle to one on-disk catalog shares its transaction lock. */
+        private fun lockFor(root: File): Any {
+            val key = runCatching { root.canonicalPath }
+                .getOrElse { root.absoluteFile.normalize().path }
+            return locks.computeIfAbsent(key) { Any() }
+        }
     }
 
     private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
