@@ -5,6 +5,7 @@ import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -45,11 +46,11 @@ fun TexturePreview(
     modifier: Modifier = Modifier,
     presentation: SurfacePresentation = remember { SurfacePresentation() },
 ) {
-    val holder = remember { object { var surface: Surface? = null; var bytes: ByteArray? = null } }
+    val holder = remember { object { var surface: Surface? = null; val bitmapCache = RenderedFrameBitmapCache() } }
     fun drawLatest() {
         val target = holder.surface ?: return
         if (!presentation.isAttached) return
-        val bitmap = RenderedFrameBitmap.decode(holder.bytes) ?: return
+        val bitmap = holder.bitmapCache.bitmap ?: return
         runCatching {
             val canvas = target.lockCanvas(null)
             try {
@@ -77,6 +78,14 @@ fun TexturePreview(
             } finally {
                 target.unlockCanvasAndPost(canvas)
             }
+        }
+    }
+    DisposableEffect(holder) {
+        onDispose {
+            presentation.onSurfaceDestroyed()
+            holder.surface?.release()
+            holder.surface = null
+            holder.bitmapCache.close()
         }
     }
     AndroidView(
@@ -112,7 +121,7 @@ fun TexturePreview(
             // The composable body refreshes the holder every recomposition,
             // so the listener's drawLatest always sees the newest frame even
             // though the listener itself was created on the first composition.
-            holder.bytes = frameBytes
+            holder.bitmapCache.update(frameBytes)
             // A fresh frame for an attached surface is drawn immediately;
             // a frame arriving while detached waits for the next attach,
             // which draws it through drawLatest.
