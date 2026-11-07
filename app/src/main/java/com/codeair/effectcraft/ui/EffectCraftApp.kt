@@ -7,8 +7,12 @@ import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -211,6 +215,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var saveMessage by remember {
         mutableStateOf(if (recoveredDraft != null) "Recovered unsaved changes" else "Stored on this device")
     }
+    // New-project guard (P07): true whenever the working draft holds
+    // edits no explicit save has committed. The New button asks first
+    // while this is true; saving or opening a saved project clears it.
+    var hasUnsavedChanges by remember { mutableStateOf(recoveredDraft != null) }
+    var showNewProjectConfirm by remember { mutableStateOf(false) }
     var undoStack by remember {
         mutableStateOf(
             recoveredSession?.state?.undoStack?.map {
@@ -309,6 +318,40 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         redoStack = emptyList()
         project = next
         saveMessage = message
+        hasUnsavedChanges = true
+    }
+
+    /** Saves the current draft; true only when the save landed. */
+    fun saveCurrentProject(): Boolean {
+        var saved = false
+        runCatching { projectStore.save(project) }
+            .onSuccess {
+                // The edits are committed now, so the journal for this
+                // project must go: keeping it would resurrect old edits.
+                runCatching { recoveryJournal.discard(project.id) }
+                savedProjects = projectStore.listSavedProjects()
+                saveMessage = "Saved locally · ${project.name}"
+                hasUnsavedChanges = false
+                saved = true
+            }
+            .onFailure { saveMessage = "Save failed · ${it.message ?: "storage error"}" }
+        return saved
+    }
+
+    /**
+     * Replaces the working draft with a fresh starter. Only called after
+     * the New guard has cleared: no unsaved changes, saved just now, or
+     * explicitly discarded by the user in the New dialog.
+     */
+    fun switchToNewProject() {
+        applyProjectChange(ProjectDocument.starter(), "New offline composition")
+        projectKeyframeTracks = emptyList()
+        selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
+        selectedClipId = null
+        selectedAudioClipId = null
+        playheadFrame = 0
+        isPlaying = false
+        hasUnsavedChanges = false
     }
 
     /**
@@ -1047,8 +1090,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // document. The effect keys on every piece of that state because
     // scrubbing the playhead or picking a layer changes no document.
     // A journal failure must never break editing, so it is
-    // swallowed here; the committed draft remains the fallback. Journals for
-    // abandoned projects are pruned so they can never resurrect later.
+    // swallowed here; the committed draft remains the fallback. Nothing
+    // here prunes other projects' journals: a project switch used to
+    // call discardAllExcept, which destroyed the previous draft's
+    // unsaved work on every New (P07). Journals are now discarded
+    // only on an explicit save (saveCurrentProject) or an explicit
+    // Discard in the New dialog. A lingering journal is inert —
+    // recovery reads the newest journal, so an abandoned one can
+    // never resurrect.
     // One writer for one file: the canonical-only writeFull effect from
     // feat/ec-recovery-export is intentionally not kept alongside this one —
     // the session write already carries the canonical stacks, and a second
@@ -1073,7 +1122,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         canonicalSelectedIds = canonicalSelectedIds
                     )
                 )
-                recoveryJournal.discardAllExcept(project.id)
             }
         }
     }
@@ -1289,6 +1337,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     playheadFrame = previous.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     undoStack = undoStack.dropLast(1)
                     saveMessage = "Undo · unsaved"
+                    hasUnsavedChanges = true
                 }
             },
             onRedo = {
@@ -1303,6 +1352,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     playheadFrame = next.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     redoStack = redoStack.dropLast(1)
                     saveMessage = "Redo · unsaved"
+                    hasUnsavedChanges = true
                 }
             },
             onOpenProject = { projectId ->
@@ -1320,6 +1370,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     undoStack = emptyList()
                     redoStack = emptyList()
                     saveMessage = "Opened locally · ${opened.name}"
+                    hasUnsavedChanges = false
                 }
             },
             onDeleteOfflineAsset = { sha256 ->
@@ -1419,25 +1470,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                 }
             },
-            onSave = {
-                runCatching { projectStore.save(project) }
-                    .onSuccess {
-                        // The edits are committed now, so the journal for this
-                        // project must go: keeping it would resurrect old edits.
-                        runCatching { recoveryJournal.discard(project.id) }
-                        savedProjects = projectStore.listSavedProjects()
-                        saveMessage = "Saved locally · ${project.name}"
-                    }
-                    .onFailure { saveMessage = "Save failed · ${it.message ?: "storage error"}" }
-            },
+            onSave = { saveCurrentProject() },
             onNewProject = {
-                applyProjectChange(ProjectDocument.starter(), "New offline composition")
-                projectKeyframeTracks = emptyList()
-                selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
-                selectedClipId = null
-                selectedAudioClipId = null
-                playheadFrame = 0
-                isPlaying = false
+                // Never silently destroy work: with unsaved changes the
+                // user picks Save / Discard / Cancel first (P07).
+                if (hasUnsavedChanges) showNewProjectConfirm = true else switchToNewProject()
             },
             onAddLayer = {
                 val layer = LayerDocument.newShape(project.layers.size + 1)
@@ -2320,5 +2357,33 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             isVerifyingOfflineAssets = mediaVerificationInProgress
         )
+
+        // P07: starting a new composition with unsaved changes asks
+        // first. Save commits the old draft and then switches; Discard
+        // is the user's explicit choice to drop it (the only path that
+        // discards the old journal on New); Cancel keeps editing.
+        if (showNewProjectConfirm) {
+            AlertDialog(
+                onDismissRequest = { showNewProjectConfirm = false },
+                title = { Text("Start a new composition?") },
+                text = { Text("The current composition has unsaved changes. Save them before starting over, or discard them.") },
+                confirmButton = {
+                    Row {
+                        TextButton(onClick = {
+                            showNewProjectConfirm = false
+                            runCatching { recoveryJournal.discard(project.id) }
+                            switchToNewProject()
+                        }) { Text("Discard", color = Color(0xFFFF858D)) }
+                        TextButton(onClick = {
+                            showNewProjectConfirm = false
+                            if (saveCurrentProject()) switchToNewProject()
+                        }) { Text("Save") }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNewProjectConfirm = false }) { Text("Cancel") }
+                }
+            )
+        }
     }
 }
