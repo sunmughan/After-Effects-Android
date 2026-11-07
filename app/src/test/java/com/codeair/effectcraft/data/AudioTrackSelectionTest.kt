@@ -40,6 +40,10 @@ class AudioTrackSelectionTest {
     @Test
     fun everyAudioStatusExplainsTheActualExportOutcome() {
         assertEquals("with audio", AudioStatus.INCLUDED.describe())
+        assertEquals("with mixed audio", AudioStatus.MIXED.describe())
+        assertTrue(AudioStatus.INCLUDED.hasAudioTrack)
+        assertTrue(AudioStatus.MIXED.hasAudioTrack)
+        assertTrue(!AudioStatus.NO_AUDIO_IN_COMPOSITION.hasAudioTrack)
         assertEquals(
             "video-only — composition has no audio",
             AudioStatus.NO_AUDIO_IN_COMPOSITION.describe()

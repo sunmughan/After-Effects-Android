@@ -1,12 +1,14 @@
 package com.codeair.effectcraft.data
 
 import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.CancellationException
 
 /**
@@ -27,20 +29,27 @@ import java.util.concurrent.CancellationException
  * 1. Encode video-only into [stagedFile] with the sibling exporter (real
  *    MediaCodec H.264 + MediaMuxer, frames from the caller's render path).
  * 2. Validate the staged file with [Mp4ExportValidator] BEFORE any SAF copy.
- * 3. When an AAC track is available, re-mux video + AAC sample-for-sample
+ * 3. When the editor timeline holds audio clips, decode every clip,
+ *    mix it to PCM with [AudioMixer] (per-clip volume and fades,
+ *    overlapping clips summed and clamped), re-encode to AAC and mux
+ *    it with the video into a second staged file, validate that file
+ *    with audio expected, and only then promote it over [stagedFile].
+ *    Mixed audio that decodes to silence, or a decode failure, falls
+ *    through to step 4 instead of failing the video export.
+ * 4. When an AAC track is available, re-mux video + AAC sample-for-sample
  *    into a second staged file (audio timestamps shifted into the export
  *    range), validate that file with audio expected, and only then promote
  *    it over [stagedFile]. When the AAC track yields zero samples inside the
  *    range, the re-muxed file is discarded and the validated video-only
  *    file stands — a valid video export must never fail only because its
  *    audio does not overlap the exported range.
- * 4. The caller copies only the validated file to SAF and deletes the
+ * 5. The caller copies only the validated file to SAF and deletes the
  *    staging file in a finally block. Cancellation is cooperative: checks
  *    run before every frame render and inside the copy loops.
  *
- * Audio is passthrough only (see [AudioTrackSelection]): no audio track is
- * ever synthesized. The video-only reason is always visible via
- * [AudioStatus.describe], never silent.
+ * Audio is mixed in-app whenever the timeline holds clips (see [AudioStatus.MIXED]);
+ * the AAC passthrough below is only the fallback for an empty timeline.
+ * The video-only reason is always visible via [AudioStatus.describe], never silent.
  */
 object Mp4ExportWorker {
     data class StagedResult(
@@ -114,6 +123,8 @@ object Mp4ExportWorker {
         hasAudioItems: Boolean,
         compositionFrameRateNum: Int,
         compositionFrameRateDen: Int,
+        audioTimeline: AudioTimeline? = null,
+        pcmSource: AudioPcmSource? = null,
         isCancelled: () -> Boolean = { false },
         onProgress: (completedFrames: Int, percent: Int) -> Unit = { _, _ -> }
     ): StagedResult {
@@ -132,6 +143,57 @@ object Mp4ExportWorker {
         }
         val validated = Mp4ExportValidator.validate(stagedFile, plan, expectAudio = false)
         val (rangeStartUs, rangeEndUs) = audioRangeUs(plan, compositionFrameRateNum, compositionFrameRateDen)
+        // Mixed timeline audio takes precedence over passthrough: the
+        // editor timeline is the user's explicit audio, decoded and
+        // re-encoded in-app. Silence or a decode failure falls through
+        // to passthrough below instead of failing the video export.
+        if (audioTimeline != null && !audioTimeline.isEmpty && pcmSource != null) {
+            val mixed = runCatching {
+                AudioMixer.mix(
+                    audioTimeline, rangeStartUs, rangeEndUs,
+                    AudioMixer.EXPORT_SAMPLE_RATE_HZ, AudioMixer.EXPORT_CHANNEL_COUNT, pcmSource
+                )
+            }.getOrNull()
+            if (mixed != null && !AudioMixer.isSilent(mixed)) {
+                val remuxed = File(stagedFile.parentFile, stagedFile.nameWithoutExtension + "-mixed.mp4")
+                try {
+                    // Any encode/validate failure falls through to
+                    // passthrough below; a failed mix must never fail
+                    // the video export.
+                    val mixedResult = runCatching {
+                        val mixedSamples = muxMixedAudio(
+                            stagedFile, mixed,
+                            AudioMixer.EXPORT_SAMPLE_RATE_HZ, AudioMixer.EXPORT_CHANNEL_COUNT,
+                            remuxed, isCancelled
+                        )
+                        check(mixedSamples > 0L) { "Mixed AAC encode produced no samples" }
+                        val remuxedValidated = Mp4ExportValidator.validate(remuxed, plan, expectAudio = true)
+                        check(remuxedValidated.audioSamples == mixedSamples) {
+                            "Muxed AAC sample count ${remuxedValidated.audioSamples} differs from written count $mixedSamples"
+                        }
+                        check(remuxedValidated.audioFirstPtsUs != null && remuxedValidated.audioLastPtsUs != null) {
+                            "Validated AAC track is missing its presentation-time window"
+                        }
+                        if (!remuxed.renameTo(stagedFile)) {
+                            remuxed.copyTo(stagedFile, overwrite = true)
+                        }
+                        StagedResult(
+                            framesWritten = encoded.framesEncoded,
+                            audioStatus = AudioStatus.MIXED,
+                            videoSamples = remuxedValidated.videoSamples,
+                            durationUs = remuxedValidated.durationUs,
+                            audioSamplesWritten = mixedSamples,
+                            audioFirstPtsUs = remuxedValidated.audioFirstPtsUs,
+                            audioLastPtsUs = remuxedValidated.audioLastPtsUs,
+                            audioTrackDurationUs = remuxedValidated.audioTrackDurationUs
+                        )
+                    }.getOrNull()
+                    if (mixedResult != null) return mixedResult
+                } finally {
+                    remuxed.delete()
+                }
+            }
+        }
         val audioStatus: AudioStatus
         var audioSamples = 0L
         when {
@@ -243,6 +305,138 @@ object Mp4ExportWorker {
         } finally {
             runCatching { videoExtractor.release() }
             runCatching { audioExtractor.release() }
+            if (muxer != null) runCatching { muxer.release() }
+        }
+    }
+
+    /**
+     * Muxes the video track of [videoFile] with [pcm] (interleaved float
+     * PCM at [sampleRateHz]/[channelCount]) re-encoded to AAC. Returns
+     * the number of AAC frames written. PCM is fed in 1024-frame chunks
+     * with presentation times from the frame index, so the audio track
+     * stays in sync with the video frame times. The AAC encoder's
+     * priming delay means the first frame's presentation time is 0 as
+     * encoded; players compensate, leaving at most one AAC frame
+     * (~21 ms at 48 kHz) of A/V offset.
+     */
+    internal fun muxMixedAudio(
+        videoFile: File,
+        pcm: FloatArray,
+        sampleRateHz: Int,
+        channelCount: Int,
+        outputFile: File,
+        isCancelled: () -> Boolean
+    ): Long {
+        require(pcm.isNotEmpty()) { "Mixed PCM is empty" }
+        require(pcm.size % channelCount == 0) { "Mixed PCM is not a whole number of frames" }
+        val totalFrames = pcm.size / channelCount
+        val videoExtractor = MediaExtractor()
+        var muxer: MediaMuxer? = null
+        var encoder: MediaCodec? = null
+        var encoderStarted = false
+        try {
+            videoExtractor.setDataSource(videoFile.absolutePath)
+            val videoTrackIndex = (0 until videoExtractor.trackCount).firstOrNull { index ->
+                videoExtractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
+                    ?.startsWith("video/") == true
+            } ?: error("Staged MP4 is missing its video track")
+            muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val mx = muxer
+            val videoOut = mx.addTrack(videoExtractor.getTrackFormat(videoTrackIndex))
+            encoder = MediaCodec.createEncoderByType("audio/mp4a-latm")
+            val enc = encoder
+            val audioFormat = MediaFormat.createAudioFormat("audio/mp4a-latm", sampleRateHz, channelCount).apply {
+                setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+                setInteger(MediaFormat.KEY_BIT_RATE, 128_000)
+                setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16_384)
+            }
+            enc.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            enc.start()
+            encoderStarted = true
+            val info = MediaCodec.BufferInfo()
+            var framesFed = 0
+            var audioOut = -1
+            var muxerStarted = false
+            var audioFramesWritten = 0L
+            var inputEosFed = false
+            var sawOutputEos = false
+            fun drain(timeoutUs: Long): Boolean {
+                var eos = false
+                while (true) {
+                    if (isCancelled()) throw CancellationException("MP4 export cancelled")
+                    when (val outputIndex = enc.dequeueOutputBuffer(info, timeoutUs)) {
+                        MediaCodec.INFO_TRY_AGAIN_LATER -> return eos
+                        MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            check(!muxerStarted) { "AAC encoder changed output format more than once" }
+                            audioOut = mx.addTrack(enc.outputFormat)
+                            mx.start()
+                            muxerStarted = true
+                        }
+                        else -> if (outputIndex >= 0) {
+                            val encoded = enc.getOutputBuffer(outputIndex)
+                            try {
+                                if (info.size > 0 &&
+                                    info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0
+                                ) {
+                                    check(muxerStarted) { "AAC encoder emitted samples before its output format" }
+                                    requireNotNull(encoded) { "AAC encoder returned a null output buffer" }
+                                    encoded.position(info.offset)
+                                    encoded.limit(info.offset + info.size)
+                                    mx.writeSampleData(audioOut, encoded, info)
+                                    audioFramesWritten++
+                                }
+                                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) eos = true
+                            } finally {
+                                enc.releaseOutputBuffer(outputIndex, false)
+                            }
+                        }
+                    }
+                }
+            }
+            while (!sawOutputEos) {
+                if (isCancelled()) throw CancellationException("MP4 export cancelled")
+                if (!inputEosFed) {
+                    val inputIndex = enc.dequeueInputBuffer(10_000L)
+                    if (inputIndex >= 0) {
+                        val remaining = totalFrames - framesFed
+                        if (remaining <= 0) {
+                            enc.queueInputBuffer(
+                                inputIndex, 0, 0,
+                                framesFed.toLong() * 1_000_000L / sampleRateHz,
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                            )
+                            inputEosFed = true
+                        } else {
+                            val chunkFrames = minOf(1024, remaining)
+                            val buffer = enc.getInputBuffer(inputIndex)
+                                ?: throw IllegalStateException("AAC encoder returned no input buffer")
+                            buffer.clear()
+                            buffer.order(ByteOrder.LITTLE_ENDIAN)
+                            for (frame in 0 until chunkFrames) {
+                                for (channel in 0 until channelCount) {
+                                    val value = (pcm[(framesFed + frame) * channelCount + channel] * 32767f)
+                                        .coerceIn(-32768f, 32767f)
+                                    buffer.putShort(value.toInt().toShort())
+                                }
+                            }
+                            val ptsUs = framesFed.toLong() * 1_000_000L / sampleRateHz
+                            enc.queueInputBuffer(inputIndex, 0, chunkFrames * channelCount * 2, ptsUs, 0)
+                            framesFed += chunkFrames
+                        }
+                    }
+                }
+                sawOutputEos = drain(if (inputEosFed) 10_000L else 0L)
+            }
+            check(muxerStarted) { "AAC encoder produced no output track" }
+            copyTrack(videoExtractor, videoTrackIndex, mx, videoOut, shift = null, 0L, 0L, isCancelled)
+            mx.stop()
+            mx.release()
+            muxer = null
+            return audioFramesWritten
+        } finally {
+            runCatching { videoExtractor.release() }
+            if (encoderStarted) runCatching { encoder?.stop() }
+            runCatching { encoder?.release() }
             if (muxer != null) runCatching { muxer.release() }
         }
     }

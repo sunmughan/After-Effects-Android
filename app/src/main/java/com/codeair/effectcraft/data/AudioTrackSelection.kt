@@ -1,20 +1,29 @@
 package com.codeair.effectcraft.data
 
 /**
- * Audio policy for MP4 export. Passthrough only: an AAC (audio/mp4a-latm)
- * track is copied sample-for-sample through MediaExtractor/MediaMuxer, and
- * any other codec, missing file, or composition without audio produces a
- * video-only export. An audio track is never synthesized or faked.
+ * Audio policy for MP4 export. Timeline audio is decoded, mixed and
+ * re-encoded to AAC inside the app ([MIXED]); when the timeline is
+ * empty the pre-existing passthrough applies: an AAC (audio/mp4a-latm)
+ * track is copied sample-for-sample through MediaExtractor/MediaMuxer,
+ * and any other codec, missing file, or composition without audio
+ * produces a video-only export. An audio track is never synthesized
+ * or faked.
  */
 enum class AudioStatus {
     INCLUDED,
+    /** Timeline clips were decoded, mixed and encoded to AAC in-app. */
+    MIXED,
     NO_AUDIO_IN_COMPOSITION,
     AUDIO_FILE_UNAVAILABLE,
     AUDIO_TRACK_UNSUPPORTED;
 
+    /** True when the exported MP4 carries an audio track. */
+    val hasAudioTrack: Boolean get() = this == INCLUDED || this == MIXED
+
     /** Visible status text: the video-only reason is always stated, never hidden. */
     fun describe(): String = when (this) {
         INCLUDED -> "with audio"
+        MIXED -> "with mixed audio"
         NO_AUDIO_IN_COMPOSITION -> "video-only — composition has no audio"
         AUDIO_FILE_UNAVAILABLE -> "video-only — audio file unavailable"
         AUDIO_TRACK_UNSUPPORTED -> "video-only — no compatible AAC audio track"
