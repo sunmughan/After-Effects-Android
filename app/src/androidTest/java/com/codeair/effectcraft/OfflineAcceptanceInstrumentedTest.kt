@@ -23,7 +23,6 @@ import java.io.File
 import java.util.zip.ZipInputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -38,11 +37,16 @@ import org.junit.Test
  * no step in any test below opens a socket, a URL, or an HTTP client.
  * Every input is a byte array or a file under the app-private filesDir,
  * every output is a file under filesDir, and no account object is ever
- * created. The account gate is checked directly: this build ships no
- * google-services.json, so FirebaseApp.getApps must be empty and
- * FirebaseInit.ensureInitialized must return false. The emulator may
- * still have a network interface up; these tests do not depend on it
- * being down, because no code path under test can reach it. That is a
+ * created. Firebase is registered now (google-services.json committed
+ * 2026-11-07 for FCM push): a default FirebaseApp exists and
+ * FirebaseInit.ensureInitialized returns true, so the gate no longer
+ * asserts "no Firebase app" — that contract ended with registration.
+ * What it still gates is the offline promise: no account is required
+ * (the app has no auth and no sign-in UI), Firebase init is idempotent
+ * (exactly one app), and every step of the offline flow runs on
+ * local-only inputs with app-private outputs. The emulator may still
+ * have a network interface up; these tests do not depend on it being
+ * down, because no code path under test can reach it. That is a
  * stub-at-test-level offline proof, not a network-disabled device proof,
  * and it is recorded as such in PHASES.md if this line is flipped.
  */
@@ -161,12 +165,14 @@ class OfflineAcceptanceInstrumentedTest {
     }
 
     @Test
-    fun offlineFlowRequiresNoAccountSignInOrNetworkCall() {
+    fun offlineFlowRequiresNoAccountSignInAndUsesLocalOnlyInputs() {
         val context = appContext()
-        // No account exists in this build and no sign-in is attempted.
-        assertTrue("No Firebase app may exist for offline acceptance", FirebaseApp.getApps(context).isEmpty())
-        assertFalse("Firebase init must report uninitialized with no config", FirebaseInit.ensureInitialized(context))
-        assertTrue("Firebase init must not create an app as a side effect", FirebaseApp.getApps(context).isEmpty())
+        // Firebase is registered, so a default app exists and init
+        // reports configured; the gate is that init is idempotent and
+        // that no account is required anywhere in the offline flow.
+        assertTrue("Firebase must be configured after registration", FirebaseApp.getApps(context).isNotEmpty())
+        assertTrue("Firebase init must report configured", FirebaseInit.ensureInitialized(context))
+        assertEquals("Firebase init must not create a second app", 1, FirebaseApp.getApps(context).size)
 
         // Every required step of the offline flow, driven with local-only
         // inputs and app-private outputs, and no account object anywhere.
@@ -192,7 +198,7 @@ class OfflineAcceptanceInstrumentedTest {
             assertEquals(1, result.framesWritten)
         }
         assertTrue("Exported ZIP must exist locally", zipFile.isFile && zipFile.length() > 0)
-        assertTrue("No Firebase app may exist after the full offline flow", FirebaseApp.getApps(context).isEmpty())
+        assertEquals("Exactly one Firebase app must exist after the full offline flow", 1, FirebaseApp.getApps(context).size)
 
         store.delete(asset.sha256)
     }

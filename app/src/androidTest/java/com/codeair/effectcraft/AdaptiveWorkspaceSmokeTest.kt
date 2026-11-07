@@ -239,9 +239,17 @@ class AdaptiveWorkspaceSmokeTest {
         assertEquals(listOf(640, 360, 30, 0, 89), added)
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("Opacity keys · 1", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithContentDescription("Add canonical opacity keyframe").performScrollTo().performClick()
+        // The Add/Remove buttons are the first children of their
+        // horizontally scrolling row, so they are visible as soon as the
+        // section is scrolled into view. Do NOT performScrollTo() on the
+        // buttons themselves: scrolling a horizontal row to reveal an
+        // already-visible first child mis-positions it and the tap then
+        // lands elsewhere (CI run 42369968520: the Add click silently
+        // fired no callback on both emulator attempts). Assert displayed
+        // and click directly.
+        compose.onNodeWithContentDescription("Add canonical opacity keyframe").assertIsDisplayed().performClick()
         assertEquals(listOf(10L, 2L, 0, 100.0), added)
-        compose.onNodeWithContentDescription("Remove canonical opacity keyframe").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Remove canonical opacity keyframe").assertIsDisplayed().performClick()
         // Frame is Int in the callback, so listOf<Any> keeps the literal 0
         // as Int instead of inferring List<Long> and coercing it to 0L.
         assertEquals(listOf<Any>(10L, 2L, 0), removed)
@@ -489,11 +497,19 @@ class AdaptiveWorkspaceSmokeTest {
         // its own viewport until Anchor X is displayed, then invoke the chip's
         // semantics click (not a coordinate tap on a clipped child).
         compose.onNodeWithText("Curve graph · Position X").performScrollTo()
-        // Ask Compose to reveal the target chip through its horizontal
-        // scroll ancestor. Repeated swipes against a clipped Row are flaky
-        // on the emulator and can leave the test waiting for an invisible node.
+        // The Anchor X chip is the fourth chip in a horizontally scrolling
+        // row. performScrollTo() alone does not reveal a horizontally
+        // clipped chip (proven by CI run 42369968520: the motion-path
+        // replacement of the swipe loop with a bare performScrollTo left
+        // the chip invisible on both emulator attempts), so swipe the
+        // row's own viewport until it is displayed, then invoke the
+        // chip's semantics click (not a coordinate tap on a clipped child).
+        val selectorRow = compose.onNodeWithTag("curve-selector-row").performScrollTo()
         val anchorSelector = compose.onNodeWithTag("curve-selector-transform-anchor")
-            .performScrollTo()
+        for (attempt in 0 until 4) {
+            if (runCatching { anchorSelector.assertIsDisplayed() }.isSuccess) break
+            selectorRow.performTouchInput { swipeLeft() }
+        }
         anchorSelector.assertIsDisplayed().performClick()
         compose.onNodeWithText("Curve graph · Anchor X").assertIsDisplayed()
         // The graph add button fires the curve callback with the selected

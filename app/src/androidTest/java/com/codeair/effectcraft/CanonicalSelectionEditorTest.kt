@@ -176,9 +176,11 @@ class CanonicalSelectionEditorTest {
 
         // Workspace transform markers are available before opening the modal
         // canonical inspector; tapping the lane seeks the nearest key frame.
+        // The lane sits below the layer tracks in the timeline panel, and
+        // with 48dp tracks it is below the visible fold until scrolled to.
         workspaceFrame.intValue = 29 // accessible activation seeks the key nearest the current playhead
         compose.onNodeWithContentDescription("Canonical transform keyframes: 0, 15, 30")
-            .assertIsDisplayed().performClick()
+            .performScrollTo().assertIsDisplayed().performClick()
         assertEquals(30, workspaceFrame.intValue)
 
         // The COLOR lane draws one swatch per color keyframe (the key's own

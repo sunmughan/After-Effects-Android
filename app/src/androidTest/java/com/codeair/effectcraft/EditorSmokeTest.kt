@@ -6,7 +6,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performTextClearance
@@ -148,9 +147,13 @@ class EditorSmokeTest {
     fun inspectorRenamesSelectedLayer() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Props").performClick()
-        compose.onNode(hasSetTextAction()).performTextClearance()
-        compose.onNode(hasSetTextAction()).performTextInput("Mobile title")
-        compose.onNodeWithText("Apply").performClick()
+        // The inspector now has three text fields (layer name, trim in,
+        // trim out): address the rename field by its description instead
+        // of assuming it is the only editable field, and the rename Apply
+        // by its description (the trim row has its own Apply button).
+        compose.onNodeWithContentDescription("Layer name").performTextClearance()
+        compose.onNodeWithContentDescription("Layer name").performTextInput("Mobile title")
+        compose.onNodeWithContentDescription("Apply layer rename").performClick()
         assertTrue("Renamed layer should appear in timeline and inspector", compose.onAllNodesWithText("Mobile title").fetchSemanticsNodes().size >= 2)
     }
 
@@ -285,7 +288,10 @@ class EditorSmokeTest {
     @Test
     fun timelineSelectionUpdatesInspectorProperties() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Accent Shapes").performClick()
+        // The timeline panel scrolls: with 48dp tracks the third layer
+        // sits below the visible fold, so scroll it into view before
+        // tapping it, exactly as a user would.
+        compose.onNodeWithText("Accent Shapes").performScrollTo().performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithText("82%").assertIsDisplayed()
     }

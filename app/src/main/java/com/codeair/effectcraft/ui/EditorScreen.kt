@@ -1412,7 +1412,11 @@ private fun InspectorPanel(
                 )
                 TextButton(
                     onClick = { onRenameLayer(layerNameDraft) },
-                    enabled = layerNameDraft.trim().isNotEmpty() && layerNameDraft.trim() != layer.name
+                    enabled = layerNameDraft.trim().isNotEmpty() && layerNameDraft.trim() != layer.name,
+                    // The inspector now has two Apply buttons (rename and
+                    // trim); a stable description keeps each addressable
+                    // to TalkBack and to tests.
+                    modifier = Modifier.semantics { contentDescription = "Apply layer rename" }
                 ) {
                     Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
                 }
@@ -1482,7 +1486,10 @@ private fun InspectorPanel(
                 )
                 TextButton(
                     onClick = { parsedIn?.let { onTrimLayer(it, parsedOut) } },
-                    enabled = trimChanged
+                    enabled = trimChanged,
+                    // See the rename Apply above: two Apply buttons share
+                    // this inspector, so each carries its own description.
+                    modifier = Modifier.semantics { contentDescription = "Apply layer trim" }
                 ) {
                     Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
                 }
