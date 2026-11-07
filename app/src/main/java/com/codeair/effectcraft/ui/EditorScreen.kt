@@ -34,6 +34,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -1400,7 +1402,7 @@ private fun InspectorPanel(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
-                    modifier = Modifier.weight(1f).semantics { contentDescription = "Layer name" },
+                    modifier = Modifier.weight(1f).testTag("layer-name-field").semantics { contentDescription = "Layer name" },
                     decorationBox = { innerTextField ->
                         Box {
                             if (layerNameDraft.isEmpty()) {
@@ -1435,7 +1437,12 @@ private fun InspectorPanel(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Opacity", color = EditorPalette.text, fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
-                Text("${(layer.opacity * 100).roundToInt()}%", color = EditorPalette.muted, fontSize = 11.sp)
+                Text(
+                    "${(layer.opacity * 100).roundToInt()}%",
+                    color = EditorPalette.muted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.testTag("layer-opacity-value")
+                )
             }
             Slider(
                 value = layer.opacity,
@@ -2424,16 +2431,19 @@ private fun CanonicalProjectEditor(
                     fontSize = 11.sp,
                     modifier = Modifier.semantics { contentDescription = "Canonical opacity keys" }
                 )
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     TextButton(
                         enabled = editable,
                         onClick = { onAddLayerOpacityKeyframe(composition.id, layer.id, previewFrame, opacityDraft.toDouble()) },
-                        modifier = Modifier.semantics { contentDescription = "Add canonical opacity keyframe" }
+                        modifier = Modifier.testTag("canonical-opacity-add-key").semantics { contentDescription = "Add canonical opacity keyframe" }
                     ) { Text("Add key · frame $previewFrame", color = EditorPalette.violet, fontSize = 11.sp) }
                     TextButton(
                         enabled = editable,
                         onClick = { onRemoveLayerOpacityKeyframe(composition.id, layer.id, previewFrame) },
-                        modifier = Modifier.semantics { contentDescription = "Remove canonical opacity keyframe" }
+                        modifier = Modifier.testTag("canonical-opacity-remove-key").semantics { contentDescription = "Remove canonical opacity keyframe" }
                     ) { Text("Remove key · frame $previewFrame", color = EditorPalette.amber, fontSize = 11.sp) }
                 }
                 if (layer.shapeItems.isNotEmpty()) {
@@ -3537,6 +3547,7 @@ private fun TimelinePanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .testTag("timeline-track-list")
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -3758,6 +3769,7 @@ private fun CanonicalColorTrack(keys: List<CanonicalCurveKey>, durationFrames: I
  * renderer always agree. This section never touches the timeline marker
  * lane, whose tap-to-seek behaviour is unchanged.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CurveGraphSection(
     layer: CanonicalLayerInfo,
@@ -3847,9 +3859,13 @@ private fun CurveGraphSection(
     if (selector == "transform:position" || selector == "transform:anchor") {
         Text("Spatial track: one speed along the motion path, from the first ease entry. See the motion-path overlay for the path itself.", color = EditorPalette.muted, fontSize = 10.sp)
     }
-    Row(
-        Modifier.horizontalScroll(rememberScrollState()).testTag("curve-selector-row"),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    // Wrap selector chips instead of hiding later tracks in a horizontal
+    // scroller. On phone-width inspectors every property curve remains
+    // discoverable without a swipe gesture or clipped accessibility target.
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().testTag("curve-selector-row"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         options.forEach { (optionSelector, optionLabel) ->
             FilterChip(
