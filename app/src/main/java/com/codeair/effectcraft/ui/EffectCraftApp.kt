@@ -50,6 +50,7 @@ import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.Mp4ExportWorker
 import com.codeair.effectcraft.export.PngSequenceExportService
 import com.codeair.effectcraft.data.Mp4OutputValidator
+import com.codeair.effectcraft.data.Mp4SequenceExporter
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
@@ -510,7 +511,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         ?.firstOrNull { it.id == compositionId }
                         ?: error("Canonical composition is no longer available")
                     val plan = RenderQueuePlan.create(settings, composition.durationFrames)
-                    saveMessage = "Rendering H.264 MP4 · 0/${plan.frameCount} (0%)"
+                    val codecLabel = Mp4SequenceExporter.codecLabel(settings.outputFormat)
+                    saveMessage = "Rendering $codecLabel MP4 · 0/${plan.frameCount} (0%)"
                     val staged = File(context.cacheDir, "effectcraft-video-${System.nanoTime()}.mp4")
                     stagedMp4 = staged
                     val stagedResult = withContext(Dispatchers.IO) {
@@ -540,7 +542,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             isCancelled = { exportJob?.isActive != true },
                             onProgress = { completed, percent ->
                                 mp4ExportProgress = percent
-                                saveMessage = "Rendering H.264 MP4 · $completed/${plan.frameCount} ($percent%)"
+                                saveMessage = "Rendering $codecLabel MP4 · $completed/${plan.frameCount} ($percent%)"
                             }
                         )
                     }
@@ -606,7 +608,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         stagedResult.audioFirstPtsUs != null && stagedResult.audioLastPtsUs != null) {
                         " · AAC PTS ${stagedResult.audioFirstPtsUs / 1_000}–${stagedResult.audioLastPtsUs / 1_000} ms"
                     } else ""
-                    saveMessage = "Exported & verified ${verified.frameCount} H.264 frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}$audioTiming"
+                    saveMessage = "Exported & verified ${verified.frameCount} $codecLabel frames · ${verified.width}×${verified.height} @ ${settings.frameRate} FPS · ${stagedResult.audioStatus.describe()}$audioTiming"
                 } catch (cancelled: CancellationException) {
                     saveMessage = "MP4 export cancelled"
                     throw cancelled

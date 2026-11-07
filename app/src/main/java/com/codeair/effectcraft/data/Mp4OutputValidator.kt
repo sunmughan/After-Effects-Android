@@ -8,7 +8,10 @@ import java.io.File
 import java.nio.ByteBuffer
 
 /**
- * Validates a completed H.264 MP4 against the exact render queue that produced it.
+ * Validates a completed H.264 or HEVC MP4 against the exact render queue
+ * that produced it. The expected video track is the plan's format: H.264
+ * plans expect `video/avc`, HEVC plans expect `video/hevc`. A non-MP4
+ * plan (PNG sequence) is rejected before any extractor work.
  *
  * Validation is performed after the muxer and output descriptor are closed:
  * MediaExtractor must see a finalized container, not an in-flight file.
@@ -29,13 +32,13 @@ object Mp4OutputValidator {
     )
 
     fun validate(context: Context, uri: Uri, plan: RenderQueuePlan, expectAudio: Boolean = false): Report {
-        require(plan.settings.outputFormat == RenderOutputFormat.MP4_H264) {
-            "Render queue is not configured for H.264 MP4"
-        }
+        // Throws for a non-MP4 plan before any extractor work, and selects
+        // the video MIME the plan's format must carry.
+        val expectedMime = Mp4SequenceExporter.mimeFor(plan.settings.outputFormat)
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
-            return inspect(extractor, plan, expectAudio)
+            return inspect(extractor, plan, expectAudio, expectedMime)
         } finally {
             extractor.release()
         }
@@ -43,21 +46,23 @@ object Mp4OutputValidator {
 
     /** File-backed variant used by codec instrumentation; production uses the SAF Uri overload. */
     fun validateFile(file: File, plan: RenderQueuePlan, expectAudio: Boolean = false): Report {
+        val expectedMime = Mp4SequenceExporter.mimeFor(plan.settings.outputFormat)
         require(file.isFile && file.length() > 0L) { "MP4 output is missing or empty" }
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(file.absolutePath)
-            return inspect(extractor, plan, expectAudio)
+            return inspect(extractor, plan, expectAudio, expectedMime)
         } finally {
             extractor.release()
         }
     }
 
-    private fun inspect(extractor: MediaExtractor, plan: RenderQueuePlan, expectAudio: Boolean): Report {
+    private fun inspect(extractor: MediaExtractor, plan: RenderQueuePlan, expectAudio: Boolean, expectedMime: String): Report {
+        val label = Mp4SequenceExporter.codecLabel(plan.settings.outputFormat)
         val track = (0 until extractor.trackCount).firstOrNull { index ->
             extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
-                ?.equals(Mp4SequenceExporter.MIME, ignoreCase = true) == true
-        } ?: error("MP4 has no H.264 video track")
+                ?.equals(expectedMime, ignoreCase = true) == true
+        } ?: error("MP4 has no $label video track")
         val format = extractor.getTrackFormat(track)
         val width = format.getInteger(MediaFormat.KEY_WIDTH)
         val height = format.getInteger(MediaFormat.KEY_HEIGHT)
@@ -156,7 +161,7 @@ object Mp4OutputValidator {
             height = height,
             frameCount = count,
             durationUs = trackDurationUs,
-            mime = format.getString(MediaFormat.KEY_MIME) ?: Mp4SequenceExporter.MIME,
+            mime = format.getString(MediaFormat.KEY_MIME) ?: expectedMime,
             audioSamples = audioSamples,
             audioFirstPtsUs = audioFirstPtsUs,
             audioLastPtsUs = audioLastPtsUs,
