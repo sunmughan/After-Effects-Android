@@ -2999,7 +2999,7 @@ private fun CanonicalParamGroupRows(
                     val (xText, yText, _) = vertexDrafts[index]
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(
-                            modifier = Modifier.width(28.dp).height(48.dp)
+                            modifier = Modifier.width(48.dp).height(48.dp)
                                 .clickable(enabled = editable) { selectedCanvasVertex = index }
                                 .semantics { contentDescription = "Select canonical $section path segment start P${index + 1} ${group.name} ${param.name}" },
                             contentAlignment = Alignment.Center
