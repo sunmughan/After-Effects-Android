@@ -47,8 +47,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -418,7 +420,13 @@ fun EditorScreen(
     ) {
         val isTabletLayout = maxWidth >= 760.dp
 
-        Column(Modifier.fillMaxSize()) {
+        // Edge-to-edge: the header starts below the status bar and the
+        // audio section clears the navigation bar / gesture area.
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            // Dim scrim behind the header (not a solid bar): content
+            // beneath stays dimmed while the status icons stay crisp.
+            // A true RenderEffect blur is Batch 3 work.
+            Surface(color = EditorPalette.background.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
             HeaderBar(
                 projectName = project.name,
                 saveMessage = saveMessage,
@@ -451,6 +459,7 @@ fun EditorScreen(
                 onOpenCanonicalEditor = { showCanonicalEditor = true },
                 onOpenRepositoryPicker = { showRepositoryPicker = true }
             )
+            }
 
             if (isTabletLayout) {
                 Row(
