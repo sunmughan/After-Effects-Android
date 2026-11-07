@@ -344,7 +344,7 @@ class CanonicalProjectRepository(private val root: File) {
     private fun moveReplacing(source: File, target: File) {
         try {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
@@ -367,7 +367,7 @@ class CanonicalProjectRepository(private val root: File) {
         writeDurably(temporary, document)
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
@@ -389,7 +389,7 @@ class CanonicalProjectRepository(private val root: File) {
         writeDurably(temporary, document.toString())
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
