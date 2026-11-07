@@ -6,7 +6,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performTextClearance
@@ -148,8 +147,11 @@ class EditorSmokeTest {
     fun inspectorRenamesSelectedLayer() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Props").performClick()
-        compose.onNode(hasSetTextAction()).performTextClearance()
-        compose.onNode(hasSetTextAction()).performTextInput("Mobile title")
+        // Target the name field by its description: the inspector also
+        // holds trim in/out fields, so a bare hasSetTextAction lookup
+        // matches three editable nodes, not one.
+        compose.onNodeWithContentDescription("Layer name").performTextClearance()
+        compose.onNodeWithContentDescription("Layer name").performTextInput("Mobile title")
         compose.onNodeWithText("Apply").performClick()
         assertTrue("Renamed layer should appear in timeline and inspector", compose.onAllNodesWithText("Mobile title").fetchSemanticsNodes().size >= 2)
     }
@@ -287,7 +289,8 @@ class EditorSmokeTest {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Accent Shapes").performClick()
         compose.onNodeWithText("Props").performClick()
-        compose.onNodeWithText("82%").assertIsDisplayed()
+        // The inspector scrolls; the opacity row may sit below the fold.
+        compose.onNodeWithText("82%").performScrollTo().assertIsDisplayed()
     }
 
     @Test
