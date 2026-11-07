@@ -1,11 +1,15 @@
 package com.codeair.effectcraft.data
 
 /**
- * Validated, bounded plan for a native-rendered PNG frame sequence.
+ * Validated, bounded plan for a render queue export.
  *
- * This is planning/validation only: the current app exporter writes one PNG.
- * A ZIP sequence executor can consume [frames] one frame at a time without
- * allocating a frame list or retaining decoded bitmaps.
+ * The app-wide export default is H.264 video in MP4 with AAC audio
+ * ([RenderOutputFormat.MP4_H264], owner decision 2026-11-06): a
+ * [RenderQueueSettings] built without an explicit format exports MP4.
+ * Callers that want the PNG frame sequence must pass
+ * [RenderOutputFormat.PNG_SEQUENCE_ZIP] explicitly; nothing in this file
+ * infers a format. A ZIP sequence executor can consume [frames] one frame
+ * at a time without allocating a frame list or retaining decoded bitmaps.
  */
 enum class RenderOutputFormat {
     PNG_SEQUENCE_ZIP,
@@ -20,7 +24,7 @@ data class RenderQueueSettings(
     val frameRate: Int,
     val startFrame: Int,
     val endFrame: Int,
-    val outputFormat: RenderOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP,
+    val outputFormat: RenderOutputFormat = RenderOutputFormat.MP4_H264,
     val videoBitrate: Int = 8_000_000
 )
 

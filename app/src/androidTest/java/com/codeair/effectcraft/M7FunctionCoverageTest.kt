@@ -14,6 +14,7 @@ import com.codeair.effectcraft.data.ProjectAssetManifest
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.ProjectKeyframeStore
 import com.codeair.effectcraft.data.RenderQueuePlan
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueueSettings
 import com.codeair.effectcraft.data.SafDocumentWriter
 import com.codeair.effectcraft.data.SafPermissionRegistry
@@ -406,7 +407,7 @@ class M7FunctionCoverageTest {
 
     @Test
     fun export_pngSequenceZipRoundTripsAndValidates() {
-        val plan = RenderQueuePlan.create(RenderQueueSettings(64, 64, 30, 0, 2))
+        val plan = RenderQueuePlan.create(RenderQueueSettings(64, 64, 30, 0, 2, RenderOutputFormat.PNG_SEQUENCE_ZIP))
         assertEquals(3, plan.frameCount)
         val png = pngBytes(64, 64)
         val archive = File(tempDir("zip-export"), "sequence.zip")
@@ -421,7 +422,7 @@ class M7FunctionCoverageTest {
 
     @Test
     fun export_pngSequenceZipCancellationAbortsAndValidatorRejectsMismatch() {
-        val plan = RenderQueuePlan.create(RenderQueueSettings(64, 64, 30, 0, 2))
+        val plan = RenderQueuePlan.create(RenderQueueSettings(64, 64, 30, 0, 2, RenderOutputFormat.PNG_SEQUENCE_ZIP))
         val png = pngBytes(64, 64)
         try {
             ByteArrayOutputStream().use { output ->
@@ -435,7 +436,7 @@ class M7FunctionCoverageTest {
         archive.outputStream().buffered().use { output ->
             PngSequenceZipExporter.export(plan, output, renderPng = { png })
         }
-        val wrongPlan = RenderQueuePlan.create(RenderQueueSettings(128, 64, 30, 0, 2))
+        val wrongPlan = RenderQueuePlan.create(RenderQueueSettings(128, 64, 30, 0, 2, RenderOutputFormat.PNG_SEQUENCE_ZIP))
         try {
             PngSequenceZipValidator.validate(archive, wrongPlan)
             fail("A ZIP whose manifest does not match the plan must be rejected")
@@ -447,19 +448,19 @@ class M7FunctionCoverageTest {
     @Test
     fun export_renderQueuePlanRejectsOutOfBoundsSettings() {
         try {
-            RenderQueuePlan.create(RenderQueueSettings(0, 64, 30, 0, 2))
+            RenderQueuePlan.create(RenderQueueSettings(0, 64, 30, 0, 2, RenderOutputFormat.PNG_SEQUENCE_ZIP))
             fail("Zero width must be rejected")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("width"))
         }
         try {
-            RenderQueuePlan.create(RenderQueueSettings(64, 64, 0, 0, 2))
+            RenderQueuePlan.create(RenderQueueSettings(64, 64, 0, 0, 2, RenderOutputFormat.PNG_SEQUENCE_ZIP))
             fail("Zero FPS must be rejected")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("Frame rate"))
         }
         try {
-            RenderQueuePlan.create(RenderQueueSettings(64, 64, 30, 5, 2))
+            RenderQueuePlan.create(RenderQueueSettings(64, 64, 30, 5, 2, RenderOutputFormat.PNG_SEQUENCE_ZIP))
             fail("An end frame before the start frame must be rejected")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("End frame"))

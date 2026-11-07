@@ -15,7 +15,7 @@ class PngSequenceZipValidatorTest {
     @get:Rule val temp = TemporaryFolder()
 
     private fun plan(start: Int = 0, end: Int = 1) =
-        RenderQueuePlan.create(RenderQueueSettings(320, 320, 30, start, end))
+        RenderQueuePlan.create(RenderQueueSettings(320, 320, 30, start, end, RenderOutputFormat.PNG_SEQUENCE_ZIP))
 
     private fun png(width: Int = 320, height: Int = 320): ByteArray =
         ByteArray(24).also { bytes ->
