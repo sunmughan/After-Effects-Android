@@ -26,7 +26,7 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 
 ## Current engineering status (2026-11-08 05:27 IST)
 
-**Release is NOT complete.** PR #1 merged into `main` at `4ae22776` (2026-11-07); that merge is not product acceptance. Ongoing engineering continues on `feat/android-app-foundation`. [PHASES.md](PHASES.md) is the authoritative acceptance ledger with evidence, commit SHAs and blockers.
+**Release is NOT complete.** PR #1 merged into `main` at `4ae22776` (2026-11-07); that merge is not product acceptance. Post-merge work is tracked in [draft follow-up PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2) (clean/mergeable; not merged). Ongoing engineering continues on `feat/android-app-foundation`. [PHASES.md](PHASES.md) is the authoritative acceptance ledger with evidence, commit SHAs and blockers.
 
 ### Latest build failure and correction
 
