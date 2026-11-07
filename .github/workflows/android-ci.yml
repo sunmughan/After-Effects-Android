@@ -153,6 +153,34 @@ jobs:
       - name: Run unit tests
         run: $GRADLE_CMD --no-daemon :app:testDebugUnitTest
 
+      # M7: the release variant must also assemble with NO signing secrets
+      # (unsigned), proving R8/proguard and the release build type work and
+      # that a missing secret degrades to "unsigned, clearly logged" instead
+      # of failing CI or silently signing with the debug key. This is a
+      # build-shape check only: the unsigned APK/AAB here are never release
+      # artifacts and are not uploaded. The signed release path stays in
+      # android-release.yml, which fails before Gradle when secrets are absent.
+      - name: Assemble unsigned release APK and AAB (no secrets)
+        run: $GRADLE_CMD --no-daemon :app:assembleRelease :app:bundleRelease
+
+      - name: Verify release outputs are unsigned (no debug-key fallback)
+        run: |
+          apk="$(find app/build/outputs/apk/release -name 'app-release*.apk' | head -n 1)"
+          aab="$(find app/build/outputs/bundle/release -name 'app-release.aab' | head -n 1)"
+          test -n "$apk" && test -s "$apk"
+          test -n "$aab" && test -s "$aab"
+          echo "Unsigned release APK: $apk"
+          echo "Unsigned release AAB: $aab"
+          # A signed APK carries signature files in META-INF; an unsigned
+          # build has none. Any signature here means the build silently
+          # picked up a key (e.g. the debug key) and must fail closed.
+          if unzip -l "$apk" | grep -q 'META-INF/.*\.\(RSA\|DSA\|EC\)'; then
+            echo "::error::Release APK unexpectedly carries signature files — it was signed (possibly with the debug key). Refusing to pass an unsigned-release check on a signed artifact."
+            exit 1
+          fi
+          test -s app/build/outputs/mapping/release/mapping.txt
+          echo "Release APK/AAB assembled unsigned (no signature files) and R8 mapping.txt exists."
+
       - name: Enable KVM access for Android emulator
         run: |
           if [[ -e /dev/kvm ]]; then
@@ -241,6 +269,7 @@ jobs:
           name: effectcraft-android-build-and-audit
           path: |
             app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/mapping/release/mapping.txt
             native/Cargo.lock
             build/audit/
           if-no-files-found: error

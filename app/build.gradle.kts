@@ -5,6 +5,18 @@ plugins {
     id("com.github.jk1.dependency-license-report") version "3.1.4"
 }
 
+// google-services plugin, applied ONLY when app/google-services.json exists.
+// The plugin fails the build when the file is missing, and this app must
+// build and run fully offline without Firebase registration, so it is never
+// applied unconditionally. Once the app is registered (see
+// docs/firebase-registration.md) and the real file is placed at
+// app/google-services.json, the plugin applies on the next build and
+// generates the Firebase config resources; FirebaseInit already handles
+// both states at runtime, so no code change is needed at registration time.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // M7 release signing: read ONLY from Gradle properties supplied by the caller
 // (in CI, from GitHub Actions secrets via -P flags in android-release.yml).
 // No keystore, password, alias or secret value is ever committed or defaulted
@@ -20,6 +32,23 @@ val hasReleaseSigning = !releaseKeystoreFile.isNullOrBlank()
     && !releaseKeystorePassword.isNullOrBlank()
     && !releaseKeyAlias.isNullOrBlank()
     && !releaseKeyPassword.isNullOrBlank()
+
+// A release build without signing properties is UNSIGNED by design (see
+// docs/M7_RELEASE_BUILD.md): say so loudly when a release task is actually
+// requested, instead of failing the build or silently using a debug key.
+// The release workflow still fails before Gradle when its secrets are
+// absent; this log covers every other route (local builds, CI checks).
+gradle.taskGraph.whenReady {
+    val buildsRelease = hasTask(":app:assembleRelease") || hasTask(":app:bundleRelease")
+    if (buildsRelease && !hasReleaseSigning) {
+        logger.lifecycle(
+            "EffectCraft release signing: no release signing properties supplied " +
+            "(-Peffectcraft.release.*), so this release build will be UNSIGNED. " +
+            "It is not a release artifact. Supply the four release secrets " +
+            "(see docs/M7_RELEASE_BUILD.md) to sign.",
+        )
+    }
+}
 
 android {
     namespace = "com.codeair.effectcraft"
@@ -88,10 +117,23 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     // Explicit (not transitive-only): the FCM service posts via NotificationCompat.
     implementation("androidx.core:core-ktx:1.17.0")
+    // Explicit Fragment pin (M7 release fix): play-services-basement
+    // (transitive via firebase-messaging) depends on fragment 1.1.0, and
+    // nothing else requests a newer one, so Gradle resolved 1.1.0. The
+    // Activity Result API in ComponentActivity needs Fragment >= 1.3.0,
+    // and :app:lintVitalRelease fails the release build on anything
+    // older — the first release assemble in CI surfaced this latent
+    // failure. Pinning the current stable (1.9.1, Sep 2026; fragment-ktx
+    // was merged into the main artifact in 1.9.0) fixes the cause; the
+    // app itself uses no Fragments (pure Compose + ComponentActivity).
+    implementation("androidx.fragment:fragment:1.9.1")
 
-    // FCM push. No google-services plugin and no google-services.json yet:
-    // the BoM pins versions only, and FirebaseInit guards all runtime use,
-    // so the app builds and runs fully offline until registration lands.
+    // FCM push. The google-services plugin applies only when
+    // app/google-services.json exists (see the conditional apply above);
+    // until registration lands, the BoM pins versions only and
+    // FirebaseInit guards all runtime use, so the app builds and runs
+    // fully offline. After registration the same code picks up the real
+    // config with no code change.
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging")
 
