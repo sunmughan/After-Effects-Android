@@ -32,6 +32,9 @@ import java.util.UUID
  *   without a sidecar is inert and never listed.
  */
 class CanonicalProjectRepository(private val root: File) {
+    // A repository instance monitor cannot protect the two-file update/recovery
+    // transaction from another instance opened for the same offline workspace.
+    private val rootLock = locks.computeIfAbsent(root.absoluteFile.toPath().normalize().toString()) { Any() }
     data class Metadata(
         val id: String,
         val displayName: String,
@@ -49,9 +52,8 @@ class CanonicalProjectRepository(private val root: File) {
         val error: String?
     )
 
-    @Synchronized
-    @Throws(IOException::class)
-    fun create(displayName: String, document: String, format: String, sourceName: String? = null): Metadata {
+        @Throws(IOException::class)
+    fun create(displayName: String, document: String, format: String, sourceName: String? = null): Metadata = synchronized(rootLock) {
         val name = validateDisplayName(displayName)
         val checkedFormat = validateFormat(format)
         validateDocument(document, checkedFormat)
@@ -72,14 +74,13 @@ class CanonicalProjectRepository(private val root: File) {
     }
 
     /** Imports the old single-document cache as a repository entry. */
-    @Synchronized
-    @Throws(IOException::class)
-    fun importLegacyDocument(document: String, displayName: String): Metadata =
+        @Throws(IOException::class)
+    fun importLegacyDocument(document: String, displayName: String): Metadata = synchronized(rootLock) {
         create(displayName, document, FORMAT_ECPROJ, null)
+    }
 
-    @Synchronized
-    @Throws(IOException::class)
-    fun update(id: String, document: String): Metadata {
+        @Throws(IOException::class)
+    fun update(id: String, document: String): Metadata = synchronized(rootLock) {
         val checkedId = validateId(id)
         val previous = metadata(checkedId) ?: throw IOException("Canonical project $checkedId is not in the repository")
         validateDocument(document, previous.format)
@@ -124,9 +125,8 @@ class CanonicalProjectRepository(private val root: File) {
         return updated
     }
 
-    @Synchronized
-    @Throws(IOException::class)
-    fun load(id: String): String? {
+        @Throws(IOException::class)
+    fun load(id: String): String? = synchronized(rootLock) {
         val checkedId = validateId(id)
         val metadata = metadata(checkedId) ?: return null
         val file = documentFile(metadata.id, metadata.format)
@@ -138,8 +138,7 @@ class CanonicalProjectRepository(private val root: File) {
         return document
     }
 
-    @Synchronized
-    fun metadata(id: String): Metadata? {
+        fun metadata(id: String): Metadata? = synchronized(rootLock) {
         val checkedId = validateId(id)
         recoverInterruptedUpdate(checkedId)
         val file = sidecarFile(checkedId)
@@ -150,8 +149,7 @@ class CanonicalProjectRepository(private val root: File) {
     }
 
     /** Sidecar-driven listing: newest first, display name breaks timestamp ties. */
-    @Synchronized
-    fun list(): List<Metadata> {
+        fun list(): List<Metadata> = synchronized(rootLock) {
         if (!root.isDirectory) return emptyList()
         val sidecars = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
         sidecars.forEach { file -> runCatching { recoverInterruptedUpdate(file.nameWithoutExtension) } }
@@ -165,8 +163,7 @@ class CanonicalProjectRepository(private val root: File) {
             .sortedWith(compareByDescending<Metadata> { it.updatedAtMillis }.thenBy { it.displayName })
     }
 
-    @Synchronized
-    fun delete(id: String): Boolean {
+        fun delete(id: String): Boolean = synchronized(rootLock) {
         val checkedId = validateId(id)
         val metadata = metadata(checkedId) ?: return false
         var removed = false
@@ -187,8 +184,7 @@ class CanonicalProjectRepository(private val root: File) {
      * version or is corrupt. Migration only fills sidecar defaults; document
      * bytes are never rewritten.
      */
-    @Synchronized
-    fun migrateAll(): List<MigrationResult> {
+        fun migrateAll(): List<MigrationResult> = synchronized(rootLock) {
         if (!root.isDirectory) return emptyList()
         return root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
             .sortedBy { it.name }
@@ -420,6 +416,7 @@ class CanonicalProjectRepository(private val root: File) {
         .joinToString("") { "%02x".format(it) }
 
     companion object {
+        private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
         const val CURRENT_SCHEMA_VERSION = 1
         const val FORMAT_ECPROJ = "ecproj"
         const val FORMAT_ECPROJX = "ecprojx"
