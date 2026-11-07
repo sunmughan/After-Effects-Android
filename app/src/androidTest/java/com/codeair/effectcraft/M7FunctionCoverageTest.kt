@@ -673,9 +673,9 @@ class M7FunctionCoverageTest {
     @Test
     fun settings_pngSequenceSettingsRenderValidSettings() {
         val exported = mutableListOf<List<Int>>()
-        sequenceSettingsScreen { w, h, fps, start, end ->
+        sequenceSettingsScreen(onExport = { w, h, fps, start, end ->
             exported.add(listOf(w, h, fps, start, end))
-        }
+        })
         compose.onNodeWithContentDescription("Export PNG sequence ZIP").performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         compose.onNodeWithText("Render ZIP").performClick()
@@ -689,7 +689,7 @@ class M7FunctionCoverageTest {
     @Test
     fun settings_pngSequenceSettingsRejectsBlankNumericField() {
         var exported = 0
-        sequenceSettingsScreen { _, _, _, _, _ -> exported++ }
+        sequenceSettingsScreen(onExport = { _, _, _, _, _ -> exported++ })
         compose.onNodeWithContentDescription("Export PNG sequence ZIP").performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         // Integration note: the original ec-m7 test selected the FPS
