@@ -376,6 +376,16 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
      * is deleted. The clip starts at frame 0 and runs to the shorter of
      * the composition and the source, so the project stays valid.
      */
+    /*
+     * NOTE (Batch 1, P15): this is the import for the timeline's
+     * project.audioTracks lanes, and its only UI entry point was the
+     * "+ Audio" header button that P15 deleted — the Audio section's
+     * "Add audio" feeds the separate AudioTimeline model instead, so
+     * the two buttons were never the same import. The function is
+     * kept (unused for now) rather than deleted: removing it would
+     * destroy the timeline-audio-track import outright. Batch 2 must
+     * reconcile the two audio models and rewire or remove this.
+     */
     fun importAudioClip(uri: Uri) {
         exportScope.launch {
             try {
