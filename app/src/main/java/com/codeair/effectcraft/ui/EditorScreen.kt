@@ -1425,6 +1425,10 @@ private fun InspectorPanel(
             Text("No layer selected", color = EditorPalette.muted, modifier = Modifier.padding(top = 8.dp))
         } else {
             var layerNameDraft by remember(layer.id, layer.name) { mutableStateOf(layer.name) }
+            // Appearance is a real collapsible section (P18): the old
+            // "⌄" was a dead character on a non-clickable row. It starts
+            // expanded, so nothing the user could see before is hidden.
+            var appearanceExpanded by remember(layer.id) { mutableStateOf(true) }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1468,8 +1472,21 @@ private fun InspectorPanel(
             }
             Spacer(Modifier.height(12.dp))
             Spacer(Modifier.height(18.dp))
-            PropertyLine("Appearance", "⌄")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { appearanceExpanded = !appearanceExpanded }
+                    .padding(vertical = 8.dp)
+                    .semantics { contentDescription = if (appearanceExpanded) "Collapse appearance" else "Expand appearance" },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Appearance", color = EditorPalette.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text(if (appearanceExpanded) "⌃" else "⌄", color = EditorPalette.muted, fontSize = 14.sp)
+            }
             Spacer(Modifier.height(12.dp))
+            if (appearanceExpanded) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Opacity", color = EditorPalette.text, fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
@@ -1486,6 +1503,7 @@ private fun InspectorPanel(
                 valueRange = 0f..1f,
                 modifier = Modifier.padding(top = 3.dp).semantics { contentDescription = "Layer opacity" }
             )
+            }
             Spacer(Modifier.height(12.dp))
             Text("Trim · frames 0–${(durationFrames - 1).coerceAtLeast(0)}", color = EditorPalette.text, fontSize = 12.sp)
             var trimInDraft by remember(layer.id, layer.inFrame) { mutableStateOf(layer.inFrame.toString()) }
@@ -3406,20 +3424,6 @@ private fun CompositionSettingsPanel(
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { onApply(width, height, fps, duration) }) { Text("Apply settings", color = EditorPalette.violet) }
         }
-    }
-}
-
-@Composable
-private fun PropertyLine(title: String, trailing: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, color = EditorPalette.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.weight(1f))
-        Text(trailing, color = EditorPalette.muted, fontSize = 14.sp)
     }
 }
 
