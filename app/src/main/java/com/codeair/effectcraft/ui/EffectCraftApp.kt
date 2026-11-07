@@ -1355,7 +1355,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     selectedAudioClipId = null
                 }
             },
-            onTrimClip = { newStart, newEnd ->,
+            onTrimClip = { newStart, newEnd ->
                 val layer = project.layers.firstOrNull { it.id == selectedLayerId }
                 val clipId = selectedClipId
                 if (layer == null || clipId == null) {
