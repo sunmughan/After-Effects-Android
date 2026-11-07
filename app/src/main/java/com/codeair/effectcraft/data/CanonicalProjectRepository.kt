@@ -53,7 +53,8 @@ class CanonicalProjectRepository(private val root: File) {
     )
 
         @Throws(IOException::class)
-    fun create(displayName: String, document: String, format: String, sourceName: String? = null): Metadata = synchronized(rootLock) {
+    fun create(displayName: String, document: String, format: String, sourceName: String? = null): Metadata {
+        return synchronized(rootLock) {
         val name = validateDisplayName(displayName)
         val checkedFormat = validateFormat(format)
         validateDocument(document, checkedFormat)
@@ -72,15 +73,17 @@ class CanonicalProjectRepository(private val root: File) {
         }
         return metadata
     }
+    }
 
     /** Imports the old single-document cache as a repository entry. */
         @Throws(IOException::class)
-    fun importLegacyDocument(document: String, displayName: String): Metadata = synchronized(rootLock) {
-        create(displayName, document, FORMAT_ECPROJ, null)
+    fun importLegacyDocument(document: String, displayName: String): Metadata {
+        return synchronized(rootLock) { create(displayName, document, FORMAT_ECPROJ, null) }
     }
 
         @Throws(IOException::class)
-    fun update(id: String, document: String): Metadata = synchronized(rootLock) {
+    fun update(id: String, document: String): Metadata {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         val previous = metadata(checkedId) ?: throw IOException("Canonical project $checkedId is not in the repository")
         validateDocument(document, previous.format)
@@ -124,9 +127,11 @@ class CanonicalProjectRepository(private val root: File) {
         backupSidecar.delete()
         return updated
     }
+    }
 
         @Throws(IOException::class)
-    fun load(id: String): String? = synchronized(rootLock) {
+    fun load(id: String): String? {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         val metadata = metadata(checkedId) ?: return null
         val file = documentFile(metadata.id, metadata.format)
@@ -137,8 +142,10 @@ class CanonicalProjectRepository(private val root: File) {
         }
         return document
     }
+    }
 
-        fun metadata(id: String): Metadata? = synchronized(rootLock) {
+        fun metadata(id: String): Metadata? {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         recoverInterruptedUpdate(checkedId)
         val file = sidecarFile(checkedId)
@@ -147,9 +154,11 @@ class CanonicalProjectRepository(private val root: File) {
             .getOrNull()
             ?.takeIf { it.id == checkedId }
     }
+    }
 
     /** Sidecar-driven listing: newest first, display name breaks timestamp ties. */
-        fun list(): List<Metadata> = synchronized(rootLock) {
+        fun list(): List<Metadata> {
+        return synchronized(rootLock) {
         if (!root.isDirectory) return emptyList()
         val sidecars = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
         sidecars.forEach { file -> runCatching { recoverInterruptedUpdate(file.nameWithoutExtension) } }
@@ -162,8 +171,10 @@ class CanonicalProjectRepository(private val root: File) {
             }
             .sortedWith(compareByDescending<Metadata> { it.updatedAtMillis }.thenBy { it.displayName })
     }
+    }
 
-        fun delete(id: String): Boolean = synchronized(rootLock) {
+        fun delete(id: String): Boolean {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         val metadata = metadata(checkedId) ?: return false
         var removed = false
@@ -177,6 +188,7 @@ class CanonicalProjectRepository(private val root: File) {
         }
         return removed
     }
+    }
 
     /**
      * Migrates every legacy (version-less) sidecar to [CURRENT_SCHEMA_VERSION]
@@ -184,7 +196,8 @@ class CanonicalProjectRepository(private val root: File) {
      * version or is corrupt. Migration only fills sidecar defaults; document
      * bytes are never rewritten.
      */
-        fun migrateAll(): List<MigrationResult> = synchronized(rootLock) {
+        fun migrateAll(): List<MigrationResult> {
+        return synchronized(rootLock) {
         if (!root.isDirectory) return emptyList()
         return root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
             .sortedBy { it.name }
@@ -205,6 +218,7 @@ class CanonicalProjectRepository(private val root: File) {
                     MigrationResult(id, 0, CURRENT_SCHEMA_VERSION, null)
                 }
             }
+    }
     }
 
     /** Structural check only; native schema validation remains the JNI import gate. */
