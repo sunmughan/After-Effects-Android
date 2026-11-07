@@ -485,3 +485,6 @@ Selected ShapePath anchors now have a **Corner vertex** action that zeros both t
 - Latest implementation/test head needs fresh exact-head CI and cold reproducibility; #1058 remains failed. Full acceptance ledger and blockers: [PHASES.md](PHASES.md). **Release NOT COMPLETE.**
 
 - Timestamp helper docs now accurately say integer conversion floors to microseconds (not nearest rounding); documentation-only correction [425c1748](https://github.com/sunmughan/After-Effects-Android/commit/425c1748939b68ea9c86d9e32f79d3b403896d46). Exact-head Actions/cold reproducibility still pending.
+
+
+**M5 export cancellation correction (2026-11-07):** Optional audio mix/remux fallback previously caught `CancellationException` via `runCatching`, risking a cancelled export being reported as video-only. `runAudioFallback` now recovers ordinary audio failures but propagates cancellation unchanged in both mix and mux/validate fallback; JVM tests cover success, recoverable failure and cancellation identity. CI #1079's six JVM failures were separately diagnosed as stale legacy trim-vs-clip state plus empty-selection recovery; production fix [c4a4fd58](https://github.com/sunmughan/After-Effects-Android/commit/c4a4fd58926d395757b911dcd01c3a2fa2ae813c) is under exact-head CI #1080. Fresh CI for cancellation commits pending. **Release NOT COMPLETE.** See [PHASES.md](PHASES.md).
