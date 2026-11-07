@@ -24,13 +24,13 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08)
+## Current engineering status (2026-11-08 01:46 IST)
 
-**Release is NOT complete.** PR #1 was merged into `main` at `4ae22776` on 2026-11-07, but merge is not product/release acceptance; ongoing fixes are on `feat/android-app-foundation`. The authoritative per-phase acceptance criteria, exact test evidence, commit links and blockers are maintained in [PHASES.md](PHASES.md).
+**Release is NOT complete.** PR #1 was merged into `main` at `4ae22776` on 2026-11-07, but merge is not product/release acceptance; ongoing fixes are on `feat/android-app-foundation`. The authoritative per-phase acceptance criteria, exact test evidence, commit links and blockers are maintained in [PHASES.md](PHASES.md). CI #1131 failed one M2 concurrency regression assertion (480 tests, 1 failed); the assertion now captures the exception explicitly and #1135/#1136 are queued/running for verification. Canonical project repository shared-root locking and a concurrent two-instance update regression are committed (`d967e7d3`, `3e96834f`); do not mark M2 complete until exact-head CI passes.
 
 | Phase | Status | Remaining gate |
 |---|---|---|
-| M0 | CI #1124 exact SHA green (61 Rust, 175 API30, JVM, dual ABI, cold APK compare) | Re-run after latest M4 source changes; current merge SHA #1125 cold comparison pending |
+| M0 | CI #1124 exact SHA green (61 Rust, 175 API30, JVM, dual ABI, cold APK compare) | Latest-head revalidation pending in #1136 |
 | M1 | Scoped editor foundation; corrected workspace test passed API30 175/175 in #1124 | Full professional parity, accessibility and physical device UX |
 | M2 | Partial; canonical import/save + offline media foundations; cross-instance manifest rollback/save serialization committed (`a5cfbe18`, `bd3861f3`, `5392b24a`) | CI #1131 queued; broader Effekseer compatibility, provider/relink matrix |
 | M3 | Partial; real Rust CPU/session preview | Physical GPU/Surface/device-loss/media qualification |
