@@ -240,16 +240,14 @@ class AdaptiveWorkspaceSmokeTest {
         assertEquals(listOf(640, 360, 30, 0, 89), added)
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
         compose.onNodeWithText("Opacity keys · 1", substring = true).performScrollTo().assertIsDisplayed()
-        // The Add/Remove buttons are the first children of their
-        // horizontally scrolling row, so they are visible as soon as the
-        // section is scrolled into view. Do NOT performScrollTo() on the
-        // buttons themselves: scrolling a horizontal row to reveal an
-        // already-visible first child mis-positions it and the tap then
-        // lands elsewhere (CI run 42369968520: the Add click silently
-        // fired no callback on both emulator attempts). Assert displayed
-        // and click directly.
+        // The Add/Remove buttons now sit in a plain full-width Row (the
+        // horizontal scroller was removed by the responsive rework), so
+        // performScrollTo on the button only scrolls the inspector
+        // vertically. Scroll the button itself into view first: scrolling
+        // to the "Opacity keys" text above leaves the button row below
+        // the fold on the emulator viewport (run 42376636064).
         compose.onNodeWithTag("canonical-opacity-add-key")
-            .assertIsDisplayed().assertIsEnabled().performClick()
+            .performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf(10L, 2L, 0, 100.0), added)
         compose.onNodeWithContentDescription("Remove canonical opacity keyframe").assertIsDisplayed().performClick()
         // Frame is Int in the callback, so listOf<Any> keeps the literal 0
