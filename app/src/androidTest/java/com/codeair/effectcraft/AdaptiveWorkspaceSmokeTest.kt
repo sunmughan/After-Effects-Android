@@ -993,10 +993,17 @@ class AdaptiveWorkspaceSmokeTest {
         }
         assertEquals(true, captures.renderRequests.any { it == (10L to 0L) })
         // The overlay is composed only after asynchronous frame decode and
-        // the 3-key spatial track are attached. Image semantics may be
-        // outside the visible viewport on constrained emulator layouts;
-        // require the image node and assert the overlay is actually visible.
+        // the 3-key spatial track are attached. The frame arrives through
+        // a LaunchedEffect that decodes on Dispatchers.Default and resumes
+        // on Main — under the test rule Main is the runTest TestDispatcher,
+        // which only advances when the test waits for idle. waitUntil only
+        // sleeps between polls, so without an idle wait the decode resume
+        // can sit queued for the whole timeout even though the render
+        // already fired (the frame is stuck, not slow: it lands in under
+        // a second or never). Pump idle on every poll round so the resume
+        // runs, then check for the node in the unmerged tree.
         compose.waitUntil(timeoutMillis = 60_000) {
+            compose.waitForIdle()
             compose.onAllNodesWithContentDescription("Motion path overlay", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertExists()
