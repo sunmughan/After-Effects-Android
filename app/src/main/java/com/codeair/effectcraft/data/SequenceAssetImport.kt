@@ -41,7 +41,7 @@ object SequenceAssetImport {
         try {
             val imported = frames.map { frame ->
                 if (cancelRequested()) throw CancellationException("Image sequence import cancelled")
-                ProjectAssetManifest.Frame(frame.name, store.import(frame.input, frame.name, frame.mimeType).sha256)
+                ProjectAssetManifest.Frame(frame.name, store.import(frame.input, frame.name, frame.mimeType, cancelRequested).sha256)
             }
             return manifest.linkSequence(itemId, imported, lastKnownPath)
         } catch (failure: Throwable) {

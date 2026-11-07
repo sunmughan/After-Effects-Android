@@ -91,7 +91,7 @@ class SequenceAssetImportTest {
                         SequenceAssetImport.FrameInput("first.png", ByteArrayInputStream(byteArrayOf(31))),
                         SequenceAssetImport.FrameInput("second.png", ByteArrayInputStream(byteArrayOf(32)))
                     ),
-                    cancelRequested = { ++cancellationChecks >= 2 }
+                    cancelRequested = { ++cancellationChecks >= 4 }
                 )
             }.exceptionOrNull()
             assertTrue(failure is CancellationException)

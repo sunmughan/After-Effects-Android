@@ -129,6 +129,36 @@ class OfflineAssetStoreTest {
     }
 
     @Test
+    fun cancellationDuringStreamingImportLeavesNoIndexPayloadOrTemporaryFile() {
+        val root = Files.createTempDirectory("effectcraft-assets-cancel-stream").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            var reads = 0
+            val source = object : java.io.InputStream() {
+                override fun read(): Int = if (reads++ < 100) 7 else -1
+                override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                    if (reads >= 100) return -1
+                    buffer[offset] = 7
+                    reads++
+                    return 1
+                }
+            }
+            var checks = 0
+            val failure = runCatching {
+                store.import(source, "cancelled.bin", cancelRequested = { ++checks >= 4 })
+            }.exceptionOrNull()
+
+            assertTrue(failure is java.util.concurrent.CancellationException)
+            assertTrue(store.list().isEmpty())
+            assertFalse(root.listFiles()!!.any { it.name.startsWith(".import-") })
+            assertFalse(root.listFiles()!!.any { it.name.matches(Regex("[a-f0-9]{64}\\.bin")) })
+            assertFalse(File(root, "assets.properties").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun enforcesAggregateLibraryQuotaWithoutPublishingRejectedPayload() {
         val root = Files.createTempDirectory("effectcraft-assets-library-limit").toFile()
         try {

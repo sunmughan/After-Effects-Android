@@ -41,7 +41,12 @@ class OfflineAssetStore(
 
     @Synchronized
     @Throws(IOException::class)
-    fun import(input: InputStream, displayName: String, mimeType: String? = null): Asset {
+    fun import(
+        input: InputStream,
+        displayName: String,
+        mimeType: String? = null,
+        cancelRequested: () -> Boolean = { false }
+    ): Asset {
         val name = displayName.trim()
         require(name.isNotEmpty() && name.length <= 255) { "Asset name must contain 1–255 characters" }
         val normalizedMime = mimeType?.trim()?.takeIf(String::isNotEmpty)
@@ -55,6 +60,7 @@ class OfflineAssetStore(
             temporary.outputStream().buffered().use { output ->
                 val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                 while (true) {
+                    if (cancelRequested()) throw java.util.concurrent.CancellationException("Offline asset import cancelled")
                     val read = input.read(buffer)
                     if (read < 0) break
                     if (read == 0) continue
@@ -105,7 +111,7 @@ class OfflineAssetStore(
             }
         } catch (failure: Throwable) {
             temporary.delete()
-            if (failure is IOException || failure is IllegalArgumentException) throw failure
+            if (failure is IOException || failure is IllegalArgumentException || failure is java.util.concurrent.CancellationException) throw failure
             throw IOException("Unable to import offline asset", failure)
         }
     }
