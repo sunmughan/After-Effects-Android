@@ -138,6 +138,8 @@ dependencies {
     // was merged into the main artifact in 1.9.0) fixes the cause; the
     // app itself uses no Fragments (pure Compose + ComponentActivity).
     implementation("androidx.fragment:fragment:1.9.1")
+    // Explicit pull parser/serializer implementation: Android Xml stubs are unavailable in JVM unit tests.
+    implementation("net.sf.kxml:kxml2:2.3.0")
 
     // FCM push. The google-services plugin applies only when
     // app/google-services.json exists (see the conditional apply above);

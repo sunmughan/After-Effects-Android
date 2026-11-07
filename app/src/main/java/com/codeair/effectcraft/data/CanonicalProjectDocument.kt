@@ -1,6 +1,8 @@
 package com.codeair.effectcraft.data
 
-import android.util.Xml
+import org.kxml2.io.KXmlParser
+import org.kxml2.io.KXmlSerializer
+import org.xmlpull.v1.XmlPullParserException
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
@@ -56,7 +58,7 @@ object CanonicalProjectDocument {
     fun toXml(json: String): String {
         val project = JSONObject(json)
         val output = StringWriter()
-        val serializer = Xml.newSerializer()
+        val serializer = KXmlSerializer()
         serializer.setOutput(output)
         serializer.startDocument("UTF-8", true)
         serializer.startTag(null, XML_ROOT)
@@ -69,7 +71,7 @@ object CanonicalProjectDocument {
     }
 
     private fun parseXmlProject(xml: String): JSONObject {
-        val parser = Xml.newPullParser()
+        val parser = KXmlParser()
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL, false)
         parser.setInput(StringReader(xml))
         parser.nextTag()
@@ -89,19 +91,23 @@ object CanonicalProjectDocument {
         require(parser.eventType == XmlPullParser.END_TAG && parser.name == XML_ROOT) {
             "Malformed EffectCraft XML project root"
         }
-        var trailingEvent = parser.next()
-        while (trailingEvent != XmlPullParser.END_DOCUMENT) {
-            // XML permits whitespace and comments after the document element.
-            // Reject a second root or non-whitespace character data, but do
-            // not mistake legal formatting for an extra project payload.
-            when (trailingEvent) {
-                XmlPullParser.TEXT -> require(parser.text.isBlank()) {
-                    "Unexpected content after EffectCraft XML project"
+        try {
+            var trailingEvent = parser.next()
+            while (trailingEvent != XmlPullParser.END_DOCUMENT) {
+                // XML permits whitespace and comments after the document element.
+                // Reject a second root or non-whitespace character data, but do
+                // not mistake legal formatting for an extra project payload.
+                when (trailingEvent) {
+                    XmlPullParser.TEXT -> require(parser.text.isBlank()) {
+                        "Unexpected content after EffectCraft XML project"
+                    }
+                    XmlPullParser.COMMENT -> Unit
+                    else -> error("Unexpected content after EffectCraft XML project")
                 }
-                XmlPullParser.COMMENT -> Unit
-                else -> error("Unexpected content after EffectCraft XML project")
+                trailingEvent = parser.next()
             }
-            trailingEvent = parser.next()
+        } catch (error: XmlPullParserException) {
+            throw IllegalArgumentException("Unexpected content after EffectCraft XML project", error)
         }
         return value
     }
