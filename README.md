@@ -24,7 +24,7 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 01:46 IST)
+## Current engineering status (2026-11-08 01:52 IST))
 
 **Release is NOT complete.** PR #1 was merged into `main` at `4ae22776` on 2026-11-07, but merge is not product/release acceptance; ongoing fixes are on `feat/android-app-foundation`. The authoritative per-phase acceptance criteria, exact test evidence, commit links and blockers are maintained in [PHASES.md](PHASES.md). CI #1131 failed one M2 concurrency regression assertion (480 tests, 1 failed); the regression now uses an explicit Callable with actual exception diagnostics, and #1136 is verifying that fix plus cross-instance repository locking. Canonical project repository shared-root locking and a concurrent two-instance update regression are committed (`d967e7d3`, `3e96834f`); do not mark M2 complete until exact-head CI passes.
 
