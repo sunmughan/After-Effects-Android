@@ -222,6 +222,28 @@ jobs:
           sha256sum "$apk" "$aab" | tee build/audit-release/release-artifact-sha256.txt
           echo "APK and AAB are present, signed (see checks above), and hashed."
 
+      # Fail closed if the release APK was signed with the Android debug
+      # key by accident: the default debug certificate carries the DN
+      # "CN=Android Debug, O=Android, C=US", which no release key must
+      # ever have. Checked from the artifact itself, so it holds no
+      # matter which keystore path the build took.
+      - name: Reject release APK signed with the debug key
+        run: |
+          apk="$(find app/build/outputs/apk/release -name 'app-release.apk' | head -n 1)"
+          test -n "$apk" && test -s "$apk"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f 2>/dev/null | sort | tail -n 1)"
+          if [[ -n "$apksigner" ]]; then
+            certs="$("$apksigner" verify --print-certs "$apk")"
+          else
+            certs="$(keytool -printcert -jarfile "$apk")"
+          fi
+          echo "$certs"
+          if echo "$certs" | grep -qi "CN=Android Debug"; then
+            echo "::error::Release APK is signed with the Android debug certificate. Refusing to treat it as a release."
+            exit 1
+          fi
+          echo "Release APK signer is not the Android debug certificate."
+
       # Fingerprints are read from the artifact that was just built,
       # never invented or copied from another build. When the secrets
       # gate passed, this is the release certificate; the step labels
