@@ -121,7 +121,11 @@ class ProjectAssetManifestTest {
 
     @Test
     fun replaceBatchAndIndependentSaveSerializeAcrossStoreInstances() {
-        val root = Files.createTempDirectory("effectcraft-manifest-cross-instance").toFile()
+        val workspace = Files.createTempDirectory("effectcraft-manifest-cross-instance").toFile()
+        val root = File(workspace, "real")
+        assertTrue(root.mkdirs())
+        val alias = File(workspace, "alias")
+        Files.createSymbolicLink(alias.toPath(), root.toPath())
         val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
         try {
             val initial = ProjectAssetManifestStore(root)
@@ -155,7 +159,8 @@ class ProjectAssetManifestTest {
             })
             assertTrue("Batch must reach the injected second publish", publishReached.await(5, java.util.concurrent.TimeUnit.SECONDS))
 
-            val independent = ProjectAssetManifestStore(root)
+            // A symlink alias must resolve to the same transaction lock as the real root.
+            val independent = ProjectAssetManifestStore(alias)
             val save = executor.submit {
                 saveStarted.countDown()
                 independent.load(firstProject).also { it.link(1, thirdHash) }.let(independent::save)
@@ -184,7 +189,7 @@ class ProjectAssetManifestTest {
                 ProjectAssetManifestStore(root).load(if (firstProject == "project-a") "project-b" else "project-a").entries().single().sha256)
         } finally {
             executor.shutdownNow()
-            root.deleteRecursively()
+            workspace.deleteRecursively()
         }
     }
 
