@@ -474,3 +474,6 @@ Selected ShapePath anchors now have a **Corner vertex** action that zeros both t
 
 
 **Run 11 CI correction (2026-11-07):** CI #1048 failed one new M2 concurrency test (330/331 passed). The test expected 160 from `referencedAssetIds()`, which is correctly a distinct-hash set of size 2. Corrected it to assert 2 hashes, 80 references per hash, and every one of 160 item mappings. [f13226a9](https://github.com/sunmughan/After-Effects-Android/commit/f13226a9038afe454a9be0b20d72c499a12476ba). Fresh exact-head CI pending; no product test weakened. **Release NOT COMPLETE.**
+
+
+**M2 catalog safety (2026-11-07):** CI #1048's one failure was a test expectation error (distinct hashes vs footage-item count), corrected at [f13226a9](https://github.com/sunmughan/After-Effects-Android/commit/f13226a9038afe454a9be0b20d72c499a12476ba). Further hardening: offline media catalog listing now fails closed on malformed entries; corruption-injection test verifies GC aborts before deleting a live payload ([4f239f4e](https://github.com/sunmughan/After-Effects-Android/commit/4f239f4e037cba3b3b2eb0a68eb9e8fef8e70ab5), [da70f9fc](https://github.com/sunmughan/After-Effects-Android/commit/da70f9fc32feebdacc750bbf2e78587735fa7015)). Exact-head CI pending. **Release NOT COMPLETE.**
