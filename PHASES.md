@@ -1,7 +1,7 @@
 # EffectCraft Android — Phase Acceptance Tracker
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
-Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1)  
+Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1) · [PR #2 (draft follow-up)](https://github.com/sunmughan/After-Effects-Android/pull/2)  
 Last checked: 2026-11-08 05:27 IST  
 Latest implementation commits: JVM-testable XML and strict parser tests `81c10049`, `da3f6e5e`; R8-safe Android KXML dependency resolution `2188f73a`, `e27138b4`; symlink-canonical transaction locks `8a2cf102`, `b8a6df4c`; concurrent manifest/repository regressions `45e812e0`, `3e96834f`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
 
