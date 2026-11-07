@@ -6,6 +6,8 @@ import com.codeair.effectcraft.data.CanonicalCurveKey
 import com.codeair.effectcraft.data.CanonicalLayerInfo
 import com.codeair.effectcraft.data.CanonicalShapePathDraft
 import com.codeair.effectcraft.data.CanonicalProjectRepository
+import com.codeair.effectcraft.data.AudioClipDocument
+import com.codeair.effectcraft.data.AudioTrackDocument
 import com.codeair.effectcraft.data.ClipDocument
 import com.codeair.effectcraft.data.CurveHandle
 import com.codeair.effectcraft.data.CurveInterp
@@ -233,6 +235,15 @@ fun EditorScreen(
     onSelectClip: (String) -> Unit = {},
     onTrimClip: (Int, Int) -> Unit = { _, _ -> },
     onSplitClipAtPlayhead: () -> Unit = {},
+    audioTracks: List<AudioTrackDocument> = emptyList(),
+    selectedAudioClipId: String? = null,
+    onSelectAudioClip: (String) -> Unit = {},
+    onAddAudioClip: () -> Unit = {},
+    onTrimAudioClip: (Int, Int) -> Unit = { _, _ -> },
+    onSplitAudioClipAtPlayhead: () -> Unit = {},
+    onSetAudioGain: (Float) -> Unit = {},
+    onSetAudioFades: (Int, Int) -> Unit = { _, _ -> },
+    onSetAudioMuted: (Boolean) -> Unit = {},
     onScrub: (Int) -> Unit,
     onAddOpacityKeyframe: () -> Unit,
     onRemoveOpacityKeyframe: () -> Unit,
@@ -484,6 +495,15 @@ fun EditorScreen(
                 onSelectClip = onSelectClip,
                 onTrimClip = onTrimClip,
                 onSplitClipAtPlayhead = onSplitClipAtPlayhead,
+                audioTracks = audioTracks,
+                selectedAudioClipId = selectedAudioClipId,
+                onSelectAudioClip = onSelectAudioClip,
+                onAddAudioClip = onAddAudioClip,
+                onTrimAudioClip = onTrimAudioClip,
+                onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
+                onSetAudioGain = onSetAudioGain,
+                onSetAudioFades = onSetAudioFades,
+                onSetAudioMuted = onSetAudioMuted,
                 selectedOpacityKeyframes = selectedOpacityKeyframes,
                 canonicalTransformKeyframes = canonicalTransformKeyframes,
                 canonicalTransformDurationFrames = canonicalTransformDurationFrames,
@@ -3300,6 +3320,15 @@ private fun TimelinePanel(
     onSelectClip: (String) -> Unit = {},
     onTrimClip: (Int, Int) -> Unit = { _, _ -> },
     onSplitClipAtPlayhead: () -> Unit = {},
+    audioTracks: List<AudioTrackDocument> = emptyList(),
+    selectedAudioClipId: String? = null,
+    onSelectAudioClip: (String) -> Unit = {},
+    onAddAudioClip: () -> Unit = {},
+    onTrimAudioClip: (Int, Int) -> Unit = { _, _ -> },
+    onSplitAudioClipAtPlayhead: () -> Unit = {},
+    onSetAudioGain: (Float) -> Unit = {},
+    onSetAudioFades: (Int, Int) -> Unit = { _, _ -> },
+    onSetAudioMuted: (Boolean) -> Unit = {},
     selectedOpacityKeyframes: List<PropertyKeyframe>,
     canonicalTransformKeyframes: List<Int>,
     canonicalTransformDurationFrames: Int,
@@ -3400,6 +3429,43 @@ private fun TimelinePanel(
             }
             if (project.layers.size > 4) {
                 Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
+            }
+            // Audio lanes: one row per audio track, clips as blocks like
+            // the layer tracks, plus an add button. Audio lives below the
+            // video layers so the two timelines never share a row.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("AUDIO", color = EditorPalette.muted, fontSize = 8.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
+                TextButton(
+                    onClick = onAddAudioClip,
+                    modifier = Modifier.height(28.dp).semantics { contentDescription = "Add audio clip" }
+                ) { Text("+ Audio", color = EditorPalette.mint, fontSize = 9.sp) }
+                if (audioTracks.isEmpty()) {
+                    Text("No audio clips yet", color = EditorPalette.muted, fontSize = 9.sp)
+                }
+            }
+            audioTracks.forEach { track ->
+                AudioTrackLane(
+                    track = track,
+                    durationFrames = project.durationFrames,
+                    selectedAudioClipId = selectedAudioClipId,
+                    onSelectAudioClip = onSelectAudioClip
+                )
+            }
+            val selectedAudioTrack = audioTracks.firstOrNull { track ->
+                track.clips.any { it.id == selectedAudioClipId }
+            }
+            val selectedAudioClip = selectedAudioTrack?.clips?.firstOrNull { it.id == selectedAudioClipId }
+            if (selectedAudioClip != null && selectedAudioTrack != null) {
+                AudioClipInspector(
+                    clip = selectedAudioClip,
+                    trackName = selectedAudioTrack.name,
+                    playheadFrame = playheadFrame,
+                    onTrimAudioClip = onTrimAudioClip,
+                    onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
+                    onSetAudioGain = onSetAudioGain,
+                    onSetAudioFades = onSetAudioFades,
+                    onSetAudioMuted = onSetAudioMuted
+                )
             }
             val selectedClipLayer = project.layers.firstOrNull { layer ->
                 layer.clips.any { it.id == selectedClipId }
@@ -4142,6 +4208,216 @@ private fun ClipInspector(
                 onClick = onSplitClipAtPlayhead,
                 enabled = canSplit,
                 modifier = Modifier.height(32.dp).semantics { contentDescription = "Split clip at playhead" }
+            ) { Text("Split", color = if (canSplit) EditorPalette.mint else EditorPalette.muted, fontSize = 10.sp) }
+        }
+    }
+}
+
+@Composable
+private fun AudioTrackLane(
+    track: AudioTrackDocument,
+    durationFrames: Int,
+    selectedAudioClipId: String? = null,
+    onSelectAudioClip: (String) -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(27.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .padding(horizontal = 5.dp)
+            .semantics { contentDescription = "Audio track: ${track.name}" },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            track.name,
+            modifier = Modifier.width(107.dp),
+            color = EditorPalette.mint,
+            fontSize = 10.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(17.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(Color(0xFF202633))
+        ) {
+            if (track.clips.isEmpty()) {
+                Text(
+                    "Empty",
+                    color = EditorPalette.muted,
+                    fontSize = 8.sp,
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+            } else {
+                // One block per clip, gaps left empty: the lane shows
+                // exactly what the mixdown hears. Tapping a block
+                // selects that audio clip.
+                Row(Modifier.fillMaxSize()) {
+                    var cursor = 0
+                    track.clips.sortedBy { it.clip.startFrame }.forEach { audioClip ->
+                        if (audioClip.clip.startFrame > cursor) {
+                            Spacer(Modifier.weight((audioClip.clip.startFrame - cursor).toFloat()))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight((audioClip.clip.endFrame - audioClip.clip.startFrame).toFloat().coerceAtLeast(1f))
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(
+                                    if (audioClip.id == selectedAudioClipId) EditorPalette.mint
+                                    else if (audioClip.muted) Color(0xFF62708B).copy(alpha = 0.45f)
+                                    else EditorPalette.mint.copy(alpha = 0.75f)
+                                )
+                                .clickable { onSelectAudioClip(audioClip.id) }
+                                .semantics {
+                                    contentDescription = "Audio clip ${audioClip.clip.startFrame} to ${audioClip.clip.endFrame} on ${track.name}" +
+                                        if (audioClip.muted) ", muted" else ""
+                                }
+                        )
+                        cursor = audioClip.clip.endFrame
+                    }
+                    if (cursor < durationFrames) {
+                        Spacer(Modifier.weight((durationFrames - cursor).toFloat()))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Gain, fade, mute, trim and split controls for the selected audio
+ * clip. Gain is a slider (0 silent, 1 unity, 2 is +6 dB) committed on
+ * release so a drag does not flood the undo stack; fades and trim are
+ * numeric fields applied with a button, through the same undo/journal
+ * path as every other edit. Split divides the clip at the playhead and
+ * is only enabled while the playhead is strictly inside the clip.
+ */
+@Composable
+private fun AudioClipInspector(
+    clip: AudioClipDocument,
+    trackName: String,
+    playheadFrame: Int,
+    onTrimAudioClip: (Int, Int) -> Unit,
+    onSplitAudioClipAtPlayhead: () -> Unit,
+    onSetAudioGain: (Float) -> Unit,
+    onSetAudioFades: (Int, Int) -> Unit,
+    onSetAudioMuted: (Boolean) -> Unit
+) {
+    var gainDraft by remember(clip.id, clip.gain) { mutableStateOf(clip.gain) }
+    var startText by remember(clip.id, clip.clip.startFrame) { mutableStateOf(clip.clip.startFrame.toString()) }
+    var endText by remember(clip.id, clip.clip.endFrame) { mutableStateOf(clip.clip.endFrame.toString()) }
+    var fadeInText by remember(clip.id, clip.fadeInFrames) { mutableStateOf(clip.fadeInFrames.toString()) }
+    var fadeOutText by remember(clip.id, clip.fadeOutFrames) { mutableStateOf(clip.fadeOutFrames.toString()) }
+    val canSplit = playheadFrame > clip.clip.startFrame && playheadFrame < clip.clip.endFrame
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(Color(0xFF202633))
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "AUDIO · $trackName",
+                color = EditorPalette.text,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.1.sp
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "src ${clip.clip.sourceStartFrame}–${clip.clip.sourceEndFrame} / ${clip.clip.sourceLengthFrames}",
+                color = EditorPalette.muted,
+                fontSize = 9.sp
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Gain", color = EditorPalette.muted, fontSize = 9.sp, modifier = Modifier.width(52.dp))
+            Slider(
+                value = gainDraft,
+                onValueChange = { gainDraft = it },
+                valueRange = 0f..AudioClipDocument.MAX_GAIN,
+                onValueChangeFinished = { onSetAudioGain(gainDraft) },
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Audio clip gain" }
+            )
+            Text(
+                "%.2f".format(Locale.US, gainDraft),
+                color = EditorPalette.text,
+                fontSize = 9.sp,
+                modifier = Modifier.width(32.dp)
+            )
+            TextButton(
+                onClick = { onSetAudioMuted(!clip.muted) },
+                modifier = Modifier.height(32.dp).semantics { contentDescription = if (clip.muted) "Unmute audio clip" else "Mute audio clip" }
+            ) { Text(if (clip.muted) "Unmute" else "Mute", color = if (clip.muted) EditorPalette.amber else EditorPalette.mint, fontSize = 10.sp) }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            OutlinedTextField(
+                value = fadeInText,
+                onValueChange = { fadeInText = it.filter { char -> char.isDigit() } },
+                label = { Text("Fade in · frames", fontSize = 9.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(104.dp).semantics { contentDescription = "Audio fade in frames" }
+            )
+            OutlinedTextField(
+                value = fadeOutText,
+                onValueChange = { fadeOutText = it.filter { char -> char.isDigit() } },
+                label = { Text("Fade out · frames", fontSize = 9.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(104.dp).semantics { contentDescription = "Audio fade out frames" }
+            )
+            TextButton(
+                onClick = {
+                    val fadeIn = fadeInText.toIntOrNull()
+                    val fadeOut = fadeOutText.toIntOrNull()
+                    if (fadeIn != null && fadeOut != null) onSetAudioFades(fadeIn, fadeOut)
+                },
+                modifier = Modifier.height(32.dp).semantics { contentDescription = "Apply audio fades" }
+            ) { Text("Fades", color = EditorPalette.violet, fontSize = 10.sp) }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 4.dp)
+        ) {
+            OutlinedTextField(
+                value = startText,
+                onValueChange = { startText = it.filter { char -> char.isDigit() } },
+                label = { Text("In · frame", fontSize = 9.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(96.dp).semantics { contentDescription = "Audio clip in frame" }
+            )
+            OutlinedTextField(
+                value = endText,
+                onValueChange = { endText = it.filter { char -> char.isDigit() } },
+                label = { Text("Out · frame", fontSize = 9.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(96.dp).semantics { contentDescription = "Audio clip out frame" }
+            )
+            TextButton(
+                onClick = {
+                    val start = startText.toIntOrNull()
+                    val end = endText.toIntOrNull()
+                    if (start != null && end != null) onTrimAudioClip(start, end)
+                },
+                modifier = Modifier.height(32.dp).semantics { contentDescription = "Apply audio clip trim" }
+            ) { Text("Trim", color = EditorPalette.violet, fontSize = 10.sp) }
+            TextButton(
+                onClick = onSplitAudioClipAtPlayhead,
+                enabled = canSplit,
+                modifier = Modifier.height(32.dp).semantics { contentDescription = "Split audio clip at playhead" }
             ) { Text("Split", color = if (canSplit) EditorPalette.mint else EditorPalette.muted, fontSize = 10.sp) }
         }
     }

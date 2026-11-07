@@ -22,6 +22,13 @@ import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import com.codeair.effectcraft.data.AudioClipDocument
+import com.codeair.effectcraft.data.AudioClipEditOutcome
+import com.codeair.effectcraft.data.AudioDecoder
+import com.codeair.effectcraft.data.AudioSourceDecision
+import com.codeair.effectcraft.data.AudioTimeline
+import com.codeair.effectcraft.data.AudioTrackDocument
+import com.codeair.effectcraft.data.AudioTranscodeDecision
 import com.codeair.effectcraft.data.AudioStatus
 import com.codeair.effectcraft.data.CanonicalEditHistory
 import com.codeair.effectcraft.data.CanonicalEditSnapshot
@@ -179,6 +186,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         mutableStateOf(project.layers.firstOrNull()?.id.orEmpty())
     }
     var selectedClipId by remember { mutableStateOf<String?>(null) }
+    var selectedAudioClipId by remember { mutableStateOf<String?>(null) }
     var playheadFrame by remember { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
     var saveMessage by remember {
@@ -275,11 +283,115 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    /**
+     * Applies an audio clip trim/split/gain/fade/mute outcome through
+     * the same undo system as every other draft edit: a change pushes
+     * the pre-edit snapshot and clears redo (and is journaled by the
+     * LaunchedEffect on [project]), while a refusal only reports its
+     * reason.
+     */
+    fun applyAudioClipEdit(outcome: AudioClipEditOutcome, trackId: String, successMessage: String): Boolean {
+        return when (outcome) {
+            is AudioClipEditOutcome.Changed -> {
+                val tracks = project.audioTracks.map { track ->
+                    if (track.id == trackId) track.copy(clips = outcome.clips) else track
+                }
+                applyProjectChange(project.copy(audioTracks = tracks), successMessage)
+                true
+            }
+            is AudioClipEditOutcome.Unchanged -> {
+                saveMessage = outcome.reason
+                false
+            }
+        }
+    }
+
     /** Drops the clip selection when its clip no longer exists in [project]. */
     fun pruneClipSelection() {
         selectedClipId = selectedClipId?.takeIf { id ->
             project.layers.any { layer -> layer.clips.any { it.id == id } }
         }
+        selectedAudioClipId = selectedAudioClipId?.takeIf { id ->
+            project.audioTracks.any { track -> track.clips.any { it.id == id } }
+        }
+    }
+
+    /**
+     * Imports one audio file as a clip on the first audio track (or a new
+     * "Audio 1" track): the file is copied into app-private storage, its
+     * audio track is probed, and only AAC/WAV/MP3/FLAC/Opus sources are
+     * accepted — anything else is refused with its reason and the copy
+     * is deleted. The clip starts at frame 0 and runs to the shorter of
+     * the composition and the source, so the project stays valid.
+     */
+    fun importAudioClip(uri: Uri) {
+        exportScope.launch {
+            try {
+                val displayName = withContext(Dispatchers.IO) {
+                    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                        ?: uri.lastPathSegment?.substringAfterLast('/') ?: "audio"
+                }
+                val extension = displayName.substringAfterLast('.', "")
+                    .filter { it.isLetterOrDigit() }.take(10).ifBlank { "audio" }
+                val audioDir = File(context.filesDir, "audio").apply { mkdirs() }
+                val target = File(audioDir, "${java.util.UUID.randomUUID()}.$extension")
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        target.outputStream().use { output -> input.copyTo(output) }
+                    } ?: error("Unable to read the selected audio file")
+                }
+                val probe = withContext(Dispatchers.IO) { AudioDecoder.probe(target) }
+                if (probe == null) {
+                    target.delete()
+                    saveMessage = "Audio file has no audio track"
+                    return@launch
+                }
+                if (AudioTranscodeDecision.decide(probe.mimeType) == AudioSourceDecision.UNSUPPORTED) {
+                    target.delete()
+                    saveMessage = "Audio format ${probe.mimeType} is not supported: use AAC, WAV, MP3, FLAC or Opus"
+                    return@launch
+                }
+                if (probe.durationUs <= 0L) {
+                    target.delete()
+                    saveMessage = "Could not read the audio duration"
+                    return@launch
+                }
+                val sourceLengthFrames = ((probe.durationUs * project.frameRate) / 1_000_000L).toInt().coerceAtLeast(1)
+                val endFrame = minOf(project.durationFrames, sourceLengthFrames)
+                if (endFrame < 1) {
+                    target.delete()
+                    saveMessage = "Audio is too short for this composition"
+                    return@launch
+                }
+                val clip = AudioClipDocument.covering(
+                    startFrame = 0,
+                    endFrame = endFrame,
+                    sourceStartFrame = 0,
+                    sourceEndFrame = endFrame,
+                    sourceLengthFrames = sourceLengthFrames,
+                    sourcePath = target.absolutePath,
+                    sourceMime = probe.mimeType,
+                    sourceDurationUs = probe.durationUs
+                )
+                val tracks = if (project.audioTracks.isEmpty()) {
+                    listOf(AudioTrackDocument.named("Audio 1").copy(clips = listOf(clip)))
+                } else {
+                    project.audioTracks.mapIndexed { index, track ->
+                        if (index == 0) track.copy(clips = track.clips + clip) else track
+                    }
+                }
+                applyProjectChange(project.copy(audioTracks = tracks), "Audio clip added · unsaved")
+                selectedClipId = null
+                selectedAudioClipId = clip.id
+            } catch (failure: Exception) {
+                saveMessage = "Audio import failed · ${failure.message ?: "storage error"}"
+            }
+        }
+    }
+
+    val audioImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) saveMessage = "Audio import cancelled" else importAudioClip(uri)
     }
 
     val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -578,6 +690,23 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             hasAudioItems = audio.hasAudioItems,
                             compositionFrameRateNum = composition.frameRateNum,
                             compositionFrameRateDen = composition.frameRateDen,
+                            audioMix = if (clipsApply) {
+                                // The draft's audio clips describe this
+                                // export exactly when the draft timeline
+                                // does; then they replace the passthrough.
+                                val clips = project.audioTracks.flatMap { it.clips }
+                                if (clips.isNotEmpty()) {
+                                    Mp4ExportWorker.AudioMixRequest(
+                                        clips = clips,
+                                        frameRateNum = composition.frameRateNum,
+                                        frameRateDen = composition.frameRateDen
+                                    )
+                                } else {
+                                    null
+                                }
+                            } else {
+                                null
+                            },
                             isCancelled = { exportJob?.isActive != true },
                             onProgress = { completed, percent ->
                                 mp4ExportProgress = percent
@@ -1063,6 +1192,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     projectKeyframeTracks = projectKeyframeStore.load(opened.id)
                     selectedLayerId = opened.layers.firstOrNull()?.id.orEmpty()
                     selectedClipId = null
+                    selectedAudioClipId = null
                     playheadFrame = 0
                     isPlaying = false
                     undoStack = emptyList()
@@ -1181,6 +1311,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 projectKeyframeTracks = emptyList()
                 selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
                 selectedClipId = null
+                selectedAudioClipId = null
                 playheadFrame = 0
                 isPlaying = false
             },
@@ -1221,9 +1352,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 if (layer != null) {
                     selectedLayerId = layer.id
                     selectedClipId = clipId
+                    selectedAudioClipId = null
                 }
             },
-            onTrimClip = { newStart, newEnd ->
+            onTrimClip = { newStart, newEnd ->,
                 val layer = project.layers.firstOrNull { it.id == selectedLayerId }
                 val clipId = selectedClipId
                 if (layer == null || clipId == null) {
@@ -1254,6 +1386,86 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                 }
             },
+            audioTracks = project.audioTracks,
+            selectedAudioClipId = selectedAudioClipId,
+            onSelectAudioClip = { clipId ->
+                val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == clipId } }
+                if (track != null) {
+                    selectedAudioClipId = clipId
+                    selectedClipId = null
+                }
+            },
+            onAddAudioClip = { audioImportLauncher.launch(arrayOf("audio/*")) },
+            onTrimAudioClip = { newStart, newEnd ->
+                val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
+                val clipId = selectedAudioClipId
+                if (track == null || clipId == null) {
+                    saveMessage = "Select an audio clip before trimming"
+                } else {
+                    applyAudioClipEdit(
+                        AudioTimeline.trimAudioClip(track.clips, clipId, newStart, newEnd, project.durationFrames),
+                        track.id,
+                        "Audio clip trimmed · unsaved"
+                    )
+                }
+            },
+            onSplitAudioClipAtPlayhead = {
+                val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
+                if (track == null) {
+                    saveMessage = "Select an audio clip before splitting"
+                } else {
+                    val target = selectedAudioClipId?.let { id -> track.clips.firstOrNull { it.id == id } }
+                        ?: AudioTimeline.clipAt(track.clips, playheadFrame)
+                    if (target == null) {
+                        saveMessage = "No audio clip under the playhead on the selected track"
+                    } else {
+                        applyAudioClipEdit(
+                            AudioTimeline.splitAudioClip(track.clips, target.id, playheadFrame, project.durationFrames),
+                            track.id,
+                            "Audio clip split at frame $playheadFrame · unsaved"
+                        )
+                    }
+                }
+            },
+            onSetAudioGain = { gain ->
+                val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
+                val clipId = selectedAudioClipId
+                if (track == null || clipId == null) {
+                    saveMessage = "Select an audio clip before changing gain"
+                } else {
+                    applyAudioClipEdit(
+                        AudioTimeline.setGain(track.clips, clipId, gain),
+                        track.id,
+                        "Audio gain set · unsaved"
+                    )
+                }
+            },
+            onSetAudioFades = { fadeIn, fadeOut ->
+                val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
+                val clipId = selectedAudioClipId
+                if (track == null || clipId == null) {
+                    saveMessage = "Select an audio clip before changing fades"
+                } else {
+                    applyAudioClipEdit(
+                        AudioTimeline.setFades(track.clips, clipId, fadeIn, fadeOut),
+                        track.id,
+                        "Audio fades set · unsaved"
+                    )
+                }
+            },
+            onSetAudioMuted = { muted ->
+                val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
+                val clipId = selectedAudioClipId
+                if (track == null || clipId == null) {
+                    saveMessage = "Select an audio clip before muting"
+                } else {
+                    applyAudioClipEdit(
+                        AudioTimeline.setMuted(track.clips, clipId, muted),
+                        track.id,
+                        if (muted) "Audio clip muted · unsaved" else "Audio clip unmuted · unsaved"
+                    )
+                }
+            },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
             onAddOpacityKeyframe = {
                 val layer = project.layers.firstOrNull { it.id == selectedLayerId }
@@ -1276,12 +1488,16 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 if (width in 320..3840 && height in 320..3840 && fps in 1..120 && duration in 1..3600) {
                     // A shorter composition trims clips that ran past it and
                     // drops clips that started at or after the new end, so
-                    // the project stays valid after the change.
+                    // the project stays valid after the change. Audio clips
+                    // are clamped the same way.
                     val layers = project.layers.map { layer ->
                         layer.copy(clips = ClipTimeline.clampToDuration(layer.clips, duration))
                     }
+                    val audioTracks = project.audioTracks.map { track ->
+                        track.copy(clips = AudioTimeline.clampToDuration(track.clips, duration))
+                    }
                     applyProjectChange(
-                        project.copy(width = width, height = height, frameRate = fps, durationFrames = duration, layers = layers),
+                        project.copy(width = width, height = height, frameRate = fps, durationFrames = duration, layers = layers, audioTracks = audioTracks),
                         "Composition updated · unsaved"
                     )
                     pruneClipSelection()
