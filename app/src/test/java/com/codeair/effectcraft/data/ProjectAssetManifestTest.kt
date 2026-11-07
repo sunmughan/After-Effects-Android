@@ -143,10 +143,16 @@ class ProjectAssetManifestTest {
                 }
                 Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
-            val batch = executor.submit {
-                runCatching { transactional.replaceAssetEverywhere(firstHash, secondHash) }
-                    .exceptionOrNull()
-            }
+            // Use an explicit Callable so the captured failure is the Future's
+            // value (rather than relying on Runnable/Callable SAM overload inference).
+            val batch = executor.submit(java.util.concurrent.Callable<Exception?> {
+                try {
+                    transactional.replaceAssetEverywhere(firstHash, secondHash)
+                    null
+                } catch (failure: Exception) {
+                    failure
+                }
+            })
             assertTrue("Batch must reach the injected second publish", publishReached.await(5, java.util.concurrent.TimeUnit.SECONDS))
 
             val independent = ProjectAssetManifestStore(root)
@@ -163,7 +169,11 @@ class ProjectAssetManifestTest {
             }
 
             allowFailure.countDown()
-            assertTrue("Injected batch failure must be surfaced", batch.get(5, java.util.concurrent.TimeUnit.SECONDS) is java.io.IOException)
+            val batchFailure = batch.get(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertTrue(
+                "Injected batch failure must be surfaced as IOException; actual=\${batchFailure?.javaClass?.name ?: \"null\"}: \${batchFailure?.message}",
+                batchFailure is java.io.IOException
+            )
             save.get(5, java.util.concurrent.TimeUnit.SECONDS)
             assertEquals(
                 "The independent save must run after rollback, not be overwritten by its backup",
