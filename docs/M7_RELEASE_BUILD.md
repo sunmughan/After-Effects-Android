@@ -49,6 +49,12 @@
   `app/google-services.json` exists, so unregistered builds are
   unaffected; registration status, fingerprints, and console steps are
   in `docs/firebase-registration.md`.
+- Fragment pin: `androidx.fragment:fragment:1.9.1` is an explicit
+  dependency because `play-services-basement` (transitive via
+  firebase-messaging) pulls fragment 1.1.0 and nothing else requests a
+  newer one; the Activity Result API needs >= 1.3.0 and
+  `:app:lintVitalRelease` fails release builds below it. Do not remove
+  the pin without re-running the unsigned release assemble in CI.
 
 ## 2. Exact toolchain (must match, or the build is not this release)
 

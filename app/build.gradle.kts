@@ -117,6 +117,16 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     // Explicit (not transitive-only): the FCM service posts via NotificationCompat.
     implementation("androidx.core:core-ktx:1.17.0")
+    // Explicit Fragment pin (M7 release fix): play-services-basement
+    // (transitive via firebase-messaging) depends on fragment 1.1.0, and
+    // nothing else requests a newer one, so Gradle resolved 1.1.0. The
+    // Activity Result API in ComponentActivity needs Fragment >= 1.3.0,
+    // and :app:lintVitalRelease fails the release build on anything
+    // older — the first release assemble in CI surfaced this latent
+    // failure. Pinning the current stable (1.9.1, Sep 2026; fragment-ktx
+    // was merged into the main artifact in 1.9.0) fixes the cause; the
+    // app itself uses no Fragments (pure Compose + ComponentActivity).
+    implementation("androidx.fragment:fragment:1.9.1")
 
     // FCM push. The google-services plugin applies only when
     // app/google-services.json exists (see the conditional apply above);
