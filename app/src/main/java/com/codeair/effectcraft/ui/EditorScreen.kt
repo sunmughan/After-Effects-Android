@@ -4068,7 +4068,6 @@ private fun curveCurrentValue(layer: CanonicalLayerInfo, selector: String): Trip
     }
 }
 
-@Composable
 /**
  * Trim/split controls for the selected clip. Numeric in/out frames are
  * the trim input: applying them trims the timeline bounds and shifts
@@ -4148,6 +4147,7 @@ private fun ClipInspector(
     }
 }
 
+@Composable
 private fun LayerTrack(
     layer: LayerDocument,
     selected: Boolean,

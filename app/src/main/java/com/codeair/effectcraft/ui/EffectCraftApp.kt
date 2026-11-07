@@ -29,6 +29,9 @@ import com.codeair.effectcraft.data.CanonicalLayerSelection
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalProjectDocument
 import com.codeair.effectcraft.data.CanonicalProjectRepository
+import com.codeair.effectcraft.data.ClipEditOutcome
+import com.codeair.effectcraft.data.ClipRenderCoverage
+import com.codeair.effectcraft.data.ClipTimeline
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.EcprojDocumentStore
 import com.codeair.effectcraft.data.EditorRecoveryJournal
