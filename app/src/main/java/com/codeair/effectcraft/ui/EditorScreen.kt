@@ -299,7 +299,9 @@ fun EditorScreen(
     missingManifestEntries: Int,
     onReleaseSafGrant: (String, SafPermissionRegistry.Kind) -> Unit,
     onReplaceOfflineAsset: (String) -> Unit,
-    onCollectUnusedOfflineAssets: () -> Unit
+    onCollectUnusedOfflineAssets: () -> Unit,
+    onVerifyOfflineAssets: () -> Unit = {},
+    isVerifyingOfflineAssets: Boolean = false
 ) {
     val selectedTool = remember { mutableStateOf("Select") }
     var interpolationProperty by remember { mutableStateOf("position") }
@@ -575,6 +577,9 @@ fun EditorScreen(
                         if (offlineAssets.isEmpty()) {
                             Text("No media imported yet. Relink footage from a canonical project to copy it here for offline use.", color = EditorPalette.muted)
                         } else {
+                            TextButton(onClick = onVerifyOfflineAssets, enabled = !isVerifyingOfflineAssets) {
+                                Text(if (isVerifyingOfflineAssets) "Verifying media…" else "Verify media integrity", color = EditorPalette.violet, fontSize = 11.sp)
+                            }
                             if (offlineAssets.any { it.sha256 !in referencedOfflineAssetIds }) {
                                 TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }) {
                                     Text("Remove unused media", color = EditorPalette.violet, fontSize = 11.sp)
