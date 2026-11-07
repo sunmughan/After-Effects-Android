@@ -574,7 +574,11 @@ class M7FunctionCoverageTest {
 
     // ---- Settings dialogs (Compose) ----
 
-    private fun sequenceSettingsScreen(onExport: (Int, Int, Int, Int, Int) -> Unit) {
+    private fun sequenceSettingsScreen(
+        onExport: (Int, Int, Int, Int, Int) -> Unit,
+        offlineAssets: List<OfflineAssetStore.Asset> = emptyList(),
+        onVerifyOfflineAssets: () -> Unit = {},
+    ) {
         val project = ProjectDocument.starter()
         val canonical = CanonicalProjectInfo(
             compositions = listOf(
@@ -596,7 +600,7 @@ class M7FunctionCoverageTest {
                     isPlaying = false,
                     saveMessage = "Saved",
                     savedProjects = emptyList(),
-                    offlineAssets = emptyList(),
+                    offlineAssets = offlineAssets,
                     referencedOfflineAssetIds = emptySet(),
                     canUndo = false,
                     canRedo = false,
@@ -660,6 +664,7 @@ class M7FunctionCoverageTest {
                     onReleaseSafGrant = { _, _ -> },
                     onReplaceOfflineAsset = {},
                     onCollectUnusedOfflineAssets = {},
+                    onVerifyOfflineAssets = onVerifyOfflineAssets,
                 )
             }
         }
@@ -711,5 +716,20 @@ class M7FunctionCoverageTest {
             .performScrollTo()
             .assertIsDisplayed()
         assertEquals(0, exported)
+    }
+
+    @Test
+    fun offlineMediaLibraryExposesIntegrityVerificationAction() {
+        val store = OfflineAssetStore(tempDir("offline-media-ui"))
+        val asset = store.import(ByteArrayInputStream(byteArrayOf(1, 2, 3)), "fixture.bin")
+        var verificationCalls = 0
+        sequenceSettingsScreen(
+            onExport = { _, _, _, _, _ -> },
+            offlineAssets = listOf(asset),
+            onVerifyOfflineAssets = { verificationCalls++ },
+        )
+        compose.onNodeWithContentDescription("Offline media library").performClick()
+        compose.onNodeWithText("Verify media integrity").assertIsDisplayed().performClick()
+        assertEquals(1, verificationCalls)
     }
 }
