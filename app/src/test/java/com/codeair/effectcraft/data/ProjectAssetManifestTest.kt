@@ -45,6 +45,42 @@ class ProjectAssetManifestTest {
     }
 
     @Test
+    fun concurrentStoreInstancesPublishOnlyCompleteManifestAndUniqueTemps() {
+        val root = Files.createTempDirectory("effectcraft-manifest-concurrent").toFile()
+        try {
+            val hashes = setOf(firstHash, secondHash, thirdHash)
+            val start = java.util.concurrent.CountDownLatch(1)
+            val failures = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
+            val workers = (0 until 8).map { worker ->
+                Thread {
+                    try {
+                        start.await()
+                        repeat(12) { iteration ->
+                            val manifest = ProjectAssetManifest("shared-project")
+                            manifest.link(1, listOf(firstHash, secondHash, thirdHash)[(worker + iteration) % 3])
+                            ProjectAssetManifestStore(root).save(manifest)
+                        }
+                    } catch (failure: Throwable) {
+                        failures += failure
+                    }
+                }.apply { start() }
+            }
+            start.countDown()
+            workers.forEach(Thread::join)
+
+            assertTrue("Concurrent manifest saves must all complete: $failures", failures.isEmpty())
+            val saved = ProjectAssetManifestStore(root).load("shared-project")
+            assertTrue("The published JSON must be parseable and complete", saved.entryFor(1)?.sha256 in hashes)
+            assertTrue(
+                "Unique temporary files must be cleaned after publication",
+                root.listFiles().orEmpty().none { it.name.contains(".tmp-") }
+            )
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun missingFlagsAndReplaceRewriteSingleAndSequenceEntries() {
         val manifest = ProjectAssetManifest("project-two")
         manifest.link(1, firstHash)
