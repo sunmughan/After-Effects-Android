@@ -1,19 +1,19 @@
 # EffectCraft Android — Phase Acceptance Tracker
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
-Work branch: `feat/android-app-foundation` · [PR #1 (Draft)](https://github.com/sunmughan/After-Effects-Android/pull/1)  
-Last checked: 2026-11-07 22:40 IST  
-Latest code/test commit: `814dd66e65989137dd80d554ebf9c38b158edbf5` · tracker/README sync commits: `2bba7133`, `e3de054d`
+Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1)  
+Last checked: 2026-11-08 00:10 IST  
+Latest implementation commits: keyframe store `542c1785`, regression `faf1d30c`; branch HEAD before these edits `048679bb`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
 
 > This file is the durable acceptance ledger, not a chronological automation transcript. Keep one concise entry per phase and link implementation/test commits. Do not append repeated run summaries; update this ledger in place.
 
 ## Current CI / test evidence
 
-- **CI #1122** — [run 42388159501](https://github.com/sunmughan/After-Effects-Android/actions/runs/42388159501), tested code SHA `8b79218c84f78830b42c106d8f0a53d815f7e925`: native ARM64+x86_64, Rust, Kotlin/JVM and unsigned release APK/AAB checks passed; Android API 30 failed only `AdaptiveWorkspaceSmokeTest.motionPathOverlayDrawsForSpatialPositionTrack` in both emulator attempts. Exact job [128449918817 logs](https://github.com/sunmughan/After-Effects-Android/actions/runs/42388159501) show a 60 s Compose `waitUntil` timeout at test line 1007 after render request `(10, 0)`; this is a presentation/semantics synchronization failure, not a native render assertion.
-- **Test correction** — [commit 814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e65989137dd80d554ebf9c38b158edbf5): no nested `waitForIdle()` inside `waitUntil`; separately await the rendered-frame semantics node and then the overlay node. Assertions still require both frame and overlay to exist/display; no timeout inflation beyond two bounded 30 s waits and no assertions removed.
-- **CI #1123** — [run 42393023883](https://github.com/sunmughan/After-Effects-Android/actions/runs/42393023883), older SHA `dd042e58`, was still in progress at the last check (release APK/AAB step); it does not include the test correction.
-- **CI #1124** — [run 42394930220](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220), exact new test SHA `814dd66e`, queued/pending at last check. Its full JVM, API30, native and independent cold APK/native comparison verdict is required. Do not infer success from queue/checkout.
-- Local Gradle/JDK/Android SDK execution is unavailable in this automation runtime; GitHub Actions is the build/test gate.
+- **CI #1124 — PASS**: [run 42394930220](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220), exact source SHA `814dd66e`. Assemble/test job and independent cold debug-APK rebuild/compare both succeeded. Rust bridge **61/61**, Kotlin/JVM suite passed, unsigned APK+AAB and no-debug-signing checks passed, Android API 30 instrumentation **175/175** (11 test classes; 0 skipped/failed). This verifies the workspace motion-path synchronization correction.
+- **CI #1125 (workflow_dispatch on merge commit `4ae22776`)**: Assemble/test job passed, including Rust **61/61** and API30 **175/175**; independent cold APK comparison remains in progress at last check. Do not treat the whole run as green until its second job concludes.
+- **M4 implementation**: cross-instance keyframe-store locking and narrow atomic-move fallback [`542c1785`](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d); concurrent independent-store regression [`faf1d30c`](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5), 6 writers × 20 keyframes. **CI #1128** [run 42402625642](https://github.com/sunmughan/After-Effects-Android/actions/runs/42402625642) was queued at last observation; its exact test verdict is pending.
+- Local Gradle/JDK/Android SDK execution is unavailable in this runtime; GitHub Actions is the build/test gate. No hardware/device acceptance is inferred from emulator CI.
+- **PR #1** was merged into `main` at [`4ae22776`](https://github.com/sunmughan/After-Effects-Android/commit/4ae22776dae28757ac56ba526b14af0f8e84a00d) on 2026-11-07. Subsequent roadmap fixes are being committed to `feat/android-app-foundation`; PR #1 cannot be kept Draft/open after merge. No new PR is claimed.
 
 ## Phase status and acceptance gates
 
@@ -31,7 +31,7 @@ Remaining: rerun all gates on the latest branch head; physical ARM64 runtime is 
 
 Acceptance: offline project creation/open/save/recovery; adaptive phone/tablet/foldable workspace; layer selection/add/delete/reorder/visibility; properties/opacity; timeline/playhead/playback; undo/redo; responsive, accessible controls; state persistence and API30 instrumentation.
 
-Evidence: scoped baseline accepted in historical emulator suites (including delete/reorder/undo/redo and offline open/save). Responsive fixes: [remove-layer action](https://github.com/sunmughan/After-Effects-Android/commit/eb7b254e), [regression](https://github.com/sunmughan/After-Effects-Android/commit/a7e9895b). Latest CI #1122 found a workspace-preview test synchronization failure; correction [814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e) pending #1124.  
+Evidence: scoped baseline accepted in historical emulator suites (including delete/reorder/undo/redo and offline open/save). Responsive fixes: [remove-layer action](https://github.com/sunmughan/After-Effects-Android/commit/eb7b254e), [regression](https://github.com/sunmughan/After-Effects-Android/commit/a7e9895b). The workspace-preview semantics synchronization correction [814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e) passed exact-head CI #1124: API30 instrumentation 175/175 and independent cold APK comparison both passed.  
 Remaining: full professional interaction parity, complete accessibility/TalkBack and physical device/foldable UX acceptance.
 
 ### M2 — Project import/save, format compatibility and media
@@ -59,6 +59,8 @@ Remaining: physical ARM64 GPU/Surface/device-loss and media decode parity/perfor
 
 ### M4 — Functional layer/effect/timeline editing
 **Status: IN PROGRESS; broad canonical editing exists, full upstream parity open.**
+
+- Keyframe editor durability now serializes independent `ProjectKeyframeStore` instances sharing a canonical directory with one process-local lock; atomic rename fallback is limited to `AtomicMoveNotSupportedException`. Implementation [542c1785](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d); regression [faf1d30c](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5): six independent writers × 20 updates, reload asserts all 120 tracks/frames. CI #1128 pending.
 
 Acceptance: canonical properties and transforms update the actual project/preview; Position/Scale/Rotation/Anchor/Orientation/Rotation X/Y keys; curve/key navigation, add/move/remove, interpolation/easing; ShapePath vertices, cubic handles, close/open, insert/delete/reverse/align/smooth/corner and feather preservation; effect/property and Layer Control authoring.
 
