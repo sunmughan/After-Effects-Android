@@ -235,7 +235,10 @@ class ProjectAssetManifest(val projectId: String) {
  * of the project id (same pattern as [ProjectKeyframeStore]) so arbitrary
  * project ids never become filesystem paths. Writes are atomic replacements.
  */
-class ProjectAssetManifestStore(private val root: File) {
+class ProjectAssetManifestStore(
+    private val root: File,
+    private val replaceFile: (source: File, target: File) -> Unit = ::atomicReplaceManifest
+) {
     @Synchronized
     fun load(projectId: String): ProjectAssetManifest {
         val id = ProjectAssetManifest.validateProjectId(projectId)
@@ -310,25 +313,84 @@ class ProjectAssetManifestStore(private val root: File) {
         return hashes
     }
 
-    /** Rewrites [oldHash] as [newHash] in every project manifest; returns entries changed. */
+    /**
+     * Rewrites [oldHash] as [newHash] across every project manifest as a
+     * rollback-capable batch. All manifests are parsed and all replacement
+     * bytes are staged before the first live file is moved. If a later move
+     * fails, already-published files are restored from backups in reverse
+     * order; a failed rollback is attached as a suppressed exception rather
+     * than being hidden.
+     */
     @Synchronized
+    @Throws(IOException::class)
     fun replaceAssetEverywhere(oldHash: String, newHash: String): Int {
-        ProjectAssetManifest.validateHash(oldHash)
-        ProjectAssetManifest.validateHash(newHash)
-        // Validate the complete manifest set before the first write. A
-        // corrupt file must not turn a multi-project replacement into a
-        // silent partial migration.
+        val old = ProjectAssetManifest.validateHash(oldHash)
+        val fresh = ProjectAssetManifest.validateHash(newHash)
+        require(old != fresh) { "Replacement asset must differ from the original asset" }
+        if (!root.isDirectory) return 0
+
+        // Safety-critical scan validates every manifest and its project-id
+        // filename before computing or staging any migration.
         allReferencedHashes()
+        val files = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }
+            ?: throw IOException("Unable to enumerate project asset manifests")
+        val replacements = linkedMapOf<File, String>()
         var changed = 0
-        projectIds().forEach { id ->
-            val manifest = load(id)
-            val count = manifest.replaceAsset(oldHash, newHash)
+        files.sortedBy { it.name }.forEach { file ->
+            val manifest = ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8))
+            val count = manifest.replaceAsset(old, fresh)
             if (count > 0) {
-                save(manifest)
+                replacements[file] = manifest.toJson()
                 changed += count
             }
         }
-        return changed
+        if (replacements.isEmpty()) return 0
+
+        val token = java.util.UUID.randomUUID().toString()
+        val staged = linkedMapOf<File, File>()
+        val backups = linkedMapOf<File, File>()
+        val published = mutableListOf<File>()
+        val preserveBackups = mutableSetOf<File>()
+        try {
+            // Stage every complete new manifest and every backup before writes.
+            replacements.forEach { (target, json) ->
+                val stage = File(root, "${target.name}.stage-$token")
+                val backup = File(root, "${target.name}.backup-$token")
+                staged[target] = stage
+                backups[target] = backup
+                java.io.FileOutputStream(stage).use { output ->
+                    output.write(json.toByteArray(Charsets.UTF_8))
+                    output.fd.sync()
+                }
+                Files.copy(target.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+
+            staged.forEach { (target, stage) ->
+                replaceFile(stage, target)
+                published += target
+            }
+            return changed
+        } catch (failure: Exception) {
+            val rollbackFailures = mutableListOf<Exception>()
+            published.asReversed().forEach { target ->
+                val backup = backups[target] ?: return@forEach
+                val rollback = File(root, "${target.name}.rollback-$token")
+                try {
+                    Files.copy(backup.toPath(), rollback.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    replaceFile(rollback, target)
+                } catch (rollbackFailure: Exception) {
+                    rollbackFailures += rollbackFailure
+                    preserveBackups += backup
+                } finally {
+                    rollback.delete()
+                }
+            }
+            rollbackFailures.forEach(failure::addSuppressed)
+            throw IOException("Unable to replace asset references transactionally", failure)
+        } finally {
+            staged.values.forEach(File::delete)
+            backups.values.filterNot { it in preserveBackups }.forEach(File::delete)
+        }
     }
 
     private fun fileFor(projectId: String): File = File(root, "${projectId.sha256()}.json")
@@ -336,4 +398,14 @@ class ProjectAssetManifestStore(private val root: File) {
     private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
         .digest(toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
+}
+
+
+/** Same-directory replacement keeps each manifest move atomic where supported. */
+private fun atomicReplaceManifest(source: File, target: File) {
+    try {
+        Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+        Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
 }

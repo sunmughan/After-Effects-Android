@@ -103,6 +103,37 @@ class ProjectAssetManifestTest {
     }
 
     @Test
+    fun replaceAssetEverywhereRollsBackEarlierManifestWhenLaterPublishFails() {
+        val root = Files.createTempDirectory("effectcraft-manifest-transaction").toFile()
+        try {
+            val initial = ProjectAssetManifestStore(root)
+            initial.load("project-a").also { it.link(1, firstHash) }.let(initial::save)
+            initial.load("project-b").also { it.link(2, firstHash) }.let(initial::save)
+            val targets = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }!!
+                .sortedBy { it.name }
+            assertEquals(2, targets.size)
+            val original = targets.associate { it.name to it.readText(Charsets.UTF_8) }
+            val failTarget = targets.last().name
+            val transactional = ProjectAssetManifestStore(root) { source, target ->
+                if (target.name == failTarget && source.name.contains(".stage-")) {
+                    throw java.io.IOException("Injected second manifest publish failure")
+                }
+                Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+
+            val failure = runCatching { transactional.replaceAssetEverywhere(firstHash, secondHash) }.exceptionOrNull()
+            assertTrue("The injected publish failure must be surfaced", failure is java.io.IOException)
+            targets.forEach { target ->
+                assertEquals("Every manifest must be restored after a partial publish", original[target.name], target.readText(Charsets.UTF_8))
+            }
+            assertTrue("Staged/backup files must be cleaned after rollback",
+                root.listFiles().orEmpty().none { it.name.contains(".stage-") || it.name.contains(".backup-") || it.name.contains(".rollback-") })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun rejectsMalformedManifestsAndInputs() {
         val manifest = ProjectAssetManifest("project-bad")
         assertTrue(runCatching { manifest.link(0, firstHash) }.isFailure)
