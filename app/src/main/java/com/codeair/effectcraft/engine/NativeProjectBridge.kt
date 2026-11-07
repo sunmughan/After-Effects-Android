@@ -453,6 +453,17 @@ object NativeProjectBridge {
         return runCatching { deleteLayerEcprojNative(json, compositionId, layerId) }.getOrNull()
     }
 
+    /**
+     * Splits one canonical layer at [frame] into two clips covering exactly
+     * the original span. The envelope carries the edited project plus
+     * `newLayerId`, the fresh id of the right-hand clip.
+     */
+    fun splitLayerEcproj(json: String, compositionId: Long, layerId: Long, frame: Long): String? {
+        ensureLoaded()
+        if (!available || frame < 0) return null
+        return runCatching { splitLayerEcprojNative(json, compositionId, layerId, frame) }.getOrNull()
+    }
+
     private fun ensureLoaded() {
         if (loadAttempted) return
         synchronized(this) {
@@ -599,6 +610,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun deleteLayerEcprojNative(json: String, compositionId: Long, layerId: Long): String
+
+    @JvmStatic
+    private external fun splitLayerEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long): String
 
     @JvmStatic
     private external fun addTextLayerEcprojNative(json: String, compositionId: Long, name: String): String

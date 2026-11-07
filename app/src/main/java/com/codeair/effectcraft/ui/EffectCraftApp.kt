@@ -999,14 +999,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         saveMessage = successMessage
     }
 
-    fun applyCanonicalEdit(envelope: String?, successMessage: String) {
+    fun applyCanonicalEdit(envelope: String?, successMessage: String, selectionOverride: Set<Long>? = null) {
         runCatching {
             val response = JSONObject(envelope ?: error("Native EffectCraft bridge unavailable on this ABI"))
             check(response.optBoolean("valid")) { response.optString("error", "Canonical edit failed") }
             val updated = response.getString("project")
             val before = importedEcproj
             val beforeSelection = canonicalSelectedIds
-            commitCanonicalSource(updated, successMessage)
+            commitCanonicalSource(updated, successMessage, selectionOverride)
             if (before != null && updated != before) {
                 canonicalUndoStack = CanonicalEditHistory.record(
                     canonicalUndoStack, CanonicalEditSnapshot(before, beforeSelection)
@@ -1342,6 +1342,23 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     NativeProjectBridge.deleteLayerEcproj(source, compositionId, layerId),
                     "Canonical layer removed · saved locally"
                 )
+            },
+            onSplitCanonicalLayer = { compositionId, layerId, frame ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val envelope = NativeProjectBridge.splitLayerEcproj(source, compositionId, layerId, frame.toLong())
+                    // Select the new right-hand clip after the split; when
+                    // the envelope carries no id the selection falls back to
+                    // the surviving left half through the usual prune.
+                    val newLayerId = envelope?.let { runCatching { JSONObject(it).optLong("newLayerId", -1L) }.getOrNull() }
+                        ?.takeIf { it >= 0 }
+                    applyCanonicalEdit(
+                        envelope,
+                        "Canonical layer split at frame $frame · saved locally",
+                        selectionOverride = newLayerId?.let { setOf(it) }
+                    )
+                }
             },
             onSetCanonicalLayerOpacity = { compositionId, layerId, opacityPercent ->
                 val source = importedEcproj

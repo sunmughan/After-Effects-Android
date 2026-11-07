@@ -194,10 +194,19 @@ data class CanonicalLayerInfo(
     /** True when the canonical layer switch is locked; locked layers reject every edit. */
     val locked: Boolean = false,
     val threeD: Boolean = false,
+    /** First comp frame the clip is active on (inclusive). */
+    val inPointFrame: Int = 0,
+    /** First comp frame after the clip's active span (exclusive); defaults to the composition length. */
+    val outPointFrame: Int = 0,
+    /** Comp frame where the clip's layer time 0 sits; the right half of a split keeps the original value. */
+    val startTimeFrame: Int = 0,
     val textParams: CanonicalTextParams? = null,
     val shapeItems: List<CanonicalParamGroup> = emptyList(),
     val effects: List<CanonicalParamGroup> = emptyList()
-)
+) {
+    /** True when [frame] lies strictly inside this clip's span, so splitting there yields two non-empty clips. */
+    fun canSplitAt(frame: Int): Boolean = frame > inPointFrame && frame < outPointFrame
+}
 
 data class CanonicalCompositionInfo(
     val id: Long,
@@ -237,6 +246,10 @@ data class CanonicalProjectInfo(
             val comps = root.optJSONArray("compositions")
             val compositions = (0 until (comps?.length() ?: 0)).map { index ->
                 val comp = comps!!.getJSONObject(index)
+                val frameRateNum = comp.optInt("frameRateNum", 30)
+                val frameRateDen = comp.optInt("frameRateDen", 1)
+                val durationSeconds = comp.optDouble("durationSeconds", 5.0)
+                val durationFrames = (durationSeconds * frameRateNum / frameRateDen.coerceAtLeast(1)).toInt().coerceAtLeast(1)
                 val layerArray = comp.optJSONArray("layers")
                 val layers = (0 until (layerArray?.length() ?: 0)).map { layerIndex ->
                     val layer = layerArray!!.getJSONObject(layerIndex)
@@ -303,6 +316,9 @@ data class CanonicalProjectInfo(
                         rotationYDegrees = layer.optDouble("rotationYDegrees", 0.0),
                         locked = layer.optBoolean("locked", false),
                         threeD = layer.optBoolean("threeD", false),
+                        inPointFrame = layer.optInt("inPointFrame", 0),
+                        outPointFrame = layer.optInt("outPointFrame", durationFrames),
+                        startTimeFrame = layer.optInt("startTimeFrame", 0),
                         textParams = textJson?.let {
                             val textKeys = it.optJSONArray("keys")
                             val keys = (0 until (textKeys?.length() ?: 0)).map { keyIndex ->
@@ -332,9 +348,9 @@ data class CanonicalProjectInfo(
                     name = comp.optString("name", "Composition"),
                     width = comp.optInt("width"),
                     height = comp.optInt("height"),
-                    frameRateNum = comp.optInt("frameRateNum", 30),
-                    frameRateDen = comp.optInt("frameRateDen", 1),
-                    durationSeconds = comp.optDouble("durationSeconds", 5.0),
+                    frameRateNum = frameRateNum,
+                    frameRateDen = frameRateDen,
+                    durationSeconds = durationSeconds,
                     layers = layers
                 )
             }

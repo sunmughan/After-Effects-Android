@@ -1101,6 +1101,9 @@ fn inspect_project(source: &str) -> Result<String, String> {
                 "name": layer.name,
                 "source": layer.source.type_name(),
                 "visible": layer.switches.video,
+                "inPointFrame": comp.frame_rate.frame_at(layer.in_point),
+                "outPointFrame": comp.frame_rate.frame_at(layer.out_point),
+                "startTimeFrame": comp.frame_rate.frame_at(layer.start_time),
                 "opacityPercent": layer_opacity_percent(layer),
                 "opacityKeys": layer_opacity_keys(layer, comp.frame_rate),
                 "opacityCurves": layer_opacity_curves(layer, comp.frame_rate),
@@ -3271,6 +3274,64 @@ fn delete_layer(source: &str, composition_id: u64, layer_id: u64) -> Result<Stri
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+/// Splits one canonical layer at a composition frame into two clips that
+/// together cover exactly the original span. The left clip keeps the
+/// original id and ends at the split frame; the right clip is a full clone
+/// (same source, start time, stretch, properties and keyframes) with a
+/// fresh id, starting at the split frame. The split frame must lie strictly
+/// inside the layer span, so neither half is empty. Because the right clip
+/// keeps the original start time, its layer time — and therefore every
+/// keyframed value and the rendered pixels — continue seamlessly from the
+/// left clip. Returns the edited project plus the new right-clip layer id.
+fn split_layer(source: &str, composition_id: u64, layer_id: u64, frame: i64) -> Result<(String, u64), String> {
+    if frame < 0 { return Err("Split frame must be non-negative".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    // Mint the fresh id before borrowing the composition mutably; a
+    // rejected split below only advances the counter, never the document.
+    let new_layer_id = project.alloc();
+    let comp = project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let frame_rate = comp.frame_rate;
+    let index = comp.layers.iter().position(|layer| layer.id == LayerId(layer_id))
+        .ok_or_else(|| format!("Layer {layer_id} was not found in composition {composition_id}"))?;
+    require_layer_unlocked(&comp.layers[index])?;
+    let tick = Tick::from_rational(frame, frame_rate.den, frame_rate.num);
+    let layer = &comp.layers[index];
+    if tick <= layer.in_point || tick >= layer.out_point {
+        return Err(format!("Split frame {frame} must lie strictly inside the layer span"));
+    }
+    let mut right = layer.clone();
+    right.id = LayerId(new_layer_id);
+    right.in_point = tick;
+    let base_name = layer.name.clone();
+    let mut suffix = 2;
+    let mut right_name = format!("{base_name} ({suffix})");
+    while comp.layers.iter().any(|other| other.name == right_name) {
+        suffix += 1;
+        right_name = format!("{base_name} ({suffix})");
+    }
+    right.name = right_name;
+    comp.layers[index].out_point = tick;
+    comp.layers.insert(index + 1, right);
+    let json = project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))?;
+    Ok((json, new_layer_id))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_splitLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, frame: jlong,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 || layer_id < 0 || frame < 0 { Err("Composition, layer and split frame must be non-negative".to_owned()) }
+        else { split_layer(&source, composition_id as u64, layer_id as u64, frame as i64) };
+    let output = match result { Ok((project_json, new_layer_id)) => json!({"valid": true, "project": project_json, "newLayerId": new_layer_id}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_setLayerVisibilityEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, layer_id: jlong, visible: jni::sys::jboolean,
@@ -3715,6 +3776,88 @@ mod tests {
         let final_project: Project = serde_json::from_str(&deleted).unwrap();
         assert_eq!(final_project.comp(comp_id).unwrap().layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), vec!["C", "B"]);
         assert_eq!(serde_json::from_str::<Project>(&final_project.to_file_json().unwrap()).unwrap(), final_project);
+    }
+
+    #[test]
+    fn split_layer_divides_span_and_renders_identically_on_both_sides() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(5.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let layer = build::layer(&mut project, &comp, "Title", LayerSource::Text, (640, 360), None);
+        let layer_id = layer.id.0;
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        let source = project.to_file_json().unwrap();
+        let original: Project = serde_json::from_str(&source).unwrap();
+        let original_layer = &original.comp(comp_id).unwrap().layers[0];
+        assert_eq!(original_layer.in_point, Tick::ZERO);
+        assert_eq!(original_layer.out_point, Tick::from_seconds_f64(5.0));
+
+        // Frames on both sides of the split must render byte-identical
+        // pixels before and after the split: the two clips together are
+        // the original layer, with no gap and no overlap.
+        let before_left = render_frame_rgba(&source, comp_id.0, 10, 160).unwrap();
+        let before_right = render_frame_rgba(&source, comp_id.0, 100, 160).unwrap();
+
+        let (split_json, new_layer_id) = split_layer(&source, comp_id.0, layer_id, 45).unwrap();
+        let split: Project = serde_json::from_str(&split_json).unwrap();
+        let layers = &split.comp(comp_id).unwrap().layers;
+        assert_eq!(layers.len(), 2);
+        let split_tick = Tick::from_rational(45, FrameRate::FPS_30.den, FrameRate::FPS_30.num);
+        assert_eq!(layers[0].id.0, layer_id);
+        assert_eq!(layers[0].in_point, Tick::ZERO);
+        assert_eq!(layers[0].out_point, split_tick);
+        assert_eq!(layers[1].id.0, new_layer_id);
+        assert_ne!(layers[1].id.0, layer_id);
+        assert_eq!(layers[1].name, "Title (2)");
+        assert_eq!(layers[1].in_point, split_tick);
+        assert_eq!(layers[1].out_point, Tick::from_seconds_f64(5.0));
+        assert_eq!(layers[1].start_time, original_layer.start_time);
+        assert_eq!(layers[1].stretch, original_layer.stretch);
+        assert_eq!(layers[1].source, original_layer.source);
+        assert_eq!(layers[1].props, original_layer.props);
+        assert_eq!(render_frame_rgba(&split_json, comp_id.0, 10, 160).unwrap(), before_left);
+        assert_eq!(render_frame_rgba(&split_json, comp_id.0, 100, 160).unwrap(), before_right);
+        // The split frame itself belongs to the right clip (in_point is inclusive).
+        assert_eq!(render_frame_rgba(&split_json, comp_id.0, 45, 160).unwrap(), before_right);
+
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&split_json).unwrap()).unwrap();
+        let meta_layers = metadata["compositions"][0]["layers"].as_array().unwrap();
+        assert_eq!(meta_layers[0]["inPointFrame"], 0);
+        assert_eq!(meta_layers[0]["outPointFrame"], 45);
+        assert_eq!(meta_layers[1]["inPointFrame"], 45);
+        assert_eq!(meta_layers[1]["outPointFrame"], 150);
+        assert_eq!(serde_json::from_str::<Project>(&split.to_file_json().unwrap()).unwrap(), split);
+    }
+
+    #[test]
+    fn split_layer_rejects_boundary_locked_and_missing_targets() {
+        use effectcraft_project::{build, Comp, ItemKind, LayerSource};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(5.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.clone().into()));
+        let layer = build::layer(&mut project, &comp, "Title", LayerSource::Text, (640, 360), None);
+        let layer_id = layer.id.0;
+        project.comp_mut(comp_id).unwrap().layers.push(layer);
+        let source = project.to_file_json().unwrap();
+
+        assert!(split_layer(&source, comp_id.0, layer_id, -1).is_err());
+        assert!(split_layer(&source, comp_id.0, layer_id, 0).is_err());
+        assert!(split_layer(&source, comp_id.0, layer_id, 149).is_ok());
+        assert!(split_layer(&source, comp_id.0, layer_id, 150).is_err());
+        assert!(split_layer(&source, comp_id.0, 999, 45).is_err());
+        assert!(split_layer(&source, 999, layer_id, 45).is_err());
+
+        let mut locked_project: Project = serde_json::from_str(&source).unwrap();
+        locked_project.comp_mut(comp_id).unwrap().layers[0].switches.locked = true;
+        let locked_source = locked_project.to_file_json().unwrap();
+        assert!(split_layer(&locked_source, comp_id.0, layer_id, 45).is_err());
     }
 
     #[test]
