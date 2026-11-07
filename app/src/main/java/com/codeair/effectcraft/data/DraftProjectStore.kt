@@ -148,6 +148,7 @@ class DraftProjectStore(context: Context) {
                     put("opacity", layer.opacity.toDouble())
                     put("tint", layer.tint)
                     put("visible", layer.visible)
+                    put("clips", ClipJson.encode(layer.clips))
                 })
             }
         })
@@ -170,7 +171,8 @@ class DraftProjectStore(context: Context) {
                         kind = layer.getString("kind"),
                         opacity = layer.optDouble("opacity", 1.0).toFloat().coerceIn(0f, 1f),
                         tint = layer.optLong("tint", 0xFF9278F6),
-                        visible = layer.optBoolean("visible", true)
+                        visible = layer.optBoolean("visible", true),
+                        clips = ClipJson.decode(layer.optJSONArray("clips"))
                     )
                 )
             }
