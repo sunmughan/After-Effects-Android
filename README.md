@@ -24,13 +24,13 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 04:10 IST)
+## Current engineering status (2026-11-08 04:32 IST)
 
-**Release is NOT complete.** PR #1 was merged into `main` at `4ae22776` on 2026-11-07, but merge is not product/release acceptance; ongoing fixes are on `feat/android-app-foundation`. The authoritative per-phase acceptance criteria, exact test evidence, commit links and blockers are maintained in [PHASES.md](PHASES.md). CI #1131 failed one M2 concurrency assertion (480 tests, 1 failed). CI #1137 then failed Kotlin test compilation because the new exception diagnostic contained malformed escaped quotes at ProjectAssetManifestTest.kt:174; corrected in [`e7f78b60`](https://github.com/sunmughan/After-Effects-Android/commit/e7f78b6037e9e9907963149973a1c6c440c7162b). CI #1142 was cancelled by the next source push. Exact-head #1143 (`da3f6e5e`) failed two XML tests: `android.util.Xml.newSerializer` is an unmocked Android SDK stub in local JVM tests, and the parser's trailing-root exception did not match the asserted diagnostic. Fix [`81c10049`](https://github.com/sunmughan/After-Effects-Android/commit/81c100490938668c45ddcb2ee62d15de89e08fdc) adds kxml2 and uses its concrete parser/serializer, with a stable strict trailing-root error. CI #1144 is running on `81c10049`; no pass is claimed yet. Canonical repository/manifest lock keys resolve symlink aliases (`b8a6df4c`, `8a2cf102`); regression [`45e812e0`](https://github.com/sunmughan/After-Effects-Android/commit/45e812e0cbe89f96351db99a14de6975063d8fb2) proves an alias-root save waits through rollback. Do not mark M2 complete until tests and cold reproducibility pass.
+**Release is NOT complete.** PR #1 was merged into `main` at `4ae22776` on 2026-11-07, but merge is not product/release acceptance; ongoing fixes are on `feat/android-app-foundation`. The authoritative per-phase acceptance criteria, exact test evidence, commit links and blockers are maintained in [PHASES.md](PHASES.md). CI #1131 failed one M2 concurrency assertion (480 tests, 1 failed). CI #1137 then failed Kotlin test compilation because the new exception diagnostic contained malformed escaped quotes at ProjectAssetManifestTest.kt:174; corrected in [`e7f78b60`](https://github.com/sunmughan/After-Effects-Android/commit/e7f78b6037e9e9907963149973a1c6c440c7162b). CI #1142 was cancelled by the next source push. Exact-head #1143 (`da3f6e5e`) failed two XML tests: `android.util.Xml.newSerializer` is an unmocked Android SDK stub in local JVM tests, and the parser's trailing-root exception did not match the asserted diagnostic. Fix [`81c10049`](https://github.com/sunmughan/After-Effects-Android/commit/81c100490938668c45ddcb2ee62d15de89e08fdc) adds kxml2 and uses its concrete parser/serializer, with a stable strict trailing-root error. CI #1144 failed two XML tests: artifact 13593948751 shows kxml2 rejects the unsupported `FEATURE_PROCESS_DOCDECL` setter and the trailing-root assertion then received that parser error. Fix [`e4e5bb85`](https://github.com/sunmughan/After-Effects-Android/commit/e4e5bb85bfeb4a3d26f216739d8890d2777a3d4d) removes the unsupported call without relaxing parsing/tests. Exact-head CI #1145 (`e4e5bb85`) is queued; no pass is claimed yet. Canonical repository/manifest lock keys resolve symlink aliases (`b8a6df4c`, `8a2cf102`); regression [`45e812e0`](https://github.com/sunmughan/After-Effects-Android/commit/45e812e0cbe89f96351db99a14de6975063d8fb2) proves an alias-root save waits through rollback. Do not mark M2 complete until tests and cold reproducibility pass.
 
 | Phase | Status | Remaining gate |
 |---|---|---|
-| M0 | CI #1124 exact SHA green (61 Rust, 175 API30, JVM, dual ABI, cold APK compare) | Latest-head revalidation pending in #1136 |
+| M0 | CI #1124 exact SHA green (61 Rust, 175 API30, JVM, dual ABI, cold APK compare) | Latest-head revalidation pending; #1145 queued |
 | M1 | Scoped editor foundation; corrected workspace test passed API30 175/175 in #1124 | Full professional parity, accessibility and physical device UX |
 | M2 | Partial; canonical import/save + offline media; cross-instance manifest/repository locks, symlink regression, `.ecprojx` typed round-trip | #1143 failed 2 XML JVM tests; KXml parser/serializer fix `81c10049` awaiting #1144. Effekseer/provider/relink matrix remains |
 | M3 | Partial; real Rust CPU/session preview | Physical GPU/Surface/device-loss/media qualification |
@@ -40,6 +40,8 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 | M7 | Not accepted | Protected signing, signed artifacts, physical install/run and release gates |
 
 ### Latest CI checkpoint
+
+- [CI #1144](https://github.com/sunmughan/After-Effects-Android/actions/runs/42421376240) failed 2 XML JVM tests (483 tests total); the artifact confirms unsupported kxml2 feature configuration. Corrected in [`e4e5bb85`](https://github.com/sunmughan/After-Effects-Android/commit/e4e5bb85bfeb4a3d26f216739d8890d2777a3d4d). [CI #1145](https://github.com/sunmughan/After-Effects-Android/actions/runs/42423554259) is queued.
 
 - [CI #1124](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220) **passed** exact source SHA `814dd66e`: Rust 61/61, JVM, dual ABI, unsigned APK/AAB, API30 instrumentation 175/175, and independent cold debug-APK byte comparison.
 - The Compose motion-path overlay synchronization correction [814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e65989137dd80d554ebf9c38b158edbf5) is verified; the prior #1122 timeout is resolved.
@@ -52,7 +54,7 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 - Adobe After Effects `.aep` is proprietary; no licensed/available parser is integrated, so native `.aep` import is **not** claimed.
 - Effekseer `.efkproj` conversion/parser compatibility is not complete.
 - Unsigned APK/AAB CI output is not a signed production release. Signing secrets/keystore must remain owner-controlled; physical ARM64 install/run evidence is still required.
-- PR #1 is already merged; do not conflate merge with M0–M7 release acceptance. Keep release status NOT COMPLETE.
+- PR #1 is already merged; do not conflate merge with M0–M7 release acceptance. Keep release status NOT COMPLETE. PR #1 is already merged and is not Draft.
 
 ## Contributing / roadmap
 
