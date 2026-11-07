@@ -3,7 +3,7 @@
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1)  
 Last checked: 2026-11-08 00:10 IST  
-Latest implementation commits: keyframe store `542c1785`, regression `faf1d30c`; branch HEAD before these edits `048679bb`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
+Latest implementation commits: keyframe store `542c1785`, regression `faf1d30c`; latest tracker sync `635e08ed`, README sync `d1a9ba29`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
 
 > This file is the durable acceptance ledger, not a chronological automation transcript. Keep one concise entry per phase and link implementation/test commits. Do not append repeated run summaries; update this ledger in place.
 
