@@ -181,6 +181,128 @@ class EditorRecoveryJournalTest {
     }
 
     @Test
+    fun sessionStateRoundTripsThroughAFreshInstance() {
+        val root = Files.createTempDirectory("effectcraft-journal-session").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 1_000L)
+            val current = edited(committed, "Unsaved revision", false)
+            val secondLayerId = current.layers[1].id
+            val state = EditorSessionState(
+                undoStack = listOf(EditorSessionSnapshot(committed, committed.layers[0].id, 7)),
+                redoStack = listOf(EditorSessionSnapshot(committed, secondLayerId, 9)),
+                selectedLayerId = secondLayerId,
+                playheadFrame = 42,
+                canonicalUndoStack = listOf(CanonicalEditSnapshot("{\"v\":1}", setOf(3L))),
+                canonicalRedoStack = listOf(CanonicalEditSnapshot("{\"v\":2}", setOf(5L))),
+                canonicalSelectedIds = setOf(3L, 5L)
+            )
+            EditorRecoveryJournal(root).write(current, state)
+
+            val recovered = EditorRecoveryJournal(root).recoverSession(committed.id, committed)
+            assertNotNull(recovered)
+            assertEquals("Unsaved revision", recovered!!.document.name)
+            assertEquals(1, recovered.state.undoStack.size)
+            assertEquals(7, recovered.state.undoStack[0].playheadFrame)
+            assertEquals(committed.layers[0].id, recovered.state.undoStack[0].selectedLayerId)
+            assertEquals(1, recovered.state.redoStack.size)
+            assertEquals(9, recovered.state.redoStack[0].playheadFrame)
+            assertEquals(secondLayerId, recovered.state.selectedLayerId)
+            assertEquals(42, recovered.state.playheadFrame)
+            assertEquals(listOf(CanonicalEditSnapshot("{\"v\":1}", setOf(3L))), recovered.state.canonicalUndoStack)
+            assertEquals(listOf(CanonicalEditSnapshot("{\"v\":2}", setOf(5L))), recovered.state.canonicalRedoStack)
+            assertEquals(setOf(3L, 5L), recovered.state.canonicalSelectedIds)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun legacyJournalWithoutSessionRecoversWithEmptyState() {
+        val root = Files.createTempDirectory("effectcraft-journal-legacy").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 1_000L)
+            EditorRecoveryJournal(root).write(edited(committed, "Unsaved revision", false))
+
+            val recovered = EditorRecoveryJournal(root).recoverSession(committed.id, committed)
+            assertNotNull(recovered)
+            assertEquals("Unsaved revision", recovered!!.document.name)
+            assertEquals(EditorSessionState.EMPTY, recovered.state)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun tamperedSessionIsTornAndJournalDeleted() {
+        val root = Files.createTempDirectory("effectcraft-journal-session-torn").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 1_000L)
+            val state = EditorSessionState(selectedLayerId = committed.layers[1].id, playheadFrame = 42)
+            EditorRecoveryJournal(root).write(edited(committed, "Unsaved revision", false), state)
+            val journalFile = root.listFiles()!!.single { it.name.endsWith(".journal") }
+            val envelope = JSONObject(journalFile.readText(Charsets.UTF_8))
+            // Rewrite the session without updating the checksum: torn storage.
+            envelope.put("session", JSONObject(envelope.getString("session")).put("playheadFrame", 99).toString())
+            journalFile.writeText(envelope.toString(), Charsets.UTF_8)
+
+            assertNull(EditorRecoveryJournal(root).recoverSession(committed.id, committed))
+            assertFalse("A journal with a tampered session must be removed", journalFile.exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun outOfRangePlayheadStaleSelectionAndForeignSnapshotAreRepaired() {
+        val root = Files.createTempDirectory("effectcraft-journal-session-repair").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 1_000L)
+            val current = edited(committed, "Unsaved revision", false)
+            val foreign = ProjectDocument.starter().copy(name = "Another project", updatedAtEpochMillis = 2_000L)
+            val state = EditorSessionState(
+                undoStack = listOf(
+                    EditorSessionSnapshot(foreign, foreign.layers[0].id, 3),
+                    EditorSessionSnapshot(committed, "gone-layer", 9999)
+                ),
+                selectedLayerId = "gone-layer",
+                playheadFrame = 9999
+            )
+            EditorRecoveryJournal(root).write(current, state)
+
+            val recovered = EditorRecoveryJournal(root).recoverSession(committed.id, committed)
+            assertNotNull(recovered)
+            assertEquals("The foreign-project snapshot must be dropped", 1, recovered!!.state.undoStack.size)
+            assertEquals(current.durationFrames - 1, recovered.state.undoStack[0].playheadFrame)
+            assertEquals(current.layers[0].id, recovered.state.undoStack[0].selectedLayerId)
+            assertEquals(current.durationFrames - 1, recovered.state.playheadFrame)
+            assertEquals(current.layers[0].id, recovered.state.selectedLayerId)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun undoStackIsCappedAtFiftyOnRecovery() {
+        val root = Files.createTempDirectory("effectcraft-journal-session-cap").toFile()
+        try {
+            val committed = ProjectDocument.starter().copy(name = "Committed baseline", updatedAtEpochMillis = 1_000L)
+            val current = edited(committed, "Unsaved revision", false)
+            val stack = (1..60).map { n ->
+                EditorSessionSnapshot(committed.copy(name = "Undo $n"), committed.layers[0].id, n)
+            }
+            EditorRecoveryJournal(root).write(current, EditorSessionState(undoStack = stack))
+
+            val recovered = EditorRecoveryJournal(root).recoverSession(committed.id, committed)
+            assertNotNull(recovered)
+            assertEquals(50, recovered!!.state.undoStack.size)
+            assertEquals("Undo 11", recovered.state.undoStack.first().document.name)
+            assertEquals("Undo 60", recovered.state.undoStack.last().document.name)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun writeRejectsInvalidProjects() {
         val root = Files.createTempDirectory("effectcraft-journal-invalid").toFile()
         try {
