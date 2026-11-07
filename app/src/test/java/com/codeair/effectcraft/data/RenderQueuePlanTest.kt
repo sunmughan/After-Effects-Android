@@ -1,0 +1,152 @@
+package com.codeair.effectcraft.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class RenderQueuePlanTest {
+    private fun settings(start: Int = 10, end: Int = 12, width: Int = 320, height: Int = 320, fps: Int = 30) =
+        RenderQueueSettings(width, height, fps, start, end)
+
+    @Test
+    fun rangeIsInclusiveAndFrameNamesAreStable() {
+        val plan = RenderQueuePlan.create(settings())
+        assertEquals(3, plan.frameCount)
+        assertEquals(listOf(10, 11, 12), plan.frames.toList())
+        assertEquals(10, plan.frameAt(0))
+        assertEquals(12, plan.frameAt(2))
+        assertEquals("frame-000010.png", plan.zipEntryName(10))
+        assertEquals("frame-000012.png", plan.zipEntryName(12))
+        assertThrows(IllegalArgumentException::class.java) { plan.frameAt(3) }
+        assertThrows(IllegalArgumentException::class.java) { plan.zipEntryName(9) }
+    }
+
+    @Test
+    fun progressIsMonotonicAndReachesOneHundred() {
+        val plan = RenderQueuePlan.create(settings(start = 4, end = 7))
+        assertEquals(0, plan.progressPercent(0))
+        assertEquals(25, plan.progressPercent(1))
+        assertEquals(50, plan.progressPercent(2))
+        assertEquals(75, plan.progressPercent(3))
+        assertEquals(100, plan.progressPercent(4))
+        assertThrows(IllegalArgumentException::class.java) { plan.progressPercent(5) }
+    }
+
+
+    @Test
+    fun mp4PresentationTimestampsAreDerivedFromFrameOffsetWithoutAccumulation() {
+        val plan = RenderQueuePlan.create(settings(start = 100, end = 102, fps = 24))
+        assertEquals(0L, plan.presentationTimeUs(0))
+        assertEquals(41_666L, plan.presentationTimeUs(1))
+        assertEquals(83_333L, plan.presentationTimeUs(2))
+        // EOS timestamp is the duration of all three frames, not the last PTS.
+        assertEquals(125_000L, plan.presentationTimeUs(plan.frameCount))
+        assertThrows(IllegalArgumentException::class.java) { plan.presentationTimeUs(-1) }
+        assertThrows(IllegalArgumentException::class.java) { plan.presentationTimeUs(plan.frameCount + 1) }
+    }
+
+    @Test
+    fun acceptsCommonSmallCompositionDimensions() {
+        val smallWide = RenderQueuePlan.create(settings(start = 0, end = 0, width = 320, height = 180))
+        assertEquals(320, smallWide.settings.width)
+        assertEquals(180, smallWide.settings.height)
+        assertEquals(230_400L, smallWide.estimatedUncompressedRgbaBytes)
+    }
+
+    @Test
+    fun rejectsInvalidDimensionsFrameRateAndRanges() {
+        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(width = 0)) }
+        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(height = 4097)) }
+        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(fps = 0)) }
+        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(fps = 121)) }
+        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(start = -1)) }
+        assertThrows(IllegalArgumentException::class.java) { RenderQueuePlan.create(settings(start = 13, end = 12)) }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(settings(start = 0, end = RenderQueuePlan.MAX_FRAME_COUNT))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(settings(end = RenderQueuePlan.MAX_FRAME_INDEX + 1))
+        }
+    }
+
+    @Test
+    fun defaultExportFormatIsMp4H264AndPngRemainsSelectable() {
+        assertEquals(
+            RenderOutputFormat.MP4_H264,
+            RenderQueueSettings(640, 360, 30, 0, 29).outputFormat
+        )
+        val png = RenderQueueSettings(
+            width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29,
+            outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP
+        )
+        assertEquals(30, RenderQueuePlan.create(png).frameCount)
+    }
+
+    @Test
+    fun mp4PlanRequiresEvenYuv420DimensionsAndBoundedBitrate() {
+        val mp4 = RenderQueueSettings(
+            width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29,
+            outputFormat = RenderOutputFormat.MP4_H264, videoBitrate = 8_000_000
+        )
+        assertEquals(30, RenderQueuePlan.create(mp4).frameCount)
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(width = 641))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(height = 359))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(videoBitrate = 249_999))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(mp4.copy(videoBitrate = 50_000_001))
+        }
+    }
+
+    @Test
+    fun hevcPlanSharesMp4DimensionAndBitrateRules() {
+        val hevc = RenderQueueSettings(
+            width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29,
+            outputFormat = RenderOutputFormat.MP4_HEVC, videoBitrate = 8_000_000
+        )
+        assertEquals(30, RenderQueuePlan.create(hevc).frameCount)
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(hevc.copy(width = 641))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(hevc.copy(videoBitrate = 50_000_001))
+        }
+    }
+
+    @Test
+    fun defaultExportFormatIsH264Mp4WithAac() {
+        // The app-wide export default is H.264 video in MP4 with AAC audio
+        // (owner decision 2026-11-06): settings built without a format
+        // produce an MP4 plan, and PNG must be asked for explicitly.
+        val defaults = RenderQueueSettings(width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29)
+        assertEquals(RenderOutputFormat.MP4_H264, defaults.outputFormat)
+        assertEquals(30, RenderQueuePlan.create(defaults).frameCount)
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(defaults.copy(width = 641))
+        }
+        val png = defaults.copy(outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP)
+        assertEquals(RenderOutputFormat.PNG_SEQUENCE_ZIP, RenderQueuePlan.create(png).settings.outputFormat)
+    }
+
+    @Test
+    fun enforcesPerFramePixelsAndTotalRgbaBudget() {
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(settings(width = 4096, height = 4096))
+        }
+        // 3840×2160 is a valid UHD frame; the queue budget bounds its length.
+        val uhd = RenderQueuePlan.create(settings(start = 0, end = 0, width = 3840, height = 2160))
+        assertEquals(33_177_600L, uhd.estimatedUncompressedRgbaBytes)
+        assertTrue(uhd.estimatedUncompressedRgbaBytes <= RenderQueuePlan.MAX_UNCOMPRESSED_RGBA_BYTES)
+        // 258 UHD frames = 8,559,820,800 bytes, still under the 8 GiB budget;
+        // 259 frames = 8,592,998,400 bytes, the first count that exceeds it.
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(settings(start = 0, end = 258, width = 3840, height = 2160))
+        }
+    }
+}

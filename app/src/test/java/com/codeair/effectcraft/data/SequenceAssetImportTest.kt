@@ -1,0 +1,153 @@
+package com.codeair.effectcraft.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.InputStream
+import java.util.concurrent.CancellationException
+import java.nio.file.Files
+
+class SequenceAssetImportTest {
+    @Test
+    fun importsOrderedFramesAndRecordsSequenceEntry() {
+        val root = Files.createTempDirectory("effectcraft-sequence").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val manifests = ProjectAssetManifestStore(File(root, "manifests"))
+            val manifest = manifests.load("seq-project")
+            val entry = SequenceAssetImport.importSequence(
+                store,
+                manifest,
+                11,
+                listOf(
+                    SequenceAssetImport.FrameInput("frame_001.png", ByteArrayInputStream(byteArrayOf(1))),
+                    SequenceAssetImport.FrameInput("frame_002.png", ByteArrayInputStream(byteArrayOf(2))),
+                    // Identical bytes deduplicate to the first frame's payload.
+                    SequenceAssetImport.FrameInput("frame_003.png", ByteArrayInputStream(byteArrayOf(1)))
+                )
+            )
+            manifests.save(manifest)
+            assertEquals(ProjectAssetManifest.Kind.SEQUENCE, entry.kind)
+            assertEquals(listOf("frame_001.png", "frame_002.png", "frame_003.png"), entry.frames.map { it.name })
+            assertEquals(entry.frames[0].sha256, entry.frames[2].sha256)
+            assertEquals(2, store.list().size)
+            assertEquals(entry, manifests.load("seq-project").entryFor(11))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun failedSequenceRestoresPreviousEntryWithoutDeletingPayloads() {
+        val root = Files.createTempDirectory("effectcraft-sequence-fail").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val manifest = ProjectAssetManifest("seq-fail")
+            val previousHash = "d".repeat(64)
+            manifest.link(5, previousHash)
+            val failing = object : InputStream() {
+                override fun read(): Int = throw java.io.IOException("synthetic read failure")
+            }
+            val failure = runCatching {
+                SequenceAssetImport.importSequence(
+                    store,
+                    manifest,
+                    5,
+                    listOf(
+                        SequenceAssetImport.FrameInput("ok.png", ByteArrayInputStream(byteArrayOf(9))),
+                        SequenceAssetImport.FrameInput("bad.png", failing)
+                    )
+                )
+            }.exceptionOrNull()
+            assertTrue(failure != null)
+            // Rollback: the previous single entry is intact in the manifest.
+            assertEquals(previousHash, manifest.entryFor(5)?.sha256)
+            // The frame imported before the failure stays in the content-addressed
+            // store: deleting it could remove a payload another project references,
+            // so garbage collection (not rollback) owns its cleanup.
+            assertEquals(1, store.list().size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun cancelledSequenceRestoresPreviousEntryAndRetainsImportedPayloads() {
+        val root = Files.createTempDirectory("effectcraft-sequence-cancel").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val manifest = ProjectAssetManifest("seq-cancel")
+            val previousHash = "e".repeat(64)
+            manifest.link(13, previousHash)
+            var cancellationChecks = 0
+            val failure = runCatching {
+                SequenceAssetImport.importSequence(
+                    store,
+                    manifest,
+                    13,
+                    listOf(
+                        SequenceAssetImport.FrameInput("first.png", ByteArrayInputStream(byteArrayOf(31))),
+                        SequenceAssetImport.FrameInput("second.png", ByteArrayInputStream(byteArrayOf(32)))
+                    ),
+                    cancelRequested = { ++cancellationChecks >= 4 }
+                )
+            }.exceptionOrNull()
+            assertTrue(failure is CancellationException)
+            assertEquals(previousHash, manifest.entryFor(13)?.sha256)
+            // Cancellation rolls back only the manifest; an already imported
+            // content-addressed payload remains safe for other project references.
+            assertEquals(1, store.list().size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun rejectsOversizedSequenceBeforeConsumingAnyFrames() {
+        val root = Files.createTempDirectory("effectcraft-sequence-limit").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val manifest = ProjectAssetManifest("seq-limit")
+            val previousHash = "a".repeat(64)
+            manifest.link(7, previousHash)
+            val frames = (0..SequenceAssetImport.MAX_SEQUENCE_FRAMES).map { index ->
+                SequenceAssetImport.FrameInput("frame-$index.png", ByteArrayInputStream(byteArrayOf(index.toByte())))
+            }
+            val failure = runCatching {
+                SequenceAssetImport.importSequence(store, manifest, 7, frames)
+            }.exceptionOrNull()
+            assertTrue(failure is IllegalArgumentException)
+            assertTrue(failure?.message.orEmpty().contains("${SequenceAssetImport.MAX_SEQUENCE_FRAMES} frames"))
+            assertEquals(previousHash, manifest.entryFor(7)?.sha256)
+            assertTrue(store.list().isEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun rejectsEmptyOrDuplicateFrameNamesBeforeImporting() {
+        val root = Files.createTempDirectory("effectcraft-sequence-bad").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val manifest = ProjectAssetManifest("seq-bad")
+            assertTrue(runCatching {
+                SequenceAssetImport.importSequence(store, manifest, 1, emptyList())
+            }.isFailure)
+            assertTrue(runCatching {
+                SequenceAssetImport.importSequence(
+                    store, manifest, 1,
+                    listOf(
+                        SequenceAssetImport.FrameInput("dup.png", ByteArrayInputStream(byteArrayOf(1))),
+                        SequenceAssetImport.FrameInput("dup.png", ByteArrayInputStream(byteArrayOf(2)))
+                    )
+                )
+            }.isFailure)
+            assertTrue(store.list().isEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+}

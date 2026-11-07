@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification small icon: white-on-transparent silhouette, as Android
+     requires for status-bar icons. A film frame with a play triangle.
+     The in-app "E" logo is full-colour and cannot serve as a
+     notification icon, so this dedicated glyph is used for FCM instead. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:pathData="M6,4h12c1.1,0 2,0.9 2,2v12c0,1.1 -0.9,2 -2,2H6c-1.1,0 -2,-0.9 -2,-2V6c0,-1.1 0.9,-2 2,-2z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10,8.2v7.6l6,-3.8z" />
+</vector>
