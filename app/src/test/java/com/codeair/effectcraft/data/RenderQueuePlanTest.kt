@@ -33,6 +33,19 @@ class RenderQueuePlanTest {
         assertThrows(IllegalArgumentException::class.java) { plan.progressPercent(5) }
     }
 
+
+    @Test
+    fun mp4PresentationTimestampsAreDerivedFromFrameOffsetWithoutAccumulation() {
+        val plan = RenderQueuePlan.create(settings(start = 100, end = 102, fps = 24))
+        assertEquals(0L, plan.presentationTimeUs(0))
+        assertEquals(41_666L, plan.presentationTimeUs(1))
+        assertEquals(83_333L, plan.presentationTimeUs(2))
+        // EOS timestamp is the duration of all three frames, not the last PTS.
+        assertEquals(125_000L, plan.presentationTimeUs(plan.frameCount))
+        assertThrows(IllegalArgumentException::class.java) { plan.presentationTimeUs(-1) }
+        assertThrows(IllegalArgumentException::class.java) { plan.presentationTimeUs(plan.frameCount + 1) }
+    }
+
     @Test
     fun acceptsCommonSmallCompositionDimensions() {
         val smallWide = RenderQueuePlan.create(settings(start = 0, end = 0, width = 320, height = 180))
