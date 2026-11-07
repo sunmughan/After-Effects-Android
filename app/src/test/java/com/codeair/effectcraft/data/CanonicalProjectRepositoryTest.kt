@@ -48,6 +48,46 @@ class CanonicalProjectRepositoryTest {
     }
 
     @Test
+    fun independentRepositoryInstancesSerializeUpdatesAndPreserveDigestPair() {
+        val root = Files.createTempDirectory("effectcraft-repo-cross-instance").toFile()
+        try {
+            val writerA = CanonicalProjectRepository(root)
+            val created = writerA.create("Concurrent update", document, "ecproj")
+            val writerB = CanonicalProjectRepository(root)
+            val secondUpdate = """{"name":"Demo v3","compositions":[]}"""
+            val start = java.util.concurrent.CountDownLatch(1)
+            val failures = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
+            val writers = listOf(
+                Thread {
+                    try { start.await(); writerA.update(created.id, updated) }
+                    catch (failure: Throwable) { failures += failure }
+                },
+                Thread {
+                    try { start.await(); writerB.update(created.id, secondUpdate) }
+                    catch (failure: Throwable) { failures += failure }
+                }
+            )
+            writers.forEach(Thread::start)
+            start.countDown()
+            writers.forEach { it.join() }
+
+            assertTrue("Both independent repository updates must serialize successfully: $failures", failures.isEmpty())
+            val reopened = CanonicalProjectRepository(root)
+            val committed = reopened.load(created.id)
+            assertTrue(committed == updated || committed == secondUpdate)
+            assertEquals(
+                MessageDigest.getInstance("SHA-256").digest(committed!!.toByteArray(Charsets.UTF_8))
+                    .joinToString("") { "%02x".format(it) },
+                reopened.metadata(created.id)?.documentSha256
+            )
+            assertFalse(File(root, "${created.id}.ecproj.update-bak").exists())
+            assertFalse(File(root, "${created.id}.json.update-bak").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun interruptedDocumentPromotionRollsBackToDurableProjectPairOnFreshLoad() {
         val root = Files.createTempDirectory("effectcraft-repo-update-death").toFile()
         try {
