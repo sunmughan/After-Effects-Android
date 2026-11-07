@@ -997,10 +997,10 @@ class AdaptiveWorkspaceSmokeTest {
         // outside the visible viewport on constrained emulator layouts;
         // require the image node and assert the overlay is actually visible.
         compose.waitUntil(timeoutMillis = 60_000) {
-            compose.onAllNodesWithContentDescription("Motion path overlay").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithContentDescription("Motion path overlay", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertExists()
-        compose.onNodeWithContentDescription("Motion path overlay").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Motion path overlay", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
