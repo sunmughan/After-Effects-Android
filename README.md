@@ -32,7 +32,7 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 |---|---|---|
 | M0 | CI #1124 exact SHA green (61 Rust, 175 API30, JVM, dual ABI, cold APK compare) | Latest-head revalidation pending in #1136 |
 | M1 | Scoped editor foundation; corrected workspace test passed API30 175/175 in #1124 | Full professional parity, accessibility and physical device UX |
-| M2 | Partial; canonical import/save + offline media; cross-instance manifest and canonical repository locking + regressions (`d967e7d3`, `3e96834f`) | CI #1131 failed one concurrency assertion; #1136 verifying explicit exception capture and latest repository lock; Effekseer/provider/relink matrix remains |
+| M2 | Partial; canonical import/save + offline media; cross-instance manifest and canonical repository locking + regressions (`d967e7d3`, `3e96834f`) | CI #1131 failed one concurrency assertion; #1137 verifies explicit exception capture, canonical repository locking and narrow move fallbacks; Effekseer/provider/relink matrix remains |
 | M3 | Partial; real Rust CPU/session preview | Physical GPU/Surface/device-loss/media qualification |
 | M4 | In progress; transform/keyframe/ShapePath editing; keyframe store cross-instance serialized (`542c1785`) with 120-update regression (`faf1d30c`) | #1128 superseded; full upstream effects/interpolation/roving/spatial parity |
 | M5 | Partial; PNG/MP4/audio export foundations | Long-run recovery, device codec/audio/output validation |
