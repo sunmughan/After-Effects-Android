@@ -771,13 +771,29 @@ fun EditorScreen(
                             color = EditorPalette.muted,
                             fontSize = 12.sp
                         )
+                        // Real selector: the current format is visibly
+                        // selected (P17). The dialog title already names
+                        // it ("H.264 MP4 settings" etc.).
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP }) { Text("PNG ZIP") }
-                            TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 }) { Text("MP4 H.264") }
-                            TextButton(
+                            FilterChip(
+                                selected = sequenceOutputFormat == RenderOutputFormat.PNG_SEQUENCE_ZIP,
+                                onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP },
+                                label = { Text("PNG ZIP") },
+                                modifier = Modifier.height(48.dp)
+                            )
+                            FilterChip(
+                                selected = sequenceOutputFormat == RenderOutputFormat.MP4_H264,
+                                onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 },
+                                label = { Text("MP4 H.264") },
+                                modifier = Modifier.height(48.dp)
+                            )
+                            FilterChip(
+                                selected = sequenceOutputFormat == RenderOutputFormat.MP4_HEVC,
                                 onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_HEVC },
-                                enabled = hevcAvailable == true
-                            ) { Text("MP4 H.265") }
+                                enabled = hevcAvailable == true,
+                                label = { Text("MP4 H.265") },
+                                modifier = Modifier.height(48.dp)
+                            )
                         }
                         if (hevcAvailable == null) {
                             Text("Checking for a hardware HEVC encoder…", color = EditorPalette.muted, fontSize = 11.sp)
