@@ -67,4 +67,79 @@ object ProjectEditorActions {
         val bounded = opacity.coerceIn(0f, 1f)
         return layers.map { if (it.id == layerId) it.copy(opacity = bounded) else it }
     }
+
+    /**
+     * Trims [layerId] to the inclusive frame range [inFrame]..[outFrame] in a
+     * composition of [durationFrames] frames. Bounds are clamped, never
+     * rejected: an in-frame past the end lands on the last frame, and an
+     * out-frame before the in-frame collapses to a one-frame clip at the
+     * in-frame. A null [outFrame] leaves the clip running to the end of the
+     * composition. Unknown IDs, non-positive durations and no-op trims return
+     * the list unchanged, so the caller can tell a real edit from a no-op.
+     */
+    fun trimLayer(
+        layers: List<LayerDocument>,
+        layerId: String,
+        inFrame: Int,
+        outFrame: Int?,
+        durationFrames: Int
+    ): List<LayerDocument> {
+        if (durationFrames <= 0 || layers.none { it.id == layerId }) return layers
+        val clampedIn = inFrame.coerceIn(0, durationFrames - 1)
+        val clampedOut = outFrame?.coerceIn(clampedIn, durationFrames - 1)
+        return layers.map { layer ->
+            if (layer.id == layerId && (layer.inFrame != clampedIn || layer.outFrame != clampedOut)) {
+                layer.copy(inFrame = clampedIn, outFrame = clampedOut)
+            } else {
+                layer
+            }
+        }
+    }
+
+    /** Removes the trim on [layerId], restoring the full composition range. Unknown IDs return the list unchanged. */
+    fun clearTrim(layers: List<LayerDocument>, layerId: String): List<LayerDocument> {
+        if (layers.none { it.id == layerId }) return layers
+        return layers.map { layer ->
+            if (layer.id == layerId && (layer.inFrame != 0 || layer.outFrame != null)) {
+                layer.copy(inFrame = 0, outFrame = null)
+            } else {
+                layer
+            }
+        }
+    }
+
+    /** Visible layers whose trim covers [frame]: the layers actually playing at the playhead. */
+    fun activeLayersAt(layers: List<LayerDocument>, frame: Int, durationFrames: Int): List<LayerDocument> =
+        layers.filter { it.visible && it.isActiveAt(frame, durationFrames) }
+
+    /**
+     * The export range for a requested [startFrame]..[endFrame] range: the
+     * requested range intersected with the union of the visible layers'
+     * trimmed spans, clamped into the composition. Null when no visible layer
+     * covers any requested frame, so the caller reports "nothing to export"
+     * instead of rendering blank frames.
+     */
+    fun trimmedExportRange(
+        layers: List<LayerDocument>,
+        startFrame: Int,
+        endFrame: Int,
+        durationFrames: Int
+    ): IntRange? {
+        if (durationFrames <= 0) return null
+        val requestedStart = startFrame.coerceIn(0, durationFrames - 1)
+        val requestedEnd = endFrame.coerceIn(0, durationFrames - 1)
+        if (requestedStart > requestedEnd) return null
+        var first: Int? = null
+        var last: Int? = null
+        layers.filter { it.visible && it.trimmedDurationFrames(durationFrames) > 0 }.forEach { layer ->
+            val spanStart = maxOf(layer.effectiveInFrame(durationFrames), requestedStart)
+            val spanEnd = minOf(layer.effectiveOutFrame(durationFrames), requestedEnd)
+            if (spanStart <= spanEnd) {
+                first = minOf(first ?: spanStart, spanStart)
+                last = maxOf(last ?: spanEnd, spanEnd)
+            }
+        }
+        val resolvedFirst = first ?: return null
+        return resolvedFirst..(last ?: return null)
+    }
 }

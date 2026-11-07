@@ -1152,6 +1152,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onOpacityChange = { opacity ->
                 applyProjectChange(project.copy(layers = ProjectEditorActions.setLayerOpacity(project.layers, selectedLayerId, opacity)))
             },
+            onTrimLayer = { inFrame, outFrame ->
+                val trimmed = ProjectEditorActions.trimLayer(project.layers, selectedLayerId, inFrame, outFrame, project.durationFrames)
+                if (trimmed != project.layers) applyProjectChange(project.copy(layers = trimmed), "Clip trimmed · unsaved")
+            },
+            onClearTrim = {
+                val cleared = ProjectEditorActions.clearTrim(project.layers, selectedLayerId)
+                if (cleared != project.layers) applyProjectChange(project.copy(layers = cleared), "Clip trim cleared · unsaved")
+            },
             onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
             onAddOpacityKeyframe = {
                 val layer = project.layers.firstOrNull { it.id == selectedLayerId }

@@ -195,6 +195,8 @@ class EditorRecoveryJournal(private val root: File) {
                     put("opacity", layer.opacity.toDouble())
                     put("tint", layer.tint)
                     put("visible", layer.visible)
+                    put("inFrame", layer.inFrame)
+                    if (layer.outFrame != null) put("outFrame", layer.outFrame)
                 })
             }
         })
@@ -214,7 +216,9 @@ class EditorRecoveryJournal(private val root: File) {
                         kind = layer.getString("kind"),
                         opacity = layer.optDouble("opacity", 1.0).toFloat().coerceIn(0f, 1f),
                         tint = layer.optLong("tint", 0xFF9278F6),
-                        visible = layer.optBoolean("visible", true)
+                        visible = layer.optBoolean("visible", true),
+                        inFrame = layer.optInt("inFrame", 0),
+                        outFrame = layer.optInt("outFrame", -1).takeIf { it >= 0 }
                     )
                 )
             }

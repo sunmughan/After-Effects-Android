@@ -119,24 +119,116 @@ class ProjectDocumentTest {
         assertEquals(layers, ProjectEditorActions.setLayerOpacity(layers, "unknown", 0.25f))
     }
     @Test
-    fun projectValidationRejectsBrokenOfflineCompositionInvariants() {
-        val starter = ProjectDocument.starter()
-        assertTrue(starter.validationErrors().isEmpty())
+    fun trimmingLayerSetsInclusiveRangeAndPreservesOtherLayers() {
+        val layers = ProjectDocument.starter().layers
+        val target = layers[1]
+        val trimmed = ProjectEditorActions.trimLayer(layers, target.id, 30, 89, 150)
 
-        val invalid = starter.copy(
-            width = 100,
-            frameRate = 240,
-            durationFrames = 0,
-            layers = listOf(starter.layers.first().copy(opacity = Float.NaN))
+        assertEquals(30, trimmed[1].inFrame)
+        assertEquals(89, trimmed[1].outFrame)
+        assertEquals(60, trimmed[1].trimmedDurationFrames(150))
+        assertTrue(trimmed[1].isTrimmed(150))
+        assertEquals(layers[0], trimmed[0])
+        assertEquals(layers[2], trimmed[2])
+        assertTrue(trimmed[1].isActiveAt(30, 150))
+        assertTrue(trimmed[1].isActiveAt(89, 150))
+        assertTrue(!trimmed[1].isActiveAt(29, 150))
+        assertTrue(!trimmed[1].isActiveAt(90, 150))
+    }
+
+    @Test
+    fun trimmingClampsOutOfRangeBoundsAndCollapsesReversedRange() {
+        val layers = ProjectDocument.starter().layers
+        val target = layers[0]
+        val clamped = ProjectEditorActions.trimLayer(layers, target.id, -5, 999, 150)
+        assertEquals(0, clamped[0].inFrame)
+        assertEquals(149, clamped[0].outFrame)
+
+        val reversed = ProjectEditorActions.trimLayer(layers, target.id, 100, 40, 150)
+        assertEquals(100, reversed[0].inFrame)
+        assertEquals(100, reversed[0].outFrame)
+        assertEquals(1, reversed[0].trimmedDurationFrames(150))
+
+        val pastEnd = ProjectEditorActions.trimLayer(layers, target.id, 500, null, 150)
+        assertEquals(149, pastEnd[0].inFrame)
+        assertEquals(null, pastEnd[0].outFrame)
+        assertEquals(1, pastEnd[0].trimmedDurationFrames(150))
+    }
+
+    @Test
+    fun trimmingIgnoresUnknownIdsAndNoOpTrims() {
+        val layers = ProjectDocument.starter().layers
+        assertEquals(layers, ProjectEditorActions.trimLayer(layers, "missing", 10, 20, 150))
+        assertEquals(layers, ProjectEditorActions.trimLayer(layers, layers[0].id, 0, null, 150))
+        assertEquals(layers, ProjectEditorActions.trimLayer(layers, layers[0].id, 10, 20, 0))
+    }
+
+    @Test
+    fun clearingTrimRestoresFullRangeAndIgnoresUnknownIds() {
+        val layers = ProjectDocument.starter().layers
+        val target = layers[1]
+        val trimmed = ProjectEditorActions.trimLayer(layers, target.id, 30, 89, 150)
+        val cleared = ProjectEditorActions.clearTrim(trimmed, target.id)
+        assertEquals(0, cleared[1].inFrame)
+        assertEquals(null, cleared[1].outFrame)
+        assertTrue(!cleared[1].isTrimmed(150))
+        assertEquals(150, cleared[1].trimmedDurationFrames(150))
+        assertEquals(trimmed, ProjectEditorActions.clearTrim(trimmed, "missing"))
+        assertEquals(layers, ProjectEditorActions.clearTrim(layers, target.id))
+    }
+
+    @Test
+    fun activeLayersAtPlayheadRespectsVisibilityAndTrim() {
+        val layers = ProjectDocument.starter().layers
+        val target = layers[1]
+        val trimmed = ProjectEditorActions.trimLayer(layers, target.id, 30, 89, 150)
+        assertEquals(3, ProjectEditorActions.activeLayersAt(trimmed, 50, 150).size)
+        assertEquals(2, ProjectEditorActions.activeLayersAt(trimmed, 10, 150).size)
+        assertTrue(ProjectEditorActions.activeLayersAt(trimmed, 10, 150).none { it.id == target.id })
+
+        val hidden = ProjectEditorActions.setLayerVisibility(trimmed, layers[0].id, false)
+        assertEquals(2, ProjectEditorActions.activeLayersAt(hidden, 50, 150).size)
+    }
+
+    @Test
+    fun trimmedExportRangeIntersectsRequestWithVisibleSpans() {
+        val layers = ProjectDocument.starter().layers
+        val trimmed = ProjectEditorActions.trimLayer(layers, layers[0].id, 30, 89, 150)
+        // The other two layers still span the full composition, so the union stays full.
+        assertEquals(0..149, ProjectEditorActions.trimmedExportRange(trimmed, 0, 149, 150))
+        assertEquals(40..60, ProjectEditorActions.trimmedExportRange(trimmed, 40, 60, 150))
+
+        val allTrimmed = ProjectEditorActions.trimLayer(
+            ProjectEditorActions.trimLayer(
+                ProjectEditorActions.trimLayer(layers, layers[0].id, 30, 89, 150),
+                layers[1].id, 100, 120, 150
+            ),
+            layers[2].id, 110, 130, 150
         )
-        val errors = invalid.validationErrors()
-        assertTrue(errors.any { it.contains("width") })
-        assertTrue(errors.any { it.contains("Frame rate") })
-        assertTrue(errors.any { it.contains("Duration") })
-        assertTrue(errors.any { it.contains("opacity") })
+        assertEquals(30..130, ProjectEditorActions.trimmedExportRange(allTrimmed, 0, 149, 150))
+        assertEquals(100..120, ProjectEditorActions.trimmedExportRange(allTrimmed, 100, 120, 150))
+        assertEquals(30..89, ProjectEditorActions.trimmedExportRange(allTrimmed, 0, 89, 150))
+        assertEquals(null, ProjectEditorActions.trimmedExportRange(allTrimmed, 0, 29, 150))
 
-        assertTrue(starter.copy(layers = emptyList()).validationErrors().any { it.contains("at least one layer") })
-        assertTrue(starter.copy(layers = listOf(starter.layers[0], starter.layers[0])).validationErrors().any { it.contains("unique") })
+        val hidden = ProjectEditorActions.setLayerVisibility(allTrimmed, layers[0].id, false)
+        assertEquals(100..130, ProjectEditorActions.trimmedExportRange(hidden, 0, 149, 150))
+        val allHidden = hidden.map { it.copy(visible = false) }
+        assertEquals(null, ProjectEditorActions.trimmedExportRange(allHidden, 0, 149, 150))
+        assertEquals(null, ProjectEditorActions.trimmedExportRange(layers, 10, 5, 150))
+    }
+
+    @Test
+    fun projectValidationRejectsTrimOutsideComposition() {
+        val starter = ProjectDocument.starter()
+        val badIn = starter.copy(layers = listOf(starter.layers.first().copy(inFrame = 150)))
+        assertTrue(badIn.validationErrors().any { it.contains("in-frame") })
+        val badOut = starter.copy(layers = listOf(starter.layers.first().copy(inFrame = 10, outFrame = 9)))
+        assertTrue(badOut.validationErrors().any { it.contains("out-frame") })
+        val badOutEnd = starter.copy(layers = listOf(starter.layers.first().copy(outFrame = 150)))
+        assertTrue(badOutEnd.validationErrors().any { it.contains("out-frame") })
+        val openEnded = starter.copy(layers = listOf(starter.layers.first().copy(inFrame = 10, outFrame = null)))
+        assertTrue(openEnded.validationErrors().isEmpty())
+        assertEquals(140, openEnded.layers.first().trimmedDurationFrames(150))
     }
 
 }

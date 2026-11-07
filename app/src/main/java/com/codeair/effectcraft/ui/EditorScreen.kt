@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -228,6 +229,8 @@ fun EditorScreen(
     onVisibilityChange: (Boolean) -> Unit,
     onRenameLayer: (String) -> Unit,
     onOpacityChange: (Float) -> Unit,
+    onTrimLayer: (Int, Int?) -> Unit = { _, _ -> },
+    onClearTrim: () -> Unit = {},
     onScrub: (Int) -> Unit,
     onAddOpacityKeyframe: () -> Unit,
     onRemoveOpacityKeyframe: () -> Unit,
@@ -436,7 +439,10 @@ fun EditorScreen(
                             .width(276.dp)
                             .fillMaxHeight(),
                         layer = selectedLayer,
+                        durationFrames = project.durationFrames,
                         onOpacityChange = onOpacityChange,
+                        onTrimLayer = onTrimLayer,
+                        onClearTrim = onClearTrim,
                         onDeleteLayer = handleDeleteLayer,
                         onMoveLayer = onMoveLayer,
                         onVisibilityChange = onVisibilityChange,
@@ -890,7 +896,10 @@ fun EditorScreen(
                         .heightIn(min = 320.dp, max = 560.dp)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     layer = selectedLayer,
+                    durationFrames = project.durationFrames,
                     onOpacityChange = onOpacityChange,
+                    onTrimLayer = onTrimLayer,
+                    onClearTrim = onClearTrim,
                     onDeleteLayer = handleDeleteLayer,
                     onMoveLayer = onMoveLayer,
                     onVisibilityChange = onVisibilityChange,
@@ -1269,7 +1278,10 @@ private fun PreviewStage(
 private fun InspectorPanel(
     modifier: Modifier,
     layer: LayerDocument?,
+    durationFrames: Int = 150,
     onOpacityChange: (Float) -> Unit,
+    onTrimLayer: (Int, Int?) -> Unit = { _, _ -> },
+    onClearTrim: () -> Unit = {},
     onDeleteLayer: () -> Unit,
     onMoveLayer: (Int) -> Unit,
     onVisibilityChange: (Boolean) -> Unit,
@@ -1357,6 +1369,65 @@ private fun InspectorPanel(
                 valueRange = 0f..1f,
                 modifier = Modifier.padding(top = 3.dp).semantics { contentDescription = "Layer opacity" }
             )
+            Spacer(Modifier.height(12.dp))
+            Text("Trim · frames 0–${(durationFrames - 1).coerceAtLeast(0)}", color = EditorPalette.text, fontSize = 12.sp)
+            var trimInDraft by remember(layer.id, layer.inFrame) { mutableStateOf(layer.inFrame.toString()) }
+            var trimOutDraft by remember(layer.id, layer.outFrame) { mutableStateOf(layer.outFrame?.toString().orEmpty()) }
+            val parsedIn = trimInDraft.toIntOrNull()
+            val parsedOut = if (trimOutDraft.isBlank()) null else trimOutDraft.toIntOrNull()
+            val trimOutValid = trimOutDraft.isBlank() || parsedOut != null
+            val trimChanged = parsedIn != null && trimOutValid &&
+                (parsedIn != layer.inFrame || parsedOut != layer.outFrame)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                BasicTextField(
+                    value = trimInDraft,
+                    onValueChange = { trimInDraft = it.filter { char -> char.isDigit() }.take(6) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 13.sp),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Trim in frame" },
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (trimInDraft.isEmpty()) Text("In", color = EditorPalette.muted, fontSize = 13.sp)
+                            innerTextField()
+                        }
+                    }
+                )
+                Text("–", color = EditorPalette.muted, fontSize = 13.sp)
+                BasicTextField(
+                    value = trimOutDraft,
+                    onValueChange = { trimOutDraft = it.filter { char -> char.isDigit() }.take(6) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 13.sp),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Trim out frame" },
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (trimOutDraft.isEmpty()) Text("Out · end", color = EditorPalette.muted, fontSize = 13.sp)
+                            innerTextField()
+                        }
+                    }
+                )
+                TextButton(
+                    onClick = { parsedIn?.let { onTrimLayer(it, parsedOut) } },
+                    enabled = trimChanged
+                ) {
+                    Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
+                }
+            }
+            if (layer.isTrimmed(durationFrames)) {
+                Text(
+                    "Showing frames ${layer.effectiveInFrame(durationFrames)}–${layer.effectiveOutFrame(durationFrames)} of $durationFrames",
+                    color = EditorPalette.muted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                TextButton(onClick = onClearTrim, modifier = Modifier.semantics { contentDescription = "Clear clip trim" }) {
+                    Text("Clear trim", color = EditorPalette.amber, fontSize = 11.sp)
+                }
+            }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = { onMoveLayer(-1) }, modifier = Modifier.semantics { contentDescription = "Move selected layer up" }) {
@@ -3379,6 +3450,7 @@ private fun TimelinePanel(
                     selected = layer.id == selectedLayerId,
                     keyframeFrames = if (layer.id == selectedLayerId) selectedOpacityKeyframes.map { it.frame } else emptyList(),
                     durationFrames = project.durationFrames,
+                    playheadFrame = playheadFrame,
                     onClick = { onSelectLayer(layer.id) }
                 )
             }
@@ -4045,8 +4117,12 @@ private fun LayerTrack(
     selected: Boolean,
     keyframeFrames: List<Int>,
     durationFrames: Int,
+    playheadFrame: Int = 0,
     onClick: () -> Unit
 ) {
+    // The bar spans only the clip's trimmed range, and dims when the
+    // playhead sits outside it, so the timeline shows what actually plays.
+    val activeAtPlayhead = layer.visible && layer.isActiveAt(playheadFrame, durationFrames)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -4067,18 +4143,20 @@ private fun LayerTrack(
         Text(
             layer.name,
             modifier = Modifier.width(107.dp),
-            color = if (selected) EditorPalette.text else EditorPalette.muted,
+            color = if (selected && activeAtPlayhead) EditorPalette.text else EditorPalette.muted,
             fontSize = 10.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
                 .height(17.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(Color(0xFF202633))
         ) {
+            val spanStart = layer.effectiveInFrame(durationFrames).toFloat() / durationFrames.coerceAtLeast(1)
+            val spanWidth = (layer.trimmedDurationFrames(durationFrames).toFloat() / durationFrames.coerceAtLeast(1)).coerceIn(0f, 1f)
             Canvas(Modifier.fillMaxSize()) {
                 val frameRange = (durationFrames - 1).coerceAtLeast(1).toFloat()
                 keyframeFrames.forEach { frame ->
@@ -4093,9 +4171,13 @@ private fun LayerTrack(
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(if (layer.kind == "Footage") 1f else 0.72f)
+                    .fillMaxWidth(spanWidth)
+                    .offset(x = maxWidth * spanStart)
                     .clip(RoundedCornerShape(5.dp))
-                    .background(if (selected) EditorPalette.violet.copy(alpha = 0.9f) else Color(0xFF62708B).copy(alpha = 0.85f))
+                    .background(
+                        if (selected) EditorPalette.violet.copy(alpha = if (activeAtPlayhead) 0.9f else 0.3f)
+                        else Color(0xFF62708B).copy(alpha = if (activeAtPlayhead) 0.85f else 0.3f)
+                    )
             )
         }
     }
