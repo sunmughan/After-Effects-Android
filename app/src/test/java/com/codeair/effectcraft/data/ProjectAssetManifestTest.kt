@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 class ProjectAssetManifestTest {
     private val firstHash = "a".repeat(64)
