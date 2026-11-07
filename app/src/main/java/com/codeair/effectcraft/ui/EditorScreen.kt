@@ -4346,7 +4346,7 @@ private fun AudioClipInspector(
                 modifier = Modifier.weight(1f).semantics { contentDescription = "Audio clip gain" }
             )
             Text(
-                "%.2f".format(Locale.US, gainDraft),
+                String.format(Locale.US, "%.2f", gainDraft),
                 color = EditorPalette.text,
                 fontSize = 9.sp,
                 modifier = Modifier.width(32.dp)
