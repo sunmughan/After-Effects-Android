@@ -994,21 +994,25 @@ class AdaptiveWorkspaceSmokeTest {
             captures.renderRequests.any { it == (10L to 0L) }
         }
         assertEquals(true, captures.renderRequests.any { it == (10L to 0L) })
-        // The overlay is composed only after asynchronous frame decode and
-        // the 3-key spatial track are attached. The frame arrives through
-        // a LaunchedEffect that decodes on Dispatchers.Default and resumes
-        // on Main — under the test rule Main is the runTest TestDispatcher,
-        // which only advances when the test waits for idle. waitUntil only
-        // sleeps between polls, so without an idle wait the decode resume
-        // can sit queued for the whole timeout even though the render
-        // already fired (the frame is stuck, not slow: it lands in under
-        // a second or never). Pump idle on every poll round so the resume
-        // runs, then check for the node in the unmerged tree.
-        compose.waitUntil(timeoutMillis = 60_000) {
-            compose.waitForIdle()
-            compose.onAllNodesWithContentDescription("Motion path overlay", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        // Render completion and Compose presentation are separate milestones:
+        // the callback can be recorded before the LaunchedEffect publishes
+        // bytes and before the workspace Image/overlay enter semantics.
+        // Drain Compose once outside waitUntil (never nest waitForIdle in
+        // its polling predicate), then wait for the actual frame node first
+        // so a missing frame is distinguished from a missing vector overlay.
+        compose.waitForIdle()
+        compose.waitUntil(timeoutMillis = 30_000) {
+            compose.onAllNodesWithContentDescription(
+                "Rendered composition frame", useUnmergedTree = true
+            ).fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithContentDescription("Rendered composition frame").assertExists()
+        compose.waitForIdle()
+        compose.waitUntil(timeoutMillis = 30_000) {
+            compose.onAllNodesWithContentDescription(
+                "Motion path overlay", useUnmergedTree = true
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Rendered composition frame", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Motion path overlay", useUnmergedTree = true).assertIsDisplayed()
     }
 
