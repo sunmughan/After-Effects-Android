@@ -251,7 +251,7 @@ class ProjectAssetManifestStore(
     }
 
     @Throws(IOException::class)
-    fun save(manifest: ProjectAssetManifest) = synchronized(lock) {
+    fun save(manifest: ProjectAssetManifest): Unit = synchronized(lock) {
         if (!root.exists() && !root.mkdirs()) throw IOException("Unable to create asset manifest directory")
         if (!root.isDirectory) throw IOException("Asset manifest path is not a directory")
         val target = fileFor(manifest.projectId)
@@ -279,6 +279,7 @@ class ProjectAssetManifestStore(
         } finally {
             temporary.delete()
         }
+        Unit
     }
 
     fun delete(projectId: String): Boolean = synchronized(lock) {
