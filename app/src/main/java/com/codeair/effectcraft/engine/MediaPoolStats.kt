@@ -21,10 +21,15 @@ data class MediaPoolStats(
     val layerCacheBudgetBytes: Long,
 ) {
     val withinBudget: Boolean get() = bytes <= budgetBytes
+    val withinLayerCacheBudget: Boolean get() = layerCacheBytes <= layerCacheBudgetBytes
 
     fun displayText(): String {
         val base = "Media cache · $frames frames · $bytes bytes / $budgetBytes budget"
-        return if (withinBudget) base else "$base · OVER BUDGET"
+        val warnings = buildList {
+            if (!withinBudget) add("OVER BUDGET")
+            if (!withinLayerCacheBudget) add("LAYER CACHE OVER BUDGET")
+        }
+        return if (warnings.isEmpty()) base else "$base · ${warnings.joinToString(" · ")}"
     }
 
     companion object {

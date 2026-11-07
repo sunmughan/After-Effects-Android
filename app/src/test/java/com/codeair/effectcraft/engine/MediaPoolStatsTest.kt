@@ -39,6 +39,16 @@ class MediaPoolStatsTest {
         assertTrue(stats.displayText().contains("OVER BUDGET"))
     }
 
+    @Test fun layerCacheOverBudgetIsReportedIndependentlyOfMediaPoolBudget() {
+        val stats = MediaPoolStats.parse(
+            """{"frames":1,"bytes":1024,"budget":268435456,"hits":1,"misses":1,"opened":1,"layerCacheEntries":3,"layerCacheBytes":67108865,"layerCacheHits":8,"layerCacheMisses":2,"layerCacheBudget":67108864}"""
+        )!!
+        assertTrue(stats.withinBudget)
+        assertFalse(stats.withinLayerCacheBudget)
+        assertTrue(stats.displayText().contains("LAYER CACHE OVER BUDGET"))
+        assertFalse(stats.displayText().contains("OVER BUDGET · LAYER CACHE"))
+    }
+
     @Test fun layerCacheBudgetConstantIs64MiB() {
         assertEquals(64L * 1024 * 1024, MediaPoolStats.LAYER_CACHE_BUDGET_BYTES)
     }
