@@ -24,6 +24,11 @@ data class ProjectDocument(
         layers.forEachIndexed { index, layer ->
             if (layer.name.isBlank()) add("Layer ${index + 1} name must not be blank")
             if (!layer.opacity.isFinite() || layer.opacity !in 0f..1f) add("Layer ${index + 1} opacity must be finite and normalized")
+            if (layer.inFrame !in 0 until durationFrames) add("Layer ${index + 1} trim in-frame must be within the composition")
+            val outFrame = layer.outFrame
+            if (outFrame != null && outFrame !in layer.inFrame until durationFrames) {
+                add("Layer ${index + 1} trim out-frame must be at or after its in-frame and within the composition")
+            }
         }
     }
 
@@ -62,14 +67,47 @@ data class ProjectDocument(
     }
 }
 
+/**
+ * One clip on the timeline. A layer spans the whole composition unless
+ * trimmed: [inFrame] is the first visible frame (inclusive) and [outFrame]
+ * the last visible frame (inclusive); a null [outFrame] means the clip runs
+ * untrimmed to the end of the composition. Frames are composition frames,
+ * so a trim stays valid when the frame rate changes and only needs
+ * re-clamping when the composition duration changes.
+ */
 data class LayerDocument(
     val id: String,
     val name: String,
     val kind: String,
     val opacity: Float,
     val tint: Long,
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    val inFrame: Int = 0,
+    val outFrame: Int? = null
 ) {
+    /** First visible frame, clamped into a composition of [durationFrames] frames. */
+    fun effectiveInFrame(durationFrames: Int): Int =
+        if (durationFrames <= 0) 0 else inFrame.coerceIn(0, durationFrames - 1)
+
+    /** Last visible frame, clamped into a composition of [durationFrames] frames. */
+    fun effectiveOutFrame(durationFrames: Int): Int {
+        if (durationFrames <= 0) return 0
+        val end = outFrame ?: durationFrames - 1
+        return end.coerceIn(0, durationFrames - 1)
+    }
+
+    /** True when the clip shows at [frame] in a composition of [durationFrames] frames. */
+    fun isActiveAt(frame: Int, durationFrames: Int): Boolean =
+        frame >= effectiveInFrame(durationFrames) && frame <= effectiveOutFrame(durationFrames)
+
+    /** Visible frame count in a composition of [durationFrames] frames; zero when the trim is degenerate. */
+    fun trimmedDurationFrames(durationFrames: Int): Int =
+        (effectiveOutFrame(durationFrames) - effectiveInFrame(durationFrames) + 1).coerceAtLeast(0)
+
+    /** True when the clip is trimmed away from the full composition range. */
+    fun isTrimmed(durationFrames: Int): Boolean =
+        effectiveInFrame(durationFrames) != 0 || effectiveOutFrame(durationFrames) != durationFrames - 1
+
     companion object {
         fun newShape(index: Int): LayerDocument = LayerDocument(
             id = UUID.randomUUID().toString(),
