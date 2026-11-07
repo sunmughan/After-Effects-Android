@@ -49,6 +49,29 @@ class OfflineAssetReferencesTest {
     }
 
     @Test
+    fun referencedAssetIdsFailClosedOnCorruptMetadata() {
+        val root = Files.createTempDirectory("effectcraft-asset-refs-corrupt").toFile()
+        try {
+            val file = File(root, "references.properties")
+            file.writeText("42=invalid-hash\n")
+            val refs = OfflineAssetReferences(file)
+            assertTrue("Invalid referenced hashes must not be silently ignored", runCatching {
+                refs.referencedAssetIds()
+            }.isFailure)
+
+            file.writeText("not-an-item-id=$firstHash\n")
+            assertTrue("Invalid item keys must not be silently ignored", runCatching {
+                refs.referencedAssetIds()
+            }.isFailure)
+
+            file.writeText("42=$firstHash\n")
+            assertEquals(setOf(firstHash), refs.referencedAssetIds())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun removesReferenceAndRejectsInvalidIdsOrHashes() {
         val root = Files.createTempDirectory("effectcraft-asset-refs-remove").toFile()
         try {
