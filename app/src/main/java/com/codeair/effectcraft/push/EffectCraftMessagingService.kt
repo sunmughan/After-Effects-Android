@@ -24,12 +24,9 @@ import com.google.firebase.messaging.RemoteMessage
 class EffectCraftMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
-        runCatching {
-            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(KEY_FCM_TOKEN, token)
-                .apply()
-        }
+        // Refresh path: the stored token is overwritten in place, so the
+        // latest token is always the one a later send path reads.
+        FcmTokenStore.save(this, token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
@@ -73,8 +70,6 @@ class EffectCraftMessagingService : FirebaseMessagingService() {
     }
 
     companion object {
-        private const val PREFS_NAME = "effectcraft_push"
-        private const val KEY_FCM_TOKEN = "fcm_token"
         private const val CHANNEL_NAME = "EffectCraft updates"
     }
 }
