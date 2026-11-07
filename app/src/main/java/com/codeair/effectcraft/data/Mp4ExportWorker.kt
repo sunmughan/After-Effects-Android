@@ -81,6 +81,19 @@ object Mp4ExportWorker {
     )
 
     /**
+     * Audio is an optional enhancement for legacy timeline exports: ordinary
+     * mix/encode failures may fall back to the validated video or passthrough
+     * path, but user cancellation is control flow and must never be swallowed.
+     */
+    internal inline fun <T> runAudioFallback(block: () -> T): T? = try {
+        block()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
      * The editor's audio clips for a mixdown export. Non-null only when
      * the draft timeline applies to this export (same duration as the
      * exported composition) and the draft holds at least one audio clip:
@@ -176,19 +189,19 @@ object Mp4ExportWorker {
         // Skipped when audioMix is present: the project-document clips
         // are authoritative for the export and must not be mixed twice.
         if (audioMix == null && audioTimeline != null && !audioTimeline.isEmpty && pcmSource != null) {
-            val mixed = runCatching {
+            val mixed = runAudioFallback {
                 AudioMixer.mix(
                     audioTimeline, rangeStartUs, rangeEndUs,
                     AudioMixer.EXPORT_SAMPLE_RATE_HZ, AudioMixer.EXPORT_CHANNEL_COUNT, pcmSource
                 )
-            }.getOrNull()
+            }
             if (mixed != null && !AudioMixer.isSilent(mixed)) {
                 val remuxed = File(stagedFile.parentFile, stagedFile.nameWithoutExtension + "-mixed.mp4")
                 try {
                     // Any encode/validate failure falls through to
                     // passthrough below; a failed mix must never fail
                     // the video export.
-                    val mixedResult = runCatching {
+                    val mixedResult = runAudioFallback {
                         val mixedSamples = muxMixedAudio(
                             stagedFile, mixed,
                             AudioMixer.EXPORT_SAMPLE_RATE_HZ, AudioMixer.EXPORT_CHANNEL_COUNT,
@@ -215,7 +228,7 @@ object Mp4ExportWorker {
                             audioLastPtsUs = remuxedValidated.audioLastPtsUs,
                             audioTrackDurationUs = remuxedValidated.audioTrackDurationUs
                         )
-                    }.getOrNull()
+                    }
                     if (mixedResult != null) return mixedResult
                 } finally {
                     remuxed.delete()
