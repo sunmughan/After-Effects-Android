@@ -6,7 +6,9 @@ import java.io.FileOutputStream
 import java.io.IOException
 import org.json.JSONObject
 import java.nio.file.Files
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Keeps the last SAF-imported canonical EffectCraft document byte-for-byte.
@@ -15,12 +17,12 @@ import java.nio.file.StandardCopyOption
 class EcprojDocumentStore(private val directory: File) {
     constructor(context: Context) : this(File(context.filesDir, "canonical-projects"))
 
+    private val lock = locks.computeIfAbsent(directory.absoluteFile.toPath().normalize().toString()) { Any() }
     private val document = File(directory, "latest.ecproj")
     private val temporary = File(directory, "latest.ecproj.tmp")
 
-    @Synchronized
     @Throws(IOException::class)
-    fun save(source: String): File {
+    fun save(source: String): File = synchronized(lock) {
         require(source.isNotBlank()) { "Project document is empty" }
         if (!directory.exists() && !directory.mkdirs()) {
             throw IOException("Unable to create canonical project cache")
@@ -35,16 +37,18 @@ class EcprojDocumentStore(private val directory: File) {
         }
         try {
             Files.move(temporary.toPath(), document.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: AtomicMoveNotSupportedException) {
+            // Only a filesystem that explicitly lacks atomic rename permits
+            // fallback. Permission/storage errors must not overwrite the last
+            // committed canonical document with a non-atomic move.
             Files.move(temporary.toPath(), document.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
-        return document
+        document
     }
 
-    @Synchronized
-    fun load(): String? {
+    fun load(): String? = synchronized(lock) {
         recoverInterruptedWrite()
-        return document.takeIf(File::isFile)?.let { runCatching { it.readText(Charsets.UTF_8) }.getOrNull() }
+        document.takeIf(File::isFile)?.readText(Charsets.UTF_8)
     }
 
     /**
@@ -66,12 +70,20 @@ class EcprojDocumentStore(private val directory: File) {
         }
         try {
             Files.move(temporary.toPath(), document.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: AtomicMoveNotSupportedException) {
             try {
                 Files.move(temporary.toPath(), document.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            } catch (_: Exception) {
+            } catch (_: IOException) {
                 // Keep the complete temp for another startup recovery attempt.
             }
+        } catch (_: IOException) {
+            // A transient permission/storage failure is not evidence that
+            // atomic rename is unsupported. Keep the temp for retry and leave
+            // the previously committed document untouched.
         }
+    }
+
+    companion object {
+        private val locks = ConcurrentHashMap<String, Any>()
     }
 }
