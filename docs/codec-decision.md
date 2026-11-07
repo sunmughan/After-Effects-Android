@@ -77,8 +77,26 @@ gap remains. Missing means no code exists.
   `Mp4ExportWorkerInstrumentedTest.junkAudioFileExportsVideoOnlyWithUnsupportedReason`
   covers the unsupported case.
 - Audio status is always visible, never silent: `AudioStatus` reports
-  INCLUDED, NO_AUDIO_IN_COMPOSITION, AUDIO_FILE_UNAVAILABLE, or
-  AUDIO_TRACK_UNSUPPORTED, and the UI shows the video-only reason.
+  INCLUDED, NO_AUDIO_IN_COMPOSITION, AUDIO_FILE_UNAVAILABLE,
+  AUDIO_TRACK_UNSUPPORTED, or AUDIO_CLIPS_SILENT (editor audio clips
+  exist but none audible covers the export range), and the UI shows
+  the video-only reason.
+- Editor audio editing (feat/ec-audio-editing): audio clips reuse the
+  `ClipDocument`/`ClipTimeline` model with per-clip gain (0..2), fades
+  and mute (`AudioClipDocument.kt`, `AudioTimeline.kt`), persist in
+  the draft store and recovery journal through `AudioTrackJson.kt`,
+  and are edited in the timeline UI (`EditorScreen.kt`). At export,
+  when the draft timeline applies to the export, `AudioMixdown.kt`
+  decodes each audible clip's source window to PCM
+  (`AudioDecoder.kt`), resamples to 44.1 kHz stereo, mixes all clips
+  at their timeline positions with gain, fades and mute (silence
+  where no clip covers), encodes one AAC LC track with
+  composition-timeline PTS, and muxes it through the same re-mux step
+  as passthrough. WAV, MP3, FLAC and Opus transcode; any other format,
+  a missing file, or an undecodable source fails the export with the
+  clip id and the reason instead of exporting video-only. Instrumented
+  test `AudioMixdownInstrumentedTest` covers the WAV mixdown, mute,
+  fail-closed, and staged export with audio included.
 - MP4 export is wired to the editor UI: `app/src/main/java/com/codeair/effectcraft/ui/EffectCraftApp.kt`
   offers an MP4 export dialog (dimensions, FPS, frame range, bitrate),
   a `CreateDocument("video/mp4")` SAF path, progress messages, and
@@ -95,10 +113,12 @@ gap remains. Missing means no code exists.
 - No HEVC, AV1, VP9, ProRes, or any other video codec code exists. A
   repository search for HEVC, AV1, ProRes, VP9, crop, and letterbox
   finds no such implementation.
-- No audio transcoding exists. A non-AAC source (for example WAV, MP3,
-  FLAC, Opus) cannot be converted into the export; it exports
-  video-only with the unsupported reason. No resampling, no mixing, no
-  multi-track audio, and no synthesized audio exist.
+- Audio transcoding now exists for editor audio clips (see the
+  "Editor audio editing" bullet under Partial): WAV, MP3, FLAC and
+  Opus sources decode to PCM and re-encode to AAC in the mixdown. A
+  non-AAC source on the legacy path (no editor audio clips) still
+  exports video-only with the unsupported reason. No time-stretch, no
+  synthesized audio, and no drift detection or correction exist.
 - AAC timing diagnostics are now measured by the staged validator (Automation run 11): first/last audio sample PTS and MediaExtractor's audio track duration are surfaced in the staged result and export status. This is measurement only. The validator still does not enforce audio start/end against video, any lip-sync tolerance, drift detection, or drift correction; no threshold or reject/trim policy has been approved.
 - No crop or letterbox option exists in code, in the plan, or in the
   export dialog.
@@ -266,9 +286,12 @@ both padded and cropped output dimensions and content.
   (hev1/hvc1). Full HEVC encode is proven only on a device with a
   hardware HEVC encoder; CI emulator coverage is the probe's
   self-consistency test, not an encode.
-- Audio: AAC LC passthrough only, first AAC track only, composition-FPS
-  range shift plus trimming to the range, video-only fallback labeled
-  with the reason. No transcode, no mixing, no multi-track.
+- Audio: AAC LC passthrough for the legacy path (first AAC track
+  only, composition-FPS range shift plus trimming to the range,
+  video-only fallback labeled with the reason); editor audio clips
+  take the mixdown path instead — decode, resample to 44.1 kHz
+  stereo, mix to one AAC track with gain, fades and mute, and mux
+  with the same range shift. No time-stretch.
 - No AV1 encode: AV1 encoding is not implemented and not offered. The
   encoder is mandatory only from Android 14 and cannot serve a minSdk
   26 app; it stays rejected for v1.
@@ -305,9 +328,12 @@ both padded and cropped output dimensions and content.
   Reject for v1; reconsider only if the user explicitly wants an
   editing-intermediate export.
 - H.263 / MPEG-4 SP: legacy quality and size, no benefit over H.264.
-- Audio transcode in v1: adds decode, resample, encode, and sync test
-  surface before the passthrough path has a device matrix. Defer to
-  the second audio step.
+- Audio transcode in v1: was deferred as the second audio step ("adds
+  decode, resample, encode, and sync test surface before the
+  passthrough path has a device matrix"). That step has since landed
+  for editor audio clips (feat/ec-audio-editing, see the "Editor audio
+  editing" bullet under Partial); the legacy passthrough path is
+  unchanged.
 - Audio time-stretch to fix drift: changes pitch and tempo, needs DSP,
   and hides a sync error instead of reporting it. Reject; report or
   trim instead.
