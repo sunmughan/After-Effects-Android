@@ -2530,14 +2530,14 @@ private fun CanonicalProjectEditor(
                         onClick = { onSplitLayer(composition.id, layer.id, previewFrame) },
                         modifier = Modifier.semantics { contentDescription = "Split canonical layer at playhead" }
                     ) { Text("Split · frame $previewFrame", color = EditorPalette.violet, fontSize = 11.sp) }
+                }
+                // Keep destructive layer removal in a dedicated full-width row.
+                // The four-action horizontal scroller clips its final child on
+                // narrow screens, making a visible-looking semantics click miss.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(
                         enabled = editable,
                         onClick = {
-                            // Selection parity on delete: survivors of the
-                            // selection stay selected, and when the whole
-                            // selection was deleted the neighbor takes its
-                            // place, so the inspector never shows a removed
-                            // layer.
                             onSelectionChange(
                                 com.codeair.effectcraft.data.CanonicalLayerSelection.selectionAfterDelete(
                                     effectiveSelectedIds, composition.layers, setOf(layer.id)
@@ -2546,7 +2546,7 @@ private fun CanonicalProjectEditor(
                             onDeleteLayer(composition.id, layer.id)
                         },
                         modifier = Modifier.semantics { contentDescription = "Remove canonical layer" }
-                    ) { Text("Remove", color = Color(0xFFFF858D), fontSize = 11.sp) }
+                    ) { Text("Remove layer", color = Color(0xFFFF858D), fontSize = 11.sp) }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicTextField(
