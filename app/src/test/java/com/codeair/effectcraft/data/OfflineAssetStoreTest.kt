@@ -230,4 +230,22 @@ class OfflineAssetStoreTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun verifyAllDetectsSameSizePayloadCorruption() {
+        val root = Files.createTempDirectory("effectcraft-assets-verify").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val asset = store.import(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)), "verified.bin")
+            assertTrue(store.verify(asset.sha256))
+            assertTrue(store.verifyAll().isEmpty())
+
+            // Preserve the indexed size to prove verification checks SHA-256, not only length.
+            File(root, "${asset.sha256}.${asset.extension}").writeBytes(byteArrayOf(4, 3, 2, 1))
+            assertFalse(store.verify(asset.sha256))
+            assertEquals(listOf(asset), store.verifyAll())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }
