@@ -1,8 +1,10 @@
 package com.codeair.effectcraft.ui
 
+import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.TextureView
+import kotlin.math.minOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -52,7 +54,27 @@ fun TexturePreview(
         runCatching {
             val canvas = target.lockCanvas(null)
             try {
-                canvas.drawBitmap(bitmap, 0f, 0f, null)
+                // Fit the frame inside the surface like ContentScale.Fit:
+                // scale uniformly, center it, and clear the letterbox
+                // area black. Drawing unscaled at (0, 0) left a 512px
+                // frame stranded in the top-left corner of the surface.
+                canvas.drawColor(android.graphics.Color.BLACK)
+                if (bitmap.width > 0 && bitmap.height > 0) {
+                    val scale = minOf(
+                        canvas.width.toFloat() / bitmap.width,
+                        canvas.height.toFloat() / bitmap.height
+                    )
+                    val destWidth = bitmap.width * scale
+                    val destHeight = bitmap.height * scale
+                    val left = (canvas.width - destWidth) / 2f
+                    val top = (canvas.height - destHeight) / 2f
+                    canvas.drawBitmap(
+                        bitmap,
+                        null,
+                        RectF(left, top, left + destWidth, top + destHeight),
+                        null
+                    )
+                }
             } finally {
                 target.unlockCanvasAndPost(canvas)
             }

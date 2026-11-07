@@ -1,13 +1,13 @@
 # Firebase registration — EffectCraft for Android
 
-> Status (2026-11-07): **NOT REGISTERED — blocked, no authenticated route.**
-> This VM has no `firebase` CLI, no `gcloud`, and no Google application
-> credentials (`GOOGLE_APPLICATION_CREDENTIALS` unset, no
-> `~/.config/gcloud`), so no agent here can register the app or download
-> a `google-services.json`. Nothing was faked: no placeholder file was
-> created and no fingerprint was invented. The console steps below are
-> the whole remaining work and take minutes once the release keystore
-> exists. This file is updated the moment registration lands.
+> Status (2026-11-07): **REGISTERED.**
+> Firebase project: **Codeair Apps** (project ID `codeair-apps`,
+> project number `249079131159`). Android app `com.codeair.effectcraft`
+> ("EffectCraft", App ID
+> `1:249079131159:android:45da270abd5468114a4052`) registered in the
+> console 2026-11-07; both SHA-1 fingerprints below added;
+> `app/google-services.json` is the file downloaded from the console
+> (verified: package + App ID + both certificate hashes match).
 
 ## What is being registered
 
@@ -31,10 +31,11 @@ From the debug keystore on this machine
 
 Caveats, read before using these:
 
-- These fingerprints match **only** APKs signed with this exact
-  keystore (local builds on this machine). GitHub CI runners generate
-  their own ephemeral debug keystore on every run, so a CI-built debug
-  APK will **not** match them — that is expected, not a mismatch.
+- These fingerprints match APKs signed with this exact keystore. The
+  keystore is committed at `app/debug.keystore` and wired as the debug
+  signing config in `app/build.gradle.kts`, so CI debug APKs are signed
+  with it too (before that change, CI runners generated their own
+  ephemeral debug keystore on every run and never matched).
 - The owner's own machine has its own debug keystore with different
   fingerprints. To print them on any machine:
   `keytool -list -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey`
@@ -44,28 +45,24 @@ Caveats, read before using these:
   from this machine. It is optional for the release build; the release
   fingerprint below is the one that matters for the shipped app.
 
-### Release keystore — BLOCKED, cannot exist yet
+### Release keystore — created 2026-11-07, secrets set
 
-The release keystore does not exist: the four release secrets
-(`EFFECTCRAFT_RELEASE_KEYSTORE_BASE64`,
+The release keystore was generated 2026-11-07 (alias `effectcraft`,
+RSA 2048, valid to 2056-10-30) and its four secrets are set in GitHub
+Actions (`EFFECTCRAFT_RELEASE_KEYSTORE_BASE64`,
 `EFFECTCRAFT_RELEASE_KEYSTORE_PASSWORD`,
-`EFFECTCRAFT_RELEASE_KEY_ALIAS`, `EFFECTCRAFT_RELEASE_KEY_PASSWORD`)
-do not exist and only the owner can supply them (see
-`docs/M7_RELEASE_BUILD.md` §3). Until then there is no release
-certificate and no release fingerprint to record — any value written
-here before that would be invented.
+`EFFECTCRAFT_RELEASE_KEY_ALIAS`, `EFFECTCRAFT_RELEASE_KEY_PASSWORD`;
+see `docs/M7_RELEASE_BUILD.md` §3). Passwords live only in those
+secrets, never in a file.
 
-Once the secrets exist, the authoritative fingerprints come from the
-release workflow itself: its "Print signing certificate fingerprints"
-step prints the SHA-1 and SHA-256 of the signer actually present in
-the built APK. Copy those values exactly as printed into the Firebase
-console. The equivalent local command, run against the real keystore
-file once the owner supplies it (passwords typed at the prompt, never
-pasted into chat or a file):
+- SHA-1: `32:79:28:E2:3A:0A:7D:F6:39:C8:E6:DF:41:C2:B7:53:04:89:EA:16`
+- SHA-256: `01:1C:F8:A1:65:4D:AC:12:69:D1:F8:94:65:88:BD:BC:46:3E:67:5F:23:73:91:7A:67:84:A4:15:5C:D1:AA:A1`
 
-```bash
-keytool -list -v -keystore /path/to/effectcraft-release.keystore -alias <key alias>
-```
+Both fingerprints are registered on the Firebase app. The release
+workflow's "Print signing certificate fingerprints" step prints the
+SHA-1 and SHA-256 of the signer actually present in the built APK;
+those printed values must equal the ones above before any release is
+treated as genuine.
 
 ## Console steps (owner, minutes)
 

@@ -64,6 +64,17 @@ android {
     }
 
     signingConfigs {
+        // Debug builds always use the committed debug keystore, so CI
+        // debug APKs are signed with the key whose SHA-1 is registered
+        // in Firebase (45:DC:6B:F8:...:D3:C1) instead of a fresh ephemeral
+        // key on every runner. Debug keystores are low-sensitivity; the
+        // standard public password "android" applies.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = file(releaseKeystoreFile!!)
