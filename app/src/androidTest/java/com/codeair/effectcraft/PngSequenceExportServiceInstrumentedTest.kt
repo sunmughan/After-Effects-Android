@@ -13,7 +13,6 @@ import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.PngSequenceZipValidator
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
-import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueueSettings
 import com.codeair.effectcraft.export.PngSequenceExportService
 import java.io.File
