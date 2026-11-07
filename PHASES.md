@@ -2,13 +2,14 @@
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1)  
-Last checked: 2026-11-08 04:10 IST  
-Latest implementation commits: JVM-testable KXml serializer/parser and strict trailing-root diagnostics `81c10049`; EffectCraft XML round-trip/strict parser tests `da3f6e5e`; symlink-canonical manifest/repository lock keys `8a2cf102`, `b8a6df4c`; symlink transaction regression `45e812e0`; manifest diagnostic interpolation correction `e7f78b60`; repository root lock `d967e7d3` and concurrent regression `3e96834f`; rollback test Callable `61a41e92`; narrow atomic-move fallback `76f06b4a`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
+Last checked: 2026-11-08 05:27 IST  
+Latest implementation commits: JVM-testable XML and strict parser tests `81c10049`, `da3f6e5e`; R8-safe Android KXML dependency resolution `2188f73a`, `e27138b4`; symlink-canonical transaction locks `8a2cf102`, `b8a6df4c`; concurrent manifest/repository regressions `45e812e0`, `3e96834f`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
 
 > This file is the durable acceptance ledger, not a chronological automation transcript. Keep one concise entry per phase and link implementation/test commits. Do not append repeated run summaries; update this ledger in place.
 
 ## Current CI / test evidence
 
+- **CI #1145 — FAILED at release minification (not XML tests)**: [run 42423554259](https://github.com/sunmughan/After-Effects-Android/actions/runs/42423554259), source SHA `e4e5bb85`. Rust dual ABI, Rust tests, JVM tests, debug APK all passed; failure was `:app:minifyReleaseWithR8`: `android.content.res.XmlResourceParser implements program class org.xmlpull.v1.XmlPullParser`. Root cause: legacy `net.sf.kxml:kxml2:2.3.0` bundles XmlPull API classes that conflict with Android's platform API during R8. Corrected by switching to KObjects KXML 2.5.0 (parser implementation only), adding JitPack repository, and excluding its separate `org.xmlpull:xmlpull` dependency so Android supplies the API: [settings commit 2188f73a](https://github.com/sunmughan/After-Effects-Android/commit/2188f73a0dbeb6c6647c4ce5386c05e04115bbf9), [Gradle commit e27138b4](https://github.com/sunmughan/After-Effects-Android/commit/e27138b4a60a6c821bf75b8f9c05567a3a3811a9). Exact-head CI #1146 was triggered at settings SHA `2188f73a`; #1147 (or later) must verify the dependency switch, JVM tests, release R8, API30 and cold APK reproducibility. No pass is claimed yet.
 - **CI #1124 — PASS**: [run 42394930220](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220), exact source SHA `814dd66e`. Assemble/test job and independent cold debug-APK rebuild/compare both succeeded. Rust bridge **61/61**, Kotlin/JVM suite passed, unsigned APK+AAB and no-debug-signing checks passed, Android API 30 instrumentation **175/175** (11 test classes; 0 skipped/failed). This verifies the workspace motion-path synchronization correction.
 - **CI #1125 (workflow_dispatch on merge commit `4ae22776`)**: Assemble/test job passed, including Rust **61/61** and API30 **175/175**; independent cold APK comparison remains in progress at last check. Do not treat the whole run as green until its second job concludes.
 - **M4 implementation**: cross-instance keyframe-store locking and narrow atomic-move fallback [`542c1785`](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d); concurrent independent-store regression [`faf1d30c`](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5), 6 writers × 20 keyframes. CI #1128 was cancelled when the next source commit arrived; no result is claimed.
@@ -36,7 +37,7 @@ Evidence: scoped baseline accepted in historical emulator suites (including dele
 Remaining: full professional interaction parity, complete accessibility/TalkBack and physical device/foldable UX acceptance.
 
 ### M2 — Project import/save, format compatibility and media
-**Status: PARTIAL; canonical and offline-media foundations implemented; XML regression repair awaiting exact-head CI.**
+**Status: PARTIAL; canonical/offline-media foundations implemented; Android-safe XML parser dependency correction committed, exact-head CI pending.**
 
 Acceptance: parse/serialize/validate supported project formats; SAF open/save; migration and rollback; missing-media relink; content-addressed media integrity; offline operation; cancellation/progress; corruption fail-closed; concurrency-safe catalog/reference updates.
 
@@ -48,7 +49,7 @@ Evidence/commits:
 - Canonical repository serializes create/update/load/list/delete/migration across independent instances sharing a normalized root [`d967e7d3`](https://github.com/sunmughan/After-Effects-Android/commit/d967e7d3a707f9b08e1817e40883dd339ed41779); lock identity now resolves symlink aliases via canonical path [`b8a6df4c`](https://github.com/sunmughan/After-Effects-Android/commit/b8a6df4c0bfaac4d20fe38ffb95420f38184d070). Regression runs two concurrent writers and verifies reopened SHA/sidecar integrity and backup cleanup [`3e96834f`](https://github.com/sunmughan/After-Effects-Android/commit/3e96834fe549d2afb76bcd394a96edd557c3d441). Atomic-move fallback now catches only `AtomicMoveNotSupportedException` in document, sidecar and recovery promotions [`76f06b4a`](https://github.com/sunmughan/After-Effects-Android/commit/76f06b4a8527289736d068d2b072eafaf08aba2c). Exact-head CI #1139 queued after the #1137 test-compilation failure was corrected; see above.
 - Cross-instance offline media catalog serialization + 120-import regression: [8b79218c](https://github.com/sunmughan/After-Effects-Android/commit/8b79218c84f78830b42c106d8f0a53d815f7e925).
 - Project manifest batch replacement now shares a canonical-root process lock with independent save/load/delete/GC instances; regression injects a mid-batch publish failure and proves a waiting save runs after rollback rather than being overwritten.
-- Historical M2 parser/round-trip and migration tests; current exact-head verification remains pending.
+- XML round-trip/strict-parser regression suite [`da3f6e5e`](https://github.com/sunmughan/After-Effects-Android/commit/da3f6e5e6e57c51d024ced9f4db2e5bddc817dc1); JVM implementation uses KXML 2.5.0 without bundling XmlPull API classes (dependency commits above). CI #1145 exposed R8 duplicate platform/program API; corrected, but latest release minification/API30/cold reproducibility must still pass.
 
 Blockers/limits: broad Effekseer `.efkproj` parser/converter and version fixtures are not integrated. Adobe `.aep` is proprietary; no licensed/available parser, so native import is not claimed. Continue with supported EffectCraft JSON/XML and explicit missing-media relinking.
 
