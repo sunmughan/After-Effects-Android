@@ -5,6 +5,10 @@ on:
     branches: [main]
   push:
     branches: [feat/android-app-foundation]
+    # Documentation-only tracker commits must not cancel a long emulator/cold-repro run.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
