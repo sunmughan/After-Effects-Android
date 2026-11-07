@@ -42,17 +42,28 @@ object ClipTimeline {
         clips.firstOrNull { frame in it.startFrame until it.endFrame }
 
     /**
-     * Timeline ranges a layer covers. A layer with no clips follows its
-     * legacy in/out trim (full composition when untrimmed), so documents
-     * written before clips existed keep their behaviour instead of going dark.
+     * Timeline ranges a layer covers: each clip's range intersected with
+     * the layer's legacy in/out window, so a frame renders only when it
+     * is inside both. A layer with no clips follows its legacy window
+     * alone (full composition when untrimmed), so documents written
+     * before clips existed keep their behaviour instead of going dark.
+     * The editor mutations keep the two representations in sync, so the
+     * intersection normally equals the clips; it only matters for a
+     * directly constructed layer whose sides disagree.
      */
-    fun layerCoverage(layer: LayerDocument, durationFrames: Int): List<IntRange> =
+    fun layerCoverage(layer: LayerDocument, durationFrames: Int): List<IntRange> {
+        if (durationFrames <= 0) return emptyList()
+        val windowStart = layer.inFrame.coerceIn(0, durationFrames - 1)
+        val windowEndExclusive = ((layer.outFrame ?: durationFrames - 1).coerceIn(0, durationFrames - 1)) + 1
         if (layer.clips.isEmpty()) {
-            if (durationFrames <= 0) emptyList()
-            else listOf(layer.effectiveInFrame(durationFrames)..layer.effectiveOutFrame(durationFrames))
-        } else {
-            layer.clips.sortedBy { it.startFrame }.map { it.startFrame until it.endFrame }
+            return listOf(windowStart until windowEndExclusive)
         }
+        return layer.clips.sortedBy { it.startFrame }.mapNotNull { clip ->
+            val start = maxOf(clip.startFrame, windowStart)
+            val end = minOf(clip.endFrame, windowEndExclusive)
+            if (start < end) start until end else null
+        }
+    }
 
     /**
      * Changes a clip's timeline bounds; null keeps that side. The source

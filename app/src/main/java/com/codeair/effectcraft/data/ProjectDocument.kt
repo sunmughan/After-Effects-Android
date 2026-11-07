@@ -96,35 +96,71 @@ data class LayerDocument(
     val opacity: Float,
     val tint: Long,
     val visible: Boolean = true,
-    /** Legacy single-range trim (HEAD): first/last visible frame. Used when [clips] is empty. */
+    /** Legacy single-range trim (HEAD): first/last visible frame — the layer's visible window. */
     val inFrame: Int = 0,
     val outFrame: Int? = null,
-    /** Clips on this layer's timeline. Empty means the legacy behaviour: the layer follows [inFrame]/[outFrame] (see [ClipTimeline.layerCoverage]). */
+    /** Clips on this layer's timeline. Empty means the legacy window alone decides visibility (see [ClipTimeline.layerCoverage]). */
     val clips: List<ClipDocument> = emptyList()
 ) {
-    /** First visible frame, clamped into a composition of [durationFrames] frames. Clips win when present, else the legacy in-frame. */
-    fun effectiveInFrame(durationFrames: Int): Int =
-        if (durationFrames <= 0) 0
-        else if (clips.isNotEmpty()) clips.minOf { it.startFrame }.coerceIn(0, durationFrames - 1)
-        else inFrame.coerceIn(0, durationFrames - 1)
+    /**
+     * Visibility rule for a layer that carries both representations: a
+     * frame is visible exactly when it is inside the legacy window AND
+     * inside a clip. The two representations are kept in sync by the
+     * editor mutations ([ProjectEditorActions.trimLayer]/[ProjectEditorActions.clearTrim],
+     * [ClipTimeline] edits), so they normally agree; the intersection
+     * makes the accessors correct for any construction — including a
+     * direct copy() that sets only one side — instead of letting one
+     * stale representation silently win. When the intersection is empty
+     * (no clip overlaps the window), the effective bounds below still
+     * describe the legacy window; [isActiveAt] and
+     * [trimmedDurationFrames] correctly report nothing visible.
+     */
+    /** Legacy window start, clamped into a composition of [durationFrames] frames. */
+    private fun legacyInFrame(durationFrames: Int): Int =
+        if (durationFrames <= 0) 0 else inFrame.coerceIn(0, durationFrames - 1)
 
-    /** Last visible frame, clamped into a composition of [durationFrames] frames. Clips win when present, else the legacy out-frame. */
-    fun effectiveOutFrame(durationFrames: Int): Int {
+    /** Legacy window end (inclusive), clamped into a composition of [durationFrames] frames. */
+    private fun legacyOutFrame(durationFrames: Int): Int {
         if (durationFrames <= 0) return 0
-        if (clips.isNotEmpty()) return (clips.maxOf { it.endFrame } - 1).coerceIn(0, durationFrames - 1)
-        val end = outFrame ?: durationFrames - 1
-        return end.coerceIn(0, durationFrames - 1)
+        return (outFrame ?: durationFrames - 1).coerceIn(0, durationFrames - 1)
     }
 
-    /** True when the clip shows at [frame] in a composition of [durationFrames] frames. Clips win when present, else the legacy range. */
+    /** First visible frame, clamped into a composition of [durationFrames] frames. */
+    fun effectiveInFrame(durationFrames: Int): Int =
+        if (durationFrames <= 0) 0
+        else if (clips.isEmpty()) legacyInFrame(durationFrames)
+        else maxOf(legacyInFrame(durationFrames), clips.minOf { it.startFrame })
+            .coerceIn(0, durationFrames - 1)
+
+    /** Last visible frame, clamped into a composition of [durationFrames] frames. */
+    fun effectiveOutFrame(durationFrames: Int): Int {
+        if (durationFrames <= 0) return 0
+        if (clips.isEmpty()) return legacyOutFrame(durationFrames)
+        return minOf(legacyOutFrame(durationFrames), clips.maxOf { it.endFrame } - 1)
+            .coerceIn(0, durationFrames - 1)
+    }
+
+    /** True when the clip shows at [frame] in a composition of [durationFrames] frames. */
     fun isActiveAt(frame: Int, durationFrames: Int): Boolean =
-        if (clips.isNotEmpty()) ClipTimeline.clipAt(clips, frame) != null
-        else frame >= effectiveInFrame(durationFrames) && frame <= effectiveOutFrame(durationFrames)
+        if (clips.isEmpty()) {
+            frame >= legacyInFrame(durationFrames) && frame <= legacyOutFrame(durationFrames)
+        } else {
+            frame >= legacyInFrame(durationFrames) && frame <= legacyOutFrame(durationFrames) &&
+                ClipTimeline.clipAt(clips, frame) != null
+        }
 
     /** Visible frame count in a composition of [durationFrames] frames; zero when the trim is degenerate. */
-    fun trimmedDurationFrames(durationFrames: Int): Int =
-        if (clips.isNotEmpty()) clips.sumOf { it.timelineLength }.coerceAtLeast(0)
-        else (effectiveOutFrame(durationFrames) - effectiveInFrame(durationFrames) + 1).coerceAtLeast(0)
+    fun trimmedDurationFrames(durationFrames: Int): Int {
+        if (durationFrames <= 0) return 0
+        if (clips.isEmpty()) {
+            return (legacyOutFrame(durationFrames) - legacyInFrame(durationFrames) + 1).coerceAtLeast(0)
+        }
+        val windowStart = legacyInFrame(durationFrames)
+        val windowEndExclusive = legacyOutFrame(durationFrames) + 1
+        return clips.sumOf { clip ->
+            (minOf(clip.endFrame, windowEndExclusive) - maxOf(clip.startFrame, windowStart)).coerceAtLeast(0)
+        }.coerceAtLeast(0)
+    }
 
     /** True when the clip is trimmed away from the full composition range. */
     fun isTrimmed(durationFrames: Int): Boolean =
