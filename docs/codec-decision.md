@@ -61,6 +61,18 @@ gap remains. Missing means no code exists.
   bitrate in 250,000 to 50,000,000 bits per second (default 8,000,000),
   frame rate 1 to 120, at most 10,000 frames, and an 8 GiB uncompressed
   RGBA budget. No other codec or container is a plan option today.
+- Default export (2026-11-07): `RenderQueueSettings.outputFormat` now
+  defaults to `MP4_H264`, so any export built without an explicit format
+  produces H.264 MP4 with AAC passthrough; the PNG-sequence path passes
+  `PNG_SEQUENCE_ZIP` explicitly (editor PNG callback,
+  `PngSequenceExportService`, and all PNG tests), and the export settings
+  dialog opens on MP4 H.264. `Mp4OutputValidator` now rejects HEVC
+  explicitly: `requireH264Plan` fails an HEVC plan with a named error
+  (JVM-tested in `Mp4OutputValidatorTest`), and `inspect` fails any file
+  containing a `video/hevc` track even when the plan says H.264. The
+  file-side HEVC-track rejection has no emulator encode proof yet (no
+  hardware HEVC encoder on the CI emulator); it is code-complete and the
+  existing H.264 instrumented validations cover no-regression.
 
 ### Partial
 

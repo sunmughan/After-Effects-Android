@@ -12,6 +12,7 @@ import com.codeair.effectcraft.data.EcprojDocumentStore
 import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.PngSequenceZipValidator
 import com.codeair.effectcraft.data.RenderQueuePlan
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueueSettings
 import com.codeair.effectcraft.export.PngSequenceExportService
 import java.io.File
@@ -95,7 +96,7 @@ class PngSequenceExportServiceInstrumentedTest {
         val context = appContext()
         val before = cacheSnapshot(context)
         val prior = saveFixture(context)
-        val settings = RenderQueueSettings(320, 180, 30, 0, 1)
+        val settings = RenderQueueSettings(320, 180, 30, 0, 1, RenderOutputFormat.PNG_SEQUENCE_ZIP)
         val plan = RenderQueuePlan.create(settings, 100)
         val destination = createDestination(context)
         try {
@@ -133,7 +134,7 @@ class PngSequenceExportServiceInstrumentedTest {
         val context = appContext()
         val before = cacheSnapshot(context)
         val prior = saveFixture(context)
-        val settings = RenderQueueSettings(320, 180, 30, 0, 599)
+        val settings = RenderQueueSettings(320, 180, 30, 0, 599, RenderOutputFormat.PNG_SEQUENCE_ZIP)
         val destination = createDestination(context)
         try {
             context.startForegroundService(

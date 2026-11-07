@@ -13,7 +13,7 @@ import org.junit.Test
 
 class PngSequenceZipExporterTest {
     private fun plan(start: Int = 4, end: Int = 5) =
-        RenderQueuePlan.create(RenderQueueSettings(320, 320, 24, start, end))
+        RenderQueuePlan.create(RenderQueueSettings(320, 320, 24, start, end, RenderOutputFormat.PNG_SEQUENCE_ZIP))
 
     /** Header-only PNG fixture: exporter validates signature/IHDR, ZIP preserves bytes verbatim. */
     private fun png(width: Int = 320, height: Int = 320): ByteArray =

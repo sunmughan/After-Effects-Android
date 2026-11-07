@@ -13,6 +13,7 @@ import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.PngSequenceZipExporter
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.RenderQueuePlan
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueueSettings
 import com.codeair.effectcraft.push.FirebaseInit
 import com.google.firebase.FirebaseApp
@@ -124,7 +125,7 @@ class OfflineAcceptanceInstrumentedTest {
         // Export a local PNG sequence ZIP to an app-private file. Frames are
         // rendered by a local callback, never fetched from anywhere.
         val plan = RenderQueuePlan.create(
-            RenderQueueSettings(width = 16, height = 16, frameRate = 30, startFrame = 0, endFrame = 1)
+            RenderQueueSettings(width = 16, height = 16, frameRate = 30, startFrame = 0, endFrame = 1, outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP)
         )
         val rendered = mutableMapOf<Int, ByteArray>()
         val exportDir = File(context.filesDir, "offline-acceptance").apply { mkdirs() }
@@ -182,7 +183,7 @@ class OfflineAcceptanceInstrumentedTest {
         assertTrue(store.verify(asset.sha256))
 
         val plan = RenderQueuePlan.create(
-            RenderQueueSettings(width = 16, height = 16, frameRate = 30, startFrame = 0, endFrame = 0)
+            RenderQueueSettings(width = 16, height = 16, frameRate = 30, startFrame = 0, endFrame = 0, outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP)
         )
         val exportDir = File(context.filesDir, "offline-acceptance").apply { mkdirs() }
         val zipFile = File(exportDir, "offline-gate.zip")

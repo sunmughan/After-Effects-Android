@@ -327,7 +327,7 @@ fun EditorScreen(
     var sequenceStartText by remember { mutableStateOf("0") }
     var sequenceEndText by remember { mutableStateOf("0") }
     var sequenceBitrateText by remember { mutableStateOf("8000000") }
-    var sequenceOutputFormat by remember { mutableStateOf(RenderOutputFormat.PNG_SEQUENCE_ZIP) }
+    var sequenceOutputFormat by remember { mutableStateOf(RenderOutputFormat.MP4_H264) }
     var sequenceSettingsError by remember { mutableStateOf<String?>(null) }
     // Hardware HEVC probe for the H.265 opt-in: null while unprobed, true
     // only when a hardware HEVC encoder exists. Probed once, when the

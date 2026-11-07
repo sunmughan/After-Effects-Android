@@ -94,6 +94,21 @@ class RenderQueuePlanTest {
     }
 
     @Test
+    fun defaultExportFormatIsH264Mp4WithAac() {
+        // The app-wide export default is H.264 video in MP4 with AAC audio
+        // (owner decision 2026-11-06): settings built without a format
+        // produce an MP4 plan, and PNG must be asked for explicitly.
+        val defaults = RenderQueueSettings(width = 640, height = 360, frameRate = 30, startFrame = 0, endFrame = 29)
+        assertEquals(RenderOutputFormat.MP4_H264, defaults.outputFormat)
+        assertEquals(30, RenderQueuePlan.create(defaults).frameCount)
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(defaults.copy(width = 641))
+        }
+        val png = defaults.copy(outputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP)
+        assertEquals(RenderOutputFormat.PNG_SEQUENCE_ZIP, RenderQueuePlan.create(png).settings.outputFormat)
+    }
+
+    @Test
     fun enforcesPerFramePixelsAndTotalRgbaBudget() {
         assertThrows(IllegalArgumentException::class.java) {
             RenderQueuePlan.create(settings(width = 4096, height = 4096))
