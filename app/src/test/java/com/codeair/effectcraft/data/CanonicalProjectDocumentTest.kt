@@ -3,6 +3,7 @@ package com.codeair.effectcraft.data
 import java.io.ByteArrayInputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Test
 
@@ -43,6 +44,47 @@ class CanonicalProjectDocumentTest {
         val error = runCatching { CanonicalProjectDocument.readUtf8(input, maxBytes = 8) }.exceptionOrNull()
         assertTrue(error is IllegalArgumentException)
         assertTrue(error?.message.orEmpty().contains("import limit"))
+    }
+
+    @Test
+    fun ecprojxRoundTripsNestedJsonTypesAndEscaping() {
+        val source = JSONObject()
+            .put("project", "EffectCraft <motion> & \"quoted\"")
+            .put("version", 1)
+            .put("enabled", true)
+            .put("nullable", JSONObject.NULL)
+            .put("nested", JSONObject()
+                .put("unicode", "कला 🎬")
+                .put("values", JSONArray().put(0).put(-1.25).put(false).put(JSONObject.NULL)))
+        val xml = CanonicalProjectDocument.toXml(source.toString())
+
+        assertTrue(xml.startsWith("<?xml"))
+        assertTrue(xml.contains("EffectCraftProject"))
+        val restored = JSONObject(CanonicalProjectDocument.toCanonicalJson(xml))
+        assertEquals(source.getString("project"), restored.getString("project"))
+        assertEquals(source.getInt("version"), restored.getInt("version"))
+        assertEquals(source.getBoolean("enabled"), restored.getBoolean("enabled"))
+        assertTrue(restored.isNull("nullable"))
+        val nested = restored.getJSONObject("nested")
+        assertEquals("कला 🎬", nested.getString("unicode"))
+        val values = nested.getJSONArray("values")
+        assertEquals(0, values.getInt(0))
+        assertEquals(-1.25, values.getDouble(1), 0.0)
+        assertEquals(false, values.getBoolean(2))
+        assertTrue(values.isNull(3))
+    }
+
+    @Test
+    fun ecprojxRejectsUnsupportedVersionAndTrailingRoot() {
+        val wrongVersion = """<?xml version="1.0"?><EffectCraftProject encoding="json" version="2"><obj/></EffectCraftProject>"""
+        val versionError = runCatching { CanonicalProjectDocument.toCanonicalJson(wrongVersion) }.exceptionOrNull()
+        assertTrue(versionError is IllegalArgumentException)
+        assertTrue(versionError?.message.orEmpty().contains("version"))
+
+        val trailingRoot = """<?xml version="1.0"?><EffectCraftProject encoding="json" version="1"><obj/></EffectCraftProject><extra/>"""
+        val trailingError = runCatching { CanonicalProjectDocument.toCanonicalJson(trailingRoot) }.exceptionOrNull()
+        assertTrue(trailingError != null)
+        assertTrue(trailingError?.message.orEmpty().contains("after EffectCraft XML project"))
     }
 
     @Test
