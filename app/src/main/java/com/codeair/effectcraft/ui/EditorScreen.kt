@@ -255,7 +255,6 @@ fun EditorScreen(
     audioTracks: List<AudioTrackDocument> = emptyList(),
     selectedAudioClipId: String? = null,
     onSelectAudioClip: (String) -> Unit = {},
-    onAddAudioTrackClip: () -> Unit = {},
     onTrimAudioClip: (Int, Int) -> Unit = { _, _ -> },
     onSplitAudioClipAtPlayhead: () -> Unit = {},
     onSetAudioGain: (Float) -> Unit = {},
@@ -535,7 +534,6 @@ fun EditorScreen(
                 audioTracks = audioTracks,
                 selectedAudioClipId = selectedAudioClipId,
                 onSelectAudioClip = onSelectAudioClip,
-                onAddAudioClip = onAddAudioTrackClip,
                 onTrimAudioClip = onTrimAudioClip,
                 onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
                 onSetAudioGain = onSetAudioGain,
@@ -555,7 +553,11 @@ fun EditorScreen(
                 onTogglePlayback = onTogglePlayback,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (isTabletLayout) 222.dp else 204.dp)
+                    // Two header rows (48dp each) + the 48dp playhead
+                    // slider cost 68dp of track viewport vs the old
+                    // single-row/28dp layout, so the card grows by the
+                    // same amount and the viewport stays as before.
+                    .height(if (isTabletLayout) 290.dp else 272.dp)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
             )
 
@@ -3472,7 +3474,6 @@ private fun TimelinePanel(
     audioTracks: List<AudioTrackDocument> = emptyList(),
     selectedAudioClipId: String? = null,
     onSelectAudioClip: (String) -> Unit = {},
-    onAddAudioClip: () -> Unit = {},
     onTrimAudioClip: (Int, Int) -> Unit = { _, _ -> },
     onSplitAudioClipAtPlayhead: () -> Unit = {},
     onSetAudioGain: (Float) -> Unit = {},
@@ -3499,6 +3500,11 @@ private fun TimelinePanel(
             .border(1.dp, EditorPalette.border, RoundedCornerShape(18.dp))
             .padding(horizontal = 13.dp, vertical = 9.dp)
     ) {
+        // Two rows, by design: the title row (label + timecode + Play)
+        // never shares width with the keyframe buttons, so the timecode
+        // can never wrap and Play can never be pushed off-screen (P03/P05).
+        // The "+ Audio" button is gone: "Add audio" in the Audio section
+        // below is the one audio entry point (P15/P04).
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Layers, contentDescription = null, tint = EditorPalette.violet, modifier = Modifier.size(17.dp))
             Text(
@@ -3510,23 +3516,13 @@ private fun TimelinePanel(
                 letterSpacing = 1.4.sp
             )
             Spacer(Modifier.weight(1f))
-            TextButton(
-                onClick = onAddOpacityKeyframe,
-                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add opacity keyframe" }
-            ) { Text("K+", color = EditorPalette.violet, fontSize = 9.sp) }
-            TextButton(
-                onClick = onRemoveOpacityKeyframe,
-                modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove opacity keyframe" }
-            ) { Text("K−", color = EditorPalette.amber, fontSize = 9.sp) }
-            TextButton(
-                onClick = onAddAudioClip,
-                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add audio clip" }
-            ) { Text("+ Audio", color = EditorPalette.mint, fontSize = 9.sp) }
             Text(
                 timecode(playheadFrame, project.frameRate),
                 color = EditorPalette.mint,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             IconButton(onClick = onTogglePlayback, modifier = Modifier.size(48.dp)) {
                 Icon(
@@ -3535,6 +3531,16 @@ private fun TimelinePanel(
                     tint = EditorPalette.text
                 )
             }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(
+                onClick = onAddOpacityKeyframe,
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add opacity keyframe" }
+            ) { Text("+ Keyframe", color = EditorPalette.violet, fontSize = 11.sp) }
+            TextButton(
+                onClick = onRemoveOpacityKeyframe,
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove opacity keyframe" }
+            ) { Text("− Keyframe", color = EditorPalette.amber, fontSize = 11.sp) }
         }
 
         Slider(

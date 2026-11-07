@@ -442,10 +442,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
-    val audioImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri == null) saveMessage = "Audio import cancelled" else importAudioClip(uri)
-    }
-
     val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) saveMessage = "Project import cancelled" else {
             canonicalImportJob?.cancel()
@@ -1521,7 +1517,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     selectedClipId = null
                 }
             },
-            onAddAudioTrackClip = { audioImportLauncher.launch(arrayOf("audio/*")) },
             onTrimAudioClip = { newStart, newEnd ->
                 val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
                 val clipId = selectedAudioClipId
