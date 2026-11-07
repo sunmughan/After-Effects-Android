@@ -90,6 +90,25 @@ class RenderedFrameCacheTest {
         }
     }
 
+    @Test fun projectRevisionEvictionRemovesOnlyItsFramesAndReclaimsBytes() {
+        val oldDigest = RenderedFrameCache.projectDigest("""{"version":3}""")
+        val newDigest = RenderedFrameCache.projectDigest("""{"version":4}""")
+        RenderedFrameCache.put(RenderedFrameCache.keyFromDigest(oldDigest, 1, 0, 256), ByteArray(1024))
+        RenderedFrameCache.put(RenderedFrameCache.keyFromDigest(oldDigest, 1, 1, 256), ByteArray(2048))
+        val newRevisionKey = RenderedFrameCache.keyFromDigest(newDigest, 1, 0, 256)
+        RenderedFrameCache.put(newRevisionKey, ByteArray(4096))
+
+        assertEquals(2, RenderedFrameCache.removeProjectDigest(oldDigest))
+        assertNull(RenderedFrameCache.get(RenderedFrameCache.keyFromDigest(oldDigest, 1, 0, 256)))
+        assertNull(RenderedFrameCache.get(RenderedFrameCache.keyFromDigest(oldDigest, 1, 1, 256)))
+        assertNotNull(RenderedFrameCache.get(newRevisionKey))
+        assertEquals(1 to 4096, RenderedFrameCache.stats())
+        assertEquals(0, RenderedFrameCache.removeProjectDigest(oldDigest))
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderedFrameCache.removeProjectDigest("invalid")
+        }
+    }
+
     @Test fun oversizedFramesAreNotRetainedAndClearResetsBudget() {
         RenderedFrameCache.put("large", ByteArray(12 * 1024 * 1024 + 1))
         assertNull(RenderedFrameCache.get("large"))
