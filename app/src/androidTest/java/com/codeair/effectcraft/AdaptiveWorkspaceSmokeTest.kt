@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -247,7 +248,8 @@ class AdaptiveWorkspaceSmokeTest {
         // lands elsewhere (CI run 42369968520: the Add click silently
         // fired no callback on both emulator attempts). Assert displayed
         // and click directly.
-        compose.onNodeWithContentDescription("Add canonical opacity keyframe").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("canonical-opacity-add-key")
+            .assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf(10L, 2L, 0, 100.0), added)
         compose.onNodeWithContentDescription("Remove canonical opacity keyframe").assertIsDisplayed().performClick()
         // Frame is Int in the callback, so listOf<Any> keeps the literal 0
@@ -492,25 +494,12 @@ class AdaptiveWorkspaceSmokeTest {
             }
         )
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
-        // The selector chips are horizontally scrollable inside the
-        // vertically scrolling inspector. Bring the row into view, swipe
-        // its own viewport until Anchor X is displayed, then invoke the chip's
-        // semantics click (not a coordinate tap on a clipped child).
+        // Curve selector chips now wrap in the inspector instead of
+        // clipping behind a horizontal scroller. Scroll the inspector to
+        // the selector and activate the actual visible Anchor X chip.
         compose.onNodeWithText("Curve graph · Position X").performScrollTo()
-        // The Anchor X chip is the fourth chip in a horizontally scrolling
-        // row. performScrollTo() alone does not reveal a horizontally
-        // clipped chip (proven by CI run 42369968520: the motion-path
-        // replacement of the swipe loop with a bare performScrollTo left
-        // the chip invisible on both emulator attempts), so swipe the
-        // row's own viewport until it is displayed, then invoke the
-        // chip's semantics click (not a coordinate tap on a clipped child).
-        val selectorRow = compose.onNodeWithTag("curve-selector-row").performScrollTo()
-        val anchorSelector = compose.onNodeWithTag("curve-selector-transform-anchor")
-        for (attempt in 0 until 4) {
-            if (runCatching { anchorSelector.assertIsDisplayed() }.isSuccess) break
-            selectorRow.performTouchInput { swipeLeft() }
-        }
-        anchorSelector.assertIsDisplayed().performClick()
+        compose.onNodeWithTag("curve-selector-transform-anchor")
+            .performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Curve graph · Anchor X").assertIsDisplayed()
         // The graph add button fires the curve callback with the selected
         // track selector, not the transform callback, so it is located by
