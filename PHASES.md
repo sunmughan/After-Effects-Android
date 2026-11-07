@@ -1740,3 +1740,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Added JVM concurrency regression (6 independent store instances × 12 writes) verifying a valid committed JSON document and no leftover staging file; existing interrupted-write promotion/discard tests remain unchanged.
 - Implementation/test are in the current checkpoint commit; exact-head CI must run JVM + API30/native/cold reproducibility before acceptance. Local Gradle unavailable in this runtime.
 - M0 remains historical SHA-scoped; M1 scoped foundation; M2 format interoperability/relink UX incomplete; M3 physical GPU/Surface/device-loss/media decode; M4 full upstream effect/interpolation/roving/spatial parity; M5 durable export/device codec; M6 physical performance/memory/thermal/accessibility/device matrix; M7 protected signing and physical install/run remain open. Adobe `.aep` proprietary/no licensed parser. **Release NOT COMPLETE.**
+
+
+## CI status update — #1119 cancelled; #1120 executing (2026-11-07 20:17 IST)
+
+- Branch code HEAD `894abf61` is the exact source SHA for CI #1120 [42383398446](https://github.com/sunmughan/After-Effects-Android/actions/runs/42383398446). Job `128435644404` checked out the commit and completed initial disk reclamation; the free-disk-space action is currently in progress. JDK/Gradle/Rust/NDK, dual ABI, JVM, API30, unsigned release and cold reproducibility steps have not yet started; no result is implied.
+- CI #1119 [42383127649](https://github.com/sunmughan/After-Effects-Android/actions/runs/42383127649) was cancelled during runner disk cleanup when the implementation commit arrived. Cancellation is not a pass.
+- M2 cache concurrency/durability code and 6×12 concurrent-store regression are committed at [894abf61](https://github.com/sunmughan/After-Effects-Android/commit/894abf61b0b6a10ef05a821aec60bddcb005d53a). Fresh #1120 is the required validation. **Release NOT COMPLETE.**
