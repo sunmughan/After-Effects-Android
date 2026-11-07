@@ -10,7 +10,9 @@ enum class AudioStatus {
     INCLUDED,
     NO_AUDIO_IN_COMPOSITION,
     AUDIO_FILE_UNAVAILABLE,
-    AUDIO_TRACK_UNSUPPORTED;
+    AUDIO_TRACK_UNSUPPORTED,
+    /** Editor audio clips exist but none audible covers the export range (all muted or out of range). */
+    AUDIO_CLIPS_SILENT;
 
     /** Visible status text: the video-only reason is always stated, never hidden. */
     fun describe(): String = when (this) {
@@ -18,6 +20,7 @@ enum class AudioStatus {
         NO_AUDIO_IN_COMPOSITION -> "video-only — composition has no audio"
         AUDIO_FILE_UNAVAILABLE -> "video-only — audio file unavailable"
         AUDIO_TRACK_UNSUPPORTED -> "video-only — no compatible AAC audio track"
+        AUDIO_CLIPS_SILENT -> "video-only — no audible audio clip covers the export range"
     }
 }
 

@@ -38,9 +38,15 @@ import java.util.concurrent.CancellationException
  *    staging file in a finally block. Cancellation is cooperative: checks
  *    run before every frame render and inside the copy loops.
  *
- * Audio is passthrough only (see [AudioTrackSelection]): no audio track is
- * ever synthesized. The video-only reason is always visible via
- * [AudioStatus.describe], never silent.
+ * Audio has two paths (see [AudioTrackSelection] and [AudioMixdown]):
+ * the legacy path passes an AAC track through sample-for-sample, and
+ * the editor-audio path decodes the draft's audio clips (AAC, WAV,
+ * MP3, FLAC, Opus) to PCM, mixes them to one AAC track honouring
+ * timeline position, trim, gain, fades and mute, and muxes that in.
+ * A missing, undecodable or unsupported clip source fails the export
+ * with its reason. No audio track is ever synthesized: silence in the
+ * mix is real zero samples where no clip covers, and the video-only
+ * reason is always visible via [AudioStatus.describe], never silent.
  */
 object Mp4ExportWorker {
     data class StagedResult(
@@ -57,6 +63,19 @@ object Mp4ExportWorker {
     data class AudioResolution(
         val file: File?,
         val hasAudioItems: Boolean
+    )
+
+    /**
+     * The editor's audio clips for a mixdown export. Non-null only when
+     * the draft timeline applies to this export (same duration as the
+     * exported composition) and the draft holds at least one audio clip:
+     * the clips are then authoritative and replace the legacy AAC
+     * passthrough for this export.
+     */
+    data class AudioMixRequest(
+        val clips: List<AudioClipDocument>,
+        val frameRateNum: Int,
+        val frameRateDen: Int
     )
 
     /**
@@ -114,6 +133,7 @@ object Mp4ExportWorker {
         hasAudioItems: Boolean,
         compositionFrameRateNum: Int,
         compositionFrameRateDen: Int,
+        audioMix: AudioMixRequest? = null,
         isCancelled: () -> Boolean = { false },
         onProgress: (completedFrames: Int, percent: Int) -> Unit = { _, _ -> }
     ): StagedResult {
@@ -135,43 +155,43 @@ object Mp4ExportWorker {
         val audioStatus: AudioStatus
         var audioSamples = 0L
         when {
+            audioMix != null -> {
+                // The editor's audio clips are authoritative for this
+                // export: decode, mix and re-encode them to one AAC track.
+                // A missing, undecodable or unsupported clip source fails
+                // the export here with its reason (see AudioMixdown) —
+                // never a silent video-only export. No audible clip in
+                // range is different: that is a valid video-only export
+                // with the reason stated.
+                val mixedFile = File(stagedFile.parentFile, stagedFile.nameWithoutExtension + "-mixed-audio.mp4")
+                try {
+                    val mixed = AudioMixdown.mixToAac(
+                        clips = audioMix.clips,
+                        frameRateNum = audioMix.frameRateNum,
+                        frameRateDen = audioMix.frameRateDen,
+                        rangeStartUs = rangeStartUs,
+                        rangeEndUs = rangeEndUs,
+                        outputFile = mixedFile,
+                        isCancelled = isCancelled
+                    )
+                    if (mixed.aacSamplesWritten > 0L) {
+                        val promoted = muxAndPromote(stagedFile, mixedFile, plan, encoded, rangeStartUs, rangeEndUs, isCancelled)
+                        if (promoted != null) return promoted
+                        audioStatus = AudioStatus.AUDIO_CLIPS_SILENT
+                    } else {
+                        audioStatus = AudioStatus.AUDIO_CLIPS_SILENT
+                    }
+                } finally {
+                    mixedFile.delete()
+                }
+            }
             !hasAudioItems -> audioStatus = AudioStatus.NO_AUDIO_IN_COMPOSITION
             audioFile == null -> audioStatus = AudioStatus.AUDIO_FILE_UNAVAILABLE
             probeAacTrack(audioFile) == null -> audioStatus = AudioStatus.AUDIO_TRACK_UNSUPPORTED
             else -> {
-                val remuxed = File(stagedFile.parentFile, stagedFile.nameWithoutExtension + "-audio.mp4")
-                try {
-                    audioSamples = muxAudio(stagedFile, audioFile, remuxed, rangeStartUs, rangeEndUs, isCancelled)
-                    if (audioSamples > 0L) {
-                        val remuxedValidated = Mp4ExportValidator.validate(remuxed, plan, expectAudio = true)
-                        check(remuxedValidated.audioSamples == audioSamples) {
-                            "Muxed AAC sample count ${remuxedValidated.audioSamples} differs from written count $audioSamples"
-                        }
-                        check(remuxedValidated.audioFirstPtsUs != null && remuxedValidated.audioLastPtsUs != null) {
-                            "Validated AAC track is missing its presentation-time window"
-                        }
-                        if (!remuxed.renameTo(stagedFile)) {
-                            // renameTo refuses an existing target; replace by copy instead.
-                            remuxed.copyTo(stagedFile, overwrite = true)
-                        }
-                        remuxed.delete()
-                        audioStatus = AudioStatus.INCLUDED
-                        return StagedResult(
-                            framesWritten = encoded.framesEncoded,
-                            audioStatus = audioStatus,
-                            videoSamples = remuxedValidated.videoSamples,
-                            durationUs = remuxedValidated.durationUs,
-                            audioSamplesWritten = audioSamples,
-                            audioFirstPtsUs = remuxedValidated.audioFirstPtsUs,
-                            audioLastPtsUs = remuxedValidated.audioLastPtsUs,
-                            audioTrackDurationUs = remuxedValidated.audioTrackDurationUs
-                        )
-                    } else {
-                        audioStatus = AudioStatus.AUDIO_TRACK_UNSUPPORTED
-                    }
-                } finally {
-                    remuxed.delete()
-                }
+                val promoted = muxAndPromote(stagedFile, audioFile, plan, encoded, rangeStartUs, rangeEndUs, isCancelled)
+                if (promoted != null) return promoted
+                audioStatus = AudioStatus.AUDIO_TRACK_UNSUPPORTED
             }
         }
         return StagedResult(
@@ -181,6 +201,54 @@ object Mp4ExportWorker {
             durationUs = validated.durationUs,
             audioSamplesWritten = audioSamples
         )
+    }
+
+    /**
+     * Re-muxes the staged video with the AAC track of [audioFile] into a
+     * second staged file, validates it with audio expected, and promotes
+     * it over [stagedFile]. Returns the staged result on success, or
+     * null when the AAC track yields zero samples inside the range (the
+     * validated video-only file stands — a valid video export must never
+     * fail only because its audio does not overlap the exported range).
+     */
+    private fun muxAndPromote(
+        stagedFile: File,
+        audioFile: File,
+        plan: RenderQueuePlan,
+        encoded: Mp4SequenceExporter.Result,
+        rangeStartUs: Long,
+        rangeEndUs: Long,
+        isCancelled: () -> Boolean
+    ): StagedResult? {
+        val remuxed = File(stagedFile.parentFile, stagedFile.nameWithoutExtension + "-audio.mp4")
+        try {
+            val audioSamples = muxAudio(stagedFile, audioFile, remuxed, rangeStartUs, rangeEndUs, isCancelled)
+            if (audioSamples <= 0L) return null
+            val remuxedValidated = Mp4ExportValidator.validate(remuxed, plan, expectAudio = true)
+            check(remuxedValidated.audioSamples == audioSamples) {
+                "Muxed AAC sample count ${remuxedValidated.audioSamples} differs from written count $audioSamples"
+            }
+            check(remuxedValidated.audioFirstPtsUs != null && remuxedValidated.audioLastPtsUs != null) {
+                "Validated AAC track is missing its presentation-time window"
+            }
+            if (!remuxed.renameTo(stagedFile)) {
+                // renameTo refuses an existing target; replace by copy instead.
+                remuxed.copyTo(stagedFile, overwrite = true)
+            }
+            remuxed.delete()
+            return StagedResult(
+                framesWritten = encoded.framesEncoded,
+                audioStatus = AudioStatus.INCLUDED,
+                videoSamples = remuxedValidated.videoSamples,
+                durationUs = remuxedValidated.durationUs,
+                audioSamplesWritten = audioSamples,
+                audioFirstPtsUs = remuxedValidated.audioFirstPtsUs,
+                audioLastPtsUs = remuxedValidated.audioLastPtsUs,
+                audioTrackDurationUs = remuxedValidated.audioTrackDurationUs
+            )
+        } finally {
+            remuxed.delete()
+        }
     }
 
     /** Index of the first AAC track in [file], or null when it holds none. */
