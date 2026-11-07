@@ -41,9 +41,10 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 
 ### Latest CI checkpoint
 
-- [CI #1122](https://github.com/sunmughan/After-Effects-Android/actions/runs/42388159501) failed only the API30 workspace motion-path overlay readiness test after native/JVM/release checks passed. The failure was a Compose timeout at test line 1007 after the native render request fired.
-- Test correction: [814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e65989137dd80d554ebf9c38b158edbf5) now waits separately for the rendered-frame node and overlay node, avoiding nested `waitForIdle` in a polling predicate while retaining both assertions.
-- Exact-head [CI #1124](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220) is pending on that test commit. No pass is claimed until JVM, API30, native and independent cold APK/native comparisons complete.
+- [CI #1124](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220) **passed** exact source SHA `814dd66e`: Rust 61/61, JVM, dual ABI, unsigned APK/AAB, API30 instrumentation 175/175, and independent cold debug-APK byte comparison.
+- The Compose motion-path overlay synchronization correction [814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e65989137dd80d554ebf9c38b158edbf5) is verified; the prior #1122 timeout is resolved.
+- [CI #1125](https://github.com/sunmughan/After-Effects-Android/actions/runs/42399063894) on merge SHA `4ae22776` has a successful assemble/test job (61 Rust, 175 API30); its independent cold rebuild/compare remains in progress.
+- [CI #1128](https://github.com/sunmughan/After-Effects-Android/actions/runs/42402625642) is in progress for the new M4 concurrent keyframe-store regression (`faf1d30c`). #1127 was cancelled/superseded before testing.
 
 ## Format and release limitations
 
