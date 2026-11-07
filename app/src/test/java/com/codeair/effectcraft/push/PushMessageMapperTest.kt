@@ -92,6 +92,35 @@ class PushMessageMapperTest {
     }
 
     @Test
+    fun blankDataTagFallsBackToCollapseKey() {
+        val mapped = PushMessageMapper.map(
+            "Hi",
+            "Body",
+            mapOf("tag" to "   "),
+            "collapse-1",
+        )
+        assertEquals("collapse-1", mapped.tag)
+    }
+
+    @Test
+    fun differentTagsGiveDifferentNotificationIds() {
+        val first = PushMessageMapper.map("Hi", "Body", mapOf("tag" to "t-1"), null)
+        val second = PushMessageMapper.map("Hi", "Body", mapOf("tag" to "t-2"), null)
+        assertTrue(first.notificationId != second.notificationId)
+    }
+
+    @Test
+    fun blankDataTitleFallsBackInsteadOfPostingBlankText() {
+        val mapped = PushMessageMapper.map(
+            title = null,
+            body = "Body",
+            data = mapOf("title" to "  "),
+            collapseKey = null,
+        )
+        assertEquals(PushMessageMapper.FALLBACK_TITLE, mapped.title)
+    }
+
+    @Test
     fun channelIsTheEffectCraftUpdatesChannel() {
         assertEquals("effectcraft_updates", PushMessageMapper.CHANNEL_ID)
     }
