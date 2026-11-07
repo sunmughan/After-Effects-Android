@@ -24,17 +24,17 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-07)
+## Current engineering status (2026-11-08)
 
-**Release is NOT complete.** The authoritative per-phase acceptance criteria, exact test evidence, commit links and blockers are maintained in [PHASES.md](PHASES.md).
+**Release is NOT complete.** PR #1 was merged into `main` at `4ae22776` on 2026-11-07, but merge is not product/release acceptance; ongoing fixes are on `feat/android-app-foundation`. The authoritative per-phase acceptance criteria, exact test evidence, commit links and blockers are maintained in [PHASES.md](PHASES.md).
 
 | Phase | Status | Remaining gate |
 |---|---|---|
-| M0 | Accepted at historical exact SHA | Re-run current-head dual ABI/JVM/API30/cold reproducibility |
-| M1 | Scoped editor foundation accepted | Full professional parity, accessibility and physical device UX |
+| M0 | CI #1124 exact SHA green (61 Rust, 175 API30, JVM, dual ABI, cold APK compare) | Re-run after latest M4 source changes; current merge SHA #1125 cold comparison pending |
+| M1 | Scoped editor foundation; corrected workspace test passed API30 175/175 in #1124 | Full professional parity, accessibility and physical device UX |
 | M2 | Partial; canonical import/save + offline media foundations | Broader Effekseer compatibility, provider/relink matrix |
 | M3 | Partial; real Rust CPU/session preview | Physical GPU/Surface/device-loss/media qualification |
-| M4 | In progress; transform/keyframe/ShapePath editing | Full upstream effects/interpolation/roving/spatial parity |
+| M4 | In progress; transform/keyframe/ShapePath editing; keyframe store now cross-instance serialized (`542c1785`) with 120-update regression (`faf1d30c`) | CI #1128 pending; full upstream effects/interpolation/roving/spatial parity |
 | M5 | Partial; PNG/MP4/audio export foundations | Long-run recovery, device codec/audio/output validation |
 | M6 | Partial; cache/recovery/memory safeguards | Physical performance, thermal, low-memory and accessibility matrix |
 | M7 | Not accepted | Protected signing, signed artifacts, physical install/run and release gates |
@@ -50,7 +50,7 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 - Adobe After Effects `.aep` is proprietary; no licensed/available parser is integrated, so native `.aep` import is **not** claimed.
 - Effekseer `.efkproj` conversion/parser compatibility is not complete.
 - Unsigned APK/AAB CI output is not a signed production release. Signing secrets/keystore must remain owner-controlled; physical ARM64 install/run evidence is still required.
-- Keep PR #1 Draft until M0–M7 gates in [PHASES.md](PHASES.md) are accepted.
+- PR #1 is already merged; do not conflate merge with M0–M7 release acceptance. Keep release status NOT COMPLETE.
 
 ## Contributing / roadmap
 
