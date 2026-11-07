@@ -604,7 +604,7 @@ fun EditorScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showProjectPicker = false }) { Text("Close") }
+                    TextButton(onClick = { showProjectPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
             )
         }
@@ -643,7 +643,7 @@ fun EditorScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showRepositoryPicker = false }) { Text("Close") }
+                    TextButton(onClick = { showRepositoryPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
             )
         }
@@ -663,11 +663,11 @@ fun EditorScreen(
                         if (offlineAssets.isEmpty()) {
                             Text("No media imported yet. Relink footage from a canonical project to copy it here for offline use.", color = EditorPalette.muted)
                         } else {
-                            TextButton(onClick = onVerifyOfflineAssets, enabled = !isVerifyingOfflineAssets) {
+                            TextButton(onClick = onVerifyOfflineAssets, enabled = !isVerifyingOfflineAssets, modifier = Modifier.height(48.dp)) {
                                 Text(if (isVerifyingOfflineAssets) "Verifying media…" else "Verify media integrity", color = EditorPalette.violet, fontSize = 11.sp)
                             }
                             if (offlineAssets.any { it.sha256 !in referencedOfflineAssetIds }) {
-                                TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }) {
+                                TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }, modifier = Modifier.height(48.dp)) {
                                     Text("Remove unused media", color = EditorPalette.violet, fontSize = 11.sp)
                                 }
                             }
@@ -683,11 +683,11 @@ fun EditorScreen(
                                     }
                                     if (asset.sha256 in referencedOfflineAssetIds) {
                                         Text("Linked", color = EditorPalette.mint, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp))
-                                        TextButton(onClick = { showMediaLibrary = false; onReplaceOfflineAsset(asset.sha256) }) {
+                                        TextButton(onClick = { showMediaLibrary = false; onReplaceOfflineAsset(asset.sha256) }, modifier = Modifier.height(48.dp)) {
                                             Text("Replace", color = EditorPalette.violet, fontSize = 11.sp)
                                         }
                                     } else {
-                                        TextButton(onClick = { assetPendingDelete = asset }) {
+                                        TextButton(onClick = { assetPendingDelete = asset }, modifier = Modifier.height(48.dp)) {
                                             Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
                                         }
                                     }
@@ -711,7 +711,7 @@ fun EditorScreen(
                                             fontSize = 10.sp
                                         )
                                     }
-                                    TextButton(onClick = { onReleaseSafGrant(grant.uri, grant.kind) }) {
+                                    TextButton(onClick = { onReleaseSafGrant(grant.uri, grant.kind) }, modifier = Modifier.height(48.dp)) {
                                         Text("Release", color = Color(0xFFFF8B91), fontSize = 11.sp)
                                     }
                                 }
@@ -719,7 +719,7 @@ fun EditorScreen(
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { showMediaLibrary = false }) { Text("Close") } }
+                confirmButton = { TextButton(onClick = { showMediaLibrary = false }, modifier = Modifier.height(48.dp)) { Text("Close") } }
             )
         }
 
@@ -733,9 +733,9 @@ fun EditorScreen(
                     TextButton(onClick = {
                         if (asset.sha256 !in referencedOfflineAssetIds) onDeleteOfflineAsset(asset.sha256)
                         assetPendingDelete = null
-                    }, enabled = asset.sha256 !in referencedOfflineAssetIds) { Text("Delete", color = Color(0xFFFF8B91)) }
+                    }, enabled = asset.sha256 !in referencedOfflineAssetIds, modifier = Modifier.height(48.dp)) { Text("Delete", color = Color(0xFFFF8B91)) }
                 },
-                dismissButton = { TextButton(onClick = { assetPendingDelete = null }) { Text("Cancel") } }
+                dismissButton = { TextButton(onClick = { assetPendingDelete = null }, modifier = Modifier.height(48.dp)) { Text("Cancel") } }
             )
         }
 
@@ -870,10 +870,10 @@ fun EditorScreen(
                                 }
                                 .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
                         }
-                    }) { Text(if (isMp4) "Render MP4" else "Render ZIP") }
+                    }, modifier = Modifier.height(48.dp)) { Text(if (isMp4) "Render MP4" else "Render ZIP") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showSequenceSettings = false }) { Text("Cancel") }
+                    TextButton(onClick = { showSequenceSettings = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
                 }
             )
         }
@@ -1458,7 +1458,7 @@ private fun InspectorPanel(
                     // The inspector now has two Apply buttons (rename and
                     // trim); a stable description keeps each addressable
                     // to TalkBack and to tests.
-                    modifier = Modifier.semantics { contentDescription = "Apply layer rename" }
+                    modifier = Modifier.height(48.dp).semantics { contentDescription = "Apply layer rename" }
                 ) {
                     Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
                 }
@@ -1550,7 +1550,7 @@ private fun InspectorPanel(
                     enabled = trimChanged,
                     // See the rename Apply above: two Apply buttons share
                     // this inspector, so each carries its own description.
-                    modifier = Modifier.semantics { contentDescription = "Apply layer trim" }
+                    modifier = Modifier.height(48.dp).semantics { contentDescription = "Apply layer trim" }
                 ) {
                     Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
                 }
@@ -1562,21 +1562,21 @@ private fun InspectorPanel(
                     fontSize = 10.sp,
                     modifier = Modifier.padding(top = 2.dp)
                 )
-                TextButton(onClick = onClearTrim, modifier = Modifier.semantics { contentDescription = "Clear clip trim" }) {
+                TextButton(onClick = onClearTrim, modifier = Modifier.height(48.dp).semantics { contentDescription = "Clear clip trim" }) {
                     Text("Clear trim", color = EditorPalette.amber, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { onMoveLayer(-1) }, modifier = Modifier.semantics { contentDescription = "Move selected layer up" }) {
+                TextButton(onClick = { onMoveLayer(-1) }, modifier = Modifier.height(48.dp).semantics { contentDescription = "Move selected layer up" }) {
                     Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp)
                 }
-                TextButton(onClick = { onMoveLayer(1) }, modifier = Modifier.semantics { contentDescription = "Move selected layer down" }) {
+                TextButton(onClick = { onMoveLayer(1) }, modifier = Modifier.height(48.dp).semantics { contentDescription = "Move selected layer down" }) {
                     Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onDeleteLayer, modifier = Modifier.semantics { contentDescription = "Delete selected layer" }) {
+            TextButton(onClick = onDeleteLayer, modifier = Modifier.height(48.dp).semantics { contentDescription = "Delete selected layer" }) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Color(0xFFFF858D))
                 Spacer(Modifier.width(6.dp))
                 Text("Remove layer", color = Color(0xFFFF858D), fontSize = 12.sp)
@@ -3412,17 +3412,17 @@ private fun CompositionSettingsPanel(
         Text("COMPOSITION SETTINGS", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Text("Changes apply to this offline draft and participate in undo/redo.", color = EditorPalette.muted, fontSize = 12.sp)
         Text("Width · ${width} px", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = width.toFloat(), onValueChange = { width = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.semantics { contentDescription = "Composition width" })
+        Slider(value = width.toFloat(), onValueChange = { width = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition width" })
         Text("Height · ${height} px", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = height.toFloat(), onValueChange = { height = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.semantics { contentDescription = "Composition height" })
+        Slider(value = height.toFloat(), onValueChange = { height = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition height" })
         Text("Frame rate · ${fps} FPS", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = fps.toFloat(), onValueChange = { fps = it.roundToInt() }, valueRange = 1f..120f, modifier = Modifier.semantics { contentDescription = "Composition frame rate" })
+        Slider(value = fps.toFloat(), onValueChange = { fps = it.roundToInt() }, valueRange = 1f..120f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition frame rate" })
         Text("Duration · ${duration} frames", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..3600f, modifier = Modifier.semantics { contentDescription = "Composition duration" })
+        Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..3600f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition duration" })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onCancel) { Text("Cancel", color = EditorPalette.muted) }
+            TextButton(onClick = onCancel, modifier = Modifier.height(48.dp)) { Text("Cancel", color = EditorPalette.muted) }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { onApply(width, height, fps, duration) }) { Text("Apply settings", color = EditorPalette.violet) }
+            TextButton(onClick = { onApply(width, height, fps, duration) }, modifier = Modifier.height(48.dp)) { Text("Apply settings", color = EditorPalette.violet) }
         }
     }
 }
@@ -3575,7 +3575,7 @@ private fun TimelinePanel(
             valueRange = 0f..(project.durationFrames - 1).coerceAtLeast(1).toFloat(),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(28.dp)
+                .height(48.dp)
                 .semantics { contentDescription = "Timeline playhead" }
         )
 
@@ -4773,7 +4773,7 @@ private fun AudioTimelinePanel(
             Spacer(Modifier.weight(1f))
             TextButton(
                 onClick = onAddAudioClip,
-                modifier = Modifier.semantics { contentDescription = "Add audio clip" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add audio clip" }
             ) {
                 Text("Add audio", color = EditorPalette.violet, fontSize = 12.sp)
             }

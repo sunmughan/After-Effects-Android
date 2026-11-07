@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -2373,15 +2375,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             showNewProjectConfirm = false
                             runCatching { recoveryJournal.discard(project.id) }
                             switchToNewProject()
-                        }) { Text("Discard", color = Color(0xFFFF858D)) }
+                        }, modifier = Modifier.height(48.dp)) { Text("Discard", color = Color(0xFFFF858D)) }
                         TextButton(onClick = {
                             showNewProjectConfirm = false
                             if (saveCurrentProject()) switchToNewProject()
-                        }) { Text("Save") }
+                        }, modifier = Modifier.height(48.dp)) { Text("Save") }
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showNewProjectConfirm = false }) { Text("Cancel") }
+                    TextButton(onClick = { showNewProjectConfirm = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
                 }
             )
         }
