@@ -66,11 +66,11 @@ class ProjectAssetManifestTest {
                 }.apply { start() }
             }
             start.countDown()
-            workers.forEach(Thread::join)
+            workers.forEach { it.join() }
 
             assertTrue("Concurrent manifest saves must all complete: $failures", failures.isEmpty())
             val saved = ProjectAssetManifestStore(root).load("shared-project")
-            assertTrue("The published JSON must be parseable and complete", saved.entryFor(1)?.sha256 in hashes)
+            assertTrue("The published JSON must be parseable and complete", saved.entryFor(1)?.sha256?.let(hashes::contains) == true)
             assertTrue(
                 "Unique temporary files must be cleaned after publication",
                 root.listFiles().orEmpty().none { it.name.contains(".tmp-") }
