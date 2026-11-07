@@ -515,6 +515,7 @@ fun EditorScreen(
                 canRedo = canRedo,
                 onUndo = onUndo,
                 onRedo = onRedo,
+                onSave = onSave,
                 onOpenInspector = { showPhoneInspector = true },
                 onOpenCompositionSettings = { showCompositionSettings = true },
                 onAddLayer = onAddLayer
@@ -1068,12 +1069,14 @@ private fun HeaderBar(
                 }
                 // Status on its own full-width line: it is never squeezed
                 // by the action bar, and it stays a single ellipsized line.
+                // 12sp so the save state ("Saved locally" vs "Unsaved
+                // changes") is readable at a glance (P14).
                 Text(
                     saveMessage,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
                         .semantics { contentDescription = "Editor status: $saveMessage" },
                     color = EditorPalette.mint,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1155,7 +1158,7 @@ private fun HeaderBar(
                         Text(
                             saveMessage,
                             modifier = Modifier.semantics { contentDescription = "Editor status: $saveMessage" },
-                            color = EditorPalette.mint, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                            color = EditorPalette.mint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -3410,6 +3413,7 @@ private fun ToolBar(
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
+    onSave: () -> Unit,
     onOpenInspector: () -> Unit,
     onOpenCompositionSettings: () -> Unit,
     onAddLayer: () -> Unit
@@ -3438,6 +3442,12 @@ private fun ToolBar(
             )
         }
 
+        // Labelled Save: the header icon alone never told the user where
+        // Save lives (P14). The header icon stays as a secondary action.
+        TextButton(onClick = onSave, modifier = Modifier.height(48.dp)) {
+            Icon(Icons.Outlined.Save, contentDescription = null, tint = EditorPalette.violet)
+            Text("Save", color = EditorPalette.violet, fontSize = 11.sp)
+        }
         TextButton(onClick = onUndo, enabled = canUndo) {
             Text("Undo", color = if (canUndo) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp)
         }
