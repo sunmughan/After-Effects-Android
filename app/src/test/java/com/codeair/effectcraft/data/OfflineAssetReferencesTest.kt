@@ -7,6 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 
 class OfflineAssetReferencesTest {
     private val firstHash = "a".repeat(64)
@@ -88,4 +90,42 @@ class OfflineAssetReferencesTest {
             root.deleteRecursively()
         }
     }
+    @Test
+    fun independentInstancesSerializeConcurrentReferenceUpdatesWithoutLostItems() {
+        val root = Files.createTempDirectory("effectcraft-asset-refs-concurrent").toFile()
+        val executor = Executors.newFixedThreadPool(8)
+        try {
+            val file = File(root, "references.properties")
+            val workers = 8
+            val writesPerWorker = 20
+            val start = CountDownLatch(1)
+            val futures = (0 until workers).map { worker ->
+                executor.submit {
+                    val refs = OfflineAssetReferences(file)
+                    start.await()
+                    repeat(writesPerWorker) { offset ->
+                        val itemId = worker * writesPerWorker + offset + 1L
+                        refs.setReference(itemId, if (offset % 2 == 0) firstHash else secondHash)
+                    }
+                }
+            }
+            start.countDown()
+            futures.forEach { it.get() }
+
+            val reopened = OfflineAssetReferences(file)
+            assertEquals(workers * writesPerWorker, reopened.referencedAssetIds().size)
+            assertEquals(setOf(firstHash, secondHash), reopened.referencedAssetIds())
+            repeat(workers * writesPerWorker) { offset ->
+                val itemId = offset + 1L
+                assertEquals(if ((offset % writesPerWorker) % 2 == 0) firstHash else secondHash, reopened.assetFor(itemId))
+            }
+            assertTrue("Durable writes must clean unique staging files", root.listFiles().orEmpty().none {
+                it.name.startsWith("references.properties.tmp-")
+            })
+        } finally {
+            executor.shutdownNow()
+            root.deleteRecursively()
+        }
+    }
+
 }
