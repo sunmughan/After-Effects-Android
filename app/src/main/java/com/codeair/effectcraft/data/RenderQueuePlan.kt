@@ -54,8 +54,8 @@ data class RenderQueuePlan private constructor(
 
     /**
      * Presentation timestamp for a zero-based frame offset, or the end-of-stream
-     * sentinel at [frameCount]. Integer division intentionally floors to the
-     * nearest microsecond; computing from the index avoids accumulated drift.
+     * sentinel at [frameCount]. Integer division truncates to microsecond precision; computing from
+     * the index avoids accumulated drift.
      */
     fun presentationTimeUs(frameOffset: Int): Long {
         require(frameOffset in 0..frameCount) { "Frame offset is outside this render queue" }
