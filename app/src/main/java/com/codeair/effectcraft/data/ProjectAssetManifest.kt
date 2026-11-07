@@ -240,18 +240,18 @@ class ProjectAssetManifestStore(
     private val replaceFile: (source: File, target: File) -> Unit = ::atomicReplaceManifest
 ) {
     // Instance monitors cannot coordinate a save with a rollback-capable batch
-    // in another store instance. Serialize all operations sharing this root.
+    // in another store instance. Serialize every operation sharing this root.
     private val lock = locks.computeIfAbsent(root.absoluteFile.toPath().normalize().toString()) { Any() }
+
     fun load(projectId: String): ProjectAssetManifest = synchronized(lock) {
         val id = ProjectAssetManifest.validateProjectId(projectId)
         val file = fileFor(id)
-        if (!file.isFile) return ProjectAssetManifest(id)
-        return ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8))
+        if (file.isFile) ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8))
+        else ProjectAssetManifest(id)
     }
 
-    @Synchronized
     @Throws(IOException::class)
-    fun save(manifest: ProjectAssetManifest) {
+    fun save(manifest: ProjectAssetManifest) = synchronized(lock) {
         if (!root.exists() && !root.mkdirs()) throw IOException("Unable to create asset manifest directory")
         if (!root.isDirectory) throw IOException("Asset manifest path is not a directory")
         val target = fileFor(manifest.projectId)
@@ -283,15 +283,17 @@ class ProjectAssetManifestStore(
 
     fun delete(projectId: String): Boolean = synchronized(lock) {
         val file = fileFor(ProjectAssetManifest.validateProjectId(projectId))
-        if (!file.exists()) return false
-        if (!file.delete()) throw IOException("Unable to remove asset manifest")
-        return true
+        if (!file.exists()) false
+        else {
+            if (!file.delete()) throw IOException("Unable to remove asset manifest")
+            true
+        }
     }
 
     /** Project ids with a readable manifest on disk; corrupt files are skipped, not fatal. */
     fun projectIds(): List<String> = synchronized(lock) {
-        if (!root.isDirectory) return emptyList()
-        return root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
+        if (!root.isDirectory) emptyList()
+        else root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
             .mapNotNull { file -> runCatching { ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8)).projectId }.getOrNull() }
             .sorted()
     }
@@ -305,7 +307,7 @@ class ProjectAssetManifestStore(
      */
     @Throws(IOException::class)
     fun allReferencedHashes(): Set<String> = synchronized(lock) {
-        if (!root.isDirectory) return emptySet()
+        if (!root.isDirectory) return@synchronized emptySet()
         val files = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }
             ?: throw IOException("Unable to enumerate project asset manifests")
         val hashes = linkedSetOf<String>()
@@ -326,7 +328,7 @@ class ProjectAssetManifestStore(
             }
             hashes += manifest.allHashes()
         }
-        return hashes
+        hashes
     }
 
     /**
@@ -342,7 +344,7 @@ class ProjectAssetManifestStore(
         val old = ProjectAssetManifest.validateHash(oldHash)
         val fresh = ProjectAssetManifest.validateHash(newHash)
         require(old != fresh) { "Replacement asset must differ from the original asset" }
-        if (!root.isDirectory) return 0
+        if (!root.isDirectory) return@synchronized 0
 
         // Safety-critical scan validates every manifest and its project-id
         // filename before computing or staging any migration.
@@ -359,7 +361,7 @@ class ProjectAssetManifestStore(
                 changed += count
             }
         }
-        if (replacements.isEmpty()) return 0
+        if (replacements.isEmpty()) return@synchronized 0
 
         val token = java.util.UUID.randomUUID().toString()
         val staged = linkedMapOf<File, File>()
@@ -384,7 +386,6 @@ class ProjectAssetManifestStore(
                 replaceFile(stage, target)
                 published += target
             }
-            return changed
         } catch (failure: Exception) {
             val rollbackFailures = mutableListOf<Exception>()
             published.asReversed().forEach { target ->
@@ -406,6 +407,7 @@ class ProjectAssetManifestStore(
             staged.values.forEach(File::delete)
             backups.values.filterNot { it in preserveBackups }.forEach(File::delete)
         }
+        changed
     }
 
     private fun fileFor(projectId: String): File = File(root, "${projectId.sha256()}.json")
@@ -418,7 +420,6 @@ class ProjectAssetManifestStore(
         .digest(toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
 }
-
 
 /** Same-directory replacement keeps each manifest move atomic where supported. */
 private fun atomicReplaceManifest(source: File, target: File) {
