@@ -18,11 +18,22 @@ class OfflineAssetReferences(private val file: File) {
         return read().getProperty(itemId.toString())?.also(::validateHash)
     }
 
+    /**
+     * Returns every referenced SHA-256 ID. Corrupt reference metadata is
+     * fail-closed: silently dropping an invalid mapping could make a live
+     * asset appear unreferenced and eligible for garbage collection.
+     */
     @Synchronized
     fun referencedAssetIds(): Set<String> {
         val properties = read()
-        return properties.stringPropertyNames().mapNotNull { key ->
-            properties.getProperty(key)?.let { hash -> runCatching { validateHash(hash); hash }.getOrNull() }
+        return properties.stringPropertyNames().map { key ->
+            val itemId = key.toLongOrNull()
+                ?: throw IllegalStateException("Invalid footage item ID in offline references: $key")
+            require(itemId > 0) { "Footage item ID in offline references must be positive" }
+            val hash = properties.getProperty(key)
+                ?: throw IllegalStateException("Missing asset hash for footage item $itemId")
+            validateHash(hash)
+            hash
         }.toSet()
     }
 
