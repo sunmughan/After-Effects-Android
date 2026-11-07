@@ -4,8 +4,10 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.codeair.effectcraft.data.HevcEncoderProbe
 import com.codeair.effectcraft.data.Mp4SequenceExporter
 import com.codeair.effectcraft.data.Mp4OutputValidator
 import com.codeair.effectcraft.data.RenderOutputFormat
@@ -13,6 +15,7 @@ import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -72,6 +75,58 @@ class Mp4SequenceExporterInstrumentedTest {
                 assertTrue("MP4 should contain encoded samples", samples >= 1)
             } finally {
                 extractor.release()
+            }
+        } finally {
+            output.delete()
+        }
+    }
+
+    /**
+     * HEVC follows the hardware gate, never a silent fallback. When the
+     * probe finds no hardware HEVC encoder (the CI emulator, which only
+     * has the software OMX.google HEVC encoder), the export must refuse
+     * with the hardware-encoder reason. When the probe passes, a real
+     * HEVC export must validate through both validator overloads with the
+     * HEVC MIME — the staged validator already accepted HEVC, but the
+     * final output validator used to require H.264 and reject it.
+     */
+    @Test fun hevcExportValidatesWhenGatePassesAndIsRejectedOtherwise() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val output = File(context.cacheDir, "mp4-hevc-${System.nanoTime()}.mp4")
+        val plan = RenderQueuePlan.create(
+            RenderQueueSettings(
+                width = 64, height = 64, frameRate = 30, startFrame = 0, endFrame = 1,
+                outputFormat = RenderOutputFormat.MP4_HEVC, videoBitrate = 500_000
+            )
+        )
+        try {
+            val codecName = HevcEncoderProbe.probe().codecName
+            if (codecName == null) {
+                try {
+                    FileOutputStream(output).use { stream ->
+                        Mp4SequenceExporter.export(plan, stream.fd, ::redFrame)
+                    }
+                    fail("HEVC export without a hardware encoder must refuse, never fall back to software")
+                } catch (expected: IllegalStateException) {
+                    assertTrue("Rejection must name the hardware encoder: ${expected.message}",
+                        expected.message!!.contains("hardware HEVC"))
+                }
+            } else {
+                val result = FileOutputStream(output).use { stream ->
+                    Mp4SequenceExporter.export(plan, stream.fd, ::redFrame)
+                }
+                assertEquals(2, result.framesEncoded)
+                assertEquals(66_666L, result.durationUs)
+                assertTrue(output.length() > 0L)
+                val validatedFile = Mp4OutputValidator.validateFile(output, plan)
+                assertEquals(64, validatedFile.width)
+                assertEquals(64, validatedFile.height)
+                assertEquals(2, validatedFile.frameCount)
+                assertEquals(Mp4SequenceExporter.HEVC_MIME, validatedFile.mime)
+                val validatedUri = Mp4OutputValidator.validate(context, Uri.fromFile(output), plan)
+                assertEquals(2, validatedUri.frameCount)
+                assertEquals(Mp4SequenceExporter.HEVC_MIME, validatedUri.mime)
+                assertEquals(validatedFile.durationUs, validatedUri.durationUs)
             }
         } finally {
             output.delete()
