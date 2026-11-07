@@ -1647,3 +1647,10 @@ This tracker is the source of truth for acceptance. A phase is **complete only w
 - Corrected regression to assert the two distinct hashes, 80 item mappings per hash, then verify all 160 individual itemId→hash mappings and no staging files. Concurrency assertions remain comprehensive; no production code/test coverage removed. Fix commit: [f13226a9](https://github.com/sunmughan/After-Effects-Android/commit/f13226a9038afe454a9be0b20d72c499a12476ba).
 - Exact-head CI must rerun after this test correction; #1048 is a confirmed test failure and not a pass. M0's latest complete cold reproducibility evidence remains CI #1046 SHA `d5b851e2`; revalidate on corrected head.
 - Next acceptance work: continue M2 media/project interoperability and M3/M4 integration independently while latest CI runs. **Release NOT COMPLETE.**
+
+
+## Automation run 11 — M2 CI #1048 test correction + catalog fail-closed (2026-11-07)
+
+- CI #1048 [42351286567](https://github.com/sunmughan/After-Effects-Android/actions/runs/42351286567) failed in JVM tests: 330/331 passed. The concurrency test incorrectly treated `referencedAssetIds()` (distinct SHA set) as a count of 160 footage mappings. Corrected it to assert the two hashes, 80 item IDs per hash, all 160 itemId→hash mappings, and staging cleanup; no coverage removed. [f13226a9](https://github.com/sunmughan/After-Effects-Android/commit/f13226a9038afe454a9be0b20d72c499a12476ba).
+- M2 additional integrity: `OfflineAssetStore.list()` previously silently filtered malformed catalog keys/records via `mapNotNull/runCatching`. This could make a corrupt indexed payload appear absent and unsafe to GC. Listing now fails closed on invalid hash key, record type or malformed record. Added a corruption-injection regression proving `list()` and GC abort and preserve the live payload. Implementation [4f239f4e](https://github.com/sunmughan/After-Effects-Android/commit/4f239f4e037cba3b3b2eb0a68eb9e8fef8e70ab5), regression [da70f9fc](https://github.com/sunmughan/After-Effects-Android/commit/da70f9fc32feebdacc750bbf2e78587735fa7015).
+- Fresh exact-head Actions verification required for these changes. **Release NOT COMPLETE.**
