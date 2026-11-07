@@ -49,15 +49,19 @@ gap remains. Missing means no code exists.
   is a pure JVM parser for ISO-BMFF boxes. It checks `ftyp` and `moov`,
   reads `mvhd`/`mdhd` timescale and duration for version 0 and version 1
   layouts, and reports the first video track codec, dimensions, and
-  sample count. It accepts only `avc1` as the video codec. It reads
-  headers only and never validates audio.
+  sample count. It accepts `avc1` (H.264) and `hev1`/`hvc1` (HEVC) as the
+  video codec. It reads headers only and never validates audio.
 - Staged MP4 validation: `app/src/main/java/com/codeair/effectcraft/data/Mp4ExportValidator.kt`
-  uses MediaExtractor and requires a present H.264 video track, a video
-  sample count exactly equal to the plan frame count, and a duration
-  within one frame of the plan duration. When audio is expected, it also
-  requires an AAC track with at least one sample.
+  uses MediaExtractor and requires a present video track in the plan's
+  codec (H.264 `video/avc` or HEVC `video/hevc`), a video sample count
+  exactly equal to the plan frame count, and a duration within one frame
+  of the plan duration. When audio is expected, it also requires an AAC
+  track with at least one sample. The final SAF-copy check
+  (`Mp4OutputValidator.kt`) applies the same per-format rule.
 - Plan limits: `app/src/main/java/com/codeair/effectcraft/data/RenderQueuePlan.kt`
-  defines the only MP4 format today, `MP4_H264`, with even dimensions,
+  defines two MP4 formats — `MP4_H264` (the default) and `MP4_HEVC`
+  (explicit opt-in only, after the hardware probe) — plus
+  `PNG_SEQUENCE_ZIP`, with even dimensions,
   bitrate in 250,000 to 50,000,000 bits per second (default 8,000,000),
   frame rate 1 to 120, at most 10,000 frames, and an 8 GiB uncompressed
   RGBA budget. No other codec or container is a plan option today.
@@ -80,8 +84,8 @@ gap remains. Missing means no code exists.
   INCLUDED, NO_AUDIO_IN_COMPOSITION, AUDIO_FILE_UNAVAILABLE, or
   AUDIO_TRACK_UNSUPPORTED, and the UI shows the video-only reason.
 - MP4 export is wired to the editor UI: `app/src/main/java/com/codeair/effectcraft/ui/EffectCraftApp.kt`
-  offers an MP4 export dialog (dimensions, FPS, frame range, bitrate),
-  a `CreateDocument("video/mp4")` SAF path, progress messages, and
+  offers an MP4 export dialog (dimensions, FPS, frame range, bitrate,
+  format choice), a `CreateDocument("video/mp4")` SAF path, progress messages, and
   deletion of the partial document on cancel or failure.
 - Aspect-preserving contain (letterbox/pillarbox): `app/src/main/java/com/codeair/effectcraft/engine/Yuv420FrameConverter.kt`
   scales each frame into the exact plan dimensions without stretching,
@@ -92,16 +96,21 @@ gap remains. Missing means no code exists.
 
 ### Missing
 
-- No HEVC, AV1, VP9, ProRes, or any other video codec code exists. A
-  repository search for HEVC, AV1, ProRes, VP9, crop, and letterbox
-  finds no such implementation.
+- HEVC exists and is implemented (see section 5): probe, gate, plan
+  format, exporter, both validators, box inspector, and dialog gate.
+  No AV1, VP9, or ProRes codec code exists: a repository search for
+  AV1, VP9, and ProRes finds no such implementation.
 - No audio transcoding exists. A non-AAC source (for example WAV, MP3,
   FLAC, Opus) cannot be converted into the export; it exports
   video-only with the unsupported reason. No resampling, no mixing, no
   multi-track audio, and no synthesized audio exist.
 - AAC timing diagnostics are now measured by the staged validator (Automation run 11): first/last audio sample PTS and MediaExtractor's audio track duration are surfaced in the staged result and export status. This is measurement only. The validator still does not enforce audio start/end against video, any lip-sync tolerance, drift detection, or drift correction; no threshold or reject/trim policy has been approved.
-- No crop or letterbox option exists in code, in the plan, or in the
-  export dialog.
+- No crop option exists in code, in the plan, or in the export dialog,
+  and there is no user-facing aspect choice: the converter always
+  applies aspect-preserving contain (letterbox/pillarbox, opaque black
+  bars). Letterbox is therefore not a missing converter behavior — it is
+  the fixed behavior — but it cannot be switched off or swapped for crop
+  or stretch.
 - No foreground-service execution for MP4 exists. MP4 runs as a UI-held
   coroutine job in `EffectCraftApp.kt`. The foreground service proven
   in Run 104 (`app/src/main/java/com/codeair/effectcraft/export/PngSequenceExportService.kt`
@@ -219,33 +228,36 @@ Licensing and patent notes, limited to what can be verified here:
 
 Definitions:
 
-- Stretch (current behavior): the frame is scaled to the exact plan
-  dimensions, distorting the picture when aspect ratios differ.
+- Letterbox or pillarbox (current behavior): the full frame is preserved
+  and padded with opaque black bars to reach the target aspect ratio.
+  Nothing is lost, but the output carries bars. This is what
+  `Yuv420FrameConverter.fromBitmap` does on every MP4 frame today;
+  same-aspect output fills the frame with no bars.
+- Stretch: the frame is scaled to the exact plan dimensions, distorting
+  the picture when aspect ratios differ. No stretch path exists in code.
 - Crop: the frame is cut to the target aspect ratio, losing picture at
   the edges. Which edges are lost needs a rule (center crop is the
-  simplest) and ideally a preview.
-- Letterbox or pillarbox: the full frame is preserved and padded with
-  bars to reach the target aspect ratio. Nothing is lost, but the
-  output carries bars.
+  simplest) and ideally a preview. No crop path exists in code.
 
-Recommendation (proposal, not approved): crop and letterbox are OUT
-of the first codec delivery, for these reasons: the codec decision
-itself is already blocked on the user, the existing stretch behavior
-is already validated for the default case where plan dimensions match
-the composition, and a crop or letterbox choice needs a settings UI
-choice, a preview, and its own tests. Shipping the codec first keeps
-the decision small and testable. Two conditions go with this
-recommendation: first, the export settings must label the current
-behavior as stretch when the chosen dimensions change the aspect
-ratio, so no user is surprised by distortion; second, letterbox is
-the recommended immediate follow-up, because it preserves the full
-frame, while crop follows after it, because crop discards picture
-and needs a preview control to be safe.
+Recommendation (proposal, not approved): crop is OUT of the first codec
+delivery, for these reasons: the codec decision itself is already blocked
+on the user, the existing letterbox behavior is already validated for the
+default case where plan dimensions match the composition, and a crop
+choice needs a settings UI choice, a preview, and its own tests. Shipping
+the codec first keeps the decision small and testable. Two conditions go
+with this recommendation: first, the export settings must label the
+current behavior as letterbox (aspect-preserving contain, black bars)
+when the chosen dimensions change the aspect ratio, so no user is
+surprised by the bars; second, crop is the recommended immediate
+follow-up, because it discards picture and needs a preview control to be
+safe. Letterbox needs no follow-up implementation — it is already the
+behavior.
 
-If the user instead wants aspect handling in v1, the cost is explicit:
+If the user instead wants an aspect choice in v1, the cost is explicit:
 one more settings choice, one more scaling path in
-`Yuv420FrameConverter`, preview coverage, and acceptance tests for
-both padded and cropped output dimensions and content.
+`Yuv420FrameConverter` (crop; the contain path already exists), preview
+coverage, and acceptance tests for both padded and cropped output
+dimensions and content.
 
 ## 5. Decided first-delivery subset (owner decision 2026-11-06)
 
@@ -262,10 +274,10 @@ both padded and cropped output dimensions and content.
   the opt-in. The export dialog shows the H.265 button disabled with a
   stated reason when no hardware encoder exists. `RenderOutputFormat.MP4_HEVC`
   shares the MP4 dimension and bitrate rules; `Mp4SequenceExporter`,
-  `Mp4ExportValidator`, and `Mp4BoxInspector` accept the HEVC track
-  (hev1/hvc1). Full HEVC encode is proven only on a device with a
-  hardware HEVC encoder; CI emulator coverage is the probe's
-  self-consistency test, not an encode.
+  `Mp4ExportValidator`, `Mp4OutputValidator`, and `Mp4BoxInspector`
+  accept the HEVC track (hev1/hvc1). Full HEVC encode is proven only on
+  a device with a hardware HEVC encoder; CI emulator coverage is the
+  probe's self-consistency test, not an encode.
 - Audio: AAC LC passthrough only, first AAC track only, composition-FPS
   range shift plus trimming to the range, video-only fallback labeled
   with the reason. No transcode, no mixing, no multi-track.
@@ -275,8 +287,10 @@ both padded and cropped output dimensions and content.
 - Sync: shift plus trim, with staged measurement of audio start, audio
   end, and video duration, and a tolerance gate (proposed: 100 ms, to
   be confirmed by the user) applied before SAF copy.
-- Aspect: stretch labeled in settings; crop and letterbox out of v1
-  as in section 4.
+- Aspect: letterbox (aspect-preserving contain, opaque black bars) is
+  the fixed converter behavior; the settings dialog does not yet label
+  it — section 4 recommends adding that label. Crop is out of v1 as in
+  section 4, and no stretch path exists.
 - Execution: move MP4 export under the foreground-service pattern
   already proven for PNG sequences (progress notification, user
   cancel, staged validation before copy, cleanup plus restart from
@@ -311,9 +325,10 @@ both padded and cropped output dimensions and content.
 - Audio time-stretch to fix drift: changes pitch and tempo, needs DSP,
   and hides a sync error instead of reporting it. Reject; report or
   trim instead.
-- Crop or letterbox in v1: needs settings UI, preview, and tests that
-  would delay the codec decision. Defer as in section 4, with stretch
-  labeled in the meantime.
+- Crop in v1: needs settings UI, preview, and tests that would delay
+  the codec decision. Defer as in section 4, with the existing letterbox
+  behavior labeled in the meantime. Letterbox itself needs no v1 work:
+  it is already what the converter does.
 - Silent video-only fallback: rejected already by the current code
   and reaffirmed here. Every video-only export must state its reason.
 
@@ -329,9 +344,11 @@ both padded and cropped output dimensions and content.
    end tolerance accepted, or does the user want a tighter or looser
    tolerance, and on a tolerance breach should the export be rejected
    or trimmed with a stated note?
-4. Crop and letterbox scope: are crop and letterbox out of v1 as
-   recommended in section 4, or must one of them (and if so, which)
-   be included in the first codec delivery?
+4. Crop and letterbox scope: is crop out of v1 as recommended in
+   section 4, or must it be included in the first codec delivery?
+   Letterbox is already the converter behavior, so it is not a scope
+   question; the open question is crop, and whether the user wants a
+   user-facing aspect choice at all.
 5. Resolution and bitrate for v1: are 720p and 1080p with the current
    8 Mbps default the right v1 targets, or does the user want a
    different default bitrate or a 4K tier in v1?
@@ -402,11 +419,12 @@ run on at least one physical device before any device claim is made.
 
 ## 9. What this record does not do
 
-- It implements no audio transcode, no crop, no letterbox,
-  and no foreground service for MP4. The HEVC opt-in IS implemented
-  (probe, plan format, exporter MIME, validator, inspector, dialog
-  gate); full HEVC encode is proven only on a device with a hardware
-  HEVC encoder.
+- It implements no audio transcode, no crop, and no foreground service
+  for MP4. Letterbox (aspect-preserving contain) IS the converter
+  behavior, not a missing feature. The HEVC opt-in IS implemented
+  (probe, plan format, exporter MIME, staged and final validators,
+  inspector, dialog gate); full HEVC encode is proven only on a device
+  with a hardware HEVC encoder.
 - It does not flip the M5-L8 bullet, which stays unchecked with no
   PASS label.
 - It does not approve any threshold: the 100 ms sync tolerance, the
