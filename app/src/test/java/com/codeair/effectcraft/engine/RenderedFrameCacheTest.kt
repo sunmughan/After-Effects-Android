@@ -2,6 +2,8 @@ package com.codeair.effectcraft.engine
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
@@ -71,6 +73,20 @@ class RenderedFrameCacheTest {
             assertEquals(1, renders.get())
         } finally {
             pool.shutdownNow()
+        }
+    }
+
+    @Test fun projectDigestCanBeReusedForEveryFrameKey() {
+        val project = """{"version":3,"layers":[1,2,3]}"""
+        val digest = RenderedFrameCache.projectDigest(project)
+        assertEquals(64, digest.length)
+        assertEquals(
+            RenderedFrameCache.key(project, 7, 24, 320),
+            RenderedFrameCache.keyFromDigest(digest, 7, 24, 320),
+        )
+        assertNotEquals(digest, RenderedFrameCache.projectDigest(project + " "))
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderedFrameCache.keyFromDigest("invalid", 7, 24, 320)
         }
     }
 
