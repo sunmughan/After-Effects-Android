@@ -94,7 +94,7 @@ object Mp4SequenceExporter {
                 }
                 queueFrame(
                     encoder, muxer, state, info, yuv.i420, yuv.width, yuv.height,
-                    framesEncoded.toLong() * 1_000_000L / plan.settings.frameRate,
+                    plan.presentationTimeUs(framesEncoded),
                     isCancelled
                 )
                 drain(encoder, muxer, state, info, 0L, isCancelled)

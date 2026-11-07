@@ -52,6 +52,16 @@ data class RenderQueuePlan private constructor(
         return (completedFrames.toLong() * 100L / frameCount).toInt()
     }
 
+    /**
+     * Presentation timestamp for a zero-based frame offset, or the end-of-stream
+     * sentinel at [frameCount]. Integer division truncates to microsecond precision; computing from
+     * the index avoids accumulated drift.
+     */
+    fun presentationTimeUs(frameOffset: Int): Long {
+        require(frameOffset in 0..frameCount) { "Frame offset is outside this render queue" }
+        return Math.multiplyExact(frameOffset.toLong(), 1_000_000L) / settings.frameRate
+    }
+
     /** Covered frames of [project] inside this plan's range, in order. */
     fun coveredFrames(project: ProjectDocument): List<Int> =
         ClipRenderCoverage.coveredFrames(project, settings.startFrame, settings.endFrame)

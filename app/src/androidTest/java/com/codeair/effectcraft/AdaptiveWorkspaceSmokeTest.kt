@@ -489,12 +489,11 @@ class AdaptiveWorkspaceSmokeTest {
         // its own viewport until Anchor X is displayed, then invoke the chip's
         // semantics click (not a coordinate tap on a clipped child).
         compose.onNodeWithText("Curve graph · Position X").performScrollTo()
-        val selectorRow = compose.onNodeWithTag("curve-selector-row").performScrollTo()
+        // Ask Compose to reveal the target chip through its horizontal
+        // scroll ancestor. Repeated swipes against a clipped Row are flaky
+        // on the emulator and can leave the test waiting for an invisible node.
         val anchorSelector = compose.onNodeWithTag("curve-selector-transform-anchor")
-        for (attempt in 0 until 4) {
-            if (runCatching { anchorSelector.assertIsDisplayed() }.isSuccess) break
-            selectorRow.performTouchInput { swipeLeft() }
-        }
+            .performScrollTo()
         anchorSelector.assertIsDisplayed().performClick()
         compose.onNodeWithText("Curve graph · Anchor X").assertIsDisplayed()
         // The graph add button fires the curve callback with the selected
