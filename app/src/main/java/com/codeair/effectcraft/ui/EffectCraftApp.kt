@@ -169,6 +169,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
     var savedProjects by remember { mutableStateOf(projectStore.listSavedProjects()) }
     var offlineAssets by remember(offlineAssetStore) { mutableStateOf(offlineAssetStore.list()) }
+    var mediaVerificationJob by remember { mutableStateOf<Job?>(null) }
+    var mediaVerificationInProgress by remember { mutableStateOf(false) }
     var referencedOfflineAssetIds by remember(offlineAssetReferences) { mutableStateOf(offlineAssetReferences.referencedAssetIds()) }
     var selectedLayerId by remember {
         mutableStateOf(project.layers.firstOrNull()?.id.orEmpty())
@@ -1814,7 +1816,30 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         saveMessage = "Removed ${result.deleted.size} unused file(s), ${result.orphanPayloadsRemoved} orphan(s)$failedNote"
                     }
                     .onFailure { saveMessage = "Unused-media cleanup failed · ${it.message ?: "storage error"}" }
-            }
+            },
+            onVerifyOfflineAssets = {
+                if (!mediaVerificationInProgress) {
+                    mediaVerificationInProgress = true
+                    saveMessage = "Verifying offline media integrity…"
+                    mediaVerificationJob = exportScope.launch {
+                        try {
+                            val invalid = withContext(Dispatchers.IO) { offlineAssetStore.verifyAll() }
+                            offlineAssets = offlineAssetStore.list()
+                            saveMessage = if (invalid.isEmpty()) {
+                                "Offline media verified · ${offlineAssets.size} asset(s) intact"
+                            } else {
+                                "Media integrity failed · ${invalid.size} asset(s) missing or corrupted"
+                            }
+                        } catch (failure: Throwable) {
+                            saveMessage = "Media verification failed · ${failure.message ?: "storage error"}"
+                        } finally {
+                            mediaVerificationInProgress = false
+                            mediaVerificationJob = null
+                        }
+                    }
+                }
+            },
+            isVerifyingOfflineAssets = mediaVerificationInProgress
         )
     }
 }
