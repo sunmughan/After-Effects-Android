@@ -39,6 +39,7 @@ import java.util.concurrent.CancellationException
  */
 object AudioMixdown {
     private const val TIMEOUT_US = 10_000L
+    private const val EOS_DRAIN_TIMEOUT_NANOS = 5_000_000_000L
     private const val AAC_MIME = "audio/mp4a-latm"
     private const val AAC_BIT_RATE = 128_000
 
@@ -141,6 +142,7 @@ object AudioMixdown {
             val info = MediaCodec.BufferInfo()
             var frameIndex = 0
             var inputEos = false
+            var eosDrainStartedAtNanos: Long? = null
             var outputEos = false
             while (!outputEos) {
                 checkCancellation(isCancelled)
@@ -153,6 +155,7 @@ object AudioMixdown {
                         if (frameStart >= totalFrames) {
                             encoder.queueInputBuffer(inputIndex, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             inputEos = true
+                            eosDrainStartedAtNanos = System.nanoTime()
                         } else {
                             val frameSamples = minOf(AudioMixMath.AAC_FRAME_SAMPLES, totalFrames - frameStart)
                             input.clear()
@@ -167,7 +170,17 @@ object AudioMixdown {
                 }
                 when (val outputIndex = encoder.dequeueOutputBuffer(info, TIMEOUT_US)) {
                     MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                        if (inputEos) throw IllegalStateException("AAC encoder stalled before end of stream")
+                        // MediaCodec may need several dequeueOutputBuffer calls after
+                        // input EOS before its final AAC packet/EOS becomes available.
+                        // A single 10 ms TRY_AGAIN is not a stall. Keep draining with
+                        // cancellation checks, but fail boundedly if the codec never
+                        // signals output EOS (broken codec/device).
+                        val eosStarted = eosDrainStartedAtNanos
+                        if (inputEos && eosStarted != null &&
+                            System.nanoTime() - eosStarted >= EOS_DRAIN_TIMEOUT_NANOS
+                        ) {
+                            throw IllegalStateException("AAC encoder stalled before end of stream")
+                        }
                     }
                     MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         check(!started) { "AAC encoder changed output format more than once" }
