@@ -50,6 +50,30 @@ internal object RenderedFrameCache {
         retainedBytes = 0
     }
 
+    /**
+     * Drops retained frames for one immutable project revision. Preview edits
+     * otherwise leave unreachable old-revision frames in the process LRU until
+     * unrelated renders evict them. The caller must pass the full SHA-256.
+     */
+    @Synchronized
+    internal fun removeProjectDigest(projectDigest: String): Int {
+        require(projectDigest.matches(Regex("[0-9a-f]{64}"))) {
+            "Project digest must be lowercase SHA-256"
+        }
+        val prefix = "$projectDigest:"
+        var removed = 0
+        val iterator = entries.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.key.startsWith(prefix)) {
+                retainedBytes -= entry.value.size
+                iterator.remove()
+                removed++
+            }
+        }
+        return removed
+    }
+
     @Synchronized
     internal fun stats(): Pair<Int, Int> = entries.size to retainedBytes
 
