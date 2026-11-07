@@ -32,6 +32,8 @@ import com.codeair.effectcraft.data.CanonicalProjectRepository
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.EcprojDocumentStore
 import com.codeair.effectcraft.data.EditorRecoveryJournal
+import com.codeair.effectcraft.data.EditorSessionSnapshot
+import com.codeair.effectcraft.data.EditorSessionState
 import com.codeair.effectcraft.data.OfflineAssetStore
 import com.codeair.effectcraft.data.OfflineAssetReferences
 import com.codeair.effectcraft.data.ProjectAssetManifestStore
@@ -149,14 +151,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // survives process death. Torn and stale journals are deleted by recovery.
     val recoveryJournal = remember(context) { EditorRecoveryJournal(File(context.filesDir, "recovery-journal")) }
     val committedDraft = projectStore.loadLatest()
-    val recoveredDraft = runCatching {
-        val forCommitted = committedDraft?.let { recoveryJournal.recover(it.id, it) }
+    // The journal entry carries the session state journaled with the
+    // document (draft undo/redo stacks, selection, playhead, canonical
+    // stacks and canonical selection), validated against that document.
+    val recoveredSession = runCatching {
+        val forCommitted = committedDraft?.let { recoveryJournal.recoverSession(it.id, it) }
         if (forCommitted != null) {
             forCommitted
         } else {
-            val newest = recoveryJournal.recoverNewest()
+            val newest = recoveryJournal.recoverNewestSession()
             if (committedDraft != null && newest != null &&
-                newest.updatedAtEpochMillis <= committedDraft.updatedAtEpochMillis
+                newest.document.updatedAtEpochMillis <= committedDraft.updatedAtEpochMillis
             ) {
                 null
             } else {
@@ -164,6 +169,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             }
         }
     }.getOrNull()
+    val recoveredDraft = recoveredSession?.document
     var project by remember {
         mutableStateOf(recoveredDraft ?: committedDraft ?: ProjectDocument.starter())
     }
@@ -173,15 +179,44 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var mediaVerificationInProgress by remember { mutableStateOf(false) }
     var referencedOfflineAssetIds by remember(offlineAssetReferences) { mutableStateOf(offlineAssetReferences.referencedAssetIds()) }
     var selectedLayerId by remember {
-        mutableStateOf(project.layers.firstOrNull()?.id.orEmpty())
+        mutableStateOf(
+            recoveredSession?.state?.selectedLayerId
+                ?.takeIf { id -> project.layers.any { it.id == id } }
+                ?: project.layers.firstOrNull()?.id.orEmpty()
+        )
     }
-    var playheadFrame by remember { mutableIntStateOf(0) }
+    var playheadFrame by remember { mutableIntStateOf(recoveredSession?.state?.playheadFrame ?: 0) }
     var isPlaying by remember { mutableStateOf(false) }
     var saveMessage by remember {
         mutableStateOf(if (recoveredDraft != null) "Recovered unsaved changes" else "Stored on this device")
     }
-    var undoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
-    var redoStack by remember { mutableStateOf(emptyList<EditorHistorySnapshot>()) }
+    var undoStack by remember {
+        mutableStateOf(
+            recoveredSession?.state?.undoStack?.map {
+                EditorHistorySnapshot(it.document, it.selectedLayerId, it.playheadFrame)
+            } ?: emptyList()
+        )
+    }
+    var redoStack by remember {
+        mutableStateOf(
+            recoveredSession?.state?.redoStack?.map {
+                EditorHistorySnapshot(it.document, it.selectedLayerId, it.playheadFrame)
+            } ?: emptyList()
+        )
+    }
+    // Crash-safe restore of the canonical session: the canonical stacks and
+    // selection are declared before recovery runs, so they are applied once
+    // from the recovered session instead of initialised from it. This runs
+    // before any user interaction; later imports and project switches reset
+    // them through their own paths, as before.
+    val recoveredCanonicalState = recoveredSession?.state
+    LaunchedEffect(recoveredCanonicalState) {
+        if (recoveredCanonicalState != null) {
+            canonicalSelectedIds = recoveredCanonicalState.canonicalSelectedIds
+            canonicalUndoStack = recoveredCanonicalState.canonicalUndoStack
+            canonicalRedoStack = recoveredCanonicalState.canonicalRedoStack
+        }
+    }
     var projectKeyframeTracks by remember { mutableStateOf(projectKeyframeStore.load(project.id)) }
 
     // One place decides whether a payload is still referenced: every project
@@ -757,13 +792,34 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
 
     // Autosave journal: every working-project change is journaled off the UI
     // thread before the user can be interrupted by a crash, rotation, or
-    // process death. A journal failure must never break editing, so it is
+    // process death. The journal entry carries the whole session state with
+    // the document — both undo/redo stacks, the current selection and
+    // playhead, and the canonical stacks and selection — in the same atomic
+    // fsynced envelope, so a crash restores the session, not just the
+    // document. The effect keys on every piece of that state because
+    // scrubbing the playhead or picking a layer changes no document.
+    // A journal failure must never break editing, so it is
     // swallowed here; the committed draft remains the fallback. Journals for
     // abandoned projects are pruned so they can never resurrect later.
-    LaunchedEffect(project) {
+    LaunchedEffect(project, selectedLayerId, playheadFrame, undoStack, redoStack, canonicalSelectedIds, canonicalUndoStack, canonicalRedoStack) {
         runCatching {
             withContext(Dispatchers.IO) {
-                recoveryJournal.write(project)
+                recoveryJournal.write(
+                    project,
+                    EditorSessionState(
+                        undoStack = undoStack.map {
+                            EditorSessionSnapshot(it.project, it.selectedLayerId, it.playheadFrame)
+                        },
+                        redoStack = redoStack.map {
+                            EditorSessionSnapshot(it.project, it.selectedLayerId, it.playheadFrame)
+                        },
+                        selectedLayerId = selectedLayerId,
+                        playheadFrame = playheadFrame,
+                        canonicalUndoStack = canonicalUndoStack,
+                        canonicalRedoStack = canonicalRedoStack,
+                        canonicalSelectedIds = canonicalSelectedIds
+                    )
+                )
                 recoveryJournal.discardAllExcept(project.id)
             }
         }
