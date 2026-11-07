@@ -45,7 +45,7 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 - The Compose motion-path overlay synchronization correction [814dd66e](https://github.com/sunmughan/After-Effects-Android/commit/814dd66e65989137dd80d554ebf9c38b158edbf5) is verified; the prior #1122 timeout is resolved.
 - [CI #1125](https://github.com/sunmughan/After-Effects-Android/actions/runs/42399063894) on merge SHA `4ae22776` has a successful assemble/test job (61 Rust, 175 API30); its independent cold rebuild/compare remains in progress.
 - CI #1128 (M4 concurrent keyframe regression) was cancelled by subsequent source commits; no result is claimed.
-- [CI #1131](https://github.com/sunmughan/After-Effects-Android/actions/runs/42405449095) is queued on M2 shared-manifest transaction fix SHA `5392b24a`; #1130 was superseded. Its exact test/build verdict is pending.
+- [CI #1131](https://github.com/sunmughan/After-Effects-Android/actions/runs/42405449095) is running on M2 shared-manifest transaction fix SHA `5392b24a`; #1130 was superseded. Its exact test/build verdict is pending.
 
 ## Format and release limitations
 
