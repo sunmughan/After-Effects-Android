@@ -48,6 +48,18 @@ data class RenderQueuePlan private constructor(
         return (completedFrames.toLong() * 100L / frameCount).toInt()
     }
 
+    /** Covered frames of [project] inside this plan's range, in order. */
+    fun coveredFrames(project: ProjectDocument): List<Int> =
+        ClipRenderCoverage.coveredFrames(project, settings.startFrame, settings.endFrame)
+
+    /** Gap frames of [project] inside this plan's range, in order. */
+    fun gapFrames(project: ProjectDocument): List<Int> =
+        ClipRenderCoverage.gapFrames(project, settings.startFrame, settings.endFrame)
+
+    /** Merged coverage ranges of [project] inside this plan's range. */
+    fun coveredRanges(project: ProjectDocument): List<IntRange> =
+        ClipRenderCoverage.coveredRanges(project, settings.startFrame, settings.endFrame)
+
     companion object {
         const val MIN_DIMENSION = 1
         const val MAX_DIMENSION = 4096
@@ -66,6 +78,19 @@ data class RenderQueuePlan private constructor(
                 "End frame must be below composition frame count ($compositionFrameCount)"
             }
             return create(settings)
+        }
+
+        /**
+         * Clip-aware plan: the project clips are validated first (an
+         * overlapping or out-of-bounds clip is rejected here instead of
+         * rendering wrong), then the range is validated against the
+         * project's own duration. Gap frames inside the range render as
+         * the background frame; see [ClipRenderCoverage].
+         */
+        fun createForClips(settings: RenderQueueSettings, project: ProjectDocument): RenderQueuePlan {
+            val errors = project.layers.flatMap { ClipTimeline.validateClips(it.clips, project.durationFrames) }
+            require(errors.isEmpty()) { "Project clips are invalid: ${errors.joinToString("; ")}" }
+            return create(settings, project.durationFrames)
         }
 
         fun create(settings: RenderQueueSettings): RenderQueuePlan {
