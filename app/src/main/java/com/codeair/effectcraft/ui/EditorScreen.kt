@@ -3567,15 +3567,24 @@ private fun TimelinePanel(
             Text("00:${(project.durationFrames / project.frameRate).toString().padStart(2, '0')}", color = EditorPalette.muted, fontSize = 8.sp)
         }
 
-        Column(
+        // Every layer renders: the old take(4) cap hid layers 5+ with a
+        // dead "+ N more layers" line. The fade at the bottom edge shows
+        // only while more rows sit below the fold, so a cut row reads as
+        // "scroll for more" instead of "broken".
+        val trackListScrollState = rememberScrollState()
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
                 .testTag("timeline-track-list")
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(trackListScrollState),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            project.layers.take(4).forEach { layer ->
+            project.layers.forEach { layer ->
                 LayerTrack(
                     layer = layer,
                     selected = layer.id == selectedLayerId,
@@ -3587,9 +3596,6 @@ private fun TimelinePanel(
                     onSelectClip = onSelectClip,
                     onClick = { onSelectLayer(layer.id) }
                 )
-            }
-            if (project.layers.size > 4) {
-                Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
             }
             // Audio lanes: one row per audio track, clips as blocks like
             // the layer tracks. With no audio tracks nothing renders here,
@@ -3636,6 +3642,20 @@ private fun TimelinePanel(
             }
             if (canonicalColorKeys.isNotEmpty()) {
                 CanonicalColorTrack(canonicalColorKeys, canonicalColorDurationFrames, playheadFrame, onScrub)
+            }
+        }
+            if (trackListScrollState.canScrollForward) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(18.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, EditorPalette.panel)
+                            )
+                        )
+                )
             }
         }
     }
