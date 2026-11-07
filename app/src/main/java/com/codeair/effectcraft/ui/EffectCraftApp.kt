@@ -278,14 +278,21 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
                     val parsedInfo = withContext(Dispatchers.Default) { CanonicalProjectDocument.validateNativeEnvelope(native) }
                     currentCoroutineContext().ensureActive()
-                    val repositoryId = withContext(Dispatchers.IO) {
-                        ecprojStore.save(source)
-                        projectRepository.create(displayName, source, "ecproj", displayName).id.also {
-                            offlineAssetReferences.clear()
-                            if (readGranted) runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.READ, displayName) }
+                    val repositoryMetadata = withContext(Dispatchers.IO) {
+                        currentCoroutineContext().ensureActive()
+                        val created = projectRepository.create(displayName, source, "ecproj", displayName)
+                        try {
+                            currentCoroutineContext().ensureActive()
+                            ecprojStore.save(source)
+                        } catch (failure: Throwable) {
+                            runCatching { projectRepository.delete(created.id) }
+                            throw failure
                         }
+                        offlineAssetReferences.clear()
+                        if (readGranted) runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.READ, displayName) }
+                        created
                     }
-                    repositoryProjectId = repositoryId
+                    repositoryProjectId = repositoryMetadata.id
                     if (readGranted) safGrants = safRegistry.grants()
                     importedEcproj = source
                     canonicalProjectInfo = parsedInfo
@@ -300,8 +307,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 } catch (failure: Throwable) {
                     saveMessage = "Import failed · ${failure.message ?: "invalid project"}"
                 } finally {
-                    canonicalImportInProgress = false
-                    canonicalImportJob = null
+                    // A cancelled predecessor must not clear the state of a
+                    // newer import started from the picker.
+                    if (canonicalImportJob === importJob) {
+                        canonicalImportInProgress = false
+                        canonicalImportJob = null
+                    }
                 }
             }
         }

@@ -1,5 +1,10 @@
 
 
+## Automation Run 11 follow-up — import cancellation race and publication rollback (2026-11-07)
+- Hardened the new async canonical import against picker replacement races: a cancelled predecessor only clears progress/job state if it still owns the active import slot. Repository/cache publication is now ordered and transactional: create the project repository entry, re-check cancellation, save the single-project cache, and delete the newly created repository entry if cache publication fails. Offline references are cleared only after both persistence operations succeed. This prevents cancellation/failure from replacing the active project or leaving an orphan repository record.
+- Commit follows the async import UI/progress change; exact-head CI #1015/#1016 required for validation. **Release NOT COMPLETE.**
+
+
 ## Automation Run 11 follow-up — cancellable, progress-reporting canonical project import (2026-11-07)
 - CI #1014 [42324448064](https://github.com/sunmughan/After-Effects-Android/actions/runs/42324448064), job 128256421319: dual native ABI, Rust 59/59, Kotlin/APK and JVM passed; API30 164/165, one timeout in `motionPathOverlayDrawsForSpatialPositionTrack` waiting for workspace frame Image semantics after render callback. Cold rebuild skipped. Regression now awaits the spatial overlay (only composed after decoded frame) and asserts image-node existence plus displayed overlay, retaining preview functionality without a viewport-bounds false negative.
 - M2: canonical SAF import reads, JSON/XML normalization, native validation and repository persistence moved off main. Bounded UTF-8 reader reports byte progress; coroutine cancellation is checked between stream chunks and before validation/publication. Import icon becomes accessible Cancel while active. Cancellation retains previous project. JVM progress and API30 cancel-action regressions added.
