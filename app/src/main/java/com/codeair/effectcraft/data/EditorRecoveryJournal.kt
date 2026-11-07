@@ -112,9 +112,9 @@ class EditorRecoveryJournal(private val root: File) {
             // verified over the exact bytes that were written: re-serializing
             // a parsed object could reorder keys and break the check.
             put("document", documentText)
-            put("undoStack", JSONArray(undoText))
-            put("redoStack", JSONArray(redoText))
-            put("selection", JSONArray(selectionText))
+            put("undoStack", undoText)
+            put("redoStack", redoText)
+            put("selection", selectionText)
             put("playheadFrame", playheadFrame)
         }
         val target = fileFor(project.id)
@@ -252,9 +252,9 @@ class EditorRecoveryJournal(private val root: File) {
                 envelope.has("undoStack") && envelope.has("redoStack") &&
                     envelope.has("selection") && envelope.has("playheadFrame")
             ) { "Journal v2 envelope is missing history fields" }
-            val undoText = envelope.getJSONArray("undoStack").toString()
-            val redoText = envelope.getJSONArray("redoStack").toString()
-            val selectionText = envelope.getJSONArray("selection").toString()
+            val undoText = envelope.getString("undoStack")
+            val redoText = envelope.getString("redoStack")
+            val selectionText = envelope.getString("selection")
             val playheadFrame = envelope.getInt("playheadFrame")
             require(playheadFrame >= 0) { "Journal playhead frame is negative" }
             require(
@@ -262,9 +262,9 @@ class EditorRecoveryJournal(private val root: File) {
                     checksumV2(documentText, undoText, redoText, selectionText, playheadFrame)
             ) { "Journal checksum mismatch" }
             val document = decode(JSONObject(documentText))
-            val undoStack = decodeSnapshots(envelope.getJSONArray("undoStack"))
-            val redoStack = decodeSnapshots(envelope.getJSONArray("redoStack"))
-            val selectionArray = envelope.getJSONArray("selection")
+            val undoStack = decodeSnapshots(JSONArray(undoText))
+            val redoStack = decodeSnapshots(JSONArray(redoText))
+            val selectionArray = JSONArray(selectionText)
             val selection = (0 until selectionArray.length()).map { selectionArray.getLong(it) }.toSet()
             Parsed(projectId, RestoredEditorState(document, undoStack, redoStack, selection, playheadFrame))
         }

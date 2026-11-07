@@ -1,5 +1,6 @@
 package com.codeair.effectcraft.data
 
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -117,8 +118,9 @@ class EditorRecoveryJournalTest {
             val journalFile = root.listFiles()!!.single { it.name.endsWith(".journal") }
             val envelope = JSONObject(journalFile.readText(Charsets.UTF_8))
             // Rewrite an undo entry without updating the checksum.
-            val tampered = envelope.getJSONArray("undoStack")
+            val tampered = JSONArray(envelope.getString("undoStack"))
             tampered.getJSONObject(0).put("projectJson", """{"id":"tampered","layers":[]}""")
+            envelope.put("undoStack", tampered.toString())
             journalFile.writeText(envelope.toString(), Charsets.UTF_8)
 
             assertNull(EditorRecoveryJournal(root).recoverFull(committed.id, committed))
