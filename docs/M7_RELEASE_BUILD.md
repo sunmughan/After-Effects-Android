@@ -20,9 +20,10 @@
   Release notes still quote the id actually built, verified from the
   artifact, never assumed.
 - Version at the time of writing: `versionName 0.1.0`, `versionCode 1`
-  (same file). Do not bump these in a build step; a version change is a
-  separate, owner-approved commit, and the release notes must quote the
-  values actually built.
+  (same file). Version scheme: `versionCode` increments by 1 on every
+  release, `versionName` follows semver. Do not bump these in a build
+  step; a version change is a separate, owner-approved commit, and the
+  release notes must quote the values actually built.
 - Build variant: `release` — R8 minification on, resource shrinking on
   (`app/build.gradle.kts` `buildTypes.release`), ProGuard rules in
   `app/proguard-rules.pro` (JNI keeps only; see that file's comments).
@@ -31,8 +32,23 @@
   (emulator) are built in release mode from `native/` and packaged into
   one universal APK and one AAB. There is no per-ABI split in this
   pipeline and no `armeabi-v7a` or 32-bit `x86` library.
-- Offline by design: the manifest requests no `INTERNET` permission.
-  A release build does not gain network access.
+- Offline by design: the editor works with no account and no network.
+  The manifest requests `INTERNET` only for FCM token/message
+  transport, and `FirebaseInit` no-ops safely when no Firebase config
+  exists, so a build without `google-services.json` runs fully offline.
+  A release build does not gain any other network access.
+- Release without secrets (CI check): `android-ci.yml` assembles the
+  release APK and AAB with no signing secrets and verifies the APK
+  carries no signature files — a missing secret degrades to unsigned
+  (Gradle logs it loudly) instead of failing CI or silently signing
+  with the debug key. Those unsigned outputs are build-shape evidence
+  only, are not uploaded, and are never release artifacts. The signed
+  release path is §4 below, and the release workflow additionally
+  rejects any APK whose signer is the Android debug certificate.
+- Firebase: the `google-services` plugin (4.4.4) applies only when
+  `app/google-services.json` exists, so unregistered builds are
+  unaffected; registration status, fingerprints, and console steps are
+  in `docs/firebase-registration.md`.
 
 ## 2. Exact toolchain (must match, or the build is not this release)
 
@@ -118,6 +134,10 @@ Rules that are enforced by the workflow and by this document alike:
    - the "Verify release artifacts are signed and hash them" step
      passed (META-INF signature files present, plus apksigner
      verification when available on the runner, else jarsigner);
+   - the "Reject release APK signed with the debug key" step passed:
+     the signer certificate in the APK is not the Android debug
+     certificate (`CN=Android Debug`), so the build cannot be a
+     debug-key accident;
    - the "Print signing certificate fingerprints" step printed the
      SHA-1 and SHA-256 of the signer certificate actually present in
      the APK. Copy those values exactly as printed for the Firebase
