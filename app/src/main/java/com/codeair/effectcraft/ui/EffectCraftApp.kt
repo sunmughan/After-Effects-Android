@@ -23,6 +23,9 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import com.codeair.effectcraft.data.AudioStatus
+import com.codeair.effectcraft.data.AudioTimeline
+import com.codeair.effectcraft.data.AudioTimelineStore
+import com.codeair.effectcraft.data.MediaCodecAudioDecoder
 import com.codeair.effectcraft.data.CanonicalEditHistory
 import com.codeair.effectcraft.data.CanonicalEditSnapshot
 import com.codeair.effectcraft.data.CanonicalLayerSelection
@@ -102,6 +105,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
     val projectKeyframeStore = remember(context) { ProjectKeyframeStore(File(context.filesDir, "keyframes")) }
+    val audioTimelineStore = remember(context) { AudioTimelineStore(File(context.filesDir, "audio-timelines")) }
+    val audioDecoder = remember(context) { MediaCodecAudioDecoder(context) }
     val manifestStore = remember(context) { ProjectAssetManifestStore(File(context.filesDir, "asset-manifests")) }
     val projectRepository = remember(context) { CanonicalProjectRepository(File(context.filesDir, "canonical-projects-repo")) }
     val safRegistry = remember(context) { SafPermissionRegistry(File(context.filesDir, "saf-permissions.properties")) }
@@ -218,6 +223,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
     var projectKeyframeTracks by remember { mutableStateOf(projectKeyframeStore.load(project.id)) }
+    var audioTimeline by remember { mutableStateOf(audioTimelineStore.load(project.id)) }
+
+    /** Persists an edited audio timeline and updates the editor state, or reports the failure. */
+    fun updateAudioTimeline(next: AudioTimeline) {
+        runCatching { audioTimelineStore.save(project.id, next) }
+            .onSuccess { audioTimeline = next }
+            .onFailure { failure -> saveMessage = "Audio timeline save failed · ${failure.message ?: "storage error"}" }
+    }
 
     // One place decides whether a payload is still referenced: every project
     // manifest, the legacy current-project references, and the payload files
@@ -499,6 +512,39 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    val addAudioClipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) {
+            saveMessage = "Audio import cancelled"
+        } else {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            val info = audioDecoder.probe(uri.toString())
+            if (info == null || info.durationUs <= 0L) {
+                saveMessage = "Audio file has no audio track"
+            } else {
+                val composition = canonicalProjectInfo?.compositions?.firstOrNull()
+                val startUs = if (composition != null) {
+                    playheadFrame.toLong() * 1_000_000L * composition.frameRateDen.coerceAtLeast(1) /
+                        composition.frameRateNum.coerceAtLeast(1)
+                } else {
+                    playheadFrame.toLong() * 1_000_000L / project.frameRate.coerceAtLeast(1)
+                }
+                val durationUs = if (composition != null) {
+                    val compositionEndUs = composition.durationFrames.toLong() * 1_000_000L *
+                        composition.frameRateDen.coerceAtLeast(1) / composition.frameRateNum.coerceAtLeast(1)
+                    minOf(info.durationUs, (compositionEndUs - startUs).coerceAtLeast(0L))
+                } else {
+                    info.durationUs
+                }
+                if (durationUs <= 0L) {
+                    saveMessage = "Audio clip would start past the end of the composition"
+                } else {
+                    updateAudioTimeline(audioTimeline.addClip(uri.toString(), info.durationUs, startUs, durationUs = durationUs))
+                    saveMessage = "Audio clip added at ${startUs / 1_000} ms"
+                }
+            }
+        }
+    }
+
     val exportMp4Launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { uri: Uri? ->
         val settings = pendingMp4Settings
         val compositionId = pendingMp4CompositionId
@@ -555,6 +601,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             hasAudioItems = audio.hasAudioItems,
                             compositionFrameRateNum = composition.frameRateNum,
                             compositionFrameRateDen = composition.frameRateDen,
+                            audioTimeline = audioTimeline,
+                            pcmSource = audioDecoder,
                             isCancelled = { exportJob?.isActive != true },
                             onProgress = { completed, percent ->
                                 mp4ExportProgress = percent
@@ -589,7 +637,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             context = context,
                             uri = uri,
                             plan = plan,
-                            expectAudio = stagedResult.audioStatus == AudioStatus.INCLUDED
+                            expectAudio = stagedResult.audioStatus.hasAudioTrack
                         )
                     }
                     // The destination is a byte copy of the staged file, so its
@@ -601,7 +649,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     check(verified.durationUs == stagedResult.durationUs) {
                         "MP4 validation duration differs from staged export"
                     }
-                    if (stagedResult.audioStatus == AudioStatus.INCLUDED) {
+                    if (stagedResult.audioStatus.hasAudioTrack) {
                         check(verified.audioSamples == stagedResult.audioSamplesWritten) {
                             "MP4 validation AAC sample count differs from staged export"
                         }
@@ -620,7 +668,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     currentCoroutineContext().ensureActive()
                     outputCompleted = true
                     mp4ExportProgress = 100
-                    val audioTiming = if (stagedResult.audioStatus == AudioStatus.INCLUDED &&
+                    val audioTiming = if (stagedResult.audioStatus.hasAudioTrack &&
                         stagedResult.audioFirstPtsUs != null && stagedResult.audioLastPtsUs != null) {
                         " · AAC PTS ${stagedResult.audioFirstPtsUs / 1_000}–${stagedResult.audioLastPtsUs / 1_000} ms"
                     } else ""
@@ -788,6 +836,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     LaunchedEffect(project.id) {
         projectKeyframeTracks = runCatching { projectKeyframeStore.load(project.id) }
             .getOrElse { failure -> saveMessage = "Keyframe load failed · ${failure.message ?: "storage error"}"; emptyList() }
+        audioTimeline = runCatching { audioTimelineStore.load(project.id) }
+            .getOrElse { failure -> saveMessage = "Audio timeline load failed · ${failure.message ?: "storage error"}"; AudioTimeline.EMPTY }
     }
 
     // Autosave journal: every working-project change is journaled off the UI
@@ -1246,6 +1296,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }
             },
             canonicalProject = canonicalProjectInfo,
+            audioTimeline = audioTimeline,
+            onAddAudioClip = { addAudioClipLauncher.launch(arrayOf("audio/*")) },
+            onRemoveAudioClip = { id -> updateAudioTimeline(audioTimeline.removeClip(id)) },
+            onAudioVolumeChange = { id, volume -> updateAudioTimeline(audioTimeline.setVolume(id, volume)) },
+            onAudioClipMove = { id, startUs -> updateAudioTimeline(audioTimeline.moveClip(id, startUs)) },
+            onAudioClipTrim = { id, sourceStartUs, durationUs -> updateAudioTimeline(audioTimeline.trimClip(id, sourceStartUs, durationUs)) },
             canEditCanonicalProject = NativeProjectBridge.isAvailable(),
             onRenameCanonicalLayer = { compositionId, layerId, name ->
                 val source = importedEcproj
