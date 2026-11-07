@@ -248,4 +248,33 @@ class OfflineAssetStoreTest {
             root.deleteRecursively()
         }
     }
+    
+    @Test
+    fun catalogCorruptionFailsClosedBeforeGarbageCollectionDeletesPayloads() {
+        val root = Files.createTempDirectory("effectcraft-assets-corrupt-catalog").toFile()
+        try {
+            val store = OfflineAssetStore(root)
+            val asset = store.import(ByteArrayInputStream(byteArrayOf(9, 8, 7)), "live.bin")
+            val payload = File(root, "${asset.sha256}.${asset.extension}")
+            assertTrue(payload.isFile)
+
+            val index = File(root, "assets.properties")
+            val properties = java.util.Properties().apply {
+                index.inputStream().use(::load)
+            }
+            properties.setProperty("not-a-sha256", properties.getProperty(asset.sha256))
+            index.outputStream().use { properties.store(it, "corruption injection") }
+
+            assertTrue("Catalog corruption must not be silently omitted by list()", runCatching {
+                store.list()
+            }.isFailure)
+            assertTrue("GC must abort before deleting any payload when the index is corrupt", runCatching {
+                store.collectGarbage(emptySet())
+            }.isFailure)
+            assertTrue("The indexed payload must survive fail-closed GC", payload.isFile)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
 }
