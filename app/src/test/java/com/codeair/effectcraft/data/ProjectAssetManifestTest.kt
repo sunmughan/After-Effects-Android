@@ -171,7 +171,7 @@ class ProjectAssetManifestTest {
             allowFailure.countDown()
             val batchFailure = batch.get(5, java.util.concurrent.TimeUnit.SECONDS)
             assertTrue(
-                "Injected batch failure must be surfaced as IOException; actual=${batchFailure?.javaClass?.name ?: \"null\"}: ${batchFailure?.message}",
+                "Injected batch failure must be surfaced as IOException; actual=${batchFailure?.javaClass?.name}: ${batchFailure?.message}",
                 batchFailure is java.io.IOException
             )
             save.get(5, java.util.concurrent.TimeUnit.SECONDS)
