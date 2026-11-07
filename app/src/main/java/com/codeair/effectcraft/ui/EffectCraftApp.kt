@@ -78,6 +78,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
     val exportScope = rememberCoroutineScope()
     var frameExportJob by remember { mutableStateOf<Job?>(null) }
+    var canonicalImportJob by remember { mutableStateOf<Job?>(null) }
+    var canonicalImportInProgress by remember { mutableStateOf(false) }
+    var canonicalImportBytes by remember { mutableStateOf(0L) }
     var frameExportInProgress by remember { mutableStateOf(false) }
     var pendingFrameExport by remember { mutableIntStateOf(0) }
     var sequenceExportJob by remember { mutableStateOf<Job?>(null) }
@@ -243,36 +246,64 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
 
     val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            runCatching {
-                val readGranted = runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }.isSuccess
-                val displayName = context.contentResolver.query(
-                    uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-                )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-                    ?: uri.lastPathSegment?.substringAfterLast('/') ?: "selected document"
-                ProjectFileFormats.importError(displayName)?.let(::error)
-                val source = context.contentResolver.openInputStream(uri)?.use {
-                    CanonicalProjectDocument.toCanonicalJson(CanonicalProjectDocument.readUtf8(it))
-                } ?: error("Unable to read selected document")
-                val native = NativeProjectBridge.inspectEcproj(source)
-                    ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
-                val parsedInfo = CanonicalProjectDocument.validateNativeEnvelope(native)
-                val status = "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
-                ecprojStore.save(source)
-                repositoryProjectId = projectRepository.create(displayName, source, "ecproj", displayName).id
-                offlineAssetReferences.clear()
-                if (readGranted) {
-                    runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.READ, displayName) }
-                    safGrants = safRegistry.grants()
+        if (uri == null) saveMessage = "Project import cancelled" else {
+            canonicalImportJob?.cancel()
+            canonicalImportInProgress = true
+            canonicalImportBytes = 0L
+            saveMessage = "Importing canonical project…"
+            canonicalImportJob = exportScope.launch {
+                val importJob = currentCoroutineContext()[Job]
+                try {
+                    val readGranted = runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }.isSuccess
+                    val displayName = withContext(Dispatchers.IO) {
+                        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                            ?: uri.lastPathSegment?.substringAfterLast('/') ?: "selected document"
+                    }
+                    ProjectFileFormats.importError(displayName)?.let(::error)
+                    val rawDocument = withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            CanonicalProjectDocument.readUtf8(input, onProgress = { bytes ->
+                                if (importJob?.isActive != true) throw CancellationException("Project import cancelled")
+                                if (bytes - canonicalImportBytes >= 256 * 1024) {
+                                    canonicalImportBytes = bytes
+                                    saveMessage = "Importing project · $bytes bytes"
+                                }
+                            })
+                        } ?: error("Unable to read selected document")
+                    }
+                    currentCoroutineContext().ensureActive()
+                    val source = withContext(Dispatchers.Default) { CanonicalProjectDocument.toCanonicalJson(rawDocument) }
+                    val native = withContext(Dispatchers.Default) { NativeProjectBridge.inspectEcproj(source) }
+                        ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
+                    val parsedInfo = withContext(Dispatchers.Default) { CanonicalProjectDocument.validateNativeEnvelope(native) }
+                    currentCoroutineContext().ensureActive()
+                    val repositoryId = withContext(Dispatchers.IO) {
+                        ecprojStore.save(source)
+                        projectRepository.create(displayName, source, "ecproj", displayName).id.also {
+                            offlineAssetReferences.clear()
+                            if (readGranted) runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.READ, displayName) }
+                        }
+                    }
+                    repositoryProjectId = repositoryId
+                    if (readGranted) safGrants = safRegistry.grants()
+                    importedEcproj = source
+                    canonicalProjectInfo = parsedInfo
+                    canonicalSelectedIds = parsedInfo.compositions.firstOrNull()?.layers?.firstOrNull()?.let { setOf(it.id) } ?: emptySet()
+                    canonicalUndoStack = emptyList()
+                    canonicalRedoStack = emptyList()
+                    refreshReferences()
+                    canonicalImportBytes = rawDocument.toByteArray(Charsets.UTF_8).size.toLong()
+                    saveMessage = "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
+                } catch (cancelled: CancellationException) {
+                    saveMessage = "Project import cancelled"
+                } catch (failure: Throwable) {
+                    saveMessage = "Import failed · ${failure.message ?: "invalid project"}"
+                } finally {
+                    canonicalImportInProgress = false
+                    canonicalImportJob = null
                 }
-                importedEcproj = source
-                canonicalProjectInfo = parsedInfo
-                canonicalSelectedIds = parsedInfo.compositions.firstOrNull()?.layers?.firstOrNull()?.let { setOf(it.id) } ?: emptySet()
-                canonicalUndoStack = emptyList()
-                canonicalRedoStack = emptyList()
-                refreshReferences()
-                saveMessage = status
-            }.onFailure { error -> saveMessage = "Import failed · ${error.message ?: "invalid project"}" }
+            }
         }
     }
     val exportEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
@@ -976,6 +1007,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     .onFailure { saveMessage = "Media removal failed · ${it.message ?: "storage error"}" }
             },
             onValidateEcproj = { validateEcprojLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
+            isImportingCanonicalProject = canonicalImportInProgress,
+            onCancelCanonicalImport = { canonicalImportJob?.cancel() },
             onExportEcproj = {
                 if (importedEcproj == null) saveMessage = "Import a canonical .ecproj first"
                 else exportEcprojLauncher.launch("EffectCraft.ecproj")

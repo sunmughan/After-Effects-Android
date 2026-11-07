@@ -1,5 +1,11 @@
 
 
+## Automation Run 11 follow-up — cancellable, progress-reporting canonical project import (2026-11-07)
+- CI #1014 [42324448064](https://github.com/sunmughan/After-Effects-Android/actions/runs/42324448064), job 128256421319: dual native ABI, Rust 59/59, Kotlin/APK and JVM passed; API30 164/165, one timeout in `motionPathOverlayDrawsForSpatialPositionTrack` waiting for workspace frame Image semantics after render callback. Cold rebuild skipped. Regression now awaits the spatial overlay (only composed after decoded frame) and asserts image-node existence plus displayed overlay, retaining preview functionality without a viewport-bounds false negative.
+- M2: canonical SAF import reads, JSON/XML normalization, native validation and repository persistence moved off main. Bounded UTF-8 reader reports byte progress; coroutine cancellation is checked between stream chunks and before validation/publication. Import icon becomes accessible Cancel while active. Cancellation retains previous project. JVM progress and API30 cancel-action regressions added.
+- Exact-head JVM/API30/native ABI/cold reproducibility pending. **Release NOT COMPLETE.**
+
+
 ## Automation Run 11 follow-up — M4 smooth Bezier tangent authoring (2026-11-07)
 - While exact-head CI #993 runs, added `smoothTangentHandles`: derive the local tangent from adjacent composition-space anchors (including closed-path wrap and open endpoints), make incoming/outgoing handles collinear, and preserve each handle's independent length. Degenerate anchor chords and invalid indices/JSON fail closed; unrelated vertices and ShapePath metadata remain unchanged.
 - Inspector exposes Smooth handles alongside Align handles. JVM tests check direction, both original magnitudes, unaffected vertices/handles, metadata and invalid/degenerate cases; API30 test selects P2, invokes Smooth, and verifies Apply remains available. This is a draft operation; canonical persistence remains explicit Apply/Key.

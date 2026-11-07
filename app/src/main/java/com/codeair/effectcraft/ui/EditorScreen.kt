@@ -202,6 +202,8 @@ fun EditorScreen(
     onOpenProject: (String) -> Unit,
     onDeleteOfflineAsset: (String) -> Unit,
     onValidateEcproj: () -> Unit,
+    isImportingCanonicalProject: Boolean,
+    onCancelCanonicalImport: () -> Unit,
     onExportEcproj: () -> Unit,
     onExportEcprojx: () -> Unit,
     isExportingFrame: Boolean,
@@ -381,6 +383,8 @@ fun EditorScreen(
                 onOpenProject = { showProjectPicker = true },
                 onOpenMediaLibrary = { showMediaLibrary = true },
                 onValidateEcproj = onValidateEcproj,
+                isImportingCanonicalProject = isImportingCanonicalProject,
+                onCancelCanonicalImport = onCancelCanonicalImport,
                 onExportEcproj = onExportEcproj,
                 onExportEcprojx = onExportEcprojx,
                 isExportingFrame = isExportingFrame,
@@ -900,6 +904,8 @@ private fun HeaderBar(
     onOpenProject: () -> Unit,
     onOpenMediaLibrary: () -> Unit,
     onValidateEcproj: () -> Unit,
+    isImportingCanonicalProject: Boolean,
+    onCancelCanonicalImport: () -> Unit,
     onExportEcproj: () -> Unit,
     onExportEcprojx: () -> Unit,
     isExportingFrame: Boolean,
@@ -981,8 +987,10 @@ private fun HeaderBar(
                     IconButton(onClick = onOpenMediaLibrary, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = "Offline media library", tint = EditorPalette.violet)
                     }
-                    IconButton(onClick = onValidateEcproj, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text)
+                    IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj, modifier = Modifier.size(32.dp)) {
+                        Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.FolderOpen,
+                            contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
+                            tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
                     }
                     IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
@@ -1053,7 +1061,11 @@ private fun HeaderBar(
                         color = EditorPalette.mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
                 IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Offline media library", tint = EditorPalette.violet) }
-                IconButton(onClick = onValidateEcproj) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Validate .ecproj", tint = EditorPalette.text) }
+                IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj) {
+                    Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.FolderOpen,
+                        contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
+                        tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
+                }
                 IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
                     Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
                 }

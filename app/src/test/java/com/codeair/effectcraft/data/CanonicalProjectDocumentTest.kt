@@ -24,6 +24,20 @@ class CanonicalProjectDocumentTest {
     }
 
     @Test
+    fun reportsMonotonicReadProgressAndFinalByteCount() {
+        val source = """{"project":"EffectCraft"}"""
+        val progress = mutableListOf<Long>()
+        val result = CanonicalProjectDocument.readUtf8(
+            ByteArrayInputStream(source.toByteArray(Charsets.UTF_8)),
+            onProgress = progress::add
+        )
+        assertEquals(source, result)
+        assertTrue(progress.isNotEmpty())
+        assertEquals(source.toByteArray(Charsets.UTF_8).size.toLong(), progress.last())
+        assertTrue(progress.zipWithNext().all { (before, after) -> after > before })
+    }
+
+    @Test
     fun rejectsDocumentBeyondImportLimit() {
         val input = ByteArrayInputStream(ByteArray(9) { 0x61 })
         val error = runCatching { CanonicalProjectDocument.readUtf8(input, maxBytes = 8) }.exceptionOrNull()

@@ -23,7 +23,7 @@ object CanonicalProjectDocument {
     const val MAX_IMPORT_BYTES = 64 * 1024 * 1024
     private const val XML_ROOT = "EffectCraftProject"
 
-    fun readUtf8(input: InputStream, maxBytes: Int = MAX_IMPORT_BYTES): String {
+    fun readUtf8(input: InputStream, maxBytes: Int = MAX_IMPORT_BYTES, onProgress: (Long) -> Unit = {}): String {
         require(maxBytes > 0) { "Import byte limit must be positive" }
         val output = ByteArrayOutputStream(minOf(maxBytes, 8192))
         val buffer = ByteArray(8192)
@@ -34,6 +34,7 @@ object CanonicalProjectDocument {
                 "Project document exceeds the $maxBytes-byte import limit"
             }
             output.write(buffer, 0, count)
+            onProgress(output.size().toLong())
         }
         return output.toString(Charsets.UTF_8.name())
     }

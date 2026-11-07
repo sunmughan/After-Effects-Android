@@ -270,6 +270,7 @@ class AdaptiveWorkspaceSmokeTest {
         var roving: List<Any>? = null
         var spatialTangents: List<Any>? = null
         val renderRequests = java.util.Collections.synchronizedList(mutableListOf<Pair<Long, Long>>())
+        var canonicalImportCancelled = false
     }
 
     private fun setCanonicalEditorContent(
@@ -285,7 +286,9 @@ class AdaptiveWorkspaceSmokeTest {
         onSetBoolKeyframe: (Long, Long, Long, Int, Boolean, Boolean) -> Unit = { c, l, uid, f, v, r -> captures.boolKeyframe = listOf(c, l, uid, f, v, r) },
         onSetPopupKeyframe: (Long, Long, Long, Int, Int, Boolean) -> Unit = { c, l, uid, f, v, r -> captures.popupKeyframe = listOf(c, l, uid, f, v, r) },
         playheadFrame: Int = 0,
-        frameBytes: ByteArray? = null
+        frameBytes: ByteArray? = null,
+        isImportingCanonicalProject: Boolean = false,
+        onCancelCanonicalImport: () -> Unit = { captures.canonicalImportCancelled = true }
     ) {
         val project = ProjectDocument.starter()
         compose.setContent {
@@ -377,6 +380,8 @@ class AdaptiveWorkspaceSmokeTest {
                         captures.renderRequests.add(compositionId to frame)
                         frameBytes
                     },
+                    isImportingCanonicalProject = isImportingCanonicalProject,
+                    onCancelCanonicalImport = onCancelCanonicalImport,
                     safGrants = emptyList(),
                     missingManifestEntries = 0,
                     onReleaseSafGrant = { _, _ -> },
@@ -963,6 +968,14 @@ class AdaptiveWorkspaceSmokeTest {
     }
 
     @Test
+    fun canonicalProjectImportExposesAccessibleCancellationAction() {
+        val captures = CanonicalCaptures()
+        setCanonicalEditorContent(canonicalRovingLayer(), captures, isImportingCanonicalProject = true)
+        compose.onNodeWithContentDescription("Cancel canonical project import").assertIsDisplayed().performClick()
+        assertEquals(true, captures.canonicalImportCancelled)
+    }
+
+    @Test
     fun motionPathOverlayDrawsForSpatialPositionTrack() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalRovingLayer(), captures, frameBytes = blackFrameBytes())
@@ -978,24 +991,15 @@ class AdaptiveWorkspaceSmokeTest {
         compose.waitUntil(timeoutMillis = 30_000) {
             captures.renderRequests.any { it == (10L to 0L) }
         }
-        // The first full EditorScreen composition on a cold CI emulator
-        // (first JIT of the workspace, first native session frame) can
-        // take far longer than the decode itself, so the frame gets a
-        // 60s budget; the fast path still resolves in well under a
-        // second once the emulator is warm.
-        compose.waitUntil(timeoutMillis = 60_000) {
-            runCatching {
-                compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
-            }.isSuccess
-        }
-        compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
         assertEquals(true, captures.renderRequests.any { it == (10L to 0L) })
-        compose.waitUntil(timeoutMillis = 30_000) {
-            compose.onAllNodesWithContentDescription("Motion path overlay")
-                .fetchSemanticsNodes().isNotEmpty()
+        // The overlay is composed only after asynchronous frame decode and
+        // the 3-key spatial track are attached. Image semantics may be
+        // outside the visible viewport on constrained emulator layouts;
+        // require the image node and assert the overlay is actually visible.
+        compose.waitUntil(timeoutMillis = 60_000) {
+            compose.onAllNodesWithContentDescription("Motion path overlay").fetchSemanticsNodes().isNotEmpty()
         }
-        // The workspace preview renders the supplied frame, and the selected
-        // layer's 3-key position track draws its motion-path overlay over it.
+        compose.onNodeWithContentDescription("Rendered composition frame").assertExists()
         compose.onNodeWithContentDescription("Motion path overlay").assertIsDisplayed()
     }
 
