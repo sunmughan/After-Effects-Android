@@ -239,8 +239,10 @@ class ProjectAssetManifestStore(
     private val root: File,
     private val replaceFile: (source: File, target: File) -> Unit = ::atomicReplaceManifest
 ) {
-    @Synchronized
-    fun load(projectId: String): ProjectAssetManifest {
+    // Instance monitors cannot coordinate a save with a rollback-capable batch
+    // in another store instance. Serialize all operations sharing this root.
+    private val lock = locks.computeIfAbsent(root.absoluteFile.toPath().normalize().toString()) { Any() }
+    fun load(projectId: String): ProjectAssetManifest = synchronized(lock) {
         val id = ProjectAssetManifest.validateProjectId(projectId)
         val file = fileFor(id)
         if (!file.isFile) return ProjectAssetManifest(id)
@@ -279,8 +281,7 @@ class ProjectAssetManifestStore(
         }
     }
 
-    @Synchronized
-    fun delete(projectId: String): Boolean {
+    fun delete(projectId: String): Boolean = synchronized(lock) {
         val file = fileFor(ProjectAssetManifest.validateProjectId(projectId))
         if (!file.exists()) return false
         if (!file.delete()) throw IOException("Unable to remove asset manifest")
@@ -288,8 +289,7 @@ class ProjectAssetManifestStore(
     }
 
     /** Project ids with a readable manifest on disk; corrupt files are skipped, not fatal. */
-    @Synchronized
-    fun projectIds(): List<String> {
+    fun projectIds(): List<String> = synchronized(lock) {
         if (!root.isDirectory) return emptyList()
         return root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
             .mapNotNull { file -> runCatching { ProjectAssetManifest.fromJson(file.readText(Charsets.UTF_8)).projectId }.getOrNull() }
@@ -303,9 +303,8 @@ class ProjectAssetManifestStore(
      * or misnamed manifest must never be silently omitted, because doing so
      * could make a still-referenced asset appear unreferenced and delete it.
      */
-    @Synchronized
     @Throws(IOException::class)
-    fun allReferencedHashes(): Set<String> {
+    fun allReferencedHashes(): Set<String> = synchronized(lock) {
         if (!root.isDirectory) return emptySet()
         val files = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }
             ?: throw IOException("Unable to enumerate project asset manifests")
@@ -338,9 +337,8 @@ class ProjectAssetManifestStore(
      * order; a failed rollback is attached as a suppressed exception rather
      * than being hidden.
      */
-    @Synchronized
     @Throws(IOException::class)
-    fun replaceAssetEverywhere(oldHash: String, newHash: String): Int {
+    fun replaceAssetEverywhere(oldHash: String, newHash: String): Int = synchronized(lock) {
         val old = ProjectAssetManifest.validateHash(oldHash)
         val fresh = ProjectAssetManifest.validateHash(newHash)
         require(old != fresh) { "Replacement asset must differ from the original asset" }
@@ -411,6 +409,10 @@ class ProjectAssetManifestStore(
     }
 
     private fun fileFor(projectId: String): File = File(root, "${projectId.sha256()}.json")
+
+    companion object {
+        private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+    }
 
     private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
         .digest(toByteArray(Charsets.UTF_8))

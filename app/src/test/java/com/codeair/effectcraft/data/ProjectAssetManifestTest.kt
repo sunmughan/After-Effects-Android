@@ -120,6 +120,65 @@ class ProjectAssetManifestTest {
     }
 
     @Test
+    fun replaceBatchAndIndependentSaveSerializeAcrossStoreInstances() {
+        val root = Files.createTempDirectory("effectcraft-manifest-cross-instance").toFile()
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val initial = ProjectAssetManifestStore(root)
+            initial.load("project-a").also { it.link(1, firstHash) }.let(initial::save)
+            initial.load("project-b").also { it.link(2, firstHash) }.let(initial::save)
+            val targets = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }!!
+                .sortedBy { it.name }
+            val firstProject = ProjectAssetManifest.fromJson(targets.first().readText(Charsets.UTF_8)).projectId
+            val failTarget = targets.last().name
+
+            val publishReached = java.util.concurrent.CountDownLatch(1)
+            val allowFailure = java.util.concurrent.CountDownLatch(1)
+            val saveStarted = java.util.concurrent.CountDownLatch(1)
+            val transactional = ProjectAssetManifestStore(root) { source, target ->
+                if (target.name == failTarget && source.name.contains(".stage-")) {
+                    publishReached.countDown()
+                    check(allowFailure.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    throw java.io.IOException("Injected batch publish failure")
+                }
+                Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+            val batch = executor.submit {
+                runCatching { transactional.replaceAssetEverywhere(firstHash, secondHash) }
+                    .exceptionOrNull()
+            }
+            assertTrue("Batch must reach the injected second publish", publishReached.await(5, java.util.concurrent.TimeUnit.SECONDS))
+
+            val independent = ProjectAssetManifestStore(root)
+            val save = executor.submit {
+                saveStarted.countDown()
+                independent.load(firstProject).also { it.link(1, thirdHash) }.let(independent::save)
+            }
+            assertTrue(saveStarted.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            try {
+                save.get(250, java.util.concurrent.TimeUnit.MILLISECONDS)
+                throw AssertionError("Independent save must wait while the shared-root batch is publishing/rolling back")
+            } catch (_: java.util.concurrent.TimeoutException) {
+                // Expected: the batch owns the root-wide transaction lock.
+            }
+
+            allowFailure.countDown()
+            assertTrue("Injected batch failure must be surfaced", batch.get(5, java.util.concurrent.TimeUnit.SECONDS) is java.io.IOException)
+            save.get(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertEquals(
+                "The independent save must run after rollback, not be overwritten by its backup",
+                thirdHash,
+                ProjectAssetManifestStore(root).load(firstProject).entryFor(1)?.sha256
+            )
+            assertEquals("Unaffected project rollback must restore its original asset", firstHash,
+                ProjectAssetManifestStore(root).load(if (firstProject == "project-a") "project-b" else "project-a").entries().single().sha256)
+        } finally {
+            executor.shutdownNow()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun replaceAssetEverywhereFailsBeforeWritesWhenAnyManifestIsCorrupt() {
         val root = Files.createTempDirectory("effectcraft-manifest-replace-safe").toFile()
         try {
