@@ -2,8 +2,8 @@
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1)  
-Last checked: 2026-11-08 00:10 IST  
-Latest implementation commits: keyframe store `542c1785`, regression `faf1d30c`; latest tracker sync `635e08ed`, README sync `d1a9ba29`. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
+Last checked: 2026-11-08 00:44 IST  
+Latest implementation commits: keyframe store `542c1785`, regression `faf1d30c`; M2 manifest root-lock implementation/test `a5cfbe18`, shared-lock correction `bd3861f3`, Unit-contract correction `5392b24a`; tracker/README will be synchronized after this code checkpoint. PR #1 merged at `4ae22776`; post-merge work remains on the feature branch.
 
 > This file is the durable acceptance ledger, not a chronological automation transcript. Keep one concise entry per phase and link implementation/test commits. Do not append repeated run summaries; update this ledger in place.
 
@@ -11,7 +11,8 @@ Latest implementation commits: keyframe store `542c1785`, regression `faf1d30c`;
 
 - **CI #1124 — PASS**: [run 42394930220](https://github.com/sunmughan/After-Effects-Android/actions/runs/42394930220), exact source SHA `814dd66e`. Assemble/test job and independent cold debug-APK rebuild/compare both succeeded. Rust bridge **61/61**, Kotlin/JVM suite passed, unsigned APK+AAB and no-debug-signing checks passed, Android API 30 instrumentation **175/175** (11 test classes; 0 skipped/failed). This verifies the workspace motion-path synchronization correction.
 - **CI #1125 (workflow_dispatch on merge commit `4ae22776`)**: Assemble/test job passed, including Rust **61/61** and API30 **175/175**; independent cold APK comparison remains in progress at last check. Do not treat the whole run as green until its second job concludes.
-- **M4 implementation**: cross-instance keyframe-store locking and narrow atomic-move fallback [`542c1785`](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d); concurrent independent-store regression [`faf1d30c`](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5), 6 writers × 20 keyframes. **CI #1128** [run 42402625642](https://github.com/sunmughan/After-Effects-Android/actions/runs/42402625642) was queued at last observation; its exact test verdict is pending.
+- **M4 implementation**: cross-instance keyframe-store locking and narrow atomic-move fallback [`542c1785`](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d); concurrent independent-store regression [`faf1d30c`](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5), 6 writers × 20 keyframes. CI #1128 was cancelled when the next source commit arrived; no result is claimed.
+- **M2 manifest transaction concurrency**: initial root-lock implementation [`a5cfbe18`](https://github.com/sunmughan/After-Effects-Android/commit/a5cfbe18e4e18c6782372cdc3f13bb7813b79200), shared-lock implementation [`bd3861f3`](https://github.com/sunmughan/After-Effects-Android/commit/bd3861f3607710e6db1d6a0886d205eef08d1793), Unit-contract correction [`5392b24a`](https://github.com/sunmughan/After-Effects-Android/commit/5392b24ad6d113fa9dbd5afa91b41c0bee85f8b6), and deterministic rollback-vs-independent-save regression (included in `a5cfbe18`). Exact CI #1131 [run 42405449095](https://github.com/sunmughan/After-Effects-Android/actions/runs/42405449095) is queued on `5392b24a`; #1130 was superseded. No test result is claimed.
 - Local Gradle/JDK/Android SDK execution is unavailable in this runtime; GitHub Actions is the build/test gate. No hardware/device acceptance is inferred from emulator CI.
 - **PR #1** was merged into `main` at [`4ae22776`](https://github.com/sunmughan/After-Effects-Android/commit/4ae22776dae28757ac56ba526b14af0f8e84a00d) on 2026-11-07. Subsequent roadmap fixes are being committed to `feat/android-app-foundation`; PR #1 cannot be kept Draft/open after merge. No new PR is claimed.
 
@@ -45,6 +46,7 @@ Evidence/commits:
 - Offline SHA-256 media store, references, relink/GC safeguards and fail-closed corruption handling.
 - Cross-instance project-cache serialization: [894abf61](https://github.com/sunmughan/After-Effects-Android/commit/894abf61).
 - Cross-instance offline media catalog serialization + 120-import regression: [8b79218c](https://github.com/sunmughan/After-Effects-Android/commit/8b79218c84f78830b42c106d8f0a53d815f7e925).
+- Project manifest batch replacement now shares a canonical-root process lock with independent save/load/delete/GC instances; regression injects a mid-batch publish failure and proves a waiting save runs after rollback rather than being overwritten.
 - Historical M2 parser/round-trip and migration tests; current exact-head verification remains pending.
 
 Blockers/limits: broad Effekseer `.efkproj` parser/converter and version fixtures are not integrated. Adobe `.aep` is proprietary; no licensed/available parser, so native import is not claimed. Continue with supported EffectCraft JSON/XML and explicit missing-media relinking.
@@ -60,7 +62,7 @@ Remaining: physical ARM64 GPU/Surface/device-loss and media decode parity/perfor
 ### M4 — Functional layer/effect/timeline editing
 **Status: IN PROGRESS; broad canonical editing exists, full upstream parity open.**
 
-- Keyframe editor durability now serializes independent `ProjectKeyframeStore` instances sharing a canonical directory with one process-local lock; atomic rename fallback is limited to `AtomicMoveNotSupportedException`. Implementation [542c1785](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d); regression [faf1d30c](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5): six independent writers × 20 updates, reload asserts all 120 tracks/frames. CI #1128 pending.
+- Keyframe editor durability now serializes independent `ProjectKeyframeStore` instances sharing a canonical directory with one process-local lock; atomic rename fallback is limited to `AtomicMoveNotSupportedException`. Implementation [542c1785](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d); regression [faf1d30c](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5): six independent writers × 20 updates, reload asserts all 120 tracks/frames. CI #1128 cancelled/superseded; M2 manifest transaction test is now queued in #1131.
 
 Acceptance: canonical properties and transforms update the actual project/preview; Position/Scale/Rotation/Anchor/Orientation/Rotation X/Y keys; curve/key navigation, add/move/remove, interpolation/easing; ShapePath vertices, cubic handles, close/open, insert/delete/reverse/align/smooth/corner and feather preservation; effect/property and Layer Control authoring.
 
