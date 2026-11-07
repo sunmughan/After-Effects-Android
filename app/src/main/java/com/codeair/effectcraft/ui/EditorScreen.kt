@@ -336,7 +336,6 @@ fun EditorScreen(
     onVerifyOfflineAssets: () -> Unit = {},
     isVerifyingOfflineAssets: Boolean = false
 ) {
-    val selectedTool = remember { mutableStateOf("Select") }
     var interpolationProperty by remember { mutableStateOf("position") }
     var interpolationSide by remember { mutableStateOf("both") }
     var showPhoneInspector by remember { mutableStateOf(false) }
@@ -512,12 +511,10 @@ fun EditorScreen(
             }
 
             ToolBar(
-                selectedTool = selectedTool.value,
                 canUndo = canUndo,
                 canRedo = canRedo,
                 onUndo = onUndo,
                 onRedo = onRedo,
-                onSelectTool = { selectedTool.value = it },
                 onOpenInspector = { showPhoneInspector = true },
                 onOpenCompositionSettings = { showCompositionSettings = true },
                 onAddLayer = onAddLayer
@@ -3409,12 +3406,10 @@ private fun PropertyLine(title: String, trailing: String) {
 
 @Composable
 private fun ToolBar(
-    selectedTool: String,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
-    onSelectTool: (String) -> Unit,
     onOpenInspector: () -> Unit,
     onOpenCompositionSettings: () -> Unit,
     onAddLayer: () -> Unit
@@ -3426,20 +3421,21 @@ private fun ToolBar(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Only Shape survives the tool row: it is the one tool with real
+        // behaviour behind it (onAddLayer adds a shape layer, and selects
+        // it). Select/Move/Text/Effects had no behaviour anywhere — the
+        // selection state was written and never read — so those chips are
+        // gone instead of highlighted-but-dead. The chip is an action,
+        // not a mode, so it never renders as selected.
         Row(
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            listOf("Select", "Move", "Text", "Shape", "Effects").forEach { tool ->
-                FilterChip(
-                    selected = selectedTool == tool,
-                    onClick = { onSelectTool(tool) },
-                    label = { Text(tool, fontSize = 11.sp) }
-                )
-            }
+            FilterChip(
+                selected = false,
+                onClick = onAddLayer,
+                label = { Text("Shape", fontSize = 11.sp) }
+            )
         }
 
         TextButton(onClick = onUndo, enabled = canUndo) {
