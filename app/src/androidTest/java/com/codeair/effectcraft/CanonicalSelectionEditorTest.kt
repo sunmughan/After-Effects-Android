@@ -297,14 +297,11 @@ class CanonicalSelectionEditorTest {
         compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
         compose.onAllNodesWithText("2 layers selected", substring = true).assertCountEquals(0)
 
-        // Deleting the selected layer moves selection to its neighbor.
-        // The Remove button is the last child of a horizontally scrolling
-        // row: performScrollTo on it mis-positions the following click
-        // (same pattern as the opacity Add failure in run 42369968520 —
-        // the click silently fires no callback). Click directly; a
-        // semantics click needs no scrolling, exactly as the action-bar
-        // buttons in the same kind of row are clicked elsewhere.
-        compose.onNodeWithContentDescription("Remove canonical layer").performClick()
+        // Removal now has a dedicated full-width row rather than the clipped
+        // action scroller. Scroll it into the viewport and assert the actual
+        // control is visible/enabled before invoking the delete callback.
+        compose.onNodeWithContentDescription("Remove canonical layer")
+            .performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(1, deleteCalls)
         assertEquals(setOf(4L), selectionState.value)
         assertEquals(setOf(4L), selectionChanges.last())
