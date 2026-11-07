@@ -1074,7 +1074,7 @@ private fun HeaderBar(
                         border = BorderStroke(1.dp, Color(0xFF24453E))
                     ) {
                         Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                            color = EditorPalette.mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
+                            color = EditorPalette.mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
                     }
                     IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
@@ -1183,7 +1183,7 @@ private fun HeaderBar(
                     border = BorderStroke(1.dp, Color(0xFF24453E))
                 ) {
                     Text("OFFLINE", modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        color = EditorPalette.mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        color = EditorPalette.mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
                 IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet) }
                 IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj) {
@@ -3585,12 +3585,12 @@ private fun TimelinePanel(
                 .padding(bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("LAYER", color = EditorPalette.muted, fontSize = 8.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
-            Text("OPACITY · ${selectedOpacityKeyframes.size} KEYS", color = EditorPalette.amber, fontSize = 8.sp)
+            Text("LAYER", color = EditorPalette.muted, fontSize = 11.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
+            Text("OPACITY · ${selectedOpacityKeyframes.size} KEYS", color = EditorPalette.amber, fontSize = 11.sp)
             Spacer(Modifier.width(8.dp))
-            Text("00:00", color = EditorPalette.muted, fontSize = 8.sp)
+            Text("00:00", color = EditorPalette.muted, fontSize = 11.sp)
             Spacer(Modifier.weight(1f))
-            Text("00:${(project.durationFrames / project.frameRate).toString().padStart(2, '0')}", color = EditorPalette.muted, fontSize = 8.sp)
+            Text("00:${(project.durationFrames / project.frameRate).toString().padStart(2, '0')}", color = EditorPalette.muted, fontSize = 11.sp)
         }
 
         // Every layer renders: the old take(4) cap hid layers 5+ with a
