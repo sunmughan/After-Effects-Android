@@ -1,6 +1,7 @@
 package com.codeair.effectcraft.data
 
 import java.io.File
+import java.util.concurrent.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -8,6 +9,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class Mp4ExportWorkerTest {
+    @Test
+    fun optionalAudioFallbackReturnsValueOnSuccess() {
+        assertEquals("mixed", Mp4ExportWorker.runAudioFallback { "mixed" })
+    }
+
+    @Test
+    fun optionalAudioFallbackRecoversOrdinaryFailure() {
+        assertNull(Mp4ExportWorker.runAudioFallback<String> {
+            throw IllegalStateException("audio decoder unavailable")
+        })
+    }
+
+    @Test
+    fun optionalAudioFallbackNeverSwallowsCancellation() {
+        val cancellation = CancellationException("user cancelled export")
+        val observed = try {
+            Mp4ExportWorker.runAudioFallback<String> { throw cancellation }
+            null
+        } catch (failure: CancellationException) {
+            failure
+        }
+        assertTrue("Cancellation must propagate unchanged", observed === cancellation)
+    }
+
     private fun item(
         hasAudio: Boolean,
         missing: Boolean = false,
