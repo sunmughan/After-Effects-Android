@@ -113,8 +113,11 @@ class OfflineAssetReferencesTest {
             futures.forEach { it.get() }
 
             val reopened = OfflineAssetReferences(file)
-            assertEquals(workers * writesPerWorker, reopened.referencedAssetIds().size)
+            // referencedAssetIds() is a distinct-hash set, not a footage-item
+            // count: this workload intentionally maps 160 items onto two hashes.
             assertEquals(setOf(firstHash, secondHash), reopened.referencedAssetIds())
+            assertEquals(workers * writesPerWorker / 2, reopened.itemIdsFor(firstHash).size)
+            assertEquals(workers * writesPerWorker / 2, reopened.itemIdsFor(secondHash).size)
             repeat(workers * writesPerWorker) { offset ->
                 val itemId = offset + 1L
                 assertEquals(if ((offset % writesPerWorker) % 2 == 0) firstHash else secondHash, reopened.assetFor(itemId))
