@@ -23,7 +23,9 @@ data class EditorSessionSnapshot(
  * apply: snapshots for another project or failing document validation are
  * dropped, playheads are coerced into the recovered document's frame range,
  * a selection naming a layer that no longer exists falls back to the first
- * layer, and every stack is capped at [CanonicalEditHistory.MAX_ENTRIES].
+ * layer (an empty selection stays empty — no selection is a real state,
+ * and the UI falls back to the first layer itself when it needs one),
+ * and every stack is capped at [CanonicalEditHistory.MAX_ENTRIES].
  * Canonical snapshots carry their own canonical project JSON, which this
  * draft document cannot validate, so only blank sources are dropped there;
  * the UI prunes canonical ids against the parsed canonical layers on
@@ -54,8 +56,12 @@ data class EditorSessionState(
         return copy(
             undoStack = validSnapshots(undoStack),
             redoStack = validSnapshots(redoStack),
-            selectedLayerId = selectedLayerId
-                .takeIf { id -> document.layers.any { layer -> layer.id == id } } ?: firstLayerId,
+            selectedLayerId = if (selectedLayerId.isEmpty()) {
+                ""
+            } else {
+                selectedLayerId
+                    .takeIf { id -> document.layers.any { layer -> layer.id == id } } ?: firstLayerId
+            },
             playheadFrame = playheadFrame.coerceIn(0, maxFrame),
             canonicalUndoStack = canonicalUndoStack
                 .filter { it.projectJson.isNotBlank() }.takeLast(CanonicalEditHistory.MAX_ENTRIES),

@@ -76,6 +76,15 @@ object ProjectEditorActions {
      * in-frame. A null [outFrame] leaves the clip running to the end of the
      * composition. Unknown IDs, non-positive durations and no-op trims return
      * the list unchanged, so the caller can tell a real edit from a no-op.
+     *
+     * The trim is written to BOTH layer representations: the legacy
+     * in/out fields and, when the layer has clips, a single clip covering
+     * exactly the trimmed window (keeping the first clip's id, so a trim
+     * that changes nothing still returns the list unchanged). The two
+     * representations must never disagree — the visibility, duration and
+     * export-range accessors derive from clips when present — so a legacy
+     * trim that left stale clips behind would silently not trim at all.
+     * A layer with no clips keeps none: the legacy fields carry its trim.
      */
     fun trimLayer(
         layers: List<LayerDocument>,
@@ -87,23 +96,74 @@ object ProjectEditorActions {
         if (durationFrames <= 0 || layers.none { it.id == layerId }) return layers
         val clampedIn = inFrame.coerceIn(0, durationFrames - 1)
         val clampedOut = outFrame?.coerceIn(clampedIn, durationFrames - 1)
+        val end = (clampedOut ?: durationFrames - 1) + 1
         return layers.map { layer ->
-            if (layer.id == layerId && (layer.inFrame != clampedIn || layer.outFrame != clampedOut)) {
-                layer.copy(inFrame = clampedIn, outFrame = clampedOut)
-            } else {
+            if (layer.id != layerId) {
                 layer
+            } else {
+                val collapsed = if (layer.clips.isEmpty()) {
+                    null
+                } else {
+                    ClipDocument(
+                        id = layer.clips.first().id,
+                        startFrame = clampedIn,
+                        endFrame = end,
+                        sourceStartFrame = clampedIn,
+                        sourceEndFrame = end,
+                        sourceLengthFrames = durationFrames
+                    )
+                }
+                val clipsChanged = collapsed != null && layer.clips != listOf(collapsed)
+                if (layer.inFrame != clampedIn || layer.outFrame != clampedOut || clipsChanged) {
+                    layer.copy(
+                        inFrame = clampedIn,
+                        outFrame = clampedOut,
+                        clips = if (collapsed == null) layer.clips else listOf(collapsed)
+                    )
+                } else {
+                    layer
+                }
             }
         }
     }
 
-    /** Removes the trim on [layerId], restoring the full composition range. Unknown IDs return the list unchanged. */
+    /**
+     * Removes the trim on [layerId], restoring the full composition range.
+     * Unknown IDs return the list unchanged. Like [trimLayer], both
+     * representations are restored: the legacy fields and, when the layer
+     * has clips, a single full-range clip (the clip's own source length
+     * is the composition duration for layer clips). A layer with no clips
+     * keeps none.
+     */
     fun clearTrim(layers: List<LayerDocument>, layerId: String): List<LayerDocument> {
         if (layers.none { it.id == layerId }) return layers
         return layers.map { layer ->
-            if (layer.id == layerId && (layer.inFrame != 0 || layer.outFrame != null)) {
-                layer.copy(inFrame = 0, outFrame = null)
-            } else {
+            if (layer.id != layerId) {
                 layer
+            } else {
+                val full = if (layer.clips.isEmpty()) {
+                    null
+                } else {
+                    val duration = layer.clips.first().sourceLengthFrames
+                    ClipDocument(
+                        id = layer.clips.first().id,
+                        startFrame = 0,
+                        endFrame = duration,
+                        sourceStartFrame = 0,
+                        sourceEndFrame = duration,
+                        sourceLengthFrames = duration
+                    )
+                }
+                val clipsChanged = full != null && layer.clips != listOf(full)
+                if (layer.inFrame != 0 || layer.outFrame != null || clipsChanged) {
+                    layer.copy(
+                        inFrame = 0,
+                        outFrame = null,
+                        clips = if (full == null) layer.clips else listOf(full)
+                    )
+                } else {
+                    layer
+                }
             }
         }
     }
