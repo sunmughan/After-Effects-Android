@@ -84,3 +84,6 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 - [CI #1270](https://github.com/sunmughan/After-Effects-Android/actions/runs/42484015152) failed Kotlin compilation at SHA `9a5b2894`: the canonical inspector's extracted helper boundary had an incomplete `fontSize @Composable` statement, cascading into unresolved helper and syntax errors. Rust dual-ABI builds and native tests passed; downstream checks were skipped.
 - Fixed the statement and restored the top-level composable boundary in [3f86c5ac](https://github.com/sunmughan/After-Effects-Android/commit/3f86c5ac89eae327c49f1a7a731642a4f2b3b2c4). This fix awaits fresh PR CI; do not treat it as accepted yet.
 - Full acceptance evidence and remaining M0–M7 blockers: [PHASES.md](PHASES.md). Release is not complete.
+
+
+- **M2 XML edge case:** valid processing instructions after the EffectCraft XML root are now accepted as exporter metadata (the parser still rejects extra roots/non-whitespace trailing text). Implementation [4a8b7e63](https://github.com/sunmughan/After-Effects-Android/commit/4a8b7e63bc7fb79989252f270e0825d40271bca0), regression [1f0f38b9](https://github.com/sunmughan/After-Effects-Android/commit/1f0f38b948e711c7a467870ed093af23be0121e5). Exact-head CI #1275 pending.
