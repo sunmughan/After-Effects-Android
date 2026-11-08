@@ -1890,21 +1890,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                 }
             },
-            onMoveCanonicalLayerTransformKeyframe = { compositionId, layerId, property, fromFrame, toFrame ->
-                val source = importedEcproj
-                if (source == null) saveMessage = "Import a canonical .ecproj first"
-                else {
-                    val envelope = NativeProjectBridge.moveLayerKeyframeEcproj(source, compositionId, layerId, "transform:$property", fromFrame.toLong(), toFrame.toLong())
-                    val moved = runCatching { JSONObject(envelope ?: "").optBoolean("moved", true) }.getOrDefault(true)
-                    val valid = runCatching { JSONObject(envelope ?: "").optBoolean("valid") }.getOrDefault(false)
-                    val target = runCatching { JSONObject(envelope ?: "").optInt("targetFrame", toFrame) }.getOrDefault(toFrame)
-                    if (valid && !moved) {
-                        saveMessage = "Canonical $property keyframe already at frame $target"
-                    } else {
-                        applyCanonicalEdit(envelope, "Canonical $property keyframe moved · frame $fromFrame → $target · saved locally")
-                    }
-                }
-            },
             onRemoveCanonicalLayerOpacityKeyframe = { compositionId, layerId, frame ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
