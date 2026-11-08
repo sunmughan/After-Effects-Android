@@ -727,6 +727,7 @@ class AdaptiveWorkspaceSmokeTest {
         // The sheet and the layer list have independent scroll containers.
         // Bring the sheet header into view first, then scroll the inner list.
         compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Layers").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("● Headline", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Anchor Point · X / Y").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("3D Rotation · Orientation X / Y / Z (°)").performScrollTo().assertIsDisplayed()
