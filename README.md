@@ -165,3 +165,6 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 - **Long layer-stack regression:** Android instrumentation now creates a 53-layer canonical composition, scrolls to Layer 54, verifies it is displayed, then returns to Background and continues the selection/edit assertions ([a3db126e](https://github.com/sunmughan/After-Effects-Android/commit/a3db126e1e7d95419aea24e81970f9f60255d3cd)). This covers the single-scroll inspector fix [dfec81cb](https://github.com/sunmughan/After-Effects-Android/commit/dfec81cb18549e736d0af586c38b45995ccb4143); fresh exact-head CI is pending.
+
+
+**2026-11-09 responsive inspector fix:** CI #1355 found Add Hexagon clipped horizontally on the phone emulator because shape actions shared one non-wrapping Row. [ff31b29b](https://github.com/sunmughan/After-Effects-Android/commit/ff31b29bb5445f20253b9ef6082f637eb112d96a) changes the shape actions to a wrapping FlowRow; fresh API30 and cold APK verification is pending. M0–M7 release acceptance remains open.
