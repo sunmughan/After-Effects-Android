@@ -3,7 +3,7 @@
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
 [PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #4 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/4) (PR #2 and #3 merged).  
-Tracker updated: 2026-11-08 21:48 IST · test comment SHA 47604d3c · CI rerun pending
+Tracker updated: 2026-11-08 22:55 IST · native collision regression c09fe485 · fresh CI queued
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
 
@@ -133,3 +133,12 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 
 
 - **M4 mobile input refinement (latest source):** transform keyframe destination now opens the numeric keyboard and filters to 10 digits before integer parsing; this avoids mobile QWERTY input and overflow/invalid-character drafts. Commit [7a4e7a15](https://github.com/sunmughan/After-Effects-Android/commit/7a4e7a15f1ff3a301f5f64997c96104e2f2a0572). The instrumentation still appends 20 to initial 0 (020 → frame 20), so it covers the real numeric-field/button flow. Latest source SHA 7a4e7a15; exact-head Actions status must be rechecked after this push.
+
+
+## Engineering checkpoint — explicit transform Move fixture + native collision policy (2026-11-08 22:55 IST)
+
+- **CI #1304 failure diagnosis:** [run 42502430476](https://github.com/sunmughan/After-Effects-Android/actions/runs/42502430476), source SHA `32a1287f`, built ARM64+x86_64 JNI, Rust/JVM tests, debug APK and unsigned release APK/AAB+R8 successfully; API30 retry failed at `AdaptiveWorkspaceSmokeTest.explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame` line 642 because the Move node was **disabled**, not missing. Its test fixture supplied `transformCurves` but no `transformKeyframes`, while the action intentionally gates on an existing transform key. This is a fixture defect; no production behavior was weakened.
+- **Fixture correction:** commit [729f8409](https://github.com/sunmughan/After-Effects-Android/commit/729f840984aa0407df863c7805049e27fc578861) adds Position transform keyframes at frames 0, 15 and 30 using the same canonical fixture shape as roving tests. Exact-head PR CI [#1306](https://github.com/sunmughan/After-Effects-Android/actions/runs/42504704850) was still in hosted-runner disk cleanup when inspected; this new push supersedes it and requires fresh verification.
+- **M4 native regression added:** [c09fe485](https://github.com/sunmughan/After-Effects-Android/commit/c09fe4854a61ef39a3b4c7d14eba5cd07cffa9ce) extends `canonical_param_keyframes_bezier_and_drag`: moving frame 15 onto existing frame 0 must replace the neighbor, leave one frame-0 key with the moved scalar value 12, and preserve its Bezier interpolation. It asserts both native model and inspected serialized metadata. This tests the documented same-frame replacement contract instead of merely moving to an empty frame.
+- Latest source SHA: `c09fe485`; hosted CI is the acceptance gate (local Android SDK/Gradle unavailable). Required: native tests, both JNI ABIs, Kotlin/JVM, release R8/APK/AAB, all API30 instrumentation and independent cold APK reproducibility. Do not mark the Move UI or collision regression accepted until a fresh exact-head run passes.
+- M0–M7 phase statuses and release blockers remain unchanged. No Adobe `.aep` compatibility claim; physical GPU/media/device/install and owner-controlled signing remain open.
