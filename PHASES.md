@@ -2,8 +2,8 @@
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
-[PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #2 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/2).  
-Tracker updated: 2026-11-08 18:38 IST · code SHA `7f464d0d` · docs HEAD `772e1287`.
+[PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #4 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/4) (PR #2 and #3 merged).  
+Tracker updated: 2026-11-08 20:42 IST · code SHA `e33d56cb` · docs checkpoint pending
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
 
@@ -113,3 +113,12 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 - Updated the trailing-event allowlist to accept `XmlPullParser.PROCESSING_INSTRUCTION` while continuing to reject a second root, non-whitespace text, and all other unexpected events: [4a8b7e63](https://github.com/sunmughan/After-Effects-Android/commit/4a8b7e63bc7fb79989252f270e0825d40271bca0).
 - Added `ecprojxAcceptsProcessingInstructionAfterRoot`, parsing a real XML fixture with `<?effectcraft-export complete?>` after the root and asserting the project name survives: [1f0f38b9](https://github.com/sunmughan/After-Effects-Android/commit/1f0f38b948e711c7a467870ed093af23be0121e5).
 - Latest source/test SHA: `1f0f38b9`; exact-head PR CI [#1275](https://github.com/sunmughan/After-Effects-Android/actions/runs/42486904072) queued/pending. Do not accept until Kotlin compile + JVM test (including this regression), both JNI ABIs, R8/APK/AAB, API30 and cold APK compare pass.
+
+
+## Engineering checkpoint — keyframe move UI regression and branch recovery (2026-11-08 20:42 IST)
+
+- PR #3 merged into main (merge commit [cab5a61e](https://github.com/sunmughan/After-Effects-Android/commit/cab5a61e6a4b062240cc1769a9f37c45cde1ea53)); its feature branch was deleted. Main's post-merge source repair [ed80c34a](https://github.com/sunmughan/After-Effects-Android/commit/ed80c34aa2439831913fb56ebffea168cf045ab0) restores the missing moveTargetDraft, removes an orphaned = 11.sp) and two stray closers, and drops an obsolete callback argument that no longer exists in EditorScreen. This was checked by a tokenizer-balance script; hosted CI remains the compiler authority.
+- Recreated feat/android-app-foundation from main and opened [draft PR #4](https://github.com/sunmughan/After-Effects-Android/pull/4). PR #1 is still merged; PR #2 and #3 are historical merged continuations.
+- **M4 concrete addition:** normalized moveTargetDraft declaration/row indentation in CanonicalTransformControls [e4f476d2](https://github.com/sunmughan/After-Effects-Android/commit/e4f476d22814562ef0ed97c089d7f611e02114a6) and added explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame instrumentation [e33d56cb](https://github.com/sunmughan/After-Effects-Android/commit/e33d56cba15b538ec0f1fd39d4d605d9ec294287). It enters frame 20 in the inspector's explicit Move control and asserts the callback's composition/layer/selector/from/to values; this is separate from the already-tested curve graph accessibility action.
+- Exact PR CI [#1284](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493757859) is pending for source/test SHA e33d56cb. Required gates: Kotlin compile, Rust tests + ARM64/x86_64 JNI, JVM, unsigned release APK/AAB + R8, API30 instrumentation (including the new test), and independent cold APK byte comparison. No acceptance is claimed yet. Local Android SDK/Gradle is unavailable in this runtime.
+- **Phase status unchanged:** M0 latest-head revalidation pending; M1/M2/M3/M4/M5/M6 partial; M7 not accepted. Physical GPU/device/codec/accessibility/install and owner-controlled signing remain concrete blockers; work continues in emulator/native CI and unsigned artifacts. Adobe .aep remains proprietary and unsupported natively; no claim is made.
