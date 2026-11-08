@@ -1276,6 +1276,54 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_a
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
+fn add_shape_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id))
+        .cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape,
+        (comp.width, comp.height), None);
+    // A newly authored shape layer must contain drawable geometry and a fill,
+    // not just an empty Shape source that renders as a transparent placeholder.
+    // Use the same upstream builders exercised by the native shape renderer.
+    let mut next_id = 10_000u64;
+    let mut ids = build::Ids(&mut next_id);
+    let rectangle = build::shape_rect(&mut ids, [200.0, 100.0], [0.0, 0.0], 0.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents")
+        .ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(rectangle.into());
+    contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?
+        .layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addShapeLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let name: String = match env.get_string(&name) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) }
+        else { add_shape_layer(&source, composition_id as u64, &name) };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
 fn set_layer_visibility(source: &str, composition_id: u64, layer_id: u64, visible: bool) -> Result<String, String> {
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
