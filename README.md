@@ -76,3 +76,11 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 - Local Gradle/Android SDK execution is unavailable in this runtime; hosted Actions is the build/test gate. Emulator CI is not physical ARM64 GPU/thermal/low-memory/install evidence.
 
 Continue implementation phase-by-phase and fix failures without weakening tests. Update [PHASES.md](PHASES.md) in place. **EffectCraft release remains NOT COMPLETE.**
+
+
+## Latest engineering checkpoint (2026-11-08 19:19 IST)
+
+- PR #2 was merged at [11821cd5](https://github.com/sunmughan/After-Effects-Android/commit/11821cd57278c5a00c2d284d809604206c28903a); its head branch was deleted. The requested `feat/android-app-foundation` branch has been recreated from current `main` (`3d7445c9`) for continued work. PR #1 remains merged.
+- [CI #1270](https://github.com/sunmughan/After-Effects-Android/actions/runs/42484015152) failed Kotlin compilation at SHA `9a5b2894`: the canonical inspector's extracted helper boundary had an incomplete `fontSize @Composable` statement, cascading into unresolved helper and syntax errors. Rust dual-ABI builds and native tests passed; downstream checks were skipped.
+- Fixed the statement and restored the top-level composable boundary in [3f86c5ac](https://github.com/sunmughan/After-Effects-Android/commit/3f86c5ac89eae327c49f1a7a731642a4f2b3b2c4). This fix awaits fresh PR CI; do not treat it as accepted yet.
+- Full acceptance evidence and remaining M0–M7 blockers: [PHASES.md](PHASES.md). Release is not complete.
