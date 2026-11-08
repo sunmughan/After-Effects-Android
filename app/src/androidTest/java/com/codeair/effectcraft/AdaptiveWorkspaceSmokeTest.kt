@@ -603,6 +603,38 @@ class AdaptiveWorkspaceSmokeTest {
     }
 
     @Test
+    fun explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame() {
+        var moved: List<Any>? = null
+        val base = canonicalM4Layer(locked = false)
+        val composition = base.compositions.single()
+        val keyedLayer = composition.layers.first().copy(
+            transformCurves = mapOf(
+                "position" to listOf(
+                    CanonicalCurveKey(frame = 0, value = 100.0),
+                    CanonicalCurveKey(frame = 15, value = 320.0),
+                    CanonicalCurveKey(frame = 30, value = 500.0)
+                )
+            )
+        )
+        val canonical = base.copy(
+            compositions = listOf(composition.copy(layers = listOf(keyedLayer, composition.layers[1])))
+        )
+        setCanonicalEditorContent(
+            canonical, CanonicalCaptures(),
+            onMoveCurveKey = { c, l, selector, from, to -> moved = listOf(c, l, selector, from, to) }
+        )
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        // The field starts at the current playhead (0); appending 20 yields
+        // "020", which is parsed as frame 20 and exercises the explicit Move
+        // button rather than the graph's accessibility shortcut.
+        compose.onNodeWithContentDescription("Move key target frame")
+            .performScrollTo().performTextInput("20")
+        compose.onNodeWithContentDescription("Move position keyframe to frame 020")
+            .performScrollTo().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "transform:position", 0, 20), moved)
+    }
+
+    @Test
     fun curveGraphLongPressDeletesNearestKeyThroughCanonicalCallback() {
         var removed: List<Any>? = null
         val base = canonicalM4Layer(locked = false)
