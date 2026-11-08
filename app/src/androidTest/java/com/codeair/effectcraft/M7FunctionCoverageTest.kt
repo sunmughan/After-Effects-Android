@@ -28,6 +28,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -709,6 +710,17 @@ class M7FunctionCoverageTest {
         // not call back. Same field, same assertion — no weakening.
         compose.onNodeWithContentDescription("Export FPS").performTextClearance()
         compose.onNodeWithText("Render ZIP").performClick()
+        // Run 42441138764 (attempt 1): the validation error is set by
+        // the click's recomposition, which can land after the fetch on
+        // a loaded emulator, so performScrollTo found no node. Wait
+        // for the error to be composed first; the scroll, the
+        // displayed assertion and the exported==0 check below are
+        // unchanged and still fail (timeout) if the error never
+        // appears. The dialog flow itself is intact — this test
+        // passed the run's fresh-emulator retry unchanged.
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("Enter valid numeric settings").fetchSemanticsNodes().isNotEmpty()
+        }
         // Gate-run-727 diagnosis: the error text IS composed when the
         // FPS field is blank, but the settings dialog content scrolls
         // (height-capped column) and the error sits below the fold, so

@@ -1,6 +1,7 @@
 package com.codeair.effectcraft
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -150,6 +151,21 @@ class DraftPreviewInstrumentedTest {
             )
         }
         compose.waitForIdle()
+        // Run 42441138764: the P06 draft render runs on
+        // Dispatchers.Default inside a LaunchedEffect, which
+        // waitForIdle() does not track — on a loaded emulator the
+        // frame had not landed when the assertion ran right after
+        // idle, so the node was absent and assertIsDisplayed
+        // reported "not displayed". Wait for the real condition
+        // instead (the house pattern for async content — see
+        // EditorSmokeTest's dialog-removal wait); the assertions
+        // below are unchanged and still fail if the frame never
+        // renders. The render itself is correct: the pixel tests
+        // in this class pass, and the full-app smoke test asserting
+        // the same node passed in the same run.
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
+        }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
         compose.onNodeWithText("Draft preview not rendered").assertDoesNotExist()
         compose.onNodeWithText("Import a supported .ecproj to see the actual composition here. Draft editing remains offline.").assertDoesNotExist()
