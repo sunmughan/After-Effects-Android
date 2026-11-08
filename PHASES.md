@@ -152,3 +152,11 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 - **Current HEAD:** 09d2dad24cb5eab8dedcd6a35099010b07290376. Fresh exact-head CI has been triggered by the push; the new JSON scanner and tests are not yet accepted. Local Android Gradle/SDK is absent; hosted Actions is authority. Keep M2 partial until duplicate/round-trip/migration tests and broader interoperability pass.
 - M0 baseline exact-head gates are green at #1309, but release phase acceptance remains conditional on maintaining the toolchain/CI contract at subsequent source heads. M1–M6 partial; M7 NOT ACCEPTED. Physical device/GPU/media/codec/accessibility/install and owner-controlled signing blockers remain. Adobe .aep is proprietary; no native compatibility claim.
 
+
+
+## CI #1312 compiler failure — JSON duplicate scanner escape correction (2026-11-09 00:59 IST)
+
+- Exact run [#1312](https://github.com/sunmughan/After-Effects-Android/actions/runs/42508463104) at docs HEAD `ffae904f` failed in `:app:compileDebugKotlin` after both Rust JNI ABI builds and Rust tests passed. The debug APK, JVM tests, unsigned release APK/AAB + R8, emulator instrumentation and cold reproducibility were skipped.
+- Root cause: the M2 duplicate-JSON-member scanner introduced Kotlin character literals containing double-escaped control sequences (for example `'\\\\t'` / `'\\\\n'` and `decoded.append('\\\\b')`), which Kotlin rejects as unsupported escapes. This is source/compiler failure, not runner infrastructure.
+- Correction: decode JSON control escapes to explicit character codes (backspace 8, form-feed 12, LF 10, CR 13, tab 9) and recognize JSON whitespace via character-code checks (space/9/10/13), avoiding ambiguous Kotlin escape literals. Added JVM regression `ecprojRejectsDuplicateMembersWithEquivalentEscapedControlCharacters` to ensure `\\\\t` and `\\\\u0009` member names collide after decoding. Existing nested/Unicode-escape duplicate and string/array-sibling tests remain.
+- Source/test + tracker/README commit is recorded in the next exact-head CI run. Required verification: Kotlin compilation, Rust/JNI ARM64+x86_64, JVM tests, unsigned APK/AAB + R8, all API30 instrumentation, and independent cold APK reproducibility. No acceptance is inferred from #1312.

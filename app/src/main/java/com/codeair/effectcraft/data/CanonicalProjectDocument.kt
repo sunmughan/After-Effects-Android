@@ -131,11 +131,11 @@ object CanonicalProjectDocument {
                         require(cursor < source.length) { "Incomplete JSON escape at offset $cursor" }
                         when (val escaped = source[cursor++]) {
                             '"', '\\', '/' -> decoded.append(escaped)
-                            'b' -> decoded.append('\\b')
-                            'f' -> decoded.append('\\u000c')
-                            'n' -> decoded.append('\\n')
-                            'r' -> decoded.append('\\r')
-                            't' -> decoded.append('\\t')
+                            'b' -> decoded.append(8.toChar())
+                            'f' -> decoded.append(12.toChar())
+                            'n' -> decoded.append(10.toChar())
+                            'r' -> decoded.append(13.toChar())
+                            't' -> decoded.append(9.toChar())
                             'u' -> {
                                 require(cursor + 4 <= source.length) { "Incomplete JSON unicode escape at offset $cursor" }
                                 val code = source.substring(cursor, cursor + 4).toIntOrNull(16)
@@ -153,14 +153,17 @@ object CanonicalProjectDocument {
             fail("Unterminated JSON string")
         }
 
+        private fun isJsonWhitespace(char: Char): Boolean =
+            char == ' ' || char.code == 0x09 || char.code == 0x0A || char.code == 0x0D
+
         private fun parsePrimitive() {
             val start = cursor
-            while (cursor < source.length && source[cursor] !in charArrayOf(' ', '\\t', '\\n', '\\r', ',', ']', '}')) cursor++
+            while (cursor < source.length && !isJsonWhitespace(source[cursor]) && source[cursor] !in charArrayOf(',', ']', '}')) cursor++
             require(cursor > start) { "Expected JSON primitive at offset $cursor" }
         }
 
         private fun skipWhitespace() {
-            while (cursor < source.length && source[cursor] in charArrayOf(' ', '\\t', '\\n', '\\r')) cursor++
+            while (cursor < source.length && isJsonWhitespace(source[cursor])) cursor++
         }
 
         private fun consume(expected: Char): Boolean {

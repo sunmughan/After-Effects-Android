@@ -9,6 +9,10 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 - Actual native CPU/session preview frames; GPU/device compatibility and media parity still require qualification.
 - Layer, transform, keyframe, Bezier/ShapePath editing and PNG/MP4 export foundations are implemented incrementally.
 
+## Engineering progress (2026-11-09 00:59 IST)
+
+- **M2 duplicate JSON scanner Kotlin compile failure fixed:** CI [#1312](https://github.com/sunmughan/After-Effects-Android/actions/runs/42508463104) reached Kotlin compilation after native ARM64/x86_64 and Rust tests passed, then failed on unsupported escape sequences in the scanner's control-character literals. Corrected the implementation to decode JSON escapes via explicit character codes and scan JSON whitespace without fragile Kotlin escapes; added duplicate escaped-tab key regression. This is a source compile fix; fresh exact-head CI is required for acceptance. Details and gate status in [PHASES.md](PHASES.md).
+
 ## Engineering progress (2026-11-08 18:12 IST)
 
 - **M4 Add Triangle implemented:** the native bridge creates a canonical editable 3-point Polygon Shape with fill, JNI + Kotlin API + Compose inspector + saved project state wiring are connected. Native test round-trips and requires visible pixels from the real upstream compositor; API30 instrumentation taps Add Triangle and checks the callback. [Native/test fdc86fa8](https://github.com/sunmughan/After-Effects-Android/commit/fdc86fa853e95b2af9afc39a60ddaa86c286d096), [JNI 14ddb5a8](https://github.com/sunmughan/After-Effects-Android/commit/14ddb5a84d3f62fe74dea103383698e11ac7577b), [app 9b560709](https://github.com/sunmughan/After-Effects-Android/commit/9b5607095235491978f1f9a16608ef5cf60a4a97), [UI b95c1ad5](https://github.com/sunmughan/After-Effects-Android/commit/b95c1ad58bb580fa3187005874082e61ed100242), [instrumentation 7a89868f](https://github.com/sunmughan/After-Effects-Android/commit/7a89868f5531935253adb4545006ae54e4c0098f).
