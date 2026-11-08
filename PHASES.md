@@ -2,14 +2,19 @@
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1) · [PR #2 (draft follow-up)](https://github.com/sunmughan/After-Effects-Android/pull/2)  
-Last checked: 2026-11-08 12:15 IST (engineering checkpoint)  
-Latest branch baseline 75aa1a35; CI #1207 fully passed this exact source (dual ABI, Rust 61/61, JVM, unsigned APK/AAB+R8, API30 smoke, independent cold APK compare). This checkpoint adds canonical add-layer auto-selection: implementation/test/doc commit to follow. PR #1 merged at 4ae22776; PR #2 draft follow-up.  
+Last checked: 2026-11-08 13:15 IST (engineering checkpoint)  
+Latest implementation/test HEAD f9bc2db1 adds native parametric Ellipse creation through Rust → JNI → Compose, immediate layer selection and an Android UI regression. Exact-head CI #1220 is in progress; prior exact-head CI #1210 passed SHA c1252f95. PR #1 merged at 4ae22776; PR #2 remains Draft.  
 
 > This file is the durable acceptance ledger, not a chronological automation transcript. Keep one concise entry per phase and link implementation/test commits. Do not append repeated run summaries; update this ledger in place.
 
 ## Current CI / test evidence
 
-- **CI #1207 — PASS at exact feature-branch HEAD 75aa1a35**: [PR run 42449625616](https://github.com/sunmughan/After-Effects-Android/actions/runs/42449625616), created 2026-11-08 10:39 IST. Both jobs succeeded: ARM64+x86_64 JNI, Rust 61/61, JVM, debug APK, unsigned release APK/AAB + R8, API30 emulator smoke, and independent cold debug APK rebuild/byte comparison. This accepts M4 native Add Rect creation + compositor-visible pixels and M2 duplicate XML-member rejection on the branch tip. Push run was cancelled by the PR run; the PR run is the authoritative exact-head pass.
+- **CI #1210 — PASS at exact feature-branch SHA c1252f95**: [PR run 42456232210](https://github.com/sunmughan/After-Effects-Android/actions/runs/42456232210), 2026-11-08 12:48 IST. Both jobs completed successfully: Rust 63/63, ARM64+x86_64 JNI, JVM, debug APK, unsigned release APK/AAB + R8, API30 smoke and independent cold APK comparison. This accepts add-layer selection regression on that SHA; it is not the later Ellipse implementation.
+- **CI #1207 — PASS at SHA 75aa1a35**: [run 42449625616](https://github.com/sunmughan/After-Effects-Android/actions/runs/42449625616). Rust 61/61, dual ABI, JVM, unsigned APK/AAB+R8, API30 and cold comparison; native Add Rect pixel acceptance.
+- **CI #1220 — IN PROGRESS for exact latest test SHA f9bc2db1**: [PR run 42460212777](https://github.com/sunmughan/After-Effects-Android/actions/runs/42460212777). Covers native Add Ellipse, JNI/UI wiring and Add Ellipse instrumentation. No pass/failure verdict yet.
+- **CI #1183 — PASS**: [run 42444715221](https://github.com/sunmughan/After-Effects-Android/actions/runs/42444715221), SHA ccf60a7c: strict malformed-UTF8 rejection; dual ABI, Rust 61/61, JVM, unsigned APK/AAB+R8, API30 175/175, cold APK compare.
+- **CI #1179 — PASS**: [run 42440451096](https://github.com/sunmughan/After-Effects-Android/actions/runs/42440451096), SHA d2ef6771: XML declaration-free/comment-before-root import, 175/175 API30, dual ABI, R8 and cold reproducibility.
+- **CI #1151 failure repaired**: invalid unpublished KObjects coordinate replaced by Maven Central KXML 2.3.0 and Gradle Jar transform stripping bundled org/xmlpull/** [cf01caf5](https://github.com/sunmughan/After-Effects-Android/commit/cf01caf53568a13e951edb55fe0a1088230f917c); #1210 proves release R8 passes on SHA c1252f95.
 - **CI #1183 — PASS**: [run 42444715221](https://github.com/sunmughan/After-Effects-Android/actions/runs/42444715221), SHA ccf60a7c: strict malformed-UTF8 rejection; dual ABI, Rust 61/61, JVM, unsigned APK/AAB+R8, API30 175/175, cold APK compare.
 - **CI #1179 — PASS**: [run 42440451096](https://github.com/sunmughan/After-Effects-Android/actions/runs/42440451096), SHA d2ef6771: XML declaration-free/comment-before-root import, 175/175 API30, dual ABI, R8 and cold reproducibility.
 - **CI #1151 failure repaired**: invalid unpublished KObjects coordinate replaced by Maven Central KXML 2.3.0 and Gradle Jar transform stripping bundled org/xmlpull/** [cf01caf5](https://github.com/sunmughan/After-Effects-Android/commit/cf01caf53568a13e951edb55fe0a1088230f917c); #1207 proves release R8 passes at branch head.
@@ -35,7 +40,7 @@ Evidence: scoped baseline accepted in historical emulator suites (including dele
 Remaining: full professional interaction parity, complete accessibility/TalkBack and physical device/foldable UX acceptance.
 
 ### M2 — Project import/save, format compatibility and media
-**Status: PARTIAL; canonical/offline-media foundations implemented; XML import fix accepted at SHA `d2ef6771`; strict UTF-8 byte decoding/regression `ccf60a7c` awaits exact-head CI #1183.**
+**Status: PARTIAL; canonical/offline-media foundations and import-integrity fixes CI-accepted through c1252f95; format interoperability/relink parity still open.**
 
 Acceptance: parse/serialize/validate supported project formats; SAF open/save; migration and rollback; missing-media relink; content-addressed media integrity; offline operation; cancellation/progress; corruption fail-closed; concurrency-safe catalog/reference updates.
 
@@ -63,17 +68,17 @@ Evidence: actual Rust CPU/session compositor and JNI lifecycle, native render re
 Remaining: physical ARM64 GPU/Surface/device-loss and media decode parity/performance; latest workspace overlay semantics test must pass #1124.
 
 ### M4 — Functional layer/effect/timeline editing
-**Status: IN PROGRESS; real native edits and compositor preview are CI-accepted at branch SHA 75aa1a35; complete upstream parity remains open.**
+**Status: IN PROGRESS; native Add Rect and automatic new-layer focus CI-accepted at SHA c1252f95; Add Ellipse implementation/test is pending exact-head CI #1220; full upstream parity remains open.**
 
 Acceptance: canonical properties/transforms update the real project and preview; add/select/delete/reorder/visibility/opacity; Position/Scale/Rotation/Anchor/Orientation and keyframe/interpolation editing; ShapePath and effect parameters; edit → serialize → reopen → preview evidence.
 
 Evidence:
-- Native canonical Add Rect creates a real upstream LayerSource::Shape with 200×100 path and opaque fill; JNI + Compose action + compositor pixel regression: [c41828df](https://github.com/sunmughan/After-Effects-Android/commit/c41828df155086b10f8f309e88e45fdd8085fa5b), [bc75f91e](https://github.com/sunmughan/After-Effects-Android/commit/bc75f91ecaa3abd20727dfa81d053d27a4da0d91), [77901d69](https://github.com/sunmughan/After-Effects-Android/commit/77901d69dd88ab2624ca58b161cc4e57c8cdcb73), [5e3fe4df](https://github.com/sunmughan/After-Effects-Android/commit/5e3fe4df532f1c713866358f13fd99f15c560b57), [75ef2892](https://github.com/sunmughan/After-Effects-Android/commit/75ef2892ae22c28d78f948824ae25d41c565b1bb), [7a449a7a](https://github.com/sunmughan/After-Effects-Android/commit/7a449a7a98596f2c79ddc0ce5466b4a5fc874ff7). Default name correction [75aa1a35](https://github.com/sunmughan/After-Effects-Android/commit/75aa1a3507f2e695909a8cb75841fd0c14cd9867).
-- **Exact-head CI #1207 PASS** [run 42449625616](https://github.com/sunmughan/After-Effects-Android/actions/runs/42449625616), SHA 75aa1a35: both assemble/test and independent cold APK jobs; Rust 61/61, dual ABI, JVM, unsigned APK/AAB+R8, API30 smoke, cold comparison.
-- This checkpoint wires add-layer creation to select the newly created layer immediately, so its Shape/Text parameters appear in the inspector without a manual list tap; pure selection regression added (commit below).
+- Native Add Rect creates a real upstream Shape layer (200×100 path + opaque fill), exposed through JNI/Compose and rendered by the upstream compositor; native pixel and Android instrumentation tests: [c41828df](https://github.com/sunmughan/After-Effects-Android/commit/c41828df155086b10f8f309e88e45fdd8085fa5b), [bc75f91e](https://github.com/sunmughan/After-Effects-Android/commit/bc75f91ecaa3abd20727dfa81d053d27a4da0d91), [77901d69](https://github.com/sunmughan/After-Effects-Android/commit/77901d69dd88ab2624ca58b161cc4e57c8cdcb73), [5e3fe4df](https://github.com/sunmughan/After-Effects-Android/commit/5e3fe4df532f1c713866358f13fd99f15c560b57), [75ef2892](https://github.com/sunmughan/After-Effects-Android/commit/75ef2892ae22c28d78f948824ae25d41c565b1bb), [7a449a7a](https://github.com/sunmughan/After-Effects-Android/commit/7a449a7a98596f2c79ddc0ce5466b4a5fc874ff7).
+- Add-layer selection now focuses the new Text/Shape layer in the inspector: [c1252f95](https://github.com/sunmughan/After-Effects-Android/commit/c1252f95c942c6fbe52bc78e1c0d14c890a53c6b) + [CanonicalLayerSelectionTest](https://github.com/sunmughan/After-Effects-Android/blob/feat/android-app-foundation/app/src/test/java/com/codeair/effectcraft/data/CanonicalLayerSelectionTest.kt). Exact CI #1210 passed at that SHA: Rust 63/63, dual ABI, JVM, unsigned APK/AAB+R8, API30 and independent cold compare.
+- New parametric Ellipse path (160×160) + white fill is authored by upstream builders, serializes as canonical project data and renders real compositor pixels; JNI bridge + Add Ellipse UI + instrumented callback regression: [native 3a989ee3](https://github.com/sunmughan/After-Effects-Android/commit/3a989ee381257e9135d3aef64b5a66658d3b4d68), [JNI a78bb5cf](https://github.com/sunmughan/After-Effects-Android/commit/a78bb5cf330ef28771fe2319f273f816eb474c0e), [app ab23c18d](https://github.com/sunmughan/After-Effects-Android/commit/ab23c18deae4162f35dce3b89d6671b274c808dc), [UI 34e2800d](https://github.com/sunmughan/After-Effects-Android/commit/34e2800d6f3b7b004a9854ecb83de727ead335d4), [instrumentation f9bc2db1](https://github.com/sunmughan/After-Effects-Android/commit/f9bc2db1641d6cf4d1c52e9344c2d66a99e6bdd5). Exact-head CI #1220 is pending.
 - Keyframe-store cross-instance transaction serialization and 120-key regression: [542c1785](https://github.com/sunmughan/After-Effects-Android/commit/542c178523e09332ae4e5dca37cf771729bc620d), [faf1d30c](https://github.com/sunmughan/After-Effects-Android/commit/faf1d30cca90fbd5c048f46ac328d7221b159bc5). ShapePath/de Casteljau, curve inspector and canonical property families are present.
-Remaining: complete upstream effect stack, 3D/spatial/roving/interpolation parity, full golden edit→reopen→preview fixtures and physical device UX.
 
+Remaining: complete upstream effect stack, 3D/spatial/roving/interpolation parity, golden edit→reopen→preview fixtures, and physical-device UX.
 ### M5 — Render/export pipeline
 **Status: PARTIAL (PNG/MP4/audio foundations and UI wiring implemented).**
 
