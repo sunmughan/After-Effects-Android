@@ -78,6 +78,26 @@ data class ProjectDocument(
                 )
             )
         )
+
+        /**
+         * True when [doc] is a starter composition nobody has edited: same
+         * name, dimensions and layers as [starter], ignoring the random ids
+         * and timestamp. New over such a document loses nothing, so the
+         * New-confirm dialog must not fire for it (P07). Conservative by
+         * design: any difference at all means "edited".
+         */
+        fun isUneditedStarter(doc: ProjectDocument): Boolean {
+            val starter = starter()
+            if (doc.name != starter.name || doc.width != starter.width ||
+                doc.height != starter.height || doc.frameRate != starter.frameRate ||
+                doc.durationFrames != starter.durationFrames ||
+                doc.audioTracks.isNotEmpty() || doc.layers.size != starter.layers.size
+            ) return false
+            return doc.layers.zip(starter.layers).all { (actual, expected) ->
+                actual.copy(id = "", clips = actual.clips.map { it.copy(id = "") }) ==
+                    expected.copy(id = "", clips = expected.clips.map { it.copy(id = "") })
+            }
+        }
     }
 }
 

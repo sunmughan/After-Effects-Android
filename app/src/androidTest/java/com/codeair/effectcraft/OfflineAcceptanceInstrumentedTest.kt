@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -62,6 +63,18 @@ class OfflineAcceptanceInstrumentedTest {
         compose.onNodeWithContentDescription("Editor status: $message").assertExists()
     }
 
+    /**
+     * Starts a fresh composition. A previous case in this run may have
+     * left unsaved changes behind, in which case New asks first (P07);
+     * discard them to start fresh, exactly as a user starting over would.
+     */
+    private fun startFreshComposition() {
+        compose.onNodeWithText("New").performClick()
+        if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Discard").performClick()
+        }
+    }
+
     private fun renderPng(width: Int, height: Int): ByteArray {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.RED)
@@ -92,7 +105,7 @@ class OfflineAcceptanceInstrumentedTest {
         compose.onNodeWithText("Close").performClick()
 
         // Edit in the editor, save locally, then reopen from the saved catalog.
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Layer").performClick()
         assertEditorStatus("Unsaved changes")
         compose.onNodeWithContentDescription("Save draft").performClick()
@@ -102,7 +115,7 @@ class OfflineAcceptanceInstrumentedTest {
         assertEquals(1, saved.size)
         assertEquals("Shape 4", saved.first().layers.last().name)
 
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithContentDescription("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         assertEditorStatus("Opened locally · Untitled Composition")

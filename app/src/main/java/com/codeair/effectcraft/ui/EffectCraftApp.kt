@@ -220,7 +220,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // New-project guard (P07): true whenever the working draft holds
     // edits no explicit save has committed. The New button asks first
     // while this is true; saving or opening a saved project clears it.
-    var hasUnsavedChanges by remember { mutableStateOf(recoveredDraft != null) }
+    // A recovered starter nobody edited is not unsaved work — New over
+    // it loses nothing, so the dialog stays silent for it.
+    var hasUnsavedChanges by remember {
+        mutableStateOf(recoveredDraft != null && !ProjectDocument.isUneditedStarter(recoveredDraft))
+    }
     var showNewProjectConfirm by remember { mutableStateOf(false) }
     var undoStack by remember {
         mutableStateOf(

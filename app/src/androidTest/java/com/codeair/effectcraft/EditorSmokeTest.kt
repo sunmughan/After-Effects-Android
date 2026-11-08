@@ -43,6 +43,18 @@ class EditorSmokeTest {
         compose.onNodeWithContentDescription("Editor status: $message").assertExists()
     }
 
+    /**
+     * Starts a fresh composition. A previous case in this run may have
+     * left unsaved changes behind, in which case New asks first (P07);
+     * discard them to start fresh, exactly as a user starting over would.
+     */
+    private fun startFreshComposition() {
+        compose.onNodeWithText("New").performClick()
+        if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Discard").performClick()
+        }
+    }
+
 
     @Test
     fun offlineMediaLibraryOpensAndExplainsEmptyState() {
@@ -187,7 +199,7 @@ class EditorSmokeTest {
 
     @Test
     fun opacityKeyframesCanBeAuthoredAtPlayheadAndPersistPerProject() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithContentDescription("Add opacity keyframe").performClick()
         assertEditorStatus("Opacity keyframe added · frame 0")
         compose.onNodeWithContentDescription("Timeline playhead")
@@ -303,7 +315,7 @@ class EditorSmokeTest {
 
     @Test
     fun editorSaveButtonPersistsTheCurrentOfflineLayerStack() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
