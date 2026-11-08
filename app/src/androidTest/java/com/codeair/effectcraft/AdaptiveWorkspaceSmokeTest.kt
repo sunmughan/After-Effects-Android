@@ -628,9 +628,9 @@ class AdaptiveWorkspaceSmokeTest {
         // "020", which is parsed as frame 20 and exercises the explicit Move
         // button rather than the graph's accessibility shortcut.
         compose.onNodeWithContentDescription("Move key target frame")
-            .performScrollTo().performTextInput("20")
-        compose.onNodeWithContentDescription("Move position keyframe to frame 020")
-            .performScrollTo().performClick()
+            .performScrollTo().performTextClearance().performTextInput("20")
+        compose.onNodeWithContentDescription("Move position keyframe to frame 20")
+            .performScrollTo().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, 2L, "transform:position", 0, 20), moved)
     }
 
