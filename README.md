@@ -24,14 +24,14 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 06:40 IST)
+## Current engineering status (2026-11-08 06:41 IST)
 
 **Release is NOT complete.** PR #1 merged into `main` at `4ae22776` (2026-11-07); that merge is not product acceptance. Post-merge work is tracked in [draft follow-up PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2) (clean/mergeable; not merged). Ongoing engineering continues on `feat/android-app-foundation`. [PHASES.md](PHASES.md) is the authoritative acceptance ledger with evidence, commit SHAs and blockers.
 
 ### Latest build failure and correction
 
 - [CI #1151](https://github.com/sunmughan/After-Effects-Android/actions/runs/42427767850), SHA `e1c2a568`: build failed before compilation because `com.github.kobjects:kxml2:v2.5.0` is unpublished/not resolvable (no upstream 2.5.0 release/tag). This was an incorrect dependency coordinate, not an R8 regression.
-- Replaced the invalid KObjects coordinate with the published Maven Central KXML 2.3.0 artifact and a deterministic Gradle task that strips `org/xmlpull/**` from the packaged parser JAR (Android supplies the API), avoiding R8 duplicate program classes: [build commit cf01caf5](https://github.com/sunmughan/After-Effects-Android/commit/cf01caf53568a13e951edb55fe0a1088230f917c). Removed unused JitPack repository [d9c88793](https://github.com/sunmughan/After-Effects-Android/commit/d9c88793ab29a590af78d3b071ec4c8de1ba7731).
+- Replaced the invalid KObjects coordinate with the published Maven Central KXML 2.3.0 artifact and a deterministic Gradle task that strips `org/xmlpull/**` from the packaged parser JAR (Android supplies the API), avoiding R8 duplicate program classes: [build commit cf01caf5](https://github.com/sunmughan/After-Effects-Android/commit/cf01caf53568a13e951edb55fe0a1088230f917c). Moved its configuration/task to script scope and used explicit configuration `add()` to avoid Kotlin DSL accessor/order issues: [54bf36e1](https://github.com/sunmughan/After-Effects-Android/commit/54bf36e1ff0fb639617199586681dfeb68e7510e). Removed unused JitPack repository [d9c88793](https://github.com/sunmughan/After-Effects-Android/commit/d9c88793ab29a590af78d3b071ec4c8de1ba7731).
 - Push CI #1147 was cancelled when the follow-up PR check started; PR checks #1148 and #1149 were superseded by documentation-only head updates. [Latest PR check #1150](https://github.com/sunmughan/After-Effects-Android/actions/runs/42427711665) was running on code-equivalent head `443dedc7` at last inspection, but the current README synchronization will cause another PR workflow attempt. The Android-safe KXML correction is **not accepted until a fresh run passes JVM, release R8, API30 instrumentation and independent cold APK comparison**.
 
 ### Phase snapshot
