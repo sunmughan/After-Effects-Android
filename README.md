@@ -109,3 +109,5 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 - **M4 keyframe target validation hardened:** [f097ac95](https://github.com/sunmughan/After-Effects-Android/commit/f097ac955557c326f5d95bbdf6600c45cffbac0f) extends explicit Move instrumentation with a mixed/negative oversized input, verifies digit-only 10-character sanitization and overflow-disabled Move, then clears and confirms frame 20 succeeds. This is additional boundary coverage; no tests removed. See [PHASES.md](PHASES.md).
+
+- Follow-up [47604d3c](https://github.com/sunmughan/After-Effects-Android/commit/47604d3cccca4d6387e8de00f9fff08b092991e3) removes the obsolete test comment that described appending to the prefilled frame. The source now explicitly describes clearing and entering a target frame. Current exact test SHA remains `f097ac95`; tracker/docs follow-up [22b273f8](https://github.com/sunmughan/After-Effects-Android/commit/22b273f88558c5d2a2b731c2404184a0369e5670). CI acceptance is still pending.
