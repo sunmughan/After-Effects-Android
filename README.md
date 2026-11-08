@@ -131,3 +131,10 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 - **M2 import integrity:** commit [09d2dad2](https://github.com/sunmughan/After-Effects-Android/commit/09d2dad24cb5eab8dedcd6a35099010b07290376) adds duplicate JSON object member rejection before JSONObject parsing, including escaped-equivalent names, with JVM tests for nested collisions and false-positive-safe string/array handling. Fresh CI at this new HEAD is pending.
 - See [PHASES.md](PHASES.md) for the acceptance ledger, exact SHAs, failures, evidence and blockers. Release is not complete; Effekseer .efkproj and Adobe .aep native parser support are not claimed, and physical device/signing gates remain open.
 
+
+
+## Engineering progress — 2026-11-09
+
+- **Exact-head CI #1317 passed** at `791a44b9`: Rust 70/70, ARM64+x86_64 JNI, Kotlin/JVM, unsigned release APK/AAB + R8, API30 177/177 and independent cold APK/JNI reproducibility. [Run #1317](https://github.com/sunmughan/After-Effects-Android/actions/runs/42515531444). This is historical evidence for that SHA only; newer Hexagon work needs fresh CI.
+- **M4 Add Hexagon implemented end-to-end:** upstream native six-sided polygon + fill, JNI bridge, canonical inspector button, app save/selection integration, native actual-pixel compositor regression and Android callback instrumentation. Commits: [d029dc8a](https://github.com/sunmughan/After-Effects-Android/commit/d029dc8aadf7c16f7ad62341398cedcab79fbed0), [7ac65cdb](https://github.com/sunmughan/After-Effects-Android/commit/7ac65cdb6c5a55bba38d1161448a3d97934c2d65), [6a766299](https://github.com/sunmughan/After-Effects-Android/commit/6a766299bc0d327aec6d398d11e41dd6e1fcf61e), [4ef2ec2d](https://github.com/sunmughan/After-Effects-Android/commit/4ef2ec2d052117462dc3be9a497c6a5c158fdfb0), [d6d8cedd](https://github.com/sunmughan/After-Effects-Android/commit/d6d8cedd0b8664416878de73da76163c08756e86).
+- See [PHASES.md](PHASES.md) for acceptance criteria, exact evidence, phase status and blockers. Release remains **NOT COMPLETE**; physical-device and signing gates remain open.
