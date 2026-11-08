@@ -87,3 +87,11 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 - **M2 XML edge case:** valid processing instructions after the EffectCraft XML root are now accepted as exporter metadata (the parser still rejects extra roots/non-whitespace trailing text). Implementation [4a8b7e63](https://github.com/sunmughan/After-Effects-Android/commit/4a8b7e63bc7fb79989252f270e0825d40271bca0), regression [1f0f38b9](https://github.com/sunmughan/After-Effects-Android/commit/1f0f38b948e711c7a467870ed093af23be0121e5). Exact-head CI #1275 pending.
+
+
+## Engineering progress (2026-11-08 20:42 IST)
+
+- PR #3 merged and its branch deleted; recreated feat/android-app-foundation from main (including [post-merge compile repair ed80c34a](https://github.com/sunmughan/After-Effects-Android/commit/ed80c34aa2439831913fb56ebffea168cf045ab0)). Current continuation: [draft PR #4](https://github.com/sunmughan/After-Effects-Android/pull/4).
+- **M4 explicit transform-key Move control regression:** [e4f476d2](https://github.com/sunmughan/After-Effects-Android/commit/e4f476d22814562ef0ed97c089d7f611e02114a6) cleans up target-frame state placement; [e33d56cb](https://github.com/sunmughan/After-Effects-Android/commit/e33d56cba15b538ec0f1fd39d4d605d9ec294287) adds Android instrumentation that enters target frame 20 and asserts the exact canonical move callback. This supplements, rather than replaces, the curve graph accessibility-action test.
+- Exact-head [CI #1284](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493757859) is pending at e33d56cb; Kotlin/Rust/JNI/JVM/release/API30/cold reproducibility gates are not yet accepted. No local Android SDK/Gradle is available in this runtime.
+- Release remains NOT complete; see PHASES.md for phase-by-phase acceptance, test evidence, blockers, and the Adobe .aep / Effekseer .efkproj limitations.
