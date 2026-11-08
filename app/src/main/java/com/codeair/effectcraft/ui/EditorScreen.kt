@@ -32,6 +32,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
@@ -104,6 +107,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -567,11 +571,11 @@ fun EditorScreen(
                 onTogglePlayback = onTogglePlayback,
                 modifier = Modifier
                     .fillMaxWidth()
-                    // Three 48dp rows (title, transport, keyframes) + the
-                    // 48dp playhead slider: the card grows by the transport
-                    // row vs the old layout so the track viewport stays
-                    // the same size.
-                    .height(if (isTabletLayout) 338.dp else 320.dp)
+                    // Adaptive height (P11): the card takes ~42% of the
+                    // available height instead of a fixed dp value, so
+                    // the track viewport scales with the screen. The
+                    // transport row's +48dp is inside that budget.
+                    .height((maxHeight * 0.42f).coerceIn(260.dp, 340.dp))
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
             )
 
@@ -3638,23 +3642,58 @@ private fun TimelinePanel(
         }
 
         // Every layer renders: the old take(4) cap hid layers 5+ with a
-        // dead "+ N more layers" line. The fade at the bottom edge shows
-        // only while more rows sit below the fold, so a cut row reads as
-        // "scroll for more" instead of "broken".
-        val trackListScrollState = rememberScrollState()
+        // dead "+ N more layers" line. The track list is a LazyColumn
+        // (P11): rows compose on demand, a scrollbar thumb rides the
+        // right edge, and the fade at the bottom edge shows only while
+        // more rows sit below the fold, so a cut row reads as "scroll
+        // for more" instead of "broken".
+        val trackListState = rememberLazyListState()
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .drawWithContent {
+                    drawContent()
+                    val info = trackListState.layoutInfo
+                    val visible = info.visibleItemsInfo
+                    if (info.totalItemsCount > 0 && visible.isNotEmpty()) {
+                        val avgSize = visible.map { it.size }.average().toFloat()
+                        val totalPx = avgSize * info.totalItemsCount
+                        val viewportPx = size.height
+                        if (avgSize > 0f && totalPx > viewportPx) {
+                            val thumbWidth = 4.dp.toPx()
+                            val thumbHeight = (viewportPx / totalPx * viewportPx)
+                                .coerceAtLeast(28.dp.toPx())
+                                .coerceAtMost(viewportPx)
+                            val scrolledPx = trackListState.firstVisibleItemIndex * avgSize +
+                                trackListState.firstVisibleItemScrollOffset
+                            val maxScroll = totalPx - viewportPx
+                            val thumbOffset = if (maxScroll > 0f) {
+                                (scrolledPx / maxScroll * (viewportPx - thumbHeight))
+                                    .coerceIn(0f, viewportPx - thumbHeight)
+                            } else 0f
+                            drawRoundRect(
+                                color = EditorPalette.muted.copy(alpha = 0.55f),
+                                topLeft = androidx.compose.ui.geometry.Offset(
+                                    size.width - thumbWidth - 2.dp.toPx(), thumbOffset
+                                ),
+                                size = androidx.compose.ui.geometry.Size(thumbWidth, thumbHeight),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                                    thumbWidth / 2f, thumbWidth / 2f
+                                )
+                            )
+                        }
+                    }
+                }
         ) {
-        Column(
+        LazyColumn(
+            state = trackListState,
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("timeline-track-list")
-                .verticalScroll(trackListScrollState),
+                .testTag("timeline-track-list"),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            project.layers.forEach { layer ->
+            items(project.layers, key = { it.id }) { layer ->
                 LayerTrack(
                     layer = layer,
                     selected = layer.id == selectedLayerId,
@@ -3670,7 +3709,7 @@ private fun TimelinePanel(
             // Audio lanes: one row per audio track, clips as blocks like
             // the layer tracks. With no audio tracks nothing renders here,
             // so the timeline is pixel-identical to the pre-audio layout.
-            audioTracks.forEach { track ->
+            items(audioTracks, key = { it.id }) { track ->
                 AudioTrackLane(
                     track = track,
                     durationFrames = project.durationFrames,
@@ -3683,38 +3722,46 @@ private fun TimelinePanel(
             }
             val selectedAudioClip = selectedAudioTrack?.clips?.firstOrNull { it.id == selectedAudioClipId }
             if (selectedAudioClip != null && selectedAudioTrack != null) {
-                AudioClipInspector(
-                    clip = selectedAudioClip,
-                    trackName = selectedAudioTrack.name,
-                    playheadFrame = playheadFrame,
-                    onTrimAudioClip = onTrimAudioClip,
-                    onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
-                    onSetAudioGain = onSetAudioGain,
-                    onSetAudioFades = onSetAudioFades,
-                    onSetAudioMuted = onSetAudioMuted
-                )
+                item(key = "audio-clip-inspector") {
+                    AudioClipInspector(
+                        clip = selectedAudioClip,
+                        trackName = selectedAudioTrack.name,
+                        playheadFrame = playheadFrame,
+                        onTrimAudioClip = onTrimAudioClip,
+                        onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
+                        onSetAudioGain = onSetAudioGain,
+                        onSetAudioFades = onSetAudioFades,
+                        onSetAudioMuted = onSetAudioMuted
+                    )
+                }
             }
             val selectedClipLayer = project.layers.firstOrNull { layer ->
                 layer.clips.any { it.id == selectedClipId }
             }
             val selectedClip = selectedClipLayer?.clips?.firstOrNull { it.id == selectedClipId }
             if (selectedClip != null && selectedClipLayer != null) {
-                ClipInspector(
-                    clip = selectedClip,
-                    layerName = selectedClipLayer.name,
-                    playheadFrame = playheadFrame,
-                    onTrimClip = onTrimClip,
-                    onSplitClipAtPlayhead = onSplitClipAtPlayhead
-                )
+                item(key = "clip-inspector") {
+                    ClipInspector(
+                        clip = selectedClip,
+                        layerName = selectedClipLayer.name,
+                        playheadFrame = playheadFrame,
+                        onTrimClip = onTrimClip,
+                        onSplitClipAtPlayhead = onSplitClipAtPlayhead
+                    )
+                }
             }
             if (canonicalTransformKeyframes.isNotEmpty()) {
-                CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub, onMoveCanonicalTransformKeyframe)
+                item(key = "canonical-transform-track") {
+                    CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub, onMoveCanonicalTransformKeyframe)
+                }
             }
             if (canonicalColorKeys.isNotEmpty()) {
-                CanonicalColorTrack(canonicalColorKeys, canonicalColorDurationFrames, playheadFrame, onScrub)
+                item(key = "canonical-color-track") {
+                    CanonicalColorTrack(canonicalColorKeys, canonicalColorDurationFrames, playheadFrame, onScrub)
+                }
             }
         }
-            if (trackListScrollState.canScrollForward) {
+            if (trackListState.canScrollForward) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)

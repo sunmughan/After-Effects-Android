@@ -4,7 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToIndex
+import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.ui.EditorScreen
 import org.junit.Rule
@@ -127,5 +130,18 @@ class Batch2EditorInstrumentedTest {
         compose.setContent { Editor(audioPreviewLabel = "Audio · theme.wav") }
         compose.waitForIdle()
         compose.onNodeWithText("Audio · theme.wav").assertIsDisplayed()
+    }
+
+    @Test
+    fun timelineTrackListScrollsToLaterLayers() {
+        val manyLayers = ProjectDocument.starter().copy(
+            layers = (1..10).map { LayerDocument.newShape(it) }
+        )
+        compose.setContent { Editor(project = manyLayers) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("timeline-track-list").assertExists()
+        compose.onNodeWithTag("timeline-track-list").performScrollToIndex(9)
+        compose.waitForIdle()
+        compose.onNodeWithText("Shape 10").assertIsDisplayed()
     }
 }
