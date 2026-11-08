@@ -1859,7 +1859,7 @@ private fun CanonicalProjectEditor(
                 ) { Text("Add Ellipse", color = EditorPalette.violet) }
                 TextButton(
                     enabled = canEdit && newTextName.trim().isNotEmpty(),
-                    onClick = { onAddCanonicalStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Star") }
+                    onClick = { onAddStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Star") }
                 ) { Text("Add Star", color = EditorPalette.violet) }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
