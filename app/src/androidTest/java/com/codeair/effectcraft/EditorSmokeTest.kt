@@ -70,7 +70,8 @@ class EditorSmokeTest {
 
     @Test
     fun offlineMediaLibraryOpensAndExplainsEmptyState() {
-        compose.onNodeWithContentDescription("Offline media library").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Offline media library").performClick()
         compose.onNodeWithText("Offline media library").assertIsDisplayed()
         compose.onNodeWithText(
             "No media imported yet. Relink footage from a canonical project to copy it here for offline use."
@@ -84,13 +85,13 @@ class EditorSmokeTest {
         InstrumentationRegistry.getInstrumentation().targetContext.filesDir
             .resolve("projects").listFiles()?.forEach { it.delete() }
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 
         // Saving the same project ID again must update its catalog entry, not
         // leave an older 4-layer snapshot beside the newer 5-layer revision.
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 
@@ -101,7 +102,8 @@ class EditorSmokeTest {
 
         val firstProjectId = DraftProjectStore(appContext).listSavedProjects()
             .first { it.layers.size == 5 }.id
-        compose.onNodeWithContentDescription("Open offline project").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 5 layers").performClick()
 
         assertEditorStatus("Opened locally · Untitled Composition")
@@ -169,14 +171,14 @@ class EditorSmokeTest {
     @Test
     fun addLayerActionAddsTrackToTimeline() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         assertEditorStatus("Unsaved changes")
     }
 
     @Test
     fun layerMutationCanBeUndoneAndRedone() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Undo").performClick()
         assertEditorStatus("Undo · unsaved")
         compose.onNodeWithText("Redo").performClick()
@@ -273,7 +275,7 @@ class EditorSmokeTest {
     @Test
     fun inspectorCanReorderAndDeleteAddedLayer() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Delete selected layer").performScrollTo().assertIsDisplayed().performClick()
@@ -291,7 +293,7 @@ class EditorSmokeTest {
     @Test
     fun deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Delete selected layer").performScrollTo().assertIsDisplayed().performClick()
@@ -352,7 +354,7 @@ class EditorSmokeTest {
     @Test
     fun editorSaveButtonPersistsTheCurrentOfflineLayerStack() {
         startFreshComposition()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 

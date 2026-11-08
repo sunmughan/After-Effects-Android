@@ -102,13 +102,14 @@ class OfflineAcceptanceInstrumentedTest {
         // itself lists it.
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Offline media library").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Offline media library").performClick()
         compose.onNodeWithText("offline-clip.png").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
 
         // Edit in the editor, save locally, then reopen from the saved catalog.
         startFreshComposition()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         assertEditorStatus("Unsaved changes")
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
@@ -118,7 +119,8 @@ class OfflineAcceptanceInstrumentedTest {
         assertEquals("Shape 4", saved.first().layers.last().name)
 
         startFreshComposition()
-        compose.onNodeWithContentDescription("Open offline project").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         assertEditorStatus("Opened locally · Untitled Composition")
         // Batch 2 (P11): the track list is a LazyColumn — the fourth

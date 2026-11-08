@@ -93,7 +93,7 @@ class DraftPreviewInstrumentedTest {
                 onSave = {},
                 onOpenProject = {},
                 onDeleteOfflineAsset = {},
-                onValidateEcproj = {},
+                onImportProject = {},
                 onExportEcproj = {},
                 onExportEcprojx = {},
                 isExportingFrame = false,

@@ -45,6 +45,7 @@ import com.codeair.effectcraft.data.CanonicalLayerSelection
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalProjectDocument
 import com.codeair.effectcraft.data.CanonicalProjectRepository
+import com.codeair.effectcraft.data.ImportDocumentResolver
 import com.codeair.effectcraft.data.ClipEditOutcome
 import com.codeair.effectcraft.data.ClipRenderCoverage
 import com.codeair.effectcraft.data.ClipTimeline
@@ -251,6 +252,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         mutableStateOf(recoveredDraft != null && !ProjectDocument.isUneditedStarter(recoveredDraft))
     }
     var showNewProjectConfirm by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
     var undoStack by remember {
         mutableStateOf(
             recoveredSession?.state?.undoStack?.map {
@@ -532,12 +534,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
-    val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    // Batch 3: the single import entry point. The picker hands over a
+    // document (.ecproj/.ecprojx, an AE interchange file, or a ZIP
+    // bundle); ImportDocumentResolver turns it into canonical JSON.
+    // A null uri means the user dismissed the picker — that, and only
+    // that, is reported as "Project import cancelled".
+    val importProjectLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) saveMessage = "Project import cancelled" else {
             canonicalImportJob?.cancel()
             canonicalImportInProgress = true
             canonicalImportBytes = 0L
-            saveMessage = "Importing canonical project…"
+            saveMessage = "Importing project…"
             canonicalImportJob = exportScope.launch {
                 val importJob = currentCoroutineContext()[Job]
                 try {
@@ -548,9 +555,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             ?: uri.lastPathSegment?.substringAfterLast('/') ?: "selected document"
                     }
                     ProjectFileFormats.importError(displayName)?.let(::error)
-                    val rawDocument = withContext(Dispatchers.IO) {
+                    val rawBytes = withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(uri)?.use { input ->
-                            CanonicalProjectDocument.readUtf8(input, onProgress = { bytes ->
+                            CanonicalProjectDocument.readBytes(input, onProgress = { bytes ->
                                 if (importJob?.isActive != true) throw CancellationException("Project import cancelled")
                                 if (bytes - canonicalImportBytes >= 256 * 1024) {
                                     canonicalImportBytes = bytes
@@ -560,7 +567,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         } ?: error("Unable to read selected document")
                     }
                     currentCoroutineContext().ensureActive()
-                    val source = withContext(Dispatchers.Default) { CanonicalProjectDocument.toCanonicalJson(rawDocument) }
+                    val resolved = withContext(Dispatchers.Default) {
+                        ImportDocumentResolver.resolve(rawBytes, File(context.filesDir, "ae-imports"))
+                    }
+                    val source = resolved.canonicalJson
                     val native = withContext(Dispatchers.Default) { NativeProjectBridge.inspectEcproj(source) }
                         ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
                     val parsedInfo = withContext(Dispatchers.Default) { CanonicalProjectDocument.validateNativeEnvelope(native) }
@@ -587,8 +597,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     canonicalUndoStack = emptyList()
                     canonicalRedoStack = emptyList()
                     refreshReferences()
-                    canonicalImportBytes = rawDocument.toByteArray(Charsets.UTF_8).size.toLong()
-                    saveMessage = "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
+                    canonicalImportBytes = rawBytes.size.toLong()
+                    saveMessage = if (resolved.wasAeInterchange) {
+                        "Imported from After Effects · ${parsedInfo.compositions.size} compositions"
+                    } else {
+                        "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
+                    }
                 } catch (cancelled: CancellationException) {
                     saveMessage = "Project import cancelled"
                 } catch (failure: Throwable) {
@@ -1494,7 +1508,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                     .onFailure { saveMessage = "Media removal failed · ${it.message ?: "storage error"}" }
             },
-            onValidateEcproj = { validateEcprojLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
+            onImportProject = { showImportDialog = true },
             isImportingCanonicalProject = canonicalImportInProgress,
             onCancelCanonicalImport = { canonicalImportJob?.cancel() },
             onExportEcproj = {
@@ -2536,6 +2550,28 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 },
                 dismissButton = {
                     TextButton(onClick = { showNewProjectConfirm = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Batch 3: import is a labelled dialog, not a hidden icon.
+        // Each option launches the same picker with the mime types
+        // that option accepts; the resolver sniffs the content, so
+        // a mislabelled file still takes the right path.
+        if (showImportDialog) {
+            ImportProjectDialog(
+                onDismiss = { showImportDialog = false },
+                onPickEcproj = {
+                    showImportDialog = false
+                    importProjectLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
+                },
+                onPickZipBundle = {
+                    showImportDialog = false
+                    importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
+                },
+                onPickAeExport = {
+                    showImportDialog = false
+                    importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
                 }
             )
         }

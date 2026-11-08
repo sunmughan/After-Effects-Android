@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -60,14 +61,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Tune
@@ -112,6 +108,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -221,7 +218,7 @@ fun EditorScreen(
     onSave: () -> Unit,
     onOpenProject: (String) -> Unit,
     onDeleteOfflineAsset: (String) -> Unit,
-    onValidateEcproj: () -> Unit,
+    onImportProject: () -> Unit,
     isImportingCanonicalProject: Boolean = false,
     onCancelCanonicalImport: () -> Unit = {},
     onExportEcproj: () -> Unit,
@@ -453,12 +450,11 @@ fun EditorScreen(
             // A true RenderEffect blur is Batch 3 work.
             Surface(color = EditorPalette.background.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
             HeaderBar(
-                projectName = project.name,
                 saveMessage = saveMessage,
                 onSave = onSave,
                 onOpenProject = { showProjectPicker = true },
                 onOpenMediaLibrary = { showMediaLibrary = true },
-                onValidateEcproj = onValidateEcproj,
+                onImportProject = onImportProject,
                 isImportingCanonicalProject = isImportingCanonicalProject,
                 onCancelCanonicalImport = onCancelCanonicalImport,
                 onExportEcproj = onExportEcproj,
@@ -481,7 +477,14 @@ fun EditorScreen(
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
                 onOpenCanonicalEditor = { showCanonicalEditor = true },
-                onOpenRepositoryPicker = { showRepositoryPicker = true }
+                onOpenRepositoryPicker = { showRepositoryPicker = true },
+                canUndo = canUndo,
+                canRedo = canRedo,
+                onUndo = onUndo,
+                onRedo = onRedo,
+                onOpenInspector = { showPhoneInspector = true },
+                onOpenCompositionSettings = { showCompositionSettings = true },
+                onAddLayer = onAddLayer
             )
             }
 
@@ -1170,12 +1173,11 @@ private fun ExportOverflowMenu(
 
 @Composable
 private fun HeaderBar(
-    projectName: String,
     saveMessage: String,
     onSave: () -> Unit,
     onOpenProject: () -> Unit,
     onOpenMediaLibrary: () -> Unit,
-    onValidateEcproj: () -> Unit,
+    onImportProject: () -> Unit,
     isImportingCanonicalProject: Boolean,
     onCancelCanonicalImport: () -> Unit,
     onExportEcproj: () -> Unit,
@@ -1196,226 +1198,292 @@ private fun HeaderBar(
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit,
-    onOpenRepositoryPicker: () -> Unit = {}
+    onOpenRepositoryPicker: () -> Unit = {},
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onOpenInspector: () -> Unit,
+    onOpenCompositionSettings: () -> Unit,
+    onAddLayer: () -> Unit
 ) {
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
-    ) {
-        // The single-row desktop header needs ~840dp to fit its action bar
-        // (logo, OFFLINE chip, nine icon buttons, three text buttons) without
-        // squeezing the status column to zero width — on a 731dp landscape
-        // phone the old 620dp threshold chose it and the status text was
-        // measured to zero and never displayed. Narrower windows use the
-        // two-row header, where the status has its own full-width row.
-        if (maxWidth < 840.dp) {
-            // Three compact rows on phones: the title row, the status on
-            // its own full-width line, and the action bar as a scrollable
-            // row. Eight 48dp action buttons cannot share one row with the
-            // status on a 360dp phone, and squeezing the status to zero
-            // width hid it entirely (see the old 620dp threshold bug).
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
-                            .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 18.sp)
-                    }
-                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text("EFFECTCRAFT", color = EditorPalette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                        Text(projectName, color = EditorPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Surface(
-                        color = Color(0xFF13231F),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color(0xFF24453E))
-                    ) {
-                        Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                            color = EditorPalette.mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
-                    }
-                    IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
-                    }
-                    TextButton(onClick = onNewProject, modifier = Modifier.height(48.dp)) {
-                        Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-                    }
-                }
-                // Status on its own full-width line: it is never squeezed
-                // by the action bar, and it stays a single ellipsized line.
-                // 12sp so the save state ("Saved locally" vs "Unsaved
-                // changes") is readable at a glance (P14).
-                Text(
-                    saveMessage,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
-                        .semantics { contentDescription = "Editor status: $saveMessage" },
-                    color = EditorPalette.mint,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // Batch 2 (P10): export progress is visible in the header
-                // while a render runs — bar + percentage + Cancel — not
-                // just a TalkBack description on the Pause icon.
-                ExportProgressRow(
-                    isExportingSequence = isExportingSequence,
-                    isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                    sequenceExportProgress = sequenceExportProgress,
-                    onCancelSequenceExport = onCancelSequenceExport,
-                    isExportingMp4 = isExportingMp4,
-                    isMp4ExportWritingOutput = isMp4ExportWritingOutput,
-                    mp4ExportProgress = mp4ExportProgress,
-                    onCancelMp4Sequence = onCancelMp4Sequence
-                )
-                // Action bar: every button is a full 48dp target. Eight
-                // 48dp buttons do not fit a 360dp phone side by side, so
-                // this row scrolls horizontally instead of squeezing or
-                // clipping any action.
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Batch 2 (P12): the app's main output, one labelled
-                    // tap from the phone header. It opens the sequence
-                    // settings with MP4 H.264 pre-selected — the format
-                    // can still be changed there. Disabled without an
-                    // imported composition, like the other render buttons.
-                    TextButton(
-                        onClick = onExportMp4Sequence,
-                        enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
-                        modifier = Modifier.height(48.dp)
-                            .semantics { contentDescription = "Export video (MP4)" }
-                    ) {
-                        Text("Export video", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
-                    }
-                    IconButton(onClick = onOpenProject, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Open offline project", tint = EditorPalette.mint)
-                    }
-                    IconButton(onClick = onOpenMediaLibrary, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet)
-                    }
-                    IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj, modifier = Modifier.size(48.dp)) {
-                        Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.Description,
-                            contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
-                            tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
-                    }
-                    IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
-                    }
-                    // Batch 2 export fix: the four FileDownload icons
-                    // here were indistinguishable — one overflow menu
-                    // with labelled entries now holds all four exports.
-                    ExportOverflowMenu(
-                        onExportEcproj = onExportEcproj,
-                        onExportEcprojx = onExportEcprojx,
-                        isExportingFrame = isExportingFrame,
-                        onExportRenderedFrame = onExportRenderedFrame,
-                        onCancelFrameExport = onCancelFrameExport,
-                        isExportingSequence = isExportingSequence,
-                        isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                        onExportPngSequence = onExportPngSequence,
-                        onCancelSequenceExport = onCancelSequenceExport,
-                        sequenceExportProgress = sequenceExportProgress,
-                        hasCanonicalProject = hasCanonicalProject
-                    )
-                }
-            }
-        } else {
-            Column(Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(68.dp),
-                verticalAlignment = Alignment.CenterVertically
+    // Batch 3: one header for every width. The title row is the app
+    // name only — no tagline, no project name under it (the project
+    // name lives in the Composition viewer tab and in the status
+    // line). Below it: the status on its own full-width line, the
+    // export progress row, and the AE-style menu bar. The old 840dp
+    // split and the scrolling row of unlabelled icons are gone.
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
+                    .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(11.dp))
-                        .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 21.sp)
-                }
-                Column(Modifier.weight(1f).padding(start = 11.dp)) {
-                    Text("EFFECTCRAFT", color = EditorPalette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.1.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(projectName, color = EditorPalette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("  ·  ", color = EditorPalette.border, fontSize = 12.sp)
-                        Text(
-                            saveMessage,
-                            modifier = Modifier.semantics { contentDescription = "Editor status: $saveMessage" },
-                            color = EditorPalette.mint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                Surface(
-                    color = Color(0xFF13231F), shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, Color(0xFF24453E))
-                ) {
-                    Text("OFFLINE", modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        color = EditorPalette.mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                }
-                IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet) }
-                IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj) {
-                    Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.Description,
-                        contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
-                        tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
-                }
-                IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
-                }
-                // Batch 2 export fix: same single overflow menu as on
-                // phones — the four FileDownload icons were identical.
-                // The MP4 button below stays as it is (wide-layout
-                // counterpart of the labelled "Export video" button).
-                ExportOverflowMenu(
-                    onExportEcproj = onExportEcproj,
-                    onExportEcprojx = onExportEcprojx,
-                    isExportingFrame = isExportingFrame,
-                    onExportRenderedFrame = onExportRenderedFrame,
-                    onCancelFrameExport = onCancelFrameExport,
-                    isExportingSequence = isExportingSequence,
-                    isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                    onExportPngSequence = onExportPngSequence,
-                    onCancelSequenceExport = onCancelSequenceExport,
-                    sequenceExportProgress = sequenceExportProgress,
-                    hasCanonicalProject = hasCanonicalProject
-                )
-                IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
-                IconButton(
-                    onClick = if (isExportingMp4 && !isMp4ExportWritingOutput) onCancelMp4Sequence else onExportMp4Sequence,
-                    enabled = if (isExportingMp4) !isMp4ExportWritingOutput else hasCanonicalProject && !isExportingFrame && !isExportingSequence
-                ) {
-                    Icon(
-                        if (isExportingMp4) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                        contentDescription = when {
-                            isExportingMp4 && isMp4ExportWritingOutput -> "Writing MP4 · $mp4ExportProgress%"
-                            isExportingMp4 -> "Cancel MP4 export · $mp4ExportProgress%"
-                            else -> "Export H.264 MP4"
-                        },
-                        tint = if (isExportingMp4) EditorPalette.amber else EditorPalette.violet
-                    )
-                }
-                TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
-                TextButton(onClick = onOpenRepositoryPicker) { Text("Projects", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
-                TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
+                Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 18.sp)
             }
-            // Batch 2 (P10): same visible progress row as on phones.
-            ExportProgressRow(
-                isExportingSequence = isExportingSequence,
-                isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                sequenceExportProgress = sequenceExportProgress,
-                onCancelSequenceExport = onCancelSequenceExport,
-                isExportingMp4 = isExportingMp4,
-                isMp4ExportWritingOutput = isMp4ExportWritingOutput,
-                mp4ExportProgress = mp4ExportProgress,
-                onCancelMp4Sequence = onCancelMp4Sequence
+            Text(
+                "EFFECTCRAFT",
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
+                color = EditorPalette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
+                maxLines = 1
             )
+            Surface(
+                color = Color(0xFF13231F),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Color(0xFF24453E))
+            ) {
+                Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                    color = EditorPalette.mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
+            }
+            IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
+            }
+            TextButton(onClick = onNewProject, modifier = Modifier.height(48.dp)) {
+                Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
             }
         }
+        // Status on its own full-width line: it is never squeezed
+        // by the action bar, and it stays a single ellipsized line.
+        // 12sp so the save state ("Saved locally" vs "Unsaved
+        // changes") is readable at a glance (P14).
+        Text(
+            saveMessage,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
+                .semantics { contentDescription = "Editor status: $saveMessage" },
+            color = EditorPalette.mint,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        // Batch 2 (P10): export progress is visible in the header
+        // while a render runs — bar + percentage + Cancel — not
+        // just a TalkBack description on the Pause icon.
+        ExportProgressRow(
+            isExportingSequence = isExportingSequence,
+            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+            sequenceExportProgress = sequenceExportProgress,
+            onCancelSequenceExport = onCancelSequenceExport,
+            isExportingMp4 = isExportingMp4,
+            isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+            mp4ExportProgress = mp4ExportProgress,
+            onCancelMp4Sequence = onCancelMp4Sequence
+        )
+        MenuBar(
+            isImportingCanonicalProject = isImportingCanonicalProject,
+            onImportProject = onImportProject,
+            onCancelCanonicalImport = onCancelCanonicalImport,
+            onNewProject = onNewProject,
+            onOpenProject = onOpenProject,
+            onOpenMediaLibrary = onOpenMediaLibrary,
+            onOpenRepositoryPicker = onOpenRepositoryPicker,
+            onSave = onSave,
+            canUndo = canUndo,
+            onUndo = onUndo,
+            canRedo = canRedo,
+            onRedo = onRedo,
+            onOpenCompositionSettings = onOpenCompositionSettings,
+            hasCanonicalProject = hasCanonicalProject,
+            onOpenCanonicalEditor = onOpenCanonicalEditor,
+            onAddLayer = onAddLayer,
+            onOpenInspector = onOpenInspector,
+            onExportEcproj = onExportEcproj,
+            onExportEcprojx = onExportEcprojx,
+            isExportingFrame = isExportingFrame,
+            onExportRenderedFrame = onExportRenderedFrame,
+            onCancelFrameExport = onCancelFrameExport,
+            isExportingSequence = isExportingSequence,
+            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+            onExportPngSequence = onExportPngSequence,
+            onCancelSequenceExport = onCancelSequenceExport,
+            sequenceExportProgress = sequenceExportProgress,
+            onExportMp4Sequence = onExportMp4Sequence,
+            isExportingMp4 = isExportingMp4,
+            isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+            onCancelMp4Sequence = onCancelMp4Sequence,
+            mp4ExportProgress = mp4ExportProgress
+        )
     }
+}
+
+/**
+ * Batch 3: the After Effects-style menu bar. File / Edit /
+ * Composition / Layer / Window dropdowns hold every command the old
+ * scrolling row of unlabelled icons held, with labelled items —
+ * the same menu style as the desktop app. Import stays a labelled
+ * button first in the row so it is visible without scrolling on
+ * any width; Export video stays a labelled button too. The four
+ * file exports stay behind the single overflow menu (Batch 2 rule).
+ */
+@Composable
+private fun MenuBar(
+    isImportingCanonicalProject: Boolean,
+    onImportProject: () -> Unit,
+    onCancelCanonicalImport: () -> Unit,
+    onNewProject: () -> Unit,
+    onOpenProject: () -> Unit,
+    onOpenMediaLibrary: () -> Unit,
+    onOpenRepositoryPicker: () -> Unit,
+    onSave: () -> Unit,
+    canUndo: Boolean,
+    onUndo: () -> Unit,
+    canRedo: Boolean,
+    onRedo: () -> Unit,
+    onOpenCompositionSettings: () -> Unit,
+    hasCanonicalProject: Boolean,
+    onOpenCanonicalEditor: () -> Unit,
+    onAddLayer: () -> Unit,
+    onOpenInspector: () -> Unit,
+    onExportEcproj: () -> Unit,
+    onExportEcprojx: () -> Unit,
+    isExportingFrame: Boolean,
+    onExportRenderedFrame: () -> Unit,
+    onCancelFrameExport: () -> Unit,
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    onExportPngSequence: () -> Unit,
+    onCancelSequenceExport: () -> Unit,
+    sequenceExportProgress: Int,
+    onExportMp4Sequence: () -> Unit,
+    isExportingMp4: Boolean,
+    isMp4ExportWritingOutput: Boolean,
+    onCancelMp4Sequence: () -> Unit,
+    mp4ExportProgress: Int
+) {
+    var expandedMenu by remember { mutableStateOf<String?>(null) }
+    val closeMenu = { expandedMenu = null }
+    Row(
+        modifier = Modifier.fillMaxWidth().height(48.dp)
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        // Import first, labelled, always visible without scrolling.
+        // While an import runs it becomes the cancel action, with
+        // the same content description the accessibility test asserts.
+        TextButton(
+            onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onImportProject,
+            modifier = Modifier.height(48.dp)
+                .semantics {
+                    contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Import project"
+                }
+        ) {
+            Text(
+                if (isImportingCanonicalProject) "Cancel import" else "Import project",
+                color = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.violet,
+                fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1
+            )
+        }
+        MenuDropdown(
+            label = "File",
+            expanded = expandedMenu == "File",
+            onExpand = { expandedMenu = if (expandedMenu == "File") null else "File" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("New composition") { closeMenu(); onNewProject() }
+            MenuItem("Open offline project") { closeMenu(); onOpenProject() }
+            MenuItem("Import project…") { closeMenu(); onImportProject() }
+            MenuItem("Open media library") { closeMenu(); onOpenMediaLibrary() }
+            MenuItem("Projects…") { closeMenu(); onOpenRepositoryPicker() }
+            MenuItem("Save draft") { closeMenu(); onSave() }
+        }
+        MenuDropdown(
+            label = "Edit",
+            expanded = expandedMenu == "Edit",
+            onExpand = { expandedMenu = if (expandedMenu == "Edit") null else "Edit" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Undo", enabled = canUndo) { closeMenu(); onUndo() }
+            MenuItem("Redo", enabled = canRedo) { closeMenu(); onRedo() }
+        }
+        MenuDropdown(
+            label = "Composition",
+            expanded = expandedMenu == "Composition",
+            onExpand = { expandedMenu = if (expandedMenu == "Composition") null else "Composition" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Composition settings") { closeMenu(); onOpenCompositionSettings() }
+            MenuItem("Edit imported .ecproj", enabled = hasCanonicalProject) { closeMenu(); onOpenCanonicalEditor() }
+        }
+        MenuDropdown(
+            label = "Layer",
+            expanded = expandedMenu == "Layer",
+            onExpand = { expandedMenu = if (expandedMenu == "Layer") null else "Layer" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Add shape layer") { closeMenu(); onAddLayer() }
+        }
+        MenuDropdown(
+            label = "Window",
+            expanded = expandedMenu == "Window",
+            onExpand = { expandedMenu = if (expandedMenu == "Window") null else "Window" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Inspector") { closeMenu(); onOpenInspector() }
+        }
+        // Batch 2 (P12): the app's main output, one labelled tap
+        // from the header. It opens the sequence settings with MP4
+        // H.264 pre-selected. Disabled without an imported
+        // composition, like the other render buttons.
+        TextButton(
+            onClick = onExportMp4Sequence,
+            enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
+            modifier = Modifier.height(48.dp)
+                .semantics { contentDescription = "Export video (MP4)" }
+        ) {
+            Text("Export video", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
+        }
+        // Batch 2 export fix: the four FileDownload icons were
+        // indistinguishable — one overflow menu with labelled
+        // entries now holds all four exports.
+        ExportOverflowMenu(
+            onExportEcproj = onExportEcproj,
+            onExportEcprojx = onExportEcprojx,
+            isExportingFrame = isExportingFrame,
+            onExportRenderedFrame = onExportRenderedFrame,
+            onCancelFrameExport = onCancelFrameExport,
+            isExportingSequence = isExportingSequence,
+            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+            onExportPngSequence = onExportPngSequence,
+            onCancelSequenceExport = onCancelSequenceExport,
+            sequenceExportProgress = sequenceExportProgress,
+            hasCanonicalProject = hasCanonicalProject
+        )
+    }
+}
+
+@Composable
+private fun MenuDropdown(
+    label: String,
+    expanded: Boolean,
+    onExpand: () -> Unit,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box {
+        TextButton(
+            onClick = onExpand,
+            modifier = Modifier.height(48.dp)
+                .semantics { contentDescription = "$label menu" }
+        ) {
+            Text(label, color = EditorPalette.text, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun MenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label, fontSize = 13.sp, maxLines = 1) },
+        onClick = onClick,
+        enabled = enabled
+    )
 }
 
 @Composable
@@ -3658,7 +3726,7 @@ private fun ToolBar(
         }
         TextButton(onClick = onAddLayer) {
             Icon(Icons.Outlined.Add, contentDescription = null, tint = EditorPalette.violet)
-            Text("Layer", color = EditorPalette.violet, fontSize = 11.sp)
+            Text("Add layer", color = EditorPalette.violet, fontSize = 11.sp, maxLines = 1)
         }
     }
 }
@@ -3770,6 +3838,17 @@ private fun TimelinePanel(
                 modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove opacity keyframe" }
             ) { Text("− Keyframe", color = EditorPalette.amber, fontSize = 11.sp) }
         }
+
+        // Batch 3: a real time ruler above the playhead, After
+        // Effects-style — second ticks with mm:ss labels — so the
+        // playhead position reads against time instead of floating
+        // over a bare slider.
+        TimelineRuler(
+            durationFrames = project.durationFrames,
+            frameRate = project.frameRate,
+            modifier = Modifier.fillMaxWidth().height(20.dp)
+                .semantics { contentDescription = "Timeline ruler" }
+        )
 
         Slider(
             value = playheadFrame.toFloat(),
@@ -5004,6 +5083,46 @@ private fun timecode(frame: Int, fps: Int): String {
  * mixes. Times are frames; the panel converts to milliseconds for
  * display with the composition frame rate.
  */
+@Composable
+private fun TimelineRuler(
+    durationFrames: Int,
+    frameRate: Int,
+    modifier: Modifier = Modifier
+) {
+    val durationSeconds = if (frameRate > 0) durationFrames / frameRate.toFloat() else 0f
+    // Labels every second on short comps, every five on long ones,
+    // so labels never collide.
+    val labelEverySeconds = if (durationSeconds <= 30f) 1 else 5
+    val paint = remember {
+        android.graphics.Paint().apply {
+            color = EditorPalette.muted.toArgb()
+            textSize = 26f
+            isAntiAlias = true
+        }
+    }
+    Canvas(modifier) {
+        if (durationSeconds <= 0f || size.width <= 0f) return@Canvas
+        val secondsToX = { seconds: Float -> seconds / durationSeconds * size.width }
+        var seconds = 0f
+        while (seconds <= durationSeconds) {
+            val x = secondsToX(seconds)
+            val isMajor = (seconds.toInt() % labelEverySeconds == 0)
+            drawLine(
+                EditorPalette.muted,
+                Offset(x, size.height - if (isMajor) 12f else 7f),
+                Offset(x, size.height),
+                strokeWidth = 1f
+            )
+            if (isMajor) {
+                val totalSeconds = seconds.toInt()
+                val label = "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+                drawContext.canvas.nativeCanvas.drawText(label, x + 3f, 11f, paint)
+            }
+            seconds += 0.5f
+        }
+    }
+}
+
 @Composable
 private fun AudioTimelinePanel(
     tracks: List<AudioTrackDocument>,

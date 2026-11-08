@@ -611,7 +611,7 @@ class M7FunctionCoverageTest {
                     onSave = {},
                     onOpenProject = {},
                     onDeleteOfflineAsset = {},
-                    onValidateEcproj = {},
+                    onImportProject = {},
                     onExportEcproj = {},
                     onExportEcprojx = {},
                     isExportingFrame = false,

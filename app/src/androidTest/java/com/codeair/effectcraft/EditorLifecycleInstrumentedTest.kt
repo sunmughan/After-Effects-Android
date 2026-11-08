@@ -56,7 +56,7 @@ class EditorLifecycleInstrumentedTest {
     @Test
     fun unsavedEditSurvivesActivityRecreationWithCanonicalDataIntact() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         assertEditorStatus("Unsaved changes")
         waitForJournalFile()
 
@@ -82,7 +82,7 @@ class EditorLifecycleInstrumentedTest {
     @Test
     fun savedEditDoesNotReportRecoveryAfterRecreation() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 

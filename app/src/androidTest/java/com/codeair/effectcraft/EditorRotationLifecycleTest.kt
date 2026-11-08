@@ -36,7 +36,7 @@ class EditorRotationLifecycleTest {
     @Test
     fun rotationKeepsSavedEditorStateWithoutDataLoss() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
 

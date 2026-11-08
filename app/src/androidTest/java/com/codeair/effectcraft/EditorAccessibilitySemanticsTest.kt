@@ -39,8 +39,10 @@ class EditorAccessibilitySemanticsTest {
     @Test
     fun headerControlsExposeDescriptionsAndClickActions() {
         compose.onNodeWithContentDescription("Save draft").assertExists().assertHasClickAction()
-        compose.onNodeWithContentDescription("Open offline project").assertExists().assertHasClickAction()
-        compose.onNodeWithContentDescription("Offline media library").assertExists().assertHasClickAction()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Open offline project").assertExists().assertHasClickAction()
+        compose.onNodeWithText("Offline media library").assertExists().assertHasClickAction()
+        compose.onNodeWithContentDescription("File menu").performClick()
         // The status node must be announced at launch. Its exact message
         // legitimately depends on sibling autosave state that postdates
         // ec-m6: "Stored on this device" on a clean launch, "Recovered

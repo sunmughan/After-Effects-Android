@@ -81,7 +81,7 @@ class OfflineAcceptanceTest {
         File(context.filesDir, "projects").listFiles()?.forEach { it.delete() }
 
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
 
@@ -92,7 +92,8 @@ class OfflineAcceptanceTest {
         assertEquals(4, saved.single().layers.size)
 
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithContentDescription("Open offline project").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         compose.onNodeWithText("Opened locally · Untitled Composition").assertIsDisplayed()
         compose.onNodeWithContentDescription("Selected timeline layer: Background").assertExists()

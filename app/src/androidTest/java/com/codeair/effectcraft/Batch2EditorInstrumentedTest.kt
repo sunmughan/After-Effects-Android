@@ -65,7 +65,7 @@ class Batch2EditorInstrumentedTest {
             onSave = {},
             onOpenProject = {},
             onDeleteOfflineAsset = {},
-            onValidateEcproj = {},
+            onImportProject = {},
             onExportEcproj = onExportEcproj,
             onExportEcprojx = onExportEcprojx,
             isExportingFrame = false,
