@@ -1289,8 +1289,7 @@ fn add_shape_layer(source: &str, composition_id: u64, name: &str) -> Result<Stri
     // A newly authored shape layer must contain drawable geometry and a fill,
     // not just an empty Shape source that renders as a transparent placeholder.
     // Use the same upstream builders exercised by the native shape renderer.
-    let mut next_id = 10_000u64;
-    let mut ids = build::Ids(&mut next_id);
+    let mut ids = build::Ids(&mut project.next_id);
     let rectangle = build::shape_rect(&mut ids, [200.0, 100.0], [0.0, 0.0], 0.0);
     let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
     let contents = layer.props.sub_mut("contents")
@@ -1336,8 +1335,7 @@ fn add_ellipse_layer(source: &str, composition_id: u64, name: &str) -> Result<St
         (comp.width, comp.height), None);
     // Author a real upstream parametric ellipse and fill so the new layer is
     // immediately visible and its Size/Position controls remain editable.
-    let mut next_id = 10_000u64;
-    let mut ids = build::Ids(&mut next_id);
+    let mut ids = build::Ids(&mut project.next_id);
     let ellipse = build::shape_ellipse(&mut ids, [160.0, 160.0], [0.0, 0.0]);
     let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
     let contents = layer.props.sub_mut("contents")
@@ -1357,7 +1355,7 @@ fn add_star_layer(source: &str, composition_id: u64, name: &str) -> Result<Strin
     let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
     let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
     let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
-    let mut next_id = 10_000u64; let mut ids = build::Ids(&mut next_id);
+    let mut ids = build::Ids(&mut project.next_id);
     let star = build::shape_star(&mut ids, true, 5.0, [0.0, 0.0], 120.0, 50.0);
     let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
     let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
@@ -3948,6 +3946,45 @@ mod tests {
         assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
         assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "star fill must produce visible white pixels in the real composition frame");
     }
+    #[test]
+    fn sequential_shape_creation_uses_project_wide_unique_property_uids() {
+        use effectcraft_project::{Comp, ItemKind};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        use std::collections::HashSet;
+
+        fn collect_group_uids(group: &effectcraft_project::PropGroup, ids: &mut Vec<u64>) {
+            ids.push(group.uid);
+            for node in &group.children {
+                match node {
+                    Node::Prop(property) => ids.push(property.uid),
+                    Node::Group(child) => collect_group_uids(child, ids),
+                }
+            }
+        }
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let mut json = project.to_file_json().unwrap();
+        json = add_shape_layer(&json, comp_id.0, "Rectangle").unwrap();
+        json = add_ellipse_layer(&json, comp_id.0, "Ellipse").unwrap();
+        json = add_star_layer(&json, comp_id.0, "Star").unwrap();
+
+        let updated: Project = serde_json::from_str(&json).unwrap();
+        let composition = updated.comp(comp_id).unwrap();
+        assert_eq!(composition.layers.len(), 3);
+        let mut ids: Vec<u64> = updated.items.keys().map(|id| id.0).collect();
+        for layer in &composition.layers {
+            ids.push(layer.id.0);
+            collect_group_uids(&layer.props, &mut ids);
+        }
+        let unique: HashSet<u64> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len(), "items, layers and every property/group UID must share one collision-free allocator");
+        assert!(updated.next_id > ids.iter().copied().max().unwrap_or(0), "serialized allocator must remain ahead of every allocated UID");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+    }
+
     #[test]
     fn add_star_layer_rejects_blank_name_and_missing_composition() {
         let source = Project::default().to_file_json().unwrap(); assert!(add_star_layer(&source, 1, "  ").is_err()); assert!(add_star_layer(&source, 99, "Star").is_err());
