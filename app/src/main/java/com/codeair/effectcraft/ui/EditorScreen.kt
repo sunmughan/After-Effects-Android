@@ -65,6 +65,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -1090,6 +1091,83 @@ private fun ExportProgressRow(
     }
 }
 
+/**
+ * Batch 2 export fix (user-verified defect): the phone and wide headers
+ * showed four identical FileDownload icons with no labels — .ecproj,
+ * .ecprojx, rendered frame PNG and PNG sequence ZIP were
+ * indistinguishable. One MoreVert overflow control now holds all four
+ * as labelled menu entries; each entry keeps the exact callback and
+ * enabled state its old icon button had (frame/sequence entries toggle
+ * to Cancel while their export runs). MP4 export stays separate: the
+ * labelled "Export video" button on phones, the MP4 icon on wide
+ * layouts. Used by both header branches so the menu is identical
+ * everywhere.
+ */
+@Composable
+private fun ExportOverflowMenu(
+    onExportEcproj: () -> Unit,
+    onExportEcprojx: () -> Unit,
+    isExportingFrame: Boolean,
+    onExportRenderedFrame: () -> Unit,
+    onCancelFrameExport: () -> Unit,
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    onExportPngSequence: () -> Unit,
+    onCancelSequenceExport: () -> Unit,
+    sequenceExportProgress: Int,
+    hasCanonicalProject: Boolean
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                Icons.Outlined.MoreVert,
+                contentDescription = "More export options",
+                tint = EditorPalette.text
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Export .ecproj") },
+                onClick = { expanded = false; onExportEcproj() }
+            )
+            DropdownMenuItem(
+                text = { Text("Export .ecprojx XML") },
+                onClick = { expanded = false; onExportEcprojx() }
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG")
+                },
+                onClick = {
+                    expanded = false
+                    if (isExportingFrame) onCancelFrameExport() else onExportRenderedFrame()
+                },
+                enabled = isExportingFrame || hasCanonicalProject
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        when {
+                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
+                            isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
+                            else -> "Export PNG sequence ZIP"
+                        }
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport() else onExportPngSequence()
+                },
+                enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame
+            )
+        }
+    }
+}
+
 @Composable
 private fun HeaderBar(
     projectName: String,
@@ -1229,38 +1307,22 @@ private fun HeaderBar(
                     IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
                     }
-                    IconButton(onClick = onExportEcproj, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
-                    }
-                    IconButton(onClick = onExportEcprojx, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint)
-                    }
-                    IconButton(
-                        onClick = if (isExportingFrame) onCancelFrameExport else onExportRenderedFrame,
-                        enabled = isExportingFrame || hasCanonicalProject,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                            contentDescription = if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG",
-                            tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
-                        )
-                    }
-                    IconButton(
-                        onClick = if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport else onExportPngSequence,
-                        enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                            contentDescription = when {
-                                isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
-                                isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
-                                else -> "Export PNG sequence ZIP"
-                            },
-                            tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
-                        )
-                    }
+                    // Batch 2 export fix: the four FileDownload icons
+                    // here were indistinguishable — one overflow menu
+                    // with labelled entries now holds all four exports.
+                    ExportOverflowMenu(
+                        onExportEcproj = onExportEcproj,
+                        onExportEcprojx = onExportEcprojx,
+                        isExportingFrame = isExportingFrame,
+                        onExportRenderedFrame = onExportRenderedFrame,
+                        onCancelFrameExport = onCancelFrameExport,
+                        isExportingSequence = isExportingSequence,
+                        isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                        onExportPngSequence = onExportPngSequence,
+                        onCancelSequenceExport = onCancelSequenceExport,
+                        sequenceExportProgress = sequenceExportProgress,
+                        hasCanonicalProject = hasCanonicalProject
+                    )
                 }
             }
         } else {
@@ -1304,32 +1366,23 @@ private fun HeaderBar(
                 IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
                     Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
                 }
-                IconButton(onClick = onExportEcproj) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text) }
-                IconButton(onClick = onExportEcprojx) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint) }
-                IconButton(
-                    onClick = if (isExportingFrame) onCancelFrameExport else onExportRenderedFrame,
-                    enabled = isExportingFrame || hasCanonicalProject
-                ) {
-                    Icon(
-                        if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                        contentDescription = if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG",
-                        tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
-                    )
-                }
-                IconButton(
-                    onClick = if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport else onExportPngSequence,
-                    enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame,
-                ) {
-                    Icon(
-                        if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                        contentDescription = when {
-                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
-                            isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
-                            else -> "Export PNG sequence ZIP"
-                        },
-                        tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
-                    )
-                }
+                // Batch 2 export fix: same single overflow menu as on
+                // phones — the four FileDownload icons were identical.
+                // The MP4 button below stays as it is (wide-layout
+                // counterpart of the labelled "Export video" button).
+                ExportOverflowMenu(
+                    onExportEcproj = onExportEcproj,
+                    onExportEcprojx = onExportEcprojx,
+                    isExportingFrame = isExportingFrame,
+                    onExportRenderedFrame = onExportRenderedFrame,
+                    onCancelFrameExport = onCancelFrameExport,
+                    isExportingSequence = isExportingSequence,
+                    isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                    onExportPngSequence = onExportPngSequence,
+                    onCancelSequenceExport = onCancelSequenceExport,
+                    sequenceExportProgress = sequenceExportProgress,
+                    hasCanonicalProject = hasCanonicalProject
+                )
                 IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
                 IconButton(
                     onClick = if (isExportingMp4 && !isMp4ExportWritingOutput) onCancelMp4Sequence else onExportMp4Sequence,

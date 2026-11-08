@@ -16,6 +16,7 @@ import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.ui.EditorScreen
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -40,6 +41,9 @@ class Batch2EditorInstrumentedTest {
         audioPreviewLabel: String = "",
         hasCanonicalProject: Boolean = false,
         canonicalProject: CanonicalProjectInfo? = null,
+        onExportEcproj: () -> Unit = {},
+        onExportEcprojx: () -> Unit = {},
+        onExportRenderedFrame: () -> Unit = {},
         onExportMp4Sequence: (Int, Int, Int, Int, Int, Int, RenderOutputFormat) -> Unit = { _, _, _, _, _, _, _ -> }
     ) {
         EditorScreen(
@@ -62,10 +66,10 @@ class Batch2EditorInstrumentedTest {
             onOpenProject = {},
             onDeleteOfflineAsset = {},
             onValidateEcproj = {},
-            onExportEcproj = {},
-            onExportEcprojx = {},
+            onExportEcproj = onExportEcproj,
+            onExportEcprojx = onExportEcprojx,
             isExportingFrame = false,
-            onExportRenderedFrame = {},
+            onExportRenderedFrame = onExportRenderedFrame,
             onCancelFrameExport = {},
             isExportingSequence = isExportingSequence,
             isSequenceExportWritingOutput = false,
@@ -207,5 +211,61 @@ class Batch2EditorInstrumentedTest {
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Export video (MP4)").assertIsDisplayed()
         compose.onNodeWithContentDescription("Export video (MP4)").assertIsNotEnabled()
+    }
+
+    @Test
+    fun exportOverflowMenuListsFourLabelledExportsAndNoIconOnlyButtons() {
+        compose.setContent { Editor(canonicalProject = canonicalProject()) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("More export options").assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Export .ecproj").assertIsDisplayed()
+        compose.onNodeWithText("Export .ecprojx XML").assertIsDisplayed()
+        compose.onNodeWithText("Export rendered frame PNG").assertIsDisplayed()
+        compose.onNodeWithText("Export PNG sequence ZIP").assertIsDisplayed()
+        // The old four FileDownload icons are gone: none of the four
+        // exports exists as an icon-only content description any more.
+        compose.onNodeWithContentDescription("Export .ecproj").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Export .ecprojx XML").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Export rendered frame PNG").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Export PNG sequence ZIP").assertDoesNotExist()
+    }
+
+    @Test
+    fun exportOverflowMenuEntriesFireTheirCallbacks() {
+        var ecproj = 0
+        var ecprojx = 0
+        var frame = 0
+        compose.setContent {
+            Editor(
+                canonicalProject = canonicalProject(),
+                onExportEcproj = { ecproj++ },
+                onExportEcprojx = { ecprojx++ },
+                onExportRenderedFrame = { frame++ }
+            )
+        }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export .ecproj").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export .ecprojx XML").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export rendered frame PNG").performClick()
+        compose.waitForIdle()
+        assertEquals(1, ecproj)
+        assertEquals(1, ecprojx)
+        assertEquals(1, frame)
+    }
+
+    @Test
+    fun exportOverflowMenuSequenceEntryOpensPngSequenceSettings() {
+        compose.setContent { Editor(canonicalProject = canonicalProject()) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export PNG sequence ZIP").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
     }
 }

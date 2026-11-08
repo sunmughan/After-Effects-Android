@@ -677,7 +677,8 @@ class M7FunctionCoverageTest {
         sequenceSettingsScreen(onExport = { w, h, fps, start, end ->
             exported.add(listOf(w, h, fps, start, end))
         })
-        compose.onNodeWithContentDescription("Export PNG sequence ZIP").performClick()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export PNG sequence ZIP").performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         compose.onNodeWithText("Render ZIP").performClick()
         // Opening the dialog resets the fields from the composition
@@ -691,7 +692,8 @@ class M7FunctionCoverageTest {
     fun settings_pngSequenceSettingsRejectsBlankNumericField() {
         var exported = 0
         sequenceSettingsScreen(onExport = { _, _, _, _, _ -> exported++ })
-        compose.onNodeWithContentDescription("Export PNG sequence ZIP").performClick()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export PNG sequence ZIP").performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         // Integration note: the original ec-m7 test selected the FPS
         // field by position via onAllNodes(hasSetTextAction())[2], but

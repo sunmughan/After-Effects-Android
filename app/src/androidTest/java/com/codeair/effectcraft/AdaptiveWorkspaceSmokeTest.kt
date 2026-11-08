@@ -234,7 +234,10 @@ class AdaptiveWorkspaceSmokeTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("Export PNG sequence ZIP").assertIsDisplayed().performClick()
+        // The four exports now live in the overflow menu (Batch 2
+        // export fix): open it first, then tap the labelled entry.
+        compose.onNodeWithContentDescription("More export options").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Export PNG sequence ZIP").assertIsDisplayed().performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         compose.onNodeWithText("Render ZIP").performClick()
         assertEquals(listOf(640, 360, 30, 0, 89), added)
