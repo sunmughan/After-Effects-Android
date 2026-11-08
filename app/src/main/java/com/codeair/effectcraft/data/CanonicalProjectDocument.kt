@@ -112,14 +112,14 @@ object CanonicalProjectDocument {
         try {
             var trailingEvent = parser.next()
             while (trailingEvent != XmlPullParser.END_DOCUMENT) {
-                // XML permits whitespace and comments after the document element.
-                // Reject a second root or non-whitespace character data, but do
-                // not mistake legal formatting for an extra project payload.
+                // XML permits whitespace, comments and processing instructions
+                // after the document element. Reject a second root or non-whitespace
+                // character data without rejecting legal exporter metadata.
                 when (trailingEvent) {
                     XmlPullParser.TEXT -> require(parser.text.isBlank()) {
                         "Unexpected content after EffectCraft XML project"
                     }
-                    XmlPullParser.COMMENT -> Unit
+                    XmlPullParser.COMMENT, XmlPullParser.PROCESSING_INSTRUCTION -> Unit
                     else -> error("Unexpected content after EffectCraft XML project")
                 }
                 trailingEvent = parser.next()
