@@ -153,6 +153,9 @@ object CanonicalProjectDocument {
                             require(parser.name == "m") { "Expected <m> inside EffectCraft object" }
                             val key = parser.getAttributeValue(null, "n")
                                 ?: error("EffectCraft object member has no n attribute")
+                            require(!result.has(key)) {
+                                "Duplicate EffectCraft XML object member <$key>"
+                            }
                             parser.nextTag()
                             val value = readXmlValue(parser)
                             parser.nextTag()
