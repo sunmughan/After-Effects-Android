@@ -219,3 +219,8 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 ### Phase status
 - M4 gained actual editable Pentagon authoring and test coverage; this is implementation progress, not phase completion.
 - M0–M6 remain partial/qualified as in the ledger; M7 NOT ACCEPTED. PR #4 remains Draft. Physical GPU/media/codec/audio/performance/accessibility/install-run and owner-controlled signing remain concrete release blockers. Effekseer interoperability is incomplete; Adobe `.aep` is proprietary and not natively supported/claimed.
+
+
+### Canonical inspector nested-scroll follow-up — 2026-11-09 03:08 IST
+- Further source inspection confirmed that the selected row is nested under both the inspector sheet's outer scroll and a 210dp layer-list scroll. Scrolling only the header and inner row can still leave the **Layers section itself** below the outer viewport. Updated both affected tests to explicitly scroll the `Layers` section into view, then the selected row: [Adaptive ce94ed30](https://github.com/sunmughan/After-Effects-Android/commit/ce94ed309e98d5df78d7021907404c9db935bb11), [CanonicalSelection 56758bbf](https://github.com/sunmughan/After-Effects-Android/commit/56758bbfac3054ab328795d1be1c4dca385f61d3). This preserves all selection and visibility assertions and addresses the actual outer viewport, not just sheet reset.
+- Fresh latest-head Actions [#1345](https://github.com/sunmughan/After-Effects-Android/actions/runs/42524786340) is queued at 56758bbf. Earlier #1342/#1344 are superseded; require full suite and cold reproducibility at the latest source/test SHA.
