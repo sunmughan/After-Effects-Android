@@ -88,6 +88,17 @@ class CanonicalProjectDocumentTest {
     }
 
     @Test
+    fun ecprojxAcceptsLeadingCommentWithoutXmlDeclaration() {
+        // XML declarations are optional and comments may precede the root.
+        // Content sniffing must route this valid document to the XML parser,
+        // not the JSON parser.
+        val xml = """<!-- exported by EffectCraft -->
+            <EffectCraftProject encoding="json" version="1"><obj><m n="name"><str>Scene</str></m></obj></EffectCraftProject>"""
+        val canonical = JSONObject(CanonicalProjectDocument.toCanonicalJson(xml))
+        assertEquals("Scene", canonical.getString("name"))
+    }
+
+    @Test
     fun validatesNativeEnvelopeAndCompositionMetadata() {
         val metadata = """{"valid":true,"compositions":[{"id":1,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":5,"layers":[]}],"items":[]}"""
         assertEquals("Main", CanonicalProjectDocument.validateNativeEnvelope(metadata).compositions.single().name)
