@@ -1246,6 +1246,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val selectedOpacityKeyframes = projectKeyframeTracks
         .firstOrNull { it.layerId == selectedLayerId && it.track.property == "opacity" }
         ?.track?.keyframes.orEmpty()
+    // Batch 2 (P05/P21): what audio sits under the playhead, for the
+    // transport row. The P21 player updates the wording to the live
+    // playback state; until then this names the clip so Play's audio
+    // behaviour is never a mystery.
+    val audioPreviewLabel = run {
+        val clip = AudioClipTimeline.audioClipAtPlayhead(project.audioTracks, playheadFrame)
+            ?.takeIf { !it.muted }
+        if (clip == null) "" else "Audio · ${clip.sourcePath.substringAfterLast('/')}"
+    }
     // Batch 2 (P06): opacity at the playhead for every layer, so the draft
     // renderer draws keyframed opacity instead of the static layer value.
     val layerOpacityAtPlayhead = remember(project, projectKeyframeTracks, playheadFrame) {
@@ -1363,6 +1372,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             playheadFrame = playheadFrame,
             selectedOpacityKeyframes = selectedOpacityKeyframes,
             layerOpacityAtPlayhead = layerOpacityAtPlayhead,
+            audioPreviewLabel = audioPreviewLabel,
             canonicalTransformKeyframes = selectedCanonicalTransformKeyframes,
             canonicalTransformDurationFrames = selectedCanonicalTransformDurationFrames,
             canonicalColorKeys = selectedCanonicalColorKeys,

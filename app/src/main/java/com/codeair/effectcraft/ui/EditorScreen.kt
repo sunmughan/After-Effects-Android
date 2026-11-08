@@ -194,6 +194,8 @@ fun EditorScreen(
     selectedOpacityKeyframes: List<PropertyKeyframe>,
     /** Opacity per layer at the playhead (keyframe-evaluated where keyed). */
     layerOpacityAtPlayhead: Map<String, Float> = emptyMap(),
+    /** Audio under the playhead, for the transport row ("" when none). */
+    audioPreviewLabel: String = "",
     canonicalTransformKeyframes: List<Int> = emptyList(),
     canonicalTransformDurationFrames: Int = project.durationFrames,
     canonicalColorKeys: List<CanonicalCurveKey> = emptyList(),
@@ -558,17 +560,18 @@ fun EditorScreen(
                 isPlaying = isPlaying,
                 onSelectLayer = onSelectLayer,
                 onScrub = onScrub,
+                audioPreviewLabel = audioPreviewLabel,
                 onMoveCanonicalTransformKeyframe = onMoveCanonicalTransformKeyframe,
                 onAddOpacityKeyframe = onAddOpacityKeyframe,
                 onRemoveOpacityKeyframe = onRemoveOpacityKeyframe,
                 onTogglePlayback = onTogglePlayback,
                 modifier = Modifier
                     .fillMaxWidth()
-                    // Two header rows (48dp each) + the 48dp playhead
-                    // slider cost 68dp of track viewport vs the old
-                    // single-row/28dp layout, so the card grows by the
-                    // same amount and the viewport stays as before.
-                    .height(if (isTabletLayout) 290.dp else 272.dp)
+                    // Three 48dp rows (title, transport, keyframes) + the
+                    // 48dp playhead slider: the card grows by the transport
+                    // row vs the old layout so the track viewport stays
+                    // the same size.
+                    .height(if (isTabletLayout) 338.dp else 320.dp)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
             )
 
@@ -3527,6 +3530,7 @@ private fun TimelinePanel(
     isPlaying: Boolean,
     onSelectLayer: (String) -> Unit,
     onScrub: (Int) -> Unit,
+    audioPreviewLabel: String = "",
     onMoveCanonicalTransformKeyframe: (Int, Int) -> Unit = { _, _ -> },
     onAddOpacityKeyframe: () -> Unit,
     onRemoveOpacityKeyframe: () -> Unit,
@@ -3540,11 +3544,9 @@ private fun TimelinePanel(
             .border(1.dp, EditorPalette.border, RoundedCornerShape(18.dp))
             .padding(horizontal = 13.dp, vertical = 9.dp)
     ) {
-        // Two rows, by design: the title row (label + timecode + Play)
-        // never shares width with the keyframe buttons, so the timecode
-        // can never wrap and Play can never be pushed off-screen (P03/P05).
-        // The "+ Audio" button is gone: "Add audio" in the Audio section
-        // below is the one audio entry point (P15/P04).
+        // Row 1 — title only. The transport lives on its own row below
+        // (P05): Play and the timecode never share a row with the
+        // keyframe buttons, so neither can be squeezed off-screen again.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Layers, contentDescription = null, tint = EditorPalette.violet, modifier = Modifier.size(17.dp))
             Text(
@@ -3557,6 +3559,30 @@ private fun TimelinePanel(
             )
             Spacer(Modifier.weight(1f))
             Text(
+                "${project.layers.size} layers",
+                color = EditorPalette.muted,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        // Row 2 — transport: Play/Pause + timecode + what audio (if any)
+        // sits under the playhead. Always visible, never shared with the
+        // keyframe controls. Play advances the playhead (the
+        // LaunchedEffect in EffectCraftApp) and the preview re-renders
+        // per frame; it is never a dead button.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            IconButton(onClick = onTogglePlayback, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause timeline" else "Play timeline",
+                    tint = EditorPalette.text
+                )
+            }
+            Text(
                 timecode(playheadFrame, project.frameRate),
                 color = EditorPalette.mint,
                 fontSize = 11.sp,
@@ -3564,11 +3590,15 @@ private fun TimelinePanel(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            IconButton(onClick = onTogglePlayback, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause timeline" else "Play timeline",
-                    tint = EditorPalette.text
+            if (audioPreviewLabel.isNotBlank()) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    audioPreviewLabel,
+                    color = EditorPalette.muted,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
             }
         }
