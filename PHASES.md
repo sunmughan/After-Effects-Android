@@ -3,7 +3,7 @@
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
 [PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #2 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/2).  
-Tracker updated: 2026-11-08 18:38 IST · branch HEAD `7f464d0d`.
+Tracker updated: 2026-11-08 18:38 IST · code SHA `7f464d0d` · docs HEAD `772e1287`.
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
 
@@ -20,7 +20,7 @@ Tracker updated: 2026-11-08 18:38 IST · branch HEAD `7f464d0d`.
 - **CI #1257 failed at exact SHA `ec0bdf4b`** after both Rust/JNI ABI builds and Rust tests succeeded. `assembleDebug` stopped in Kotlin code generation with ASM `MethodTooLargeException` for `EditorScreenKt.CanonicalProjectEditor`; JVM tests, release packaging, instrumentation and cold APK comparison were skipped. This was a real source/compiler limit, not runner/JDK/network infrastructure.
 - Root cause: the canonical inspector had accumulated preview, transform/keyframe interpolation, Source Text and shape/effect property UI into one Compose-generated JVM method exceeding the 64-KiB bytecode method limit.
 - Refactor [97a1ae3d](https://github.com/sunmughan/After-Effects-Android/commit/97a1ae3d45fd511763e286dd10d1c8f2d8198310) extracts transform/keyframe, text and shape/effect parameter sections into dedicated composables, preserving canonical callbacks/state. A faulty follow-up [a40aa02c](https://github.com/sunmughan/After-Effects-Android/commit/a40aa02c68ce16426ef63b3b2f32b76e88a0a122) accidentally truncated the source file to the text helper; this was detected by checking file length/header and restored from the refactor commit with corrected text-helper scope at [a356f5d0](https://github.com/sunmughan/After-Effects-Android/commit/a356f5d0bc0725e34cf403918931623868cfc752). Call indentation was normalized in [7f464d0d](https://github.com/sunmughan/After-Effects-Android/commit/7f464d0dc0c1e9f57abd15099cf107eab6044e09).
-- CI #1261 at a40aa02c and #1263 at 4d75f182 were superseded/cancelled before build acceptance. Exact-head [CI #1267](https://github.com/sunmughan/After-Effects-Android/actions/runs/42483928445) at 7f464d0d is queued; it must prove Kotlin compilation, Rust/JNI, JVM, unsigned APK/AAB + R8, API30 instrumentation and independent cold APK reproducibility. No acceptance is claimed yet.
+- CI #1261 at a40aa02c and #1263 at 4d75f182 were superseded/cancelled before build acceptance. Exact-head CI #1267 at 7f464d0d was cancelled during hosted-runner cleanup when the docs commit superseded it. Latest PR check [CI #1269](https://github.com/sunmughan/After-Effects-Android/actions/runs/42483986534) is queued at docs HEAD 772e1287 (same restored source SHA 7f464d0d); it must prove Kotlin compilation, Rust/JNI, JVM, unsigned APK/AAB + R8, API30 instrumentation and independent cold APK reproducibility. No acceptance is claimed yet.
 - The correction does not remove tests or reduce feature behavior. Local Android SDK/Gradle is unavailable in this runtime; hosted Actions is the compile/test authority.
 
 ## Phase acceptance
