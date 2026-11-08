@@ -1656,6 +1656,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical Text layer added · saved locally"
                 )
             },
+            onAddCanonicalShapeLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalEdit(
+                    NativeProjectBridge.addShapeLayerEcproj(source, compositionId, name),
+                    "Canonical Rectangle layer added · saved locally"
+                )
+            },
             onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
