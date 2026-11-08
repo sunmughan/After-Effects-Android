@@ -1,6 +1,7 @@
 package com.codeair.effectcraft
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -142,6 +143,15 @@ class EditorSmokeTest {
         compose.onNodeWithText("COMPOSITION VIEWER", substring = true).assertIsDisplayed()
         // Batch 2 (P06): a fresh draft renders its own layers now — the
         // dead "Draft preview not rendered" placeholder is gone.
+        // Run 42444179683: the draft render lands on
+        // Dispatchers.Default, outside Compose idle tracking, so on a
+        // loaded emulator the frame had not landed when this asserted
+        // right after launch. Wait for it (same fix as the
+        // DraftPreview test in run 42441138764); the assertions below
+        // are unchanged and still fail if the frame never renders.
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
+        }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
         compose.onNodeWithText("Draft preview not rendered").assertDoesNotExist()
         compose.onNodeWithText("TIMELINE").assertIsDisplayed()
@@ -245,7 +255,12 @@ class EditorSmokeTest {
         val playhead = compose.onNodeWithContentDescription("Timeline playhead")
         compose.onNodeWithContentDescription("Play timeline").performClick()
         compose.onNodeWithContentDescription("Pause timeline").assertIsDisplayed()
-        compose.waitUntil(timeoutMillis = 3_000) {
+        // Run 42444179683: the playhead advances one frame per 33 ms,
+        // but on a loaded emulator even one frame had not landed
+        // inside the old 3 s budget, so the condition timed out. The
+        // condition is unchanged — only the wait budget grows, to the
+        // 10 s used elsewhere for async content.
+        compose.waitUntil(timeoutMillis = 10_000) {
             playhead.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current > 60f
         }
         compose.onNodeWithContentDescription("Pause timeline").performClick()
