@@ -19,6 +19,12 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 - **Release remains NOT complete.** M0–M7 acceptance, Effekseer interoperability, physical GPU/device/media qualification, codec/audio sync, owner-controlled signing and physical installation/run remain open. Adobe `.aep` is proprietary and unsupported natively here; no compatibility claim.
 
 
+## Engineering progress (2026-11-08 18:38 IST)
+
+- **Kotlin method-size failure fixed in source:** CI #1257 at `ec0bdf4b` failed with ASM `MethodTooLargeException` in the Compose-generated `CanonicalProjectEditor` method after Rust/JNI had passed. Split the transform/keyframe, Source Text, and Shape/effect parameter panels into smaller composables [97a1ae3d](https://github.com/sunmughan/After-Effects-Android/commit/97a1ae3d45fd511763e286dd10d1c8f2d8198310); corrected the extracted text composable scope [a40aa02c](https://github.com/sunmughan/After-Effects-Android/commit/a40aa02c68ce16426ef63b3b2f32b76e88a0a122). No tests/features were removed.
+- Exact-head CI [#1261](https://github.com/sunmughan/After-Effects-Android/actions/runs/42483749680) at `a40aa02c` is pending; compiler fix is not accepted until Kotlin, Rust/JNI, JVM, release R8/APK/AAB, API30 instrumentation and cold APK reproducibility all pass.
+- Release remains NOT complete; PR #2 remains Draft. See [PHASES.md](PHASES.md) for exact acceptance evidence and blockers.
+
 ## Build
 
 Requirements: JDK 17, Android SDK Platform 37 and the pinned Android NDK described in the implementation docs. The committed official Gradle Wrapper is 9.5.0 with a distribution SHA-256.
@@ -34,7 +40,7 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 18:12 IST)
+## Current engineering status (2026-11-08 18:38 IST)
 
 **Release is NOT complete.** PR #1 merged into `main` at `4ae22776`; post-merge work is in [draft PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2), not merged. [PHASES.md](PHASES.md) is the authoritative M0–M7 acceptance ledger.
 
