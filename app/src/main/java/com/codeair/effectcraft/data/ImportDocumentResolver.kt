@@ -15,10 +15,12 @@ import java.io.File
  *   document inside takes one of the two paths above, with bundle
  *   media resolved to the extracted files.
  *
- * A raw .aep binary is rejected with the honest reason (no public
- * reader exists; export from After Effects with the included script)
- * instead of a native parse failure. Garbage bytes are rejected the
- * same way. The native inspector remains the final judge downstream.
+ * A raw .aep binary is rejected with the honest reason (direct .aep
+ * import is not in this build yet — it is being built from the
+ * official EffectCraft .aep importer; the ExtendScript export is the
+ * interim route) instead of a native parse failure. Garbage bytes are
+ * rejected the same way. The native inspector remains the final judge
+ * downstream.
  */
 object ImportDocumentResolver {
 
@@ -43,9 +45,10 @@ object ImportDocumentResolver {
             bytes[2] == 'F'.code.toByte() && bytes[3] == 'X'.code.toByte()
         ) {
             throw IllegalArgumentException(
-                "Adobe .aep is a proprietary binary format and cannot be imported directly. " +
-                    "Export the project from After Effects with the included ExtendScript " +
-                    "(docs/ae-export/ExportToEffectCraft.jsx) and import the .zip it creates."
+                "Direct .aep import is not in this build yet — it is being built from the official " +
+                    "EffectCraft .aep importer. For now, export the project from After Effects with " +
+                    "the included ExtendScript (docs/ae-export/ExportToEffectCraft.jsx) and import " +
+                    "the .zip it creates."
             )
         }
         if (ProjectBundleZip.isZip(bytes)) {

@@ -9,9 +9,9 @@ import org.junit.Test
 /**
  * Batch 3: the After Effects interchange parser. The interchange is the
  * open JSON format an After Effects project is exported to (see
- * docs/AE_IMPORT.md and docs/ae-export/ExportToEffectCraft.jsx); it is
- * what makes a real AE project importable, since a raw .aep binary has
- * no public reader on this device.
+ * docs/AE_IMPORT.md and docs/ae-export/ExportToEffectCraft.jsx). It is
+ * an interim route only: direct .aep import is the real requirement
+ * and is being built from the official EffectCraft .aep importer.
  */
 class AeInterchangeTest {
 

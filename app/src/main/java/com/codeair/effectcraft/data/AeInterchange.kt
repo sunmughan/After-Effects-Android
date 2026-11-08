@@ -8,9 +8,10 @@ import org.json.JSONObject
  * project is exported to from After Effects with
  * docs/ae-export/ExportToEffectCraft.jsx (see docs/AE_IMPORT.md).
  *
- * A raw .aep file is a proprietary RIFX binary with no public reader
- * on this device, so it is never accepted here; the interchange is the
- * real, working import path for genuine After Effects projects.
+ * A raw .aep file is a proprietary RIFX binary. Direct .aep import
+ * is the real requirement and is being built from the official
+ * EffectCraft .aep importer (v0.21.1+); until it lands, the
+ * interchange is only an interim route, not the AE import solution.
  *
  * The parser is the trust boundary: it validates every number and
  * name, clamps times into the composition, and turns anything it

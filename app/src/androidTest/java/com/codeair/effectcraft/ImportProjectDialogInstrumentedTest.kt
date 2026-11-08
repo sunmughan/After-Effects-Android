@@ -11,8 +11,9 @@ import org.junit.Test
 /**
  * Batch 3: the Import dialog through the real app. The header's
  * labelled Import button must open a dialog with three honest
- * options — including the plain statement that direct .aep files
- * cannot be imported — and the After Effects export steps.
+ * options — including that direct .aep import is coming in a later
+ * update (the ExtendScript export is an interim route, not the
+ * solution) — and the After Effects export steps.
  */
 class ImportProjectDialogInstrumentedTest {
 
@@ -25,7 +26,7 @@ class ImportProjectDialogInstrumentedTest {
         compose.onNodeWithText("EffectCraft project").assertIsDisplayed()
         compose.onNodeWithText("Project bundle (.zip)").assertIsDisplayed()
         compose.onNodeWithText("After Effects export (.zip)").assertIsDisplayed()
-        compose.onNodeWithText("Direct .aep files cannot be imported.", substring = true)
+        compose.onNodeWithText("Direct .aep import is coming in a later update.", substring = true)
             .assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("EffectCraft project").assertDoesNotExist()

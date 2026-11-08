@@ -9,23 +9,22 @@ offers three options. Each one says honestly what it takes:
 |---|---|---|
 | EffectCraft project (.ecproj / .ecprojx) | A project saved by EffectCraft (JSON `.ecproj` or XML `.ecprojx`) | The native inspector validates it before anything is kept. |
 | Project bundle (.zip) | A `.zip` holding `project.json` plus its media files | `project.json` is either an `.ecproj` document or an After Effects export (below). Media is extracted and relinked. |
-| After Effects export (.zip) | A `.zip` produced by the included ExtendScript (below) | The real path for genuine After Effects projects. |
+| After Effects export (.zip) | A `.zip` produced by the included ExtendScript (below) | Interim route only — direct `.aep` import is being built (below), and is the real solution. |
 
-## Why there is no direct .aep import
+## Direct .aep import: in progress, not in this build
 
-A `.aep` file is a proprietary RIFX binary. Adobe publishes no
-specification for it, and no app except After Effects itself can open
-it reliably. EffectCraft does not pretend otherwise: picking a `.aep`
-explains this and points at the script export instead of failing
-with a parse error.
-
-Research note (2026-11-08): reverse-engineered `.aep` readers do
-exist (py_aep / aep-parser, MIT, and a Go port). They are Python /
-Go libraries built on a reverse-engineered spec, not a supported
-format, and porting one into this app is a separate project with its
-own sample-corpus validation. It was evaluated and deliberately NOT
-attempted in this batch: the script export is Adobe's own supported
-route and works end to end today.
+CORRECTION (2026-11-08): an earlier version of this doc claimed a
+raw `.aep` binary cannot be imported at all. That was wrong. The
+official EffectCraft project (storytold/effectcraft) imports
+`.aep` / `.aepx` files partially since v0.21.1 (Nov 5, 2026), and
+open-source parsers (py_aep / aep-parser) have reverse-engineered
+the RIFX format. Direct `.aep` import is the requirement for this
+app — the ExtendScript export below is only an interim route until
+the real importer lands, not the solution. A separate audit of the
+official `.aep` import code is in progress; this app's real `.aep`
+importer will be built from its port plan. Until then, picking a
+`.aep` explains this and points at the interim export instead of
+failing with a parse error.
 
 ## Exporting from After Effects (exact steps)
 

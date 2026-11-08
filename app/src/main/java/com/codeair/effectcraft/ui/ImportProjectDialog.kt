@@ -33,8 +33,10 @@ import androidx.compose.ui.unit.sp
  * - EffectCraft project: a .ecproj / .ecprojx file saved by EffectCraft.
  * - Project bundle (.zip): a .zip holding project.json plus its media.
  * - After Effects export (.zip): a .zip produced by the included
- *   ExtendScript. A raw .aep binary is proprietary and cannot be
- *   imported directly; the dialog says so instead of pretending.
+ *   ExtendScript. This is an INTERIM route only: direct .aep import
+ *   is the real requirement and is being built from the official
+ *   EffectCraft .aep importer (v0.21.1+); the dialog says it is
+ *   coming instead of claiming .aep can never be imported.
  */
 @Composable
 fun ImportProjectDialog(
@@ -63,7 +65,7 @@ fun ImportProjectDialog(
                 )
                 ImportOption(
                     title = "After Effects export (.zip)",
-                    description = "A .zip made by the included ExtendScript. Direct .aep files cannot be imported.",
+                    description = "A .zip made by the included ExtendScript (interim route). Direct .aep import is coming in a later update.",
                     onClick = onPickAeExport
                 )
                 TextButton(

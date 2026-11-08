@@ -22,9 +22,10 @@ class ProjectFileFormatsTest {
             ProjectFileFormats.importError("scene.efkproj")
         )
         assertEquals(
-            "Adobe .aep is a proprietary binary format and cannot be imported directly. " +
-                "Export the project from After Effects with the included ExtendScript " +
-                "(docs/ae-export/ExportToEffectCraft.jsx) and import the .zip it creates.",
+            "Direct .aep import is not in this build yet — it is being built from the official " +
+                "EffectCraft .aep importer. For now, export the project from After Effects with " +
+                "the included ExtendScript (docs/ae-export/ExportToEffectCraft.jsx) and import " +
+                "the .zip it creates.",
             ProjectFileFormats.importError("scene.aep")
         )
     }

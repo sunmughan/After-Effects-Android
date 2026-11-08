@@ -15,7 +15,8 @@ import java.util.zip.ZipOutputStream
  * picker can hand over — plain .ecproj/.ecprojx, an AE interchange
  * document, or a ZIP bundle holding either — and one canonical JSON
  * string out. A raw .aep binary is rejected with the honest reason
- * (use the ExtendScript export) instead of a native parse failure.
+ * (direct import is coming; use the ExtendScript export meanwhile)
+ * instead of a native parse failure.
  */
 class ImportDocumentResolverTest {
 
