@@ -1378,6 +1378,34 @@ private fun MenuBar(
                 fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1
             )
         }
+        // Batch 2 (P12): the app's main output, one labelled tap
+        // from the header. It opens the sequence settings with MP4
+        // H.264 pre-selected. Disabled without an imported
+        // composition, like the other render buttons.
+        TextButton(
+            onClick = onExportMp4Sequence,
+            enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
+            modifier = Modifier.height(48.dp)
+                .semantics { contentDescription = "Export video (MP4)" }
+        ) {
+            Text("Export video", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
+        }
+        // Batch 2 export fix: the four FileDownload icons were
+        // indistinguishable — one overflow menu with labelled
+        // entries now holds all four exports.
+        ExportOverflowMenu(
+            onExportEcproj = onExportEcproj,
+            onExportEcprojx = onExportEcprojx,
+            isExportingFrame = isExportingFrame,
+            onExportRenderedFrame = onExportRenderedFrame,
+            onCancelFrameExport = onCancelFrameExport,
+            isExportingSequence = isExportingSequence,
+            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+            onExportPngSequence = onExportPngSequence,
+            onCancelSequenceExport = onCancelSequenceExport,
+            sequenceExportProgress = sequenceExportProgress,
+            hasCanonicalProject = hasCanonicalProject
+        )
         MenuDropdown(
             label = "File",
             expanded = expandedMenu == "File",
@@ -1387,8 +1415,8 @@ private fun MenuBar(
             MenuItem("New composition") { closeMenu(); onNewProject() }
             MenuItem("Open offline project") { closeMenu(); onOpenProject() }
             MenuItem("Import project…") { closeMenu(); onImportProject() }
-            MenuItem("Open media library") { closeMenu(); onOpenMediaLibrary() }
-            MenuItem("Projects…") { closeMenu(); onOpenRepositoryPicker() }
+            MenuItem("Offline media library") { closeMenu(); onOpenMediaLibrary() }
+            MenuItem("Projects") { closeMenu(); onOpenRepositoryPicker() }
             MenuItem("Save draft") { closeMenu(); onSave() }
         }
         MenuDropdown(
@@ -1425,34 +1453,6 @@ private fun MenuBar(
         ) {
             MenuItem("Inspector") { closeMenu(); onOpenInspector() }
         }
-        // Batch 2 (P12): the app's main output, one labelled tap
-        // from the header. It opens the sequence settings with MP4
-        // H.264 pre-selected. Disabled without an imported
-        // composition, like the other render buttons.
-        TextButton(
-            onClick = onExportMp4Sequence,
-            enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
-            modifier = Modifier.height(48.dp)
-                .semantics { contentDescription = "Export video (MP4)" }
-        ) {
-            Text("Export video", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
-        }
-        // Batch 2 export fix: the four FileDownload icons were
-        // indistinguishable — one overflow menu with labelled
-        // entries now holds all four exports.
-        ExportOverflowMenu(
-            onExportEcproj = onExportEcproj,
-            onExportEcprojx = onExportEcprojx,
-            isExportingFrame = isExportingFrame,
-            onExportRenderedFrame = onExportRenderedFrame,
-            onCancelFrameExport = onCancelFrameExport,
-            isExportingSequence = isExportingSequence,
-            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-            onExportPngSequence = onExportPngSequence,
-            onCancelSequenceExport = onCancelSequenceExport,
-            sequenceExportProgress = sequenceExportProgress,
-            hasCanonicalProject = hasCanonicalProject
-        )
     }
 }
 
