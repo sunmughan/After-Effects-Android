@@ -24,6 +24,15 @@ object CanonicalProjectDocument {
     private const val XML_ROOT = "EffectCraftProject"
 
     fun readUtf8(input: InputStream, maxBytes: Int = MAX_IMPORT_BYTES, onProgress: (Long) -> Unit = {}): String {
+        return readBytes(input, maxBytes, onProgress).toString(Charsets.UTF_8)
+    }
+
+    /**
+     * Reads a picked document as raw bytes (ZIP bundles are binary;
+     * decoding them as UTF-8 first would corrupt them). Same limits
+     * and progress contract as [readUtf8].
+     */
+    fun readBytes(input: InputStream, maxBytes: Int = MAX_IMPORT_BYTES, onProgress: (Long) -> Unit = {}): ByteArray {
         require(maxBytes > 0) { "Import byte limit must be positive" }
         val output = ByteArrayOutputStream(minOf(maxBytes, 8192))
         val buffer = ByteArray(8192)
@@ -36,7 +45,7 @@ object CanonicalProjectDocument {
             output.write(buffer, 0, count)
             onProgress(output.size().toLong())
         }
-        return output.toString(Charsets.UTF_8.name())
+        return output.toByteArray()
     }
 
     /** Normalizes a supported .ecproj JSON or .ecprojx XML document to canonical JSON. */

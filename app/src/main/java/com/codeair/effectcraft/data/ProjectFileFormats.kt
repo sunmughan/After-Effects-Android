@@ -33,7 +33,9 @@ object ProjectFileFormats {
         Kind.EFFEKSEER_PROJECT ->
             "Effekseer .efkproj is not supported yet; no Effekseer parser/converter is integrated."
         Kind.ADOBE_AFTER_EFFECTS ->
-            "Adobe .aep is proprietary and cannot be imported without a compatible licensed parser/converter."
+            "Adobe .aep is a proprietary binary format and cannot be imported directly. " +
+                "Export the project from After Effects with the included ExtendScript " +
+                "(docs/ae-export/ExportToEffectCraft.jsx) and import the .zip it creates."
         Kind.ANDROID_DRAFT ->
             "This is an Android offline draft (.efx-draft). Use Open offline project instead of canonical import."
         else -> null
