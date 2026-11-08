@@ -11,9 +11,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // kobjects' KXML implementation keeps XmlPull API separate from its
-        // parser classes, allowing Android to supply its platform interfaces.
-        maven { url = uri("https://jitpack.io") }
     }
 }
 
