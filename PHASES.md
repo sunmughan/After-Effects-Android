@@ -246,3 +246,10 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 - M7: NOT ACCEPTED; signed release, owner-controlled keystore, install/run/device verification and release notes gate remain open.
 
 Adobe .aep remains proprietary and is not natively supported/claimed. Effekseer .efkproj compatibility is not claimed as complete. PR #4 stays Draft.
+
+
+### Long-stack scroll regression added — 2026-11-09 03:20 IST
+
+- Instrumentation [a3db126e](https://github.com/sunmughan/After-Effects-Android/commit/a3db126e1e7d95419aea24e81970f9f60255d3cd) expands the canonical selection/editor fixture to 53 layers and scrolls to the last row (Layer 54), asserts it is visible, then returns to Background and exercises existing selection/edit actions. This guards off-fold layer accessibility without removing any previous assertion.
+- UI fix is [dfec81cb](https://github.com/sunmughan/After-Effects-Android/commit/dfec81cb18549e736d0af586c38b45995ccb4143). The latest test commit is now branch/PR HEAD; exact-head CI must include the large stack, all API30 tests and independent cold APK rebuild.
+- CI #1351 was started at the preceding docs SHA and remains in hosted disk-cleanup setup when inspected; it is not acceptance for a3db126e. A fresh PR run is required after this test push.
