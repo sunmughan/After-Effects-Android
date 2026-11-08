@@ -1,7 +1,5 @@
 package com.codeair.effectcraft.ui
 
-import com.codeair.effectcraft.data.AudioClip
-import com.codeair.effectcraft.data.AudioTimeline
 import com.codeair.effectcraft.data.BezierCurveEditor
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
 import com.codeair.effectcraft.data.CanonicalCurveKey
@@ -231,12 +229,11 @@ fun EditorScreen(
     onOpenMp4Settings: () -> Unit = {},
     onCancelMp4Sequence: () -> Unit = {},
     mp4ExportProgress: Int = 0,
-    audioTimeline: AudioTimeline = AudioTimeline.EMPTY,
     onAddAudioClip: () -> Unit = {},
     onRemoveAudioClip: (String) -> Unit = {},
     onAudioVolumeChange: (String, Double) -> Unit = { _, _ -> },
-    onAudioClipMove: (String, Long) -> Unit = { _, _ -> },
-    onAudioClipTrim: (String, Long, Long) -> Unit = { _, _, _ -> },
+    onAudioClipMove: (String, Int) -> Unit = { _, _ -> },
+    onAudioClipTrim: (String, Int, Int) -> Unit = { _, _, _ -> },
     onExportMp4Sequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int, bitrate: Int, outputFormat: RenderOutputFormat) -> Unit = { _, _, _, _, _, _, _ -> },
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
@@ -560,7 +557,8 @@ fun EditorScreen(
             )
 
             AudioTimelinePanel(
-                timeline = audioTimeline,
+                tracks = audioTracks,
+                frameRate = project.frameRate,
                 onAddAudioClip = onAddAudioClip,
                 onRemoveAudioClip = onRemoveAudioClip,
                 onVolumeChange = onAudioVolumeChange,
@@ -4751,22 +4749,27 @@ private fun timecode(frame: Int, fps: Int): String {
 }
 
 /**
- * Project audio timeline: clips added from the device are listed with
- * their timeline window, a volume slider, 1-second move buttons,
- * 1-second trim buttons and remove. Every control writes through the
- * callbacks into the persisted [AudioTimelineStore] and the mixed
- * result is what the MP4 export encodes.
+ * Project audio: the clips of the unified [ProjectDocument.audioTracks]
+ * model, listed with their timeline window, a volume slider, 1-second
+ * move buttons, 1-second trim buttons and remove. Every control writes
+ * through the callbacks into the project model — the same clips the
+ * timeline lanes show, undo tracks, save persists and the MP4 export
+ * mixes. Times are frames; the panel converts to milliseconds for
+ * display with the composition frame rate.
  */
 @Composable
 private fun AudioTimelinePanel(
-    timeline: AudioTimeline,
+    tracks: List<AudioTrackDocument>,
+    frameRate: Int,
     onAddAudioClip: () -> Unit,
     onRemoveAudioClip: (String) -> Unit,
     onVolumeChange: (String, Double) -> Unit,
-    onMove: (String, Long) -> Unit,
-    onTrim: (String, Long, Long) -> Unit,
+    onMove: (String, Int) -> Unit,
+    onTrim: (String, Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val clips = tracks.flatMap { track -> track.clips.map { clip -> track to clip } }
+    val safeFps = frameRate.coerceAtLeast(1)
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Audio", color = EditorPalette.text, fontSize = 12.sp)
@@ -4778,16 +4781,18 @@ private fun AudioTimelinePanel(
                 Text("Add audio", color = EditorPalette.violet, fontSize = 12.sp)
             }
         }
-        if (timeline.isEmpty) {
+        if (clips.isEmpty()) {
             Text(
                 "No audio clips yet. Added clips are mixed into the MP4 export.",
                 color = EditorPalette.muted,
                 fontSize = 11.sp
             )
         }
-        timeline.clips.forEach { clip ->
+        clips.forEach { (track, clip) ->
             AudioClipRow(
+                trackName = track.name,
                 clip = clip,
+                frameRate = safeFps,
                 onRemoveAudioClip = onRemoveAudioClip,
                 onVolumeChange = onVolumeChange,
                 onMove = onMove,
@@ -4799,15 +4804,20 @@ private fun AudioTimelinePanel(
 
 @Composable
 private fun AudioClipRow(
-    clip: AudioClip,
+    trackName: String,
+    clip: AudioClipDocument,
+    frameRate: Int,
     onRemoveAudioClip: (String) -> Unit,
     onVolumeChange: (String, Double) -> Unit,
-    onMove: (String, Long) -> Unit,
-    onTrim: (String, Long, Long) -> Unit
+    onMove: (String, Int) -> Unit,
+    onTrim: (String, Int, Int) -> Unit
 ) {
+    val startMs = clip.clip.startFrame * 1_000L / frameRate.coerceAtLeast(1)
+    val endMs = clip.clip.endFrame * 1_000L / frameRate.coerceAtLeast(1)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
-            "${clip.sourceUri.substringAfterLast('/')} · ${clip.timelineStartUs / 1_000}–${clip.timelineEndUs / 1_000} ms",
+            "$trackName · ${clip.sourcePath.substringAfterLast('/')} · $startMs–${endMs} ms" +
+                if (clip.muted) " · muted" else "",
             color = EditorPalette.text,
             fontSize = 11.sp,
             maxLines = 1,
@@ -4816,35 +4826,36 @@ private fun AudioClipRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Vol", color = EditorPalette.muted, fontSize = 11.sp)
             Slider(
-                value = clip.volume.toFloat(),
+                value = clip.gain.coerceIn(0f, 1f),
                 onValueChange = { onVolumeChange(clip.id, it.toDouble()) },
                 valueRange = 0f..1f,
                 modifier = Modifier.weight(1f)
+                    .height(48.dp)
                     .semantics { contentDescription = "Audio clip volume" }
             )
             TextButton(
-                onClick = { onMove(clip.id, (clip.timelineStartUs - 1_000_000L).coerceAtLeast(0L)) },
-                modifier = Modifier.semantics { contentDescription = "Move audio clip back 1 second" }
+                onClick = { onMove(clip.id, (clip.clip.startFrame - frameRate).coerceAtLeast(0)) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Move audio clip back 1 second" }
             ) { Text("−1s", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
-                onClick = { onMove(clip.id, clip.timelineStartUs + 1_000_000L) },
-                modifier = Modifier.semantics { contentDescription = "Move audio clip forward 1 second" }
+                onClick = { onMove(clip.id, clip.clip.startFrame + frameRate) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Move audio clip forward 1 second" }
             ) { Text("+1s", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
                 onClick = { onRemoveAudioClip(clip.id) },
-                modifier = Modifier.semantics { contentDescription = "Remove audio clip" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove audio clip" }
             ) { Text("Remove", color = EditorPalette.amber, fontSize = 10.sp) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(
-                enabled = clip.durationUs > 1_000_000L,
-                onClick = { onTrim(clip.id, clip.sourceStartUs + 1_000_000L, clip.durationUs - 1_000_000L) },
-                modifier = Modifier.semantics { contentDescription = "Trim audio clip start by 1 second" }
+                enabled = clip.timelineLength > frameRate,
+                onClick = { onTrim(clip.id, clip.clip.startFrame + frameRate, clip.clip.endFrame) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Trim audio clip start by 1 second" }
             ) { Text("Trim start −1s", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
-                enabled = clip.durationUs > 1_000_000L,
-                onClick = { onTrim(clip.id, clip.sourceStartUs, clip.durationUs - 1_000_000L) },
-                modifier = Modifier.semantics { contentDescription = "Trim audio clip end by 1 second" }
+                enabled = clip.timelineLength > frameRate,
+                onClick = { onTrim(clip.id, clip.clip.startFrame, clip.clip.endFrame - frameRate) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Trim audio clip end by 1 second" }
             ) { Text("Trim end −1s", color = EditorPalette.violet, fontSize = 10.sp) }
         }
     }

@@ -105,7 +105,7 @@ object AudioClipTimeline {
 
     /**
      * Converts one legacy microsecond [AudioClip] (the retired
-     * AudioTimelineStore model) into the unified frame-based model, or
+     * AudioTimeline model) into the unified frame-based model, or
      * null when the clip has no audible frame inside the composition
      * (starts at/after the end, or rounds to zero frames). The caller
      * supplies the probed [sourcePath]/[sourceMime]: the legacy clip only
