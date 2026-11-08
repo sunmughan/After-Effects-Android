@@ -627,12 +627,17 @@ class AdaptiveWorkspaceSmokeTest {
         // Clear the prefilled playhead frame explicitly so the target is
         // unambiguous; this exercises the Move button, not the graph shortcut.
         val targetInput = compose.onNodeWithContentDescription("Move key target frame").performScrollTo()
-        targetInput.performTextClearance().performTextInput("-x99999999999")
+        // performTextClearance() returns Unit in ui-test-junit4, so it cannot
+        // be chained into performTextInput(); clear and type as separate calls
+        // (same pattern as the shape-path t-field below in this file).
+        targetInput.performTextClearance()
+        targetInput.performTextInput("-x99999999999")
         // The field strips non-digits, caps at ten digits, and the Move
         // action rejects values outside Int frame range instead of crashing.
         compose.onNodeWithContentDescription("Move position keyframe to frame 9999999999")
             .performScrollTo().assertIsNotEnabled()
-        targetInput.performTextClearance().performTextInput("20")
+        targetInput.performTextClearance()
+        targetInput.performTextInput("20")
         compose.onNodeWithContentDescription("Move position keyframe to frame 20")
             .performScrollTo().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, 2L, "transform:position", 0, 20), moved)
