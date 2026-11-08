@@ -9,12 +9,12 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 - Actual native CPU/session preview frames; GPU/device compatibility and media parity still require qualification.
 - Layer, transform, keyframe, Bezier/ShapePath editing and PNG/MP4 export foundations are implemented incrementally.
 
-## Engineering progress (2026-11-08)
+## Engineering progress (2026-11-08 13:15 IST)
 
-- Exact feature-branch CI **#1207 passed** at 75aa1a35: Rust 61/61, ARM64+x86_64 JNI, JVM, unsigned release APK/AAB with R8, API30 smoke and independent cold APK reproducibility.
-- M2 import hardening includes strict UTF-8 decoding and duplicate XML-member rejection; supported formats remain EffectCraft .ecproj JSON / .ecprojx XML. Adobe .aep and Effekseer .efkproj are not claimed.
-- M4 Add Rect creates a real upstream Shape layer through JNI and renders through the native compositor. New Text/Rect actions now focus the added layer for immediate parameter editing (implementation/test commit below; exact-head CI will verify).
-- M3/M4/M5 product foundations are real native preview, canonical transforms/keyframes, ShapePath editing and PNG/MP4 export; full parity, physical-device and release gates remain open.
+- **CI #1210 fully passed** at exact SHA `c1252f95`: Rust 63/63, ARM64+x86_64 JNI, JVM, unsigned release APK/AAB + R8, API30 instrumentation and independent cold APK comparison. This verifies automatic selection/focus of newly authored Text/Rect layers.
+- M2 import integrity (strict UTF-8 and duplicate XML member rejection) is CI-accepted through `c1252f95`; canonical EffectCraft `.ecproj` JSON / `.ecprojx` XML only. Adobe `.aep` and Effekseer `.efkproj` are not claimed.
+- M4 now adds real upstream Shape geometry: Add Rect (accepted at #1207) and a new parametric Add Ellipse (160×160 + fill) through Rust/JNI/Compose. Ellipse native pixel render + Android UI callback tests are committed; exact-head [CI #1220](https://github.com/sunmughan/After-Effects-Android/actions/runs/42460212777) is pending on SHA `f9bc2db1`.
+- M3/M4/M5 product foundations include native composition preview, canonical transforms/keyframes, ShapePath editing and PNG/MP4 export; full parity, physical-device and release gates remain open.
 - See [PHASES.md](PHASES.md), [support matrix](docs/M7_SUPPORT_MATRIX.md), and [release checklist](docs/M7_RELEASE_GATE_CHECKLIST.md). PR #1 is merged; [PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2) is the draft post-merge follow-up.
 
 
@@ -33,7 +33,7 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 10:35 IST)
+## Current engineering status (2026-11-08 13:15 IST)
 
 **Release is NOT complete.** PR #1 merged into `main` at `4ae22776`; post-merge work is in [draft PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2), not merged. [PHASES.md](PHASES.md) is the authoritative M0–M7 acceptance ledger.
 
@@ -57,7 +57,7 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 | M1 | Scoped offline adaptive editor accepted | Professional interaction/accessibility and physical phone/tablet/foldable UX |
 | M2 | Canonical EffectCraft JSON/XML, SAF, offline media and transaction integrity | Exact-head CI; broader Effekseer interoperability and missing-media relinking |
 | M3 | Actual Rust CPU/session preview and Android frame presentation | GPU/Surface/device-loss/media parity and physical performance |
-| M4 | Transform/keyframe/Bezier/ShapePath + native rectangle creation | Full effect/interpolation/roving/spatial parity and golden edit/reopen/preview tests |
+| M4 | Transform/keyframe/Bezier/ShapePath + native Rect/Ellipse creation | Full effect/interpolation/roving/spatial parity and golden edit/reopen/preview tests |
 | M5 | PNG/MP4/audio export foundations | Device codec/audio sync, long-run cancellation/recovery and output playback |
 | M6 | Recovery/offline/cache/memory safeguards | Physical performance/thermal/low-memory/accessibility/API/ABI matrix |
 | M7 | Unsigned APK/AAB and signing safety checks | Owner-controlled signing, signed artifacts and physical install/run |
