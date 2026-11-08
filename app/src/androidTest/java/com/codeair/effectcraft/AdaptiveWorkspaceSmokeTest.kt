@@ -624,9 +624,8 @@ class AdaptiveWorkspaceSmokeTest {
             onMoveCurveKey = { c, l, selector, from, to -> moved = listOf(c, l, selector, from, to) }
         )
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
-        // The field starts at the current playhead (0); appending 20 yields
-        // "020", which is parsed as frame 20 and exercises the explicit Move
-        // button rather than the graph's accessibility shortcut.
+        // Clear the prefilled playhead frame explicitly so the target is
+        // unambiguous; this exercises the Move button, not the graph shortcut.
         val targetInput = compose.onNodeWithContentDescription("Move key target frame").performScrollTo()
         targetInput.performTextClearance().performTextInput("-x99999999999")
         // The field strips non-digits, caps at ten digits, and the Move
