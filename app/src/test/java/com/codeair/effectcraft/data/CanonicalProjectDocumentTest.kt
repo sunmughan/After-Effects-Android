@@ -47,6 +47,17 @@ class CanonicalProjectDocumentTest {
     }
 
     @Test
+    fun rejectsMalformedUtf8InsteadOfReplacingBytes() {
+        // C3 must be followed by a continuation byte; 28 is an ASCII '('.
+        val malformed = byteArrayOf(0xC3.toByte(), 0x28)
+        val error = runCatching {
+            CanonicalProjectDocument.readUtf8(ByteArrayInputStream(malformed))
+        }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+        assertTrue(error?.message.orEmpty().contains("valid UTF-8"))
+    }
+
+    @Test
     fun ecprojxRoundTripsNestedJsonTypesAndEscaping() {
         val source = JSONObject()
             .put("project", "EffectCraft <motion> & \"quoted\"")

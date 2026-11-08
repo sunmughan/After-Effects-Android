@@ -12,6 +12,9 @@ import java.io.InputStream
 import java.io.StringReader
 import java.io.StringWriter
 import java.math.BigDecimal
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 
 /**
  * Strict import boundary for upstream canonical EffectCraft project documents.
@@ -38,7 +41,19 @@ object CanonicalProjectDocument {
             output.write(buffer, 0, count)
             onProgress(output.size().toLong())
         }
-        return output.toString(Charsets.UTF_8.name())
+        // Charset's convenience conversion silently replaces malformed byte
+        // sequences with U+FFFD. That changes project keys/paths before schema
+        // validation and can make a corrupt import appear valid. Decode strictly
+        // so the caller can reject the original bytes and avoid caching them.
+        return try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(output.toByteArray()))
+                .toString()
+        } catch (failure: CharacterCodingException) {
+            throw IllegalArgumentException("Project document is not valid UTF-8", failure)
+        }
     }
 
     /** Normalizes a supported .ecproj JSON or .ecprojx XML document to canonical JSON. */
