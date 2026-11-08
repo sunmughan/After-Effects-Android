@@ -371,12 +371,13 @@ fun EditorScreen(
     // only when a hardware HEVC encoder exists. Probed once, when the
     // export settings dialog first opens.
     var hevcAvailable by remember { mutableStateOf<Boolean?>(null) }
-    val openSequenceSettings: (RenderOutputFormat) -> Unit = { format ->
+    val openSequenceSettings: (RenderOutputFormat) -> Boolean = { format ->
         sequenceOutputFormat = format
         sequenceBitrateText = "8000000"
         val composition = canonicalProject?.compositions?.firstOrNull()
         if (composition == null) {
             sequenceSettingsError = "Import a canonical composition first"
+            false
         } else {
             sequenceWidthText = composition.width.toString()
             sequenceHeightText = composition.height.toString()
@@ -385,6 +386,7 @@ fun EditorScreen(
             sequenceEndText = (composition.durationFrames - 1).toString()
             sequenceSettingsError = null
             showSequenceSettings = true
+            true
         }
     }
 
@@ -467,8 +469,7 @@ fun EditorScreen(
                 isExportingMp4 = isExportingMp4,
                 isMp4ExportWritingOutput = isMp4ExportWritingOutput,
                 onExportMp4Sequence = {
-                    openSequenceSettings(RenderOutputFormat.MP4_H264)
-                    onOpenMp4Settings()
+                    if (openSequenceSettings(RenderOutputFormat.MP4_H264)) onOpenMp4Settings()
                 },
                 onCancelMp4Sequence = onCancelMp4Sequence,
                 mp4ExportProgress = mp4ExportProgress,
@@ -1197,6 +1198,19 @@ private fun HeaderBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // Batch 2 (P12): the app's main output, one labelled
+                    // tap from the phone header. It opens the sequence
+                    // settings with MP4 H.264 pre-selected — the format
+                    // can still be changed there. Disabled without an
+                    // imported composition, like the other render buttons.
+                    TextButton(
+                        onClick = onExportMp4Sequence,
+                        enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
+                        modifier = Modifier.height(48.dp)
+                            .semantics { contentDescription = "Export video (MP4)" }
+                    ) {
+                        Text("Export video", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
+                    }
                     IconButton(onClick = onOpenProject, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = "Open offline project", tint = EditorPalette.mint)
                     }

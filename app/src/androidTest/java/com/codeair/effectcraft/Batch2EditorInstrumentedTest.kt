@@ -2,11 +2,16 @@ package com.codeair.effectcraft
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import com.codeair.effectcraft.data.CanonicalCompositionInfo
+import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.ui.EditorScreen
@@ -33,6 +38,7 @@ class Batch2EditorInstrumentedTest {
         sequenceExportProgress: Int = 0,
         audioPreviewLabel: String = "",
         hasCanonicalProject: Boolean = false,
+        canonicalProject: CanonicalProjectInfo? = null,
         onExportMp4Sequence: () -> Unit = {}
     ) {
         EditorScreen(
@@ -81,7 +87,7 @@ class Batch2EditorInstrumentedTest {
             onRemoveOpacityKeyframe = {},
             onTogglePlayback = {},
             onApplyComposition = { _, _, _, _ -> },
-            canonicalProject = null,
+            canonicalProject = canonicalProject,
             canEditCanonicalProject = hasCanonicalProject,
             onRenameCanonicalLayer = { _, _, _ -> },
             onAddCanonicalTextLayer = { _, _ -> },
@@ -166,5 +172,39 @@ class Batch2EditorInstrumentedTest {
         compose.waitForIdle()
         compose.onNodeWithText("Exporting MP4 · 0%").assertDoesNotExist()
         compose.onNodeWithText("Exporting PNG sequence · 0%").assertDoesNotExist()
+    }
+
+    private fun canonicalProject() = CanonicalProjectInfo(
+        compositions = listOf(
+            CanonicalCompositionInfo(
+                id = 1L,
+                name = "Comp",
+                width = 1920,
+                height = 1080,
+                frameRateNum = 30,
+                frameRateDen = 1,
+                durationSeconds = 5.0,
+                layers = emptyList()
+            )
+        )
+    )
+
+    @Test
+    fun exportVideoButtonOpensMp4SettingsInOneTap() {
+        compose.setContent { Editor(canonicalProject = canonicalProject()) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Export video (MP4)").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Export video (MP4)").assertIsEnabled()
+        compose.onNodeWithContentDescription("Export video (MP4)").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("H.264 MP4 settings").assertIsDisplayed()
+    }
+
+    @Test
+    fun exportVideoButtonIsDisabledWithoutACanonicalProject() {
+        compose.setContent { Editor() }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Export video (MP4)").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Export video (MP4)").assertIsNotEnabled()
     }
 }
