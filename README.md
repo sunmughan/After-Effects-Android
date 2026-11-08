@@ -98,3 +98,11 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 - Latest M4 source [7a4e7a15](https://github.com/sunmughan/After-Effects-Android/commit/7a4e7a15f1ff3a301f5f64997c96104e2f2a0572) uses Android's numeric keyboard and digit-only/10-digit input for the transform keyframe target. Instrumentation [e33d56cb](https://github.com/sunmughan/After-Effects-Android/commit/e33d56cba15b538ec0f1fd39d4d605d9ec294287) covers target frame 20 via the explicit Move control. Exact-head CI is pending; no acceptance claim.
+
+
+## Engineering progress (2026-11-08 21:46 IST)
+
+- **CI #1290 failure diagnosed and test corrected:** the build, Rust dual-ABI bridge, Rust/JVM suites and unsigned release R8/APK/AAB passed; API30 instrumentation had 1 failure among 177 tests. The explicit transform-key Move test appended `20` to a prefilled `0`, then searched for a semantics label containing `020`; the test's cursor/selection assumption was not stable. [95713180](https://github.com/sunmughan/After-Effects-Android/commit/95713180dea7f2d9fd0bf09b7d6e1c186ff214ef) clears the numeric field, enters `20`, checks the Move control is enabled and verifies the same exact callback. No feature or assertion was weakened.
+- Exact failure evidence: [Actions #1290](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493884493), `AdaptiveWorkspaceSmokeTest.explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame`; API30 176/177 passed, one failed. Cold reproducibility was skipped after the primary job failure. New CI at `95713180` is required before acceptance.
+- Tracker: [PHASES.md](PHASES.md) records the precise failure, source/test SHA, remediation and pending fresh run. PR #4 remains Draft. Release remains **NOT complete**; physical GPU/media/device, signed artifact/install and full M0–M7 gates are outstanding.
+
