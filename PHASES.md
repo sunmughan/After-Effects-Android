@@ -3,7 +3,7 @@
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
 [PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #4 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/4) (PR #2 and #3 merged).  
-Tracker updated: 2026-11-08 20:44 IST · code SHA 7a4e7a15 · docs checkpoint pending
+Tracker updated: 2026-11-08 21:46 IST · test fix SHA 95713180 · CI rerun pending
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
 
@@ -22,6 +22,13 @@ Tracker updated: 2026-11-08 20:44 IST · code SHA 7a4e7a15 · docs checkpoint pe
 - Refactor [97a1ae3d](https://github.com/sunmughan/After-Effects-Android/commit/97a1ae3d45fd511763e286dd10d1c8f2d8198310) extracts transform/keyframe, text and shape/effect parameter sections into dedicated composables, preserving canonical callbacks/state. A faulty follow-up [a40aa02c](https://github.com/sunmughan/After-Effects-Android/commit/a40aa02c68ce16426ef63b3b2f32b76e88a0a122) accidentally truncated the source file to the text helper; this was detected by checking file length/header and restored from the refactor commit with corrected text-helper scope at [a356f5d0](https://github.com/sunmughan/After-Effects-Android/commit/a356f5d0bc0725e34cf403918931623868cfc752). Call indentation was normalized in [7f464d0d](https://github.com/sunmughan/After-Effects-Android/commit/7f464d0dc0c1e9f57abd15099cf107eab6044e09).
 - CI #1261 at a40aa02c and #1263 at 4d75f182 were superseded/cancelled before build acceptance. Exact-head CI #1267 at 7f464d0d was cancelled during hosted-runner cleanup when the docs commit superseded it. Latest PR check [CI #1269](https://github.com/sunmughan/After-Effects-Android/actions/runs/42483986534) is queued at docs HEAD 772e1287 (same restored source SHA 7f464d0d); it must prove Kotlin compilation, Rust/JNI, JVM, unsigned APK/AAB + R8, API30 instrumentation and independent cold APK reproducibility. No acceptance is claimed yet.
 - The correction does not remove tests or reduce feature behavior. Local Android SDK/Gradle is unavailable in this runtime; hosted Actions is the compile/test authority.
+
+### CI #1290 instrumentation failure and deterministic correction — 2026-11-08 21:46 IST
+
+- Exact run [#1290](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493884493) at docs SHA `e6c4517b` completed **failure**. The Assemble/test job successfully built ARM64 and x86_64 JNI, passed Rust tests, JVM tests, debug APK and unsigned release APK/AAB + R8. Android emulator instrumentation ran 177 tests with 1 failure; the independent cold APK comparison job was skipped because the primary job failed.
+- Exact failing test: `AdaptiveWorkspaceSmokeTest.explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame`. The assertion could not locate the semantics node `Move position keyframe to frame 020` after the test appended `20` to a prefilled `0` draft. This was a brittle test assumption about BasicTextField selection/cursor state, not a renderer/native failure.
+- Corrected the test to explicitly clear the field before entering `20`, then assert the stable `Move position keyframe to frame 20` node is enabled before clicking it. It still asserts the full canonical callback `(composition 10, layer 2, transform:position, source 0, destination 20)`; no behavior or coverage was removed. [Fix commit 95713180](https://github.com/sunmughan/After-Effects-Android/commit/95713180dea7f2d9fd0bf09b7d6e1c186ff214ef).
+- Fresh push CI is required at `95713180`; cold APK comparison and full 177-test API30 suite remain unaccepted until that run passes. Local Android SDK/Gradle is unavailable here, so hosted Actions is the reproducible test authority.
 
 ## Phase acceptance
 
