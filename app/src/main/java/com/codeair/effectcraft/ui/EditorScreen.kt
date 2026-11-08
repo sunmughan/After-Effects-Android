@@ -2307,9 +2307,9 @@ private fun CanonicalTransformControls(
                     }
                 }
             }
+            var moveTargetDraft by remember(composition.id, layer.id, previewFrame) { mutableStateOf(previewFrame.toString()) }
             Text("Both edits both tangents; Incoming/Outgoing preserves the opposite side. Ease In slows the segment after this key; Ease Out slows the segment before it; Bezier is an asymmetric custom curve. The renderer evaluates the ease.", color = EditorPalette.muted, fontSize = 10.sp)
-                var moveTargetDraft by remember(composition.id, layer.id, previewFrame) { mutableStateOf(previewFrame.toString()) }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Move key · to frame", color = EditorPalette.text, fontSize = 12.sp)
                 BasicTextField(
                     value = moveTargetDraft,
