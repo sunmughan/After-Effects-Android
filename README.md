@@ -11,6 +11,7 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 
 ## Engineering progress (2026-11-09 00:59 IST)
 
+- **M2 duplicate-member escape test fixture corrected:** [f27d312e](https://github.com/sunmughan/After-Effects-Android/commit/f27d312eb4e34ff46f73bad812e362173ac43c3a) changes the Kotlin raw JSON fixture to single-backslash `\\t` and `\\u0009` escapes so both keys decode to a tab. Standalone Kotlin scanner compilation and four structural/escape cases pass; exact Android CI remains pending.
 - **M2 duplicate JSON scanner Kotlin compile failure fixed:** CI [#1312](https://github.com/sunmughan/After-Effects-Android/actions/runs/42508463104) reached Kotlin compilation after native ARM64/x86_64 and Rust tests passed, then failed on unsupported escape sequences in the scanner's control-character literals. Corrected the implementation to decode JSON escapes via explicit character codes and scan JSON whitespace without fragile Kotlin escapes; added duplicate escaped-tab key regression. This is a source compile fix; fresh exact-head CI is required for acceptance. Details and gate status in [PHASES.md](PHASES.md).
 
 ## Engineering progress (2026-11-08 18:12 IST)
