@@ -76,6 +76,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -108,7 +110,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -5093,13 +5094,7 @@ private fun TimelineRuler(
     // Labels every second on short comps, every five on long ones,
     // so labels never collide.
     val labelEverySeconds = if (durationSeconds <= 30f) 1 else 5
-    val paint = remember {
-        android.graphics.Paint().apply {
-            color = EditorPalette.muted.toArgb()
-            textSize = 26f
-            isAntiAlias = true
-        }
-    }
+    val textMeasurer = rememberTextMeasurer()
     Canvas(modifier) {
         if (durationSeconds <= 0f || size.width <= 0f) return@Canvas
         val secondsToX = { seconds: Float -> seconds / durationSeconds * size.width }
@@ -5116,7 +5111,12 @@ private fun TimelineRuler(
             if (isMajor) {
                 val totalSeconds = seconds.toInt()
                 val label = "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
-                drawContext.canvas.nativeCanvas.drawText(label, x + 3f, 11f, paint)
+                drawText(
+                    textMeasurer,
+                    label,
+                    topLeft = Offset(x + 3f, 0f),
+                    style = androidx.compose.ui.text.TextStyle(color = EditorPalette.muted, fontSize = 9.sp)
+                )
             }
             seconds += 0.5f
         }
