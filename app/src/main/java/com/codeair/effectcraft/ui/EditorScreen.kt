@@ -1939,7 +1939,7 @@ private fun CanonicalProjectEditor(
                 if (layer.locked) {
                     Text("Locked layers cannot be edited until unlocked.", color = EditorPalette.amber, fontSize = 11.sp)
                 }
-                                CanonicalTransformControls(
+                CanonicalTransformControls(
                     composition = composition, layer = layer, editable = editable, previewFrame = previewFrame,
                     onPreviewFrameChange = onPreviewFrameChange, interpolationProperty = interpolationProperty,
                     onInterpolationPropertyChange = onInterpolationPropertyChange, interpolationSide = interpolationSide,
@@ -1956,7 +1956,7 @@ private fun CanonicalProjectEditor(
                     onMoveCanonicalCurveKey = onMoveCanonicalCurveKey, onSetCanonicalCurveHandle = onSetCanonicalCurveHandle,
                     onAddCanonicalCurveKey = onAddCanonicalCurveKey, onRemoveCanonicalCurveKey = onRemoveCanonicalCurveKey
                 )
-                                layer.textParams?.let { textParams ->
+                layer.textParams?.let { textParams ->
                     CanonicalTextLayerControls(
                         compositionId = composition.id, layerId = layer.id, textParams = textParams,
                         editable = editable, previewFrame = previewFrame,
@@ -2003,7 +2003,7 @@ private fun CanonicalProjectEditor(
                         modifier = Modifier.testTag("canonical-opacity-remove-key").semantics { contentDescription = "Remove canonical opacity keyframe" }
                     ) { Text("Remove key · frame $previewFrame", color = EditorPalette.amber, fontSize = 11.sp) }
                 }
-                                CanonicalLayerParamSections(
+                CanonicalLayerParamSections(
                     composition = composition, layer = layer, editable = editable, previewFrame = previewFrame,
                     onSetLayerScalarProperty = onSetLayerScalarProperty, onSetLayerVecProperty = onSetLayerVecProperty,
                     onSetLayerColorProperty = onSetLayerColorProperty, onSetLayerGradientProperty = onSetLayerGradientProperty,
