@@ -2084,7 +2084,11 @@ private fun CanonicalProjectEditor(
                 if (mediaItems.isEmpty()) Text("No linked media assets in this project.", color = EditorPalette.muted, fontSize = 11.sp)
             }
         }
-        if (!canEdit) Text("Native editor bridge unavailable for this ABI; import/export remains read-only.", color = EditorPalette.amber, fontSize @Composable
+        if (!canEdit) Text("Native editor bridge unavailable for this ABI; import/export remains read-only.", color = EditorPalette.amber, fontSize = 11.sp)
+    }
+}
+
+@Composable
 private fun CanonicalTransformControls(
     composition: CanonicalCompositionInfo, layer: CanonicalLayerInfo, editable: Boolean, previewFrame: Int,
     onPreviewFrameChange: (Int) -> Unit, interpolationProperty: String, onInterpolationPropertyChange: (String) -> Unit,

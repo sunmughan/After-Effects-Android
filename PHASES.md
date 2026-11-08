@@ -96,3 +96,20 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 ## Release decision
 
 **EffectCraft is NOT release-complete.** PR #1 is merged; that merge does not mean M0–M7 are accepted. No native Adobe `.aep` compatibility claim. Do not mark a phase complete merely because code is committed or CI is queued.
+
+
+## Engineering checkpoint — Kotlin inspector syntax repair (2026-11-08 19:19 IST)
+
+- Repository state changed since the prior run: PR #2 was **merged** at [11821cd5](https://github.com/sunmughan/After-Effects-Android/commit/11821cd57278c5a00c2d284d809604206c28903a). GitHub had deleted its head branch; this run recreated `feat/android-app-foundation` from current `main` (base SHA `3d7445c9`) so work can continue on the requested branch. PR #1 remains merged at `4ae22776`.
+- **CI #1270 failed at SHA `9a5b2894`** in `:app:compileDebugKotlin` (job `128741895777`): the extracted inspector boundary had an incomplete statement: `fontSize @Composable`. Kotlin then reported unresolved extracted composables and cascading syntax/scope errors. Rust ARM64/x86_64 and Rust tests passed; JVM/release/instrumentation/cold jobs were skipped.
+- Root fix: complete the unavailable-ABI notice as `fontSize = 11.sp)`, close `CanonicalProjectEditor` and start the extracted helper at a top-level `@Composable` boundary. The source is now structurally restored around lines 2087–2090; no feature or test was removed. Commit: [3f86c5ac](https://github.com/sunmughan/After-Effects-Android/commit/3f86c5ac89eae327c49f1a7a731642a4f2b3b2c4).
+- **Verification pending:** this source commit has not yet run through PR CI. Create a fresh PR from the recreated branch and require Kotlin compilation, both native ABIs, JVM, release R8/APK/AAB, API30 instrumentation and independent cold APK comparison. Local Gradle/SDK remains unavailable in this automation runtime.
+- M4 remains partial; Triangle/Star and inspector refactor are not accepted solely by commit. M0–M7 release status remains unchanged; no signed/physical install evidence and no native Adobe `.aep` claim.
+
+
+## M2 follow-up — legal trailing XML processing instructions (2026-11-08 19:25 IST)
+
+- During the pending compiler CI, audited the XML post-root validator. It allowed XML whitespace/comments but rejected `PROCESSING_INSTRUCTION`, although XML permits processing instructions after the document element. This could reject valid exporter metadata without changing the canonical project payload.
+- Updated the trailing-event allowlist to accept `XmlPullParser.PROCESSING_INSTRUCTION` while continuing to reject a second root, non-whitespace text, and all other unexpected events: [4a8b7e63](https://github.com/sunmughan/After-Effects-Android/commit/4a8b7e63bc7fb79989252f270e0825d40271bca0).
+- Added `ecprojxAcceptsProcessingInstructionAfterRoot`, parsing a real XML fixture with `<?effectcraft-export complete?>` after the root and asserting the project name survives: [1f0f38b9](https://github.com/sunmughan/After-Effects-Android/commit/1f0f38b948e711c7a467870ed093af23be0121e5).
+- Latest source/test SHA: `1f0f38b9`; exact-head PR CI [#1275](https://github.com/sunmughan/After-Effects-Android/actions/runs/42486904072) queued/pending. Do not accept until Kotlin compile + JVM test (including this regression), both JNI ABIs, R8/APK/AAB, API30 and cold APK compare pass.
