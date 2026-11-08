@@ -12,6 +12,20 @@ package com.codeair.effectcraft.data
  * entry of [resolveAll].
  */
 object CanonicalLayerSelection {
+    /**
+     * Selects a newly appended canonical layer after an add action so its
+     * inspector is immediately editable. If the project did not gain a
+     * layer, preserve the surviving prior selection instead.
+     */
+    fun selectionAfterAdd(
+        selectedIdsBefore: Set<Long>,
+        layerIdsBefore: Set<Long>,
+        layersAfter: List<CanonicalLayerInfo>
+    ): Set<Long> {
+        val added = layersAfter.lastOrNull { it.id !in layerIdsBefore }
+        return added?.let { setOf(it.id) } ?: pruneSelection(selectedIdsBefore, layersAfter)
+    }
+
     /** The selected layer when it still exists, otherwise the first layer, otherwise null. */
     fun resolve(layers: List<CanonicalLayerInfo>, selectedId: Long?): CanonicalLayerInfo? {
         if (layers.isEmpty()) return null

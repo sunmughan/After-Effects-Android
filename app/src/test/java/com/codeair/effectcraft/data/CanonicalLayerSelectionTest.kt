@@ -75,6 +75,15 @@ class CanonicalLayerSelectionTest {
     }
 
     @Test
+    fun selectionAfterAddFocusesNewLayerAndPreservesSelectionWhenNothingWasAdded() {
+        val before = listOf(layer(2, "A"), layer(3, "B"))
+        val after = before + layer(9, "Rectangle")
+        assertEquals(setOf(9L), CanonicalLayerSelection.selectionAfterAdd(setOf(2, 3), before.map { it.id }.toSet(), after))
+        assertEquals(setOf(3L), CanonicalLayerSelection.selectionAfterAdd(setOf(3, 99), before.map { it.id }.toSet(), before))
+        assertEquals(emptySet<Long>(), CanonicalLayerSelection.selectionAfterAdd(setOf(99), before.map { it.id }.toSet(), emptyList()))
+    }
+
+    @Test
     fun nextAfterDeleteMovesToNeighborAtSameStackIndex() {
         val layers = listOf(layer(2, "A"), layer(3, "B"), layer(4, "C"))
 

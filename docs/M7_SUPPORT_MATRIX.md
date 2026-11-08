@@ -24,6 +24,8 @@
 
 ## 2. What is supported (implemented + CI-covered at the stated level)
 
+- Canonical Shape authoring: Add Rect creates a real upstream shape layer with rectangle geometry/fill through JNI; API30 instrumentation and compositor pixel regression passed in CI #1207 at branch SHA 75aa1a35. Newly created Text/Shape layers are selected automatically by the latest implementation checkpoint; that selection fix awaits exact-head CI.
+
 - Canonical EffectCraft projects: `.ecproj` (JSON) and `.ecprojx` (XML)
   import through SAF, with native schema validation; import is
   persisted only after validation succeeds and metadata contains at
@@ -50,7 +52,9 @@
 - Export: native frame → PNG, and configurable PNG-sequence ZIP
   (dimensions, FPS/range, resampling, manifest, staged ZIP integrity)
   via SAF, with bounded copy and rollback/best-effort provider
-  deletion on failure.
+  deletion on failure; H.264 MP4 sequence export and AAC audio mixdown
+  are implemented with MediaCodec and output validators (device codec/audio
+  synchronization matrix remains pending).
 - Accessibility (partial): semantics/labels added for covered
   controls, including a screen-reader click on the transform lane.
   TalkBack/manual verification is still pending (§4).
@@ -60,8 +64,10 @@
 - Adobe After Effects `.aep` — proprietary format, no licensed parser
   in this project. Never describe a project as ".aep-compatible".
 - Effekseer `.efkproj` — no parser/converter in this project.
-- Video export and audio (preview, codecs, export, sync) — absent.
-  PNG-sequence ZIP is the only export.
+- Full audio preview/sync parity and codec/device matrix — not yet qualified.
+  MP4/H.264 export and AAC mixdown are implemented; see
+  Mp4SequenceExporterInstrumentedTest, Mp4ExportWorkerInstrumentedTest
+  and AudioMixdownInstrumentedTest. PNG-sequence ZIP remains supported.
 - Full effect-parameter and 3D transform parity — not implemented;
   only the transform/opacity families in §2 are covered.
 - Pinch/twist gestures — the pinch/twist detector is not wired;
@@ -108,8 +114,8 @@ must still close with real evidence:
    multi-project manifests, missing-media recovery.
 7. **M3 physical gates open**: physical ARM64 GPU/Surface path,
    device-loss recovery on hardware, interruptible CPU rendering.
-8. **M4 parity open**: effect parameters, 3D parity, pinch/twist,
-   easing graph (see §3).
+8. **M4 parity open**: full effect stack, 3D/spatial/roving parity,
+   pinch/twist and complete interpolation parity (see §3).
 9. **M5 open**: video/audio, background render service, interruption
    recovery, physical memory/thermal acceptance.
 10. **M6 open**: full device/API/performance matrix, TalkBack/manual

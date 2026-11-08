@@ -9,6 +9,15 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 - Actual native CPU/session preview frames; GPU/device compatibility and media parity still require qualification.
 - Layer, transform, keyframe, Bezier/ShapePath editing and PNG/MP4 export foundations are implemented incrementally.
 
+## Engineering progress (2026-11-08)
+
+- Exact feature-branch CI **#1207 passed** at 75aa1a35: Rust 61/61, ARM64+x86_64 JNI, JVM, unsigned release APK/AAB with R8, API30 smoke and independent cold APK reproducibility.
+- M2 import hardening includes strict UTF-8 decoding and duplicate XML-member rejection; supported formats remain EffectCraft .ecproj JSON / .ecprojx XML. Adobe .aep and Effekseer .efkproj are not claimed.
+- M4 Add Rect creates a real upstream Shape layer through JNI and renders through the native compositor. New Text/Rect actions now focus the added layer for immediate parameter editing (implementation/test commit below; exact-head CI will verify).
+- M3/M4/M5 product foundations are real native preview, canonical transforms/keyframes, ShapePath editing and PNG/MP4 export; full parity, physical-device and release gates remain open.
+- See [PHASES.md](PHASES.md), [support matrix](docs/M7_SUPPORT_MATRIX.md), and [release checklist](docs/M7_RELEASE_GATE_CHECKLIST.md). PR #1 is merged; [PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2) is the draft post-merge follow-up.
+
+
 ## Build
 
 Requirements: JDK 17, Android SDK Platform 37 and the pinned Android NDK described in the implementation docs. The committed official Gradle Wrapper is 9.5.0 with a distribution SHA-256.
