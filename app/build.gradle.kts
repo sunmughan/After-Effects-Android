@@ -106,6 +106,8 @@ android {
 }
 
 dependencies {
+    kxml2Raw("net.sf.kxml:kxml2:2.3.0")
+    implementation(files(kxml2WithoutXmlPull))
     implementation(platform("androidx.compose:compose-bom:2026.08.00"))
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.ui:ui")
@@ -116,12 +118,20 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.fragment:fragment:1.9.1")
 
-    // KXML parser/serializer implementation without its bundled XmlPull API.
-    // Android provides org.xmlpull.v1 at runtime; test SDK stubs provide
-    // the interface while the KXML implementation remains JVM-testable.
-    implementation("com.github.kobjects:kxml2:v2.5.0") {
-        exclude(group = "org.xmlpull", module = "xmlpull")
+    // KXML 2.3.0 is available from Maven Central but bundles XmlPull API
+// classes that conflict with Android's boot class path under R8. Build a
+// deterministic local parser/serializer JAR with those API classes removed;
+// Android supplies org.xmlpull.v1, and JVM tests use the SDK interfaces.
+val kxml2Raw = configurations.create("kxml2Raw") {
+    isTransitive = false
+}
+val kxml2WithoutXmlPull = tasks.register<Jar>("kxml2WithoutXmlPull") {
+    archiveFileName.set("kxml2-without-xmlpull.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("kxml2"))
+    from({ zipTree(kxml2Raw.singleFile) }) {
+        exclude("org/xmlpull/**")
     }
+}
 
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging")
