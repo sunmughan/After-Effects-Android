@@ -131,4 +131,49 @@ class OfflineAssetReferencesTest {
         }
     }
 
+
+    @Test
+    fun symlinkAliasesShareReferenceTransactionLockWithoutLostUpdates() {
+        val root = Files.createTempDirectory("effectcraft-asset-refs-symlink").toFile()
+        val actual = File(root, "actual")
+        val alias = File(root, "alias")
+        val executor = Executors.newFixedThreadPool(8)
+        try {
+            assertTrue(actual.mkdirs())
+            Files.createSymbolicLink(alias.toPath(), actual.toPath())
+            val actualFile = File(actual, "references.properties")
+            val aliasFile = File(alias, "references.properties")
+            val workers = 8
+            val writesPerWorker = 25
+            val start = CountDownLatch(1)
+            val futures = (0 until workers).map { worker ->
+                executor.submit {
+                    // Half the workers open the same file through its symlink.
+                    val refs = OfflineAssetReferences(if (worker % 2 == 0) actualFile else aliasFile)
+                    start.await()
+                    repeat(writesPerWorker) { offset ->
+                        val itemId = worker * writesPerWorker + offset + 1L
+                        refs.setReference(itemId, if (worker % 2 == 0) firstHash else secondHash)
+                    }
+                }
+            }
+            start.countDown()
+            futures.forEach { it.get() }
+
+            val reopened = OfflineAssetReferences(actualFile)
+            assertEquals(workers * writesPerWorker, reopened.itemIdsFor(firstHash).size + reopened.itemIdsFor(secondHash).size)
+            repeat(workers * writesPerWorker) { offset ->
+                val itemId = offset + 1L
+                val worker = offset / writesPerWorker
+                assertEquals(if (worker % 2 == 0) firstHash else secondHash, reopened.assetFor(itemId))
+            }
+            assertTrue("Canonical lock must not leave staging files", actual.listFiles().orEmpty().none {
+                it.name.startsWith("references.properties.tmp-")
+            })
+        } finally {
+            executor.shutdownNow()
+            root.deleteRecursively()
+        }
+    }
+
 }
