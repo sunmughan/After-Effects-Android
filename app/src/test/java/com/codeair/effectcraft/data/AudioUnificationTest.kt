@@ -31,9 +31,7 @@ class AudioUnificationTest {
         sourceLengthFrames = endFrame - startFrame,
         sourcePath = "/audio/test.wav",
         sourceMime = "audio/wav",
-        sourceDurationUs = ((endFrame - startFrame).toLong() * 1_000_000L) / 30L,
-        gain = gain,
-        muted = muted
+        sourceDurationUs = ((endFrame - startFrame).toLong() * 1_000_000L) / 30L
     ).let {
         // covering() builds gain/fades as defaults; apply the requested ones.
         it.copy(gain = gain, fadeInFrames = fadeInFrames, fadeOutFrames = fadeOutFrames, muted = muted)
