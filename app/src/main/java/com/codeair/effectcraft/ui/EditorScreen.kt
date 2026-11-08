@@ -439,6 +439,10 @@ fun EditorScreen(
             .background(EditorPalette.background)
     ) {
         val isTabletLayout = maxWidth >= 760.dp
+        // Adaptive timeline height (P11), captured here: BoxWithConstraints
+        // scope values are not reachable with an implicit receiver from
+        // inside the nested Column below.
+        val timelineCardHeight = (maxHeight * 0.42f).coerceIn(260.dp, 340.dp)
 
         // Edge-to-edge: the header starts below the status bar and the
         // audio section clears the navigation bar / gesture area.
@@ -577,7 +581,7 @@ fun EditorScreen(
                     // available height instead of a fixed dp value, so
                     // the track viewport scales with the screen. The
                     // transport row's +48dp is inside that budget.
-                    .height((maxHeight * 0.42f).coerceIn(260.dp, 340.dp))
+                    .height(timelineCardHeight)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
             )
 

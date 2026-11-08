@@ -280,30 +280,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
     var projectKeyframeTracks by remember { mutableStateOf(projectKeyframeStore.load(project.id)) }
 
-    /** The track holding audio clip [clipId], or null when no track has it. */
-    fun audioTrackForClip(clipId: String): AudioTrackDocument? =
-        project.audioTracks.firstOrNull { track -> track.clips.any { it.id == clipId } }
-
-    /**
-     * Removes one audio clip from its track, dropping the track when it
-     * becomes empty, through the same undo system as every other draft
-     * edit. This is the one removal path for the unified audio model.
-     */
-    fun removeAudioClip(clipId: String) {
-        val track = audioTrackForClip(clipId) ?: run {
-            saveMessage = "Audio clip is no longer in the project"
-            return
-        }
-        val remaining = track.clips.filterNot { it.id == clipId }
-        val tracks = if (remaining.isEmpty()) {
-            project.audioTracks.filterNot { it.id == track.id }
-        } else {
-            project.audioTracks.map { if (it.id == track.id) it.copy(clips = remaining) else it }
-        }
-        applyProjectChange(project.copy(audioTracks = tracks), "Audio clip removed · unsaved")
-        if (selectedAudioClipId == clipId) selectedAudioClipId = null
-    }
-
     // One place decides whether a payload is still referenced: every project
     // manifest, the legacy current-project references, and the payload files
     // the canonical document itself still points at. The last set is what
@@ -366,6 +342,32 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         project = next
         saveMessage = message
         hasUnsavedChanges = true
+    }
+
+    /** The track holding audio clip [clipId], or null when no track has it. */
+    fun audioTrackForClip(clipId: String): AudioTrackDocument? =
+        project.audioTracks.firstOrNull { track -> track.clips.any { it.id == clipId } }
+
+    /**
+     * Removes one audio clip from its track, dropping the track when it
+     * becomes empty, through the same undo system as every other draft
+     * edit. This is the one removal path for the unified audio model.
+     * (Declared after [applyProjectChange]: Kotlin local functions are
+     * only visible after their declaration point.)
+     */
+    fun removeAudioClip(clipId: String) {
+        val track = audioTrackForClip(clipId) ?: run {
+            saveMessage = "Audio clip is no longer in the project"
+            return
+        }
+        val remaining = track.clips.filterNot { it.id == clipId }
+        val tracks = if (remaining.isEmpty()) {
+            project.audioTracks.filterNot { it.id == track.id }
+        } else {
+            project.audioTracks.map { if (it.id == track.id) it.copy(clips = remaining) else it }
+        }
+        applyProjectChange(project.copy(audioTracks = tracks), "Audio clip removed · unsaved")
+        if (selectedAudioClipId == clipId) selectedAudioClipId = null
     }
 
     /** Saves the current draft; true only when the save landed. */
