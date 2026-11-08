@@ -627,8 +627,13 @@ class AdaptiveWorkspaceSmokeTest {
         // The field starts at the current playhead (0); appending 20 yields
         // "020", which is parsed as frame 20 and exercises the explicit Move
         // button rather than the graph's accessibility shortcut.
-        compose.onNodeWithContentDescription("Move key target frame")
-            .performScrollTo().performTextClearance().performTextInput("20")
+        val targetInput = compose.onNodeWithContentDescription("Move key target frame").performScrollTo()
+        targetInput.performTextClearance().performTextInput("-x99999999999")
+        // The field strips non-digits, caps at ten digits, and the Move
+        // action rejects values outside Int frame range instead of crashing.
+        compose.onNodeWithContentDescription("Move position keyframe to frame 9999999999")
+            .performScrollTo().assertIsNotEnabled()
+        targetInput.performTextClearance().performTextInput("20")
         compose.onNodeWithContentDescription("Move position keyframe to frame 20")
             .performScrollTo().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, 2L, "transform:position", 0, 20), moved)
