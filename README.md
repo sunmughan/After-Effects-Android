@@ -118,3 +118,11 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 - CI #1304 pinpointed the explicit transform Move instrumentation failure: its fixture omitted `transformKeyframes`, leaving the button disabled by design. [729f8409](https://github.com/sunmughan/After-Effects-Android/commit/729f840984aa0407df863c7805049e27fc578861) adds canonical position keys (0/15/30); no app gate was relaxed.
 - M4 native test [c09fe485](https://github.com/sunmughan/After-Effects-Android/commit/c09fe4854a61ef39a3b4c7d14eba5cd07cffa9ce) now verifies moving a Bezier key onto an occupied frame replaces the neighbor and preserves the moved key's value/interpolation in serialized project data. Fresh exact-head CI is required.
 - [PHASES.md](PHASES.md) is the authoritative M0–M7 ledger. Release remains NOT complete; physical device/GPU/media/install and owner-controlled signing are still blockers; Adobe `.aep` is not natively supported.
+
+
+## Engineering progress (2026-11-08 23:35 IST)
+
+- **CI #1309 green at exact docs HEAD 1a826388:** 70 Rust tests passed; API30 instrumentation 177/177; both CI jobs succeeded, including independent debug APK byte/content and ARM64/x86_64 JNI .so reproducibility. [Run #1309](https://github.com/sunmughan/After-Effects-Android/actions/runs/42504897643), [test artifact](https://github.com/sunmughan/After-Effects-Android/actions/runs/42504897643/artifacts/13627114212), [repro report](https://github.com/sunmughan/After-Effects-Android/actions/runs/42504897643/artifacts/13628206022). This evidence applies only to that SHA.
+- **M2 import integrity:** commit [09d2dad2](https://github.com/sunmughan/After-Effects-Android/commit/09d2dad24cb5eab8dedcd6a35099010b07290376) adds duplicate JSON object member rejection before JSONObject parsing, including escaped-equivalent names, with JVM tests for nested collisions and false-positive-safe string/array handling. Fresh CI at this new HEAD is pending.
+- See [PHASES.md](PHASES.md) for the acceptance ledger, exact SHAs, failures, evidence and blockers. Release is not complete; Effekseer .efkproj and Adobe .aep native parser support are not claimed, and physical device/signing gates remain open.
+
