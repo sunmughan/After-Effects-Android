@@ -3,7 +3,7 @@
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
 [PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #2 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/2).  
-Tracker updated: 2026-11-08 18:12 IST · branch HEAD `7a89868f`.
+Tracker updated: 2026-11-08 18:38 IST · branch HEAD `a40aa02c`.
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
 
@@ -14,6 +14,14 @@ Tracker updated: 2026-11-08 18:12 IST · branch HEAD `7a89868f`.
 - **Earlier accepted baseline:** [CI #1222](https://github.com/sunmughan/After-Effects-Android/actions/runs/42460342703) passed exact SHA `3fbc4a96`: Rust 63/63, ARM64+x86_64 JNI, JVM, unsigned APK/AAB + R8, API30 176/176 (0 skipped/failed), and independent cold APK byte comparison. This accepts Add Ellipse, not the later Star/Triangle code.
 - Add Star callback compile error from #1237 was fixed in [d0b14cbe](https://github.com/sunmughan/After-Effects-Android/commit/d0b14cbeef0c6baa325442d5180196c9f2699b06); M4 project-wide Shape property UID allocator correction [448f2537](https://github.com/sunmughan/After-Effects-Android/commit/448f25377c44f79074776c1cda8ac4394e3d9e0c); actual Star white→red edit→serialize→compositor regression [52d1caad](https://github.com/sunmughan/After-Effects-Android/commit/52d1caad505f8891ef053cb1ddff19054ee52189). Exact latest CI pending.
 - Local Android SDK/Gradle execution is unavailable in this automation runtime; hosted Actions is the build/test gate. Emulator CI is not physical-device GPU/thermal/install proof.
+
+## Latest compiler failure and source remediation — 2026-11-08 18:38 IST
+
+- **CI #1257 failed at exact SHA `ec0bdf4b`** after both Rust/JNI ABI builds and Rust tests succeeded. `assembleDebug` stopped in Kotlin code generation with ASM `MethodTooLargeException` for `EditorScreenKt.CanonicalProjectEditor`; JVM tests, release packaging, instrumentation and cold APK comparison were skipped. This was a real source/compiler limit, not runner/JDK/network infrastructure.
+- Root cause: the canonical inspector had accumulated preview, transform/keyframe interpolation, Source Text and shape/effect property UI into one Compose-generated JVM method exceeding the 64-KiB bytecode method limit.
+- Refactor [97a1ae3d](https://github.com/sunmughan/After-Effects-Android/commit/97a1ae3d45fd511763e286dd10d1c8f2d8198310) extracts transform/keyframe, text and shape/effect parameter sections into dedicated composables, preserving their canonical callbacks and state. Follow-up [a40aa02c](https://github.com/sunmughan/After-Effects-Android/commit/a40aa02c68ce16426ef63b3b2f32b76e88a0a122) corrected the extracted Source Text composable's closing scope.
+- Exact-head PR workflow [CI #1261](https://github.com/sunmughan/After-Effects-Android/actions/runs/42483749680) at `a40aa02c` is pending. It must prove Kotlin compilation, Rust/JNI, JVM, unsigned APK/AAB + R8, API30 instrumentation and independent cold APK reproducibility. No acceptance is claimed yet.
+- The correction does not remove tests or reduce feature behavior. Local Android SDK/Gradle is unavailable in this runtime; hosted Actions is the compile/test authority.
 
 ## Phase acceptance
 
