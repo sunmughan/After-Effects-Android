@@ -1,6 +1,7 @@
 package com.codeair.effectcraft
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -19,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import com.codeair.effectcraft.ui.EditorScreen
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.CanonicalProjectDocument
@@ -53,6 +55,16 @@ class EditorSmokeTest {
         if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
             compose.onNodeWithText("Discard").performClick()
         }
+    }
+
+    /**
+     * Batch 2 (P11): the track list is a LazyColumn, so a row below the
+     * fold is not composed until it is scrolled into view — exactly as a
+     * user must scroll to see it.
+     */
+    private fun scrollTimelineToLayer(index: Int) {
+        compose.onNodeWithTag("timeline-track-list").performScrollToIndex(index)
+        compose.waitForIdle()
     }
 
 
@@ -129,7 +141,10 @@ class EditorSmokeTest {
         compose.onNodeWithText("EFFECTCRAFT").assertIsDisplayed()
         compose.onNodeWithText("OFFLINE").assertIsDisplayed()
         compose.onNodeWithText("COMPOSITION VIEWER", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Draft preview not rendered").assertIsDisplayed()
+        // Batch 2 (P06): a fresh draft renders its own layers now — the
+        // dead "Draft preview not rendered" placeholder is gone.
+        compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
+        compose.onNodeWithText("Draft preview not rendered").assertDoesNotExist()
         compose.onNodeWithText("TIMELINE").assertIsDisplayed()
     }
 
@@ -269,11 +284,14 @@ class EditorSmokeTest {
 
         // Shape 4 was moved into slot 3. Deletion selects the surviving layer
         // now occupying that slot (Accent Shapes), not a stale deleted ID.
+        scrollTimelineToLayer(2)
         compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
 
         compose.onNodeWithText("Undo").performClick()
+        scrollTimelineToLayer(3)
         compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
         compose.onNodeWithText("Redo").performClick()
+        scrollTimelineToLayer(2)
         compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
     }
 
@@ -303,10 +321,11 @@ class EditorSmokeTest {
     @Test
     fun timelineSelectionUpdatesInspectorProperties() {
         compose.onNodeWithText("New").performClick()
-        // The timeline panel scrolls: with 48dp tracks the third layer
-        // sits below the visible fold, so scroll it into view before
-        // tapping it, exactly as a user would.
-        compose.onNodeWithText("Accent Shapes").performScrollTo().performClick()
+        // The timeline is a LazyColumn: the third layer is not composed
+        // until it is scrolled into view, so scroll the list first and
+        // then tap the row, exactly as a user would.
+        scrollTimelineToLayer(2)
+        compose.onNodeWithText("Accent Shapes").performClick()
         compose.onNodeWithText("Props").performClick()
         // The inspector scrolls; the opacity row may sit below the fold.
         compose.onNodeWithTag("layer-opacity-value")

@@ -6,8 +6,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.platform.app.InstrumentationRegistry
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.OfflineAssetStore
@@ -119,6 +121,10 @@ class OfflineAcceptanceInstrumentedTest {
         compose.onNodeWithContentDescription("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         assertEditorStatus("Opened locally · Untitled Composition")
+        // Batch 2 (P11): the track list is a LazyColumn — the fourth
+        // row is not composed until it is scrolled into view.
+        compose.onNodeWithTag("timeline-track-list").performScrollToIndex(3)
+        compose.waitForIdle()
         compose.onNodeWithText("Shape 4").assertExists()
 
         // Reload from fresh store instances: the edit and the media survive.
