@@ -192,6 +192,8 @@ fun EditorScreen(
     selectedLayerId: String,
     playheadFrame: Int,
     selectedOpacityKeyframes: List<PropertyKeyframe>,
+    /** Opacity per layer at the playhead (keyframe-evaluated where keyed). */
+    layerOpacityAtPlayhead: Map<String, Float> = emptyMap(),
     canonicalTransformKeyframes: List<Int> = emptyList(),
     canonicalTransformDurationFrames: Int = project.durationFrames,
     canonicalColorKeys: List<CanonicalCurveKey> = emptyList(),
@@ -408,6 +410,20 @@ fun EditorScreen(
         } else null
     }
 
+    // Batch 2 (P06): the draft preview. With no imported canonical
+    // project the draft renders itself — the real renderer draws the
+    // draft layers to a bitmap on every project/playhead change, so the
+    // preview follows edits and playback. With a canonical project the
+    // native frame wins and no draft bitmap is produced.
+    var draftFrame by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(project, playheadFrame, layerOpacityAtPlayhead) {
+        draftFrame = if (previewComposition == null) {
+            withContext(Dispatchers.Default) {
+                DraftFrameRenderer.render(project, playheadFrame, layerOpacityAtPlayhead)
+            }
+        } else null
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -468,7 +484,7 @@ fun EditorScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
-                        bitmap = workspaceFrame,
+                        bitmap = workspaceFrame ?: draftFrame,
                         compositionName = previewComposition?.name,
                         motionPathKeys = workspaceMotionPathKeys,
                         compositionWidth = previewComposition?.width ?: 0,
@@ -497,7 +513,7 @@ fun EditorScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .padding(horizontal = 14.dp, vertical = 4.dp),
-                    bitmap = workspaceFrame,
+                    bitmap = workspaceFrame ?: draftFrame,
                     compositionName = previewComposition?.name,
                     motionPathKeys = workspaceMotionPathKeys,
                     compositionWidth = previewComposition?.width ?: 0,
@@ -1365,13 +1381,13 @@ private fun PreviewStage(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        if (compositionName == null) "Draft preview not rendered" else "Native frame unavailable",
+                        if (compositionName == null) "Draft preview unavailable" else "Native frame unavailable",
                         color = EditorPalette.text,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        if (compositionName == null) "Import a supported .ecproj to see the actual composition here. Draft editing remains offline."
+                        if (compositionName == null) "This composition has no usable size, so no frame could be drawn."
                         else "The project is loaded, but its native renderer did not return a frame for this ABI.",
                         color = EditorPalette.muted,
                         fontSize = 11.sp,

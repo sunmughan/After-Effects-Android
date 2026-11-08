@@ -66,6 +66,7 @@ import com.codeair.effectcraft.data.ProjectEditorActions
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.ProjectFileFormats
 import com.codeair.effectcraft.data.ProjectKeyframeStore
+import com.codeair.effectcraft.data.PropertyTrackEditor
 import com.codeair.effectcraft.data.FinalCopyRecovery
 import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.Mp4ExportWorker
@@ -1245,6 +1246,16 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val selectedOpacityKeyframes = projectKeyframeTracks
         .firstOrNull { it.layerId == selectedLayerId && it.track.property == "opacity" }
         ?.track?.keyframes.orEmpty()
+    // Batch 2 (P06): opacity at the playhead for every layer, so the draft
+    // renderer draws keyframed opacity instead of the static layer value.
+    val layerOpacityAtPlayhead = remember(project, projectKeyframeTracks, playheadFrame) {
+        project.layers.associate { layer ->
+            val keyframed = projectKeyframeTracks
+                .firstOrNull { it.layerId == layer.id && it.track.property == "opacity" }
+                ?.let { PropertyTrackEditor.evaluate(it.track, playheadFrame.toDouble()) }
+            layer.id to (keyframed ?: layer.opacity)
+        }
+    }
     val selectedCanonicalTransformComposition = canonicalProjectInfo?.compositions
         ?.firstOrNull { composition -> composition.layers.any { it.id in canonicalSelectedIds } }
     val selectedCanonicalTransformKeyframes = selectedCanonicalTransformComposition?.layers
@@ -1351,6 +1362,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             selectedLayerId = selectedLayerId,
             playheadFrame = playheadFrame,
             selectedOpacityKeyframes = selectedOpacityKeyframes,
+            layerOpacityAtPlayhead = layerOpacityAtPlayhead,
             canonicalTransformKeyframes = selectedCanonicalTransformKeyframes,
             canonicalTransformDurationFrames = selectedCanonicalTransformDurationFrames,
             canonicalColorKeys = selectedCanonicalColorKeys,
