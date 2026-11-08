@@ -3,7 +3,7 @@
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
 [PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #4 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/4) (PR #2 and #3 merged).  
-Tracker updated: 2026-11-08 21:46 IST · test fix SHA 95713180 · CI rerun pending
+Tracker updated: 2026-11-08 21:47 IST · test coverage SHA f097ac95 · CI rerun pending
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
 
@@ -28,6 +28,7 @@ Tracker updated: 2026-11-08 21:46 IST · test fix SHA 95713180 · CI rerun pendi
 - Exact run [#1290](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493884493) at docs SHA `e6c4517b` completed **failure**. The Assemble/test job successfully built ARM64 and x86_64 JNI, passed Rust tests, JVM tests, debug APK and unsigned release APK/AAB + R8. Android emulator instrumentation ran 177 tests with 1 failure; the independent cold APK comparison job was skipped because the primary job failed.
 - Exact failing test: `AdaptiveWorkspaceSmokeTest.explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame`. The assertion could not locate the semantics node `Move position keyframe to frame 020` after the test appended `20` to a prefilled `0` draft. This was a brittle test assumption about BasicTextField selection/cursor state, not a renderer/native failure.
 - Corrected the test to explicitly clear the field before entering `20`, then assert the stable `Move position keyframe to frame 20` node is enabled before clicking it. It still asserts the full canonical callback `(composition 10, layer 2, transform:position, source 0, destination 20)`; no behavior or coverage was removed. [Fix commit 95713180](https://github.com/sunmughan/After-Effects-Android/commit/95713180dea7f2d9fd0bf09b7d6e1c186ff214ef).
+- Follow-up hardening [f097ac95](https://github.com/sunmughan/After-Effects-Android/commit/f097ac955557c326f5d95bbdf6600c45cffbac0f) extends the same instrumentation: input `-x99999999999` must be sanitized to ten digits and its overflowing `Int` frame must leave Move disabled; the field is then cleared and valid frame `20` must enable Move and invoke the callback. This verifies digit filtering, length cap and overflow guard on-device without weakening the positive path.
 - Fresh push CI is required at `95713180`; cold APK comparison and full 177-test API30 suite remain unaccepted until that run passes. Local Android SDK/Gradle is unavailable here, so hosted Actions is the reproducible test authority.
 
 ## Phase acceptance
