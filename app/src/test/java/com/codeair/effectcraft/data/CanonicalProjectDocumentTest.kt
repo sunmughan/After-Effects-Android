@@ -85,7 +85,7 @@ class CanonicalProjectDocumentTest {
     @Test
     fun ecprojRejectsDuplicateMembersWithEquivalentEscapedControlCharacters() {
         // Both JSON spellings decode to the same tab-containing member name.
-        val duplicate = """{"tab\\tkey":1,"tab\\u0009key":2}"""
+        val duplicate = """{"tab\tkey":1,"tab\u0009key":2}"""
         val failure = runCatching { CanonicalProjectDocument.toCanonicalJson(duplicate) }.exceptionOrNull()
         assertTrue(failure is IllegalArgumentException)
         assertTrue(failure?.message.orEmpty().contains("Duplicate JSON object member"))
