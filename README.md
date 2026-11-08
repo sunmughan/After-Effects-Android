@@ -24,14 +24,14 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 05:27 IST)
+## Current engineering status (2026-11-08 06:40 IST)
 
 **Release is NOT complete.** PR #1 merged into `main` at `4ae22776` (2026-11-07); that merge is not product acceptance. Post-merge work is tracked in [draft follow-up PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2) (clean/mergeable; not merged). Ongoing engineering continues on `feat/android-app-foundation`. [PHASES.md](PHASES.md) is the authoritative acceptance ledger with evidence, commit SHAs and blockers.
 
 ### Latest build failure and correction
 
-- [CI #1145](https://github.com/sunmughan/After-Effects-Android/actions/runs/42423554259), SHA `e4e5bb85`: Rust dual-ABI, Rust tests, JVM tests and debug APK passed, but release R8 failed with `android.content.res.XmlResourceParser implements program class org.xmlpull.v1.XmlPullParser`. The legacy `net.sf.kxml:kxml2:2.3.0` bundles XmlPull API classes that conflict with Android's framework API.
-- Corrected the dependency to KObjects KXML 2.5.0 (parser implementation only), added JitPack, and excluded its separate `org.xmlpull:xmlpull` API so Android supplies the interface: [settings commit 2188f73a](https://github.com/sunmughan/After-Effects-Android/commit/2188f73a0dbeb6c6647c4ce5386c05e04115bbf9), [Gradle commit e27138b4](https://github.com/sunmughan/After-Effects-Android/commit/e27138b4a60a6c821bf75b8f9c05567a3a3811a9).
+- [CI #1151](https://github.com/sunmughan/After-Effects-Android/actions/runs/42427767850), SHA `e1c2a568`: build failed before compilation because `com.github.kobjects:kxml2:v2.5.0` is unpublished/not resolvable (no upstream 2.5.0 release/tag). This was an incorrect dependency coordinate, not an R8 regression.
+- Replaced the invalid KObjects coordinate with the published Maven Central KXML 2.3.0 artifact and a deterministic Gradle task that strips `org/xmlpull/**` from the packaged parser JAR (Android supplies the API), avoiding R8 duplicate program classes: [build commit cf01caf5](https://github.com/sunmughan/After-Effects-Android/commit/cf01caf53568a13e951edb55fe0a1088230f917c). Removed unused JitPack repository [d9c88793](https://github.com/sunmughan/After-Effects-Android/commit/d9c88793ab29a590af78d3b071ec4c8de1ba7731).
 - Push CI #1147 was cancelled when the follow-up PR check started; PR checks #1148 and #1149 were superseded by documentation-only head updates. [Latest PR check #1150](https://github.com/sunmughan/After-Effects-Android/actions/runs/42427711665) was running on code-equivalent head `443dedc7` at last inspection, but the current README synchronization will cause another PR workflow attempt. The Android-safe KXML correction is **not accepted until a fresh run passes JVM, release R8, API30 instrumentation and independent cold APK comparison**.
 
 ### Phase snapshot
