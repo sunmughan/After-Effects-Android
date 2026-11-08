@@ -202,3 +202,20 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 ### Next gate
 - Await the Actions run triggered by edde8aeb / current branch HEAD. Require Rust tests + ARM64/x86_64 JNI, Kotlin/JVM, release R8/APK/AAB, API30 177/177 and independent cold APK reproducibility.
 - Continue M4 shape/property/keyframe work only after fixing any new test failures; M2 interoperability and physical M3/M5/M6 validation remain open. PR #4 stays Draft; M7 remains **NOT ACCEPTED**.
+
+
+## Engineering checkpoint — 2026-11-09 03:02 IST
+
+### M4 — Add Pentagon implemented end-to-end
+- Native Rust authors a real upstream Shape layer with a five-sided parametric polygon (`shape_star(..., star=false, points=5)`) and Fill, serializes the canonical project, and the actual CPU compositor renders it. Native test `add_pentagon_layer_creates_editable_polygon_and_renders` checks normalized name, Shape source, geometry+fill, project JSON round-trip, 320×180 frame and visible white pixels.
+- Commits: [native authoring + pixel test 5da1ad74](https://github.com/sunmughan/After-Effects-Android/commit/5da1ad742634360d4d62781e4c542a502df8fb82); [JNI/Kotlin bridge 28f5f6b7](https://github.com/sunmughan/After-Effects-Android/commit/28f5f6b706f93d4794d8ecf264ee6d7be0850119); [canonical inspector button a6b22d7f](https://github.com/sunmughan/After-Effects-Android/commit/a6b22d7fe081fe9a8cc4c9f4ecb13d470357ff06); [app save/selection wiring 1affcbc5](https://github.com/sunmughan/After-Effects-Android/commit/1affcbc5b91393ff30d7021df371ffe3e8280c1d); [Android callback test cff48e65](https://github.com/sunmughan/After-Effects-Android/commit/cff48e65d068456088c46c50aa375013b0530dd8).
+- The UI action creates a Pentagon in the selected composition, routes through JNI, persists the canonical project and uses existing layer-selection behavior. Test asserts callback composition/name; no mock geometry.
+
+### CI #1328 instrumentation failure and navigation repair
+- [Actions #1328](https://github.com/sunmughan/After-Effects-Android/actions/runs/42520953988) at `dcde2ca2` compiled successfully and ran 177 API30 tests; two `assertIsDisplayed` checks failed (`● Headline` in AdaptiveWorkspaceSmokeTest line 727 and `● Background` in CanonicalSelectionEditorTest line 217). Exact logs show 177 completed, 2 failed; independent APK rebuild was skipped.
+- Diagnosis: inspector sheet and its nested layer list have separate scroll containers. Test `performScrollTo` only moved the inner list while the sheet's retained scroll offset clipped the row. Fixed without removing assertions: [Adaptive test f94933c9](https://github.com/sunmughan/After-Effects-Android/commit/f94933c9692568bdab2dd6a71fbd2a2603fcf13a) and [selection test edde8aeb](https://github.com/sunmughan/After-Effects-Android/commit/edde8aeb3486696cfee02e9bd59f5de1dc5e9dee) explicitly scroll the sheet header then the inner row.
+- Subsequent CI #1331 on test SHA `edde8aeb` was cancelled/superseded while source work continued. Current exact-head verification [#1341](https://github.com/sunmughan/After-Effects-Android/actions/runs/42524736520) is pending at SHA `cff48e65` and includes the scroll repair + Pentagon implementation/test. Require dual ABI, Rust/JVM, release R8/APK/AAB, API30 177/177, and cold APK reproducibility.
+
+### Phase status
+- M4 gained actual editable Pentagon authoring and test coverage; this is implementation progress, not phase completion.
+- M0–M6 remain partial/qualified as in the ledger; M7 NOT ACCEPTED. PR #4 remains Draft. Physical GPU/media/codec/audio/performance/accessibility/install-run and owner-controlled signing remain concrete release blockers. Effekseer interoperability is incomplete; Adobe `.aep` is proprietary and not natively supported/claimed.
