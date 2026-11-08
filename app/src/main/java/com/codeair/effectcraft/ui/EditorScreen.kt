@@ -278,6 +278,7 @@ fun EditorScreen(
     onRenameCanonicalLayer: (Long, Long, String) -> Unit,
     onAddCanonicalTextLayer: (Long, String) -> Unit,
     onAddCanonicalShapeLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalEllipseLayer: (Long, String) -> Unit = { _, _ -> },
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
@@ -895,6 +896,7 @@ fun EditorScreen(
                     onRenameLayer = onRenameCanonicalLayer,
                     onAddTextLayer = onAddCanonicalTextLayer,
                     onAddShapeLayer = onAddCanonicalShapeLayer,
+                    onAddEllipseLayer = onAddCanonicalEllipseLayer,
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
@@ -1569,6 +1571,7 @@ private fun CanonicalProjectEditor(
     onRenameLayer: (Long, Long, String) -> Unit,
     onAddTextLayer: (Long, String) -> Unit,
     onAddShapeLayer: (Long, String) -> Unit,
+    onAddEllipseLayer: (Long, String) -> Unit,
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
@@ -1847,6 +1850,10 @@ private fun CanonicalProjectEditor(
                         onAddShapeLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Rectangle")
                     }
                 ) { Text("Add Rect", color = EditorPalette.violet) }
+                TextButton(
+                    enabled = canEdit && newTextName.trim().isNotEmpty(),
+                    onClick = { onAddEllipseLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Ellipse") }
+                ) { Text("Add Ellipse", color = EditorPalette.violet) }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
             Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
