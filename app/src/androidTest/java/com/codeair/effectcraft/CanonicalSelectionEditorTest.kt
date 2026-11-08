@@ -61,7 +61,7 @@ class CanonicalSelectionEditorTest {
                 layer(2, "Background", 10.0, 20.0).copy(transformKeyframes = mapOf("position" to listOf(0, 15, 30), "scale" to listOf(0), "rotation" to listOf(30))),
                 layer(3, "Title", 30.0, 40.0),
                 layer(4, "Locked", 50.0, 60.0, locked = true)
-            )
+            ) + (5L..54L).map { id -> layer(id, "Layer $id", id.toDouble(), id.toDouble()) }
         )
         val canonicalState = mutableStateOf(CanonicalProjectInfo(compositions = listOf(composition)))
         val selectionState = mutableStateOf(setOf(2L))
@@ -215,10 +215,11 @@ class CanonicalSelectionEditorTest {
         assertEquals(15, workspaceFrame.intValue)
 
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
-        // Reopening restores the sheet scroll position. Explicitly bring
-        // its header and nested layer list back into view before asserting.
+        // A 53-layer fixture verifies that off-fold rows remain reachable
+        // through the inspector's single outer scroll container.
         compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Layers").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("○ Layer 54", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("● Background", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Add Ellipse").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Ellipse"), ellipseAdded)
@@ -265,11 +266,8 @@ class CanonicalSelectionEditorTest {
         // on Background (line-205 failure: expected [3] but was [2]).
         // Scroll each row back into view first, as the indicator and preview
         // steps below already do.
-        // The row scrollTo above only scrolls the inner layer list, not the
-        // sheet itself, so the sheet stays scrolled down at the inspector
-        // and the tap is still swallowed. Scroll the sheet header, a direct
-        // child of the sheet column, back into view first to bring the rows
-        // back, then tap the row.
+        // All layer rows share the outer sheet scroll; bring the section
+        // and target row into view before injecting a click.
         compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo()
         compose.onNodeWithContentDescription("Canonical layer row Title").performScrollTo().performClick()
         assertEquals(setOf(3L), selectionState.value)
