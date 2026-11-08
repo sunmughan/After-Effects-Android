@@ -6163,6 +6163,21 @@ mod tests {
         assert_eq!(param_keys[1]["inInterp"], "Bezier");
         assert!(set_layer_param_keyframe(&source, comp_id.0, null_id, 999_999, 15, 1.0, 0.0, 0.0).is_err());
         assert!(move_keyframe(&bezier, comp_id.0, null_id, &selector, 15, -1).is_err());
+
+        // Moving a key onto an existing neighbor is an intentional same-frame
+        // replacement. The moved key (including its Bezier interpolation)
+        // must win, rather than inheriting the replaced neighbor's metadata.
+        let collided = move_keyframe(&bezier, comp_id.0, null_id, &selector, 15, 0).unwrap();
+        let collided_project: Project = serde_json::from_str(&collided).unwrap();
+        let collided_blur = collided_project.comp(comp_id).unwrap().layers[1].props.prop(&format!("@{blur_uid}")).unwrap();
+        assert_eq!(collided_blur.keys.len(), 1, "destination frame replaces its neighbor");
+        assert_eq!(collided_blur.keys[0].time, Tick::ZERO);
+        assert_eq!(collided_blur.keys[0].value, Value::Scalar(12.0));
+        assert_eq!(collided_blur.keys[0].in_interp, Interp::Bezier);
+        let collided_meta = serde_json::from_str::<serde_json::Value>(&inspect_project(&collided).unwrap()).unwrap();
+        let collided_keys = &collided_meta["compositions"][0]["layers"][1]["effects"][0]["scalars"][0]["keys"];
+        assert_eq!(collided_keys.as_array().unwrap().len(), 1);
+        assert_eq!(collided_keys[0]["frame"], 0);
         let (without_param_mid, removed_param_mid) = remove_curve_keyframe(&dragged, comp_id.0, null_id, &selector, 24).unwrap();
         assert!(removed_param_mid);
         let param_after_mid: Project = serde_json::from_str(&without_param_mid).unwrap();
