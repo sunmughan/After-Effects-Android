@@ -1364,6 +1364,22 @@ fn add_star_layer(source: &str, composition_id: u64, name: &str) -> Result<Strin
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+fn add_triangle_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
+    let mut ids = build::Ids(&mut project.next_id);
+    let triangle = build::shape_star(&mut ids, false, 3.0, [0.0, 0.0], 100.0, 100.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(triangle.into()); contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addStarLayerEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
@@ -1371,6 +1387,17 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_a
     let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
     let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
     let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_star_layer(&source, composition_id as u64, &name) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addTriangleLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_triangle_layer(&source, composition_id as u64, &name) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -3945,6 +3972,20 @@ mod tests {
         let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
         assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
         assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "star fill must produce visible white pixels in the real composition frame");
+    }
+
+    #[test]
+    fn add_triangle_layer_creates_editable_polygon_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
+        let updated_json = add_triangle_layer(&source, comp_id.0, "  Triangle  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Triangle"); assert_eq!(layer.source.type_name(), "Shape");
+        assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "triangle layer must contain polygon geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "triangle fill must produce visible white pixels in the real composition frame");
     }
     #[test]
     fn sequential_shape_creation_uses_project_wide_unique_property_uids() {
