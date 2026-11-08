@@ -24,7 +24,7 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 08:05 IST)
+## Current engineering status (2026-11-08 08:23 IST)
 
 **Release is NOT complete.** PR #1 merged into `main` at `4ae22776`; post-merge work is in [draft PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2), not merged. [PHASES.md](PHASES.md) is the authoritative M0–M7 acceptance ledger.
 
@@ -33,6 +33,7 @@ The Android manifest intentionally does not request `INTERNET`. Project drafts, 
 - M2 fix [60dc6bcd](https://github.com/sunmughan/After-Effects-Android/commit/60dc6bcd49a9b9439a70ab8435128a2e8cfaa9c4) canonicalizes `OfflineAssetReferences` lock keys so real and symlink paths to one file serialize. Regression [46c27832](https://github.com/sunmughan/After-Effects-Android/commit/46c2783257fc1b9aa8a5363267fed2bddd74586f) runs 8 independent writers × 25 writes (200 unique mappings) through both paths and checks reopen integrity/staging cleanup. Push CI #1170 [run 42439234144](https://github.com/sunmughan/After-Effects-Android/actions/runs/42439234144) is running on test SHA `46c27832`; PR check #1172 [run 42439260823](https://github.com/sunmughan/After-Effects-Android/actions/runs/42439260823) is pending.
 - Earlier KXML packaging/dependency failures (#1145 R8 duplicate XmlPull classes, #1151 unpublished KObjects coordinate) were corrected with Maven Central KXML 2.3.0 plus a deterministic JAR transform excluding `org/xmlpull/**`: [cf01caf5](https://github.com/sunmughan/After-Effects-Android/commit/cf01caf53568a13e951edb55fe0a1088230f917c), [54bf36e1](https://github.com/sunmughan/After-Effects-Android/commit/54bf36e1ff0fb639617199586681dfeb68e7510e), [d9c88793](https://github.com/sunmughan/After-Effects-Android/commit/d9c88793ab29a590af78d3b071ec4c8de1ba7731). Exact-head verification is required for release R8 and parser tests.
 
+- M2 XML content detection now accepts valid declaration-free `.ecprojx` files with comments before the root; implementation [0a489e9c](https://github.com/sunmughan/After-Effects-Android/commit/0a489e9c7db218f034d3700e98e7642bc1a81655), regression [d2ef6771](https://github.com/sunmughan/After-Effects-Android/commit/d2ef67715a98129d547539f1db1704be2cd49beb). CI #1174 [run](https://github.com/sunmughan/After-Effects-Android/actions/runs/42439333279) passed dual-ABI/native, JVM, debug and unsigned release/R8 checks but was cancelled during emulator setup; not a full pass. Exact source/test CI #1179 [run](https://github.com/sunmughan/After-Effects-Android/actions/runs/42440451096) is in progress. See PHASES.md for the acceptance ledger.
 - Footage relink is covered by `M2DeviceFlowsInstrumentedTest.safCopyNativeRelinkExport` using the pinned upstream missing-footage fixture; the real JNI leg is ARM64-gated, so emulator skip is not physical proof (details in [PHASES.md](PHASES.md) and [function coverage](docs/M7_FUNCTION_COVERAGE.md)).
 
 ### Phase snapshot
