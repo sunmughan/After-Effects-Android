@@ -110,6 +110,20 @@ class CanonicalProjectDocumentTest {
     }
 
     @Test
+    fun ecprojxAcceptsProcessingInstructionAfterRoot() {
+        // XML permits processing instructions after the document element.
+        // Exporters may use them for non-project metadata; they are not a
+        // second project payload and must not make a valid .ecprojx fail.
+        val xml = """<?xml version="1.0"?>
+            <EffectCraftProject encoding="json" version="1">
+              <obj><m n="name"><str>Scene</str></m></obj>
+            </EffectCraftProject>
+            <?effectcraft-export complete?>"""
+        val canonical = JSONObject(CanonicalProjectDocument.toCanonicalJson(xml))
+        assertEquals("Scene", canonical.getString("name"))
+    }
+
+    @Test
     fun ecprojxRejectsDuplicateObjectMembersInsteadOfSilentlyOverwriting() {
         val xml = """<?xml version="1.0"?>
             <EffectCraftProject encoding="json" version="1">
