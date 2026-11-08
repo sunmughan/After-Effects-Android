@@ -78,6 +78,7 @@ class CanonicalSelectionEditorTest {
         var deleteCalls = 0
         var ellipseAdded: List<Any>? = null
         var starAdded: List<Any>? = null
+        var triangleAdded: List<Any>? = null
         val project = ProjectDocument.starter()
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
@@ -146,6 +147,7 @@ class CanonicalSelectionEditorTest {
                     onAddCanonicalTextLayer = { _, _ -> },
                     onAddCanonicalEllipseLayer = { compositionId, name -> ellipseAdded = listOf(compositionId, name) },
                     onAddCanonicalStarLayer = { compositionId, name -> starAdded = listOf(compositionId, name) },
+                    onAddCanonicalTriangleLayer = { compositionId, name -> triangleAdded = listOf(compositionId, name) },
                     onSetCanonicalLayerVisibility = { _, _, _ -> },
                     onMoveCanonicalLayer = { _, _, _ -> },
                     onDeleteCanonicalLayer = { _, _ -> deleteCalls += 1 },
@@ -215,6 +217,8 @@ class CanonicalSelectionEditorTest {
         assertEquals(listOf<Any>(10L, "Ellipse"), ellipseAdded)
         compose.onNodeWithText("Add Star").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Star"), starAdded)
+        compose.onNodeWithText("Add Triangle").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Triangle"), triangleAdded)
 
         // The canonical preview follows the workspace timeline in both
         // directions; scrubbing the main playhead requests that real frame.
