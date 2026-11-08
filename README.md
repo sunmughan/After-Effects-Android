@@ -9,11 +9,11 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 - Actual native CPU/session preview frames; GPU/device compatibility and media parity still require qualification.
 - Layer, transform, keyframe, Bezier/ShapePath editing and PNG/MP4 export foundations are implemented incrementally.
 
-## Engineering progress (2026-11-08 14:10 IST)
+## Engineering progress (2026-11-08 14:47 IST)
 
 - **CI #1222 fully passed** at exact branch SHA `3fbc4a96`: Rust 63/63, both JNI ABIs, JVM, unsigned release APK/AAB + R8, API30 **176/176** (0 skipped/failed), independent cold APK byte match (`43c55725694bfb8075f196de53cf2a3b4a15931ba429ed3ed3cdd1c03262b5ba`). This accepts Add Ellipse and prior layer-selection work; #1210 also passed at `c1252f95`.
 - M2 import integrity (strict UTF-8 and duplicate XML member rejection) is CI-accepted through `c1252f95`; canonical EffectCraft `.ecproj` JSON / `.ecprojx` XML only. Adobe `.aep` and Effekseer `.efkproj` are not claimed.
-- M4 now adds real upstream Shape geometry: Add Rect, Add Ellipse (160×160) and now Add Star (5 points, 120/50 radii) through Rust/JNI/Compose. Each is a canonical Shape with fill, not a UI mock; native compositor pixel regressions and Android action tests are included. Add Star implementation/test is committed at [a5529895](https://github.com/sunmughan/After-Effects-Android/commit/a55298952ce3afe0532fdef3ea1d00ee25e96687); exact-head CI #1226/#1227 is pending.
+- M4 now adds real upstream Shape geometry: Add Rect, Add Ellipse (160×160) and Add Star (5 points, 120/50 radii) through Rust/JNI/Compose. Each is a canonical Shape with fill, not a UI mock; native compositor pixel regressions and Android action tests are included. Add Star implementation/test is [a5529895](https://github.com/sunmughan/After-Effects-Android/commit/a55298952ce3afe0532fdef3ea1d00ee25e96687). Exact-head CI #1227 caught a missing callback forwarding into the private inspector (`EditorScreen.kt:1860`); [0d880772](https://github.com/sunmughan/After-Effects-Android/commit/0d88077290cfdc42201cd8e1b5227b8dbfa4e1b1) wires it, and push CI #1229 is running. #1228 is a separate workflow_dispatch at SHA a928f36b, not current-head acceptance.
 - M3/M4/M5 product foundations include native composition preview, canonical transforms/keyframes, ShapePath editing and PNG/MP4 export; full parity, physical-device and release gates remain open.
 - See [PHASES.md](PHASES.md), [support matrix](docs/M7_SUPPORT_MATRIX.md), and [release checklist](docs/M7_RELEASE_GATE_CHECKLIST.md). PR #1 is merged; [PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2) is the draft post-merge follow-up.
 
