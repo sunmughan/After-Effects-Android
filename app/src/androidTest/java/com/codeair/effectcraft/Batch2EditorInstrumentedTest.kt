@@ -144,4 +144,27 @@ class Batch2EditorInstrumentedTest {
         compose.waitForIdle()
         compose.onNodeWithText("Shape 10").assertIsDisplayed()
     }
+
+    @Test
+    fun mp4ExportProgressShowsBarPercentageAndCancel() {
+        compose.setContent { Editor(isExportingMp4 = true, mp4ExportProgress = 42) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Exporting MP4 · 42%").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").assertIsDisplayed()
+    }
+
+    @Test
+    fun sequenceExportProgressShowsItsOwnLabel() {
+        compose.setContent { Editor(isExportingSequence = true, sequenceExportProgress = 17) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Exporting PNG sequence · 17%").assertIsDisplayed()
+    }
+
+    @Test
+    fun noExportProgressRowWhenNothingIsExporting() {
+        compose.setContent { Editor() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Exporting MP4 · 0%").assertDoesNotExist()
+        compose.onNodeWithText("Exporting PNG sequence · 0%").assertDoesNotExist()
+    }
 }

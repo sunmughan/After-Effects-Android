@@ -82,6 +82,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -1028,6 +1029,62 @@ fun EditorScreen(
     }
 }
 
+/**
+ * Batch 2 (P10): visible export progress in the header area. While a
+ * PNG-sequence or MP4 export runs, the user sees a progress bar, the
+ * percentage as text, and the same Cancel action the Pause icon
+ * provides. Nothing renders when no export is running.
+ */
+@Composable
+private fun ExportProgressRow(
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    sequenceExportProgress: Int,
+    onCancelSequenceExport: () -> Unit,
+    isExportingMp4: Boolean,
+    isMp4ExportWritingOutput: Boolean,
+    mp4ExportProgress: Int,
+    onCancelMp4Sequence: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (!isExportingSequence && !isExportingMp4) return
+    val isMp4 = isExportingMp4
+    val progress = if (isMp4) mp4ExportProgress else sequenceExportProgress
+    val writing = if (isMp4) isMp4ExportWritingOutput else isSequenceExportWritingOutput
+    val label = when {
+        isMp4 && writing -> "Writing MP4 · $progress%"
+        isMp4 -> "Exporting MP4 · $progress%"
+        writing -> "Writing PNG sequence · $progress%"
+        else -> "Exporting PNG sequence · $progress%"
+    }
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LinearProgressIndicator(
+            progress = progress.coerceIn(0, 100) / 100f,
+            modifier = Modifier.weight(1f).height(6.dp)
+                .semantics { contentDescription = label },
+            color = EditorPalette.mint,
+            trackColor = EditorPalette.border
+        )
+        Text(
+            label,
+            color = EditorPalette.text,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+        TextButton(
+            onClick = if (isMp4) onCancelMp4Sequence else onCancelSequenceExport,
+            modifier = Modifier.height(48.dp).semantics { contentDescription = "Cancel export" }
+        ) {
+            Text("Cancel", color = EditorPalette.amber, fontSize = 11.sp)
+        }
+    }
+}
+
 @Composable
 private fun HeaderBar(
     projectName: String,
@@ -1117,6 +1174,19 @@ private fun HeaderBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // Batch 2 (P10): export progress is visible in the header
+                // while a render runs — bar + percentage + Cancel — not
+                // just a TalkBack description on the Pause icon.
+                ExportProgressRow(
+                    isExportingSequence = isExportingSequence,
+                    isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                    sequenceExportProgress = sequenceExportProgress,
+                    onCancelSequenceExport = onCancelSequenceExport,
+                    isExportingMp4 = isExportingMp4,
+                    isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+                    mp4ExportProgress = mp4ExportProgress,
+                    onCancelMp4Sequence = onCancelMp4Sequence
+                )
                 // Action bar: every button is a full 48dp target. Eight
                 // 48dp buttons do not fit a 360dp phone side by side, so
                 // this row scrolls horizontally instead of squeezing or
@@ -1176,6 +1246,7 @@ private fun HeaderBar(
                 }
             }
         } else {
+            Column(Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(68.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1259,6 +1330,18 @@ private fun HeaderBar(
                 TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onOpenRepositoryPicker) { Text("Projects", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
+            }
+            // Batch 2 (P10): same visible progress row as on phones.
+            ExportProgressRow(
+                isExportingSequence = isExportingSequence,
+                isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                sequenceExportProgress = sequenceExportProgress,
+                onCancelSequenceExport = onCancelSequenceExport,
+                isExportingMp4 = isExportingMp4,
+                isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+                mp4ExportProgress = mp4ExportProgress,
+                onCancelMp4Sequence = onCancelMp4Sequence
+            )
             }
         }
     }
