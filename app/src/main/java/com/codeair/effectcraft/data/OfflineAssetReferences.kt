@@ -16,12 +16,12 @@ import java.util.concurrent.ConcurrentHashMap
  * SHA-256 IDs. This lets the UI prevent deletion of assets still referenced by
  * the currently cached canonical project.
  *
- * Instances targeting the same normalized file path share a process-local lock,
- * so read/modify/write operations cannot lose references when multiple project
- * import or relink workers use separate store instances concurrently.
+ * Instances targeting the same filesystem file share a process-local lock.
+ * Lock identity is canonicalized (resolving symlink aliases), so workers
+ * opened through different paths cannot lose read/modify/write updates.
  */
 class OfflineAssetReferences(private val file: File) {
-    private val lock = locks.computeIfAbsent(file.absoluteFile.toPath().normalize().toString()) { Any() }
+    private val lock = lockFor(file)
 
     fun assetFor(itemId: Long): String? = synchronized(lock) {
         require(itemId > 0) { "Footage item ID must be positive" }
@@ -92,7 +92,7 @@ class OfflineAssetReferences(private val file: File) {
         if (!parent.exists() && !parent.mkdirs()) throw IOException("Unable to create asset reference directory")
         if (!parent.isDirectory) throw IOException("Asset reference parent is not a directory")
         // Unique staging avoids collisions between independent instances; the
-        // shared path lock also serializes their read/modify/write transactions.
+        // shared canonical-file lock serializes their read/modify/write.
         val temporary = File(parent, "${file.name}.tmp-${UUID.randomUUID()}")
         try {
             FileOutputStream(temporary).use { output ->
@@ -120,5 +120,15 @@ class OfflineAssetReferences(private val file: File) {
 
     companion object {
         private val locks = ConcurrentHashMap<String, Any>()
+
+        private fun lockFor(path: File): Any {
+            // canonicalFile resolves symlink aliases and normalizes path
+            // segments. If canonicalization fails (e.g. inaccessible parent),
+            // retain a deterministic absolute normalized fallback; actual I/O
+            // will still report the underlying permission/storage failure.
+            val key = runCatching { path.canonicalFile.toPath().normalize().toString() }
+                .getOrElse { path.absoluteFile.toPath().normalize().toString() }
+            return locks.computeIfAbsent(key) { Any() }
+        }
     }
 }
