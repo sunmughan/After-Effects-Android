@@ -9,11 +9,11 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 - Actual native CPU/session preview frames; GPU/device compatibility and media parity still require qualification.
 - Layer, transform, keyframe, Bezier/ShapePath editing and PNG/MP4 export foundations are implemented incrementally.
 
-## Engineering progress (2026-11-08 13:15 IST)
+## Engineering progress (2026-11-08 14:10 IST)
 
-- **CI #1210 fully passed** at exact SHA `c1252f95`: Rust 63/63, ARM64+x86_64 JNI, JVM, unsigned release APK/AAB + R8, API30 instrumentation and independent cold APK comparison. This verifies automatic selection/focus of newly authored Text/Rect layers.
+- **CI #1222 fully passed** at exact branch SHA `3fbc4a96`: Rust 63/63, both JNI ABIs, JVM, unsigned release APK/AAB + R8, API30 **176/176** (0 skipped/failed), independent cold APK byte match (`43c55725694bfb8075f196de53cf2a3b4a15931ba429ed3ed3cdd1c03262b5ba`). This accepts Add Ellipse and prior layer-selection work; #1210 also passed at `c1252f95`.
 - M2 import integrity (strict UTF-8 and duplicate XML member rejection) is CI-accepted through `c1252f95`; canonical EffectCraft `.ecproj` JSON / `.ecprojx` XML only. Adobe `.aep` and Effekseer `.efkproj` are not claimed.
-- M4 now adds real upstream Shape geometry: Add Rect (accepted at #1207) and a new parametric Add Ellipse (160×160 + fill) through Rust/JNI/Compose. Ellipse native pixel render + Android UI callback tests are committed; exact-head [CI #1220](https://github.com/sunmughan/After-Effects-Android/actions/runs/42460212777) is pending on SHA `f9bc2db1`.
+- M4 now adds real upstream Shape geometry: Add Rect, Add Ellipse (160×160) and now Add Star (5 points, 120/50 radii) through Rust/JNI/Compose. Each is a canonical Shape with fill, not a UI mock; native compositor pixel regressions and Android action tests are included. Add Star is the current unverified commit; exact-head CI is pending.
 - M3/M4/M5 product foundations include native composition preview, canonical transforms/keyframes, ShapePath editing and PNG/MP4 export; full parity, physical-device and release gates remain open.
 - See [PHASES.md](PHASES.md), [support matrix](docs/M7_SUPPORT_MATRIX.md), and [release checklist](docs/M7_RELEASE_GATE_CHECKLIST.md). PR #1 is merged; [PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2) is the draft post-merge follow-up.
 
@@ -33,7 +33,7 @@ For native bridge and emulator instrumentation, use the reproducible workflow in
 
 The Android manifest intentionally does not request `INTERNET`. Project drafts, canonical documents, media payloads and recovery state are stored locally; SAF is used for user-selected import/export locations. No cloud service is required for editing.
 
-## Current engineering status (2026-11-08 13:15 IST)
+## Current engineering status (2026-11-08 14:10 IST)
 
 **Release is NOT complete.** PR #1 merged into `main` at `4ae22776`; post-merge work is in [draft PR #2](https://github.com/sunmughan/After-Effects-Android/pull/2), not merged. [PHASES.md](PHASES.md) is the authoritative M0–M7 acceptance ledger.
 

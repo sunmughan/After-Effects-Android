@@ -1692,6 +1692,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical Ellipse layer added · saved locally"
                 )
             },
+            onAddCanonicalStarLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(NativeProjectBridge.addStarLayerEcproj(source, compositionId, name), compositionId, "Canonical Star layer added · saved locally")
+            },
             onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

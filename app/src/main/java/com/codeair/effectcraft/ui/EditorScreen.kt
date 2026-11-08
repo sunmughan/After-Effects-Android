@@ -279,6 +279,7 @@ fun EditorScreen(
     onAddCanonicalTextLayer: (Long, String) -> Unit,
     onAddCanonicalShapeLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalEllipseLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalStarLayer: (Long, String) -> Unit = { _, _ -> },
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
@@ -1854,6 +1855,10 @@ private fun CanonicalProjectEditor(
                     enabled = canEdit && newTextName.trim().isNotEmpty(),
                     onClick = { onAddEllipseLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Ellipse") }
                 ) { Text("Add Ellipse", color = EditorPalette.violet) }
+                TextButton(
+                    enabled = canEdit && newTextName.trim().isNotEmpty(),
+                    onClick = { onAddCanonicalStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Star") }
+                ) { Text("Add Star", color = EditorPalette.violet) }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
             Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
