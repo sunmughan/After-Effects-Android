@@ -155,3 +155,10 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 - Follow-up after CI #1328: test navigation now scrolls the outer `Layers` section into view before the nested row, not just the sheet header ([Adaptive ce94ed30](https://github.com/sunmughan/After-Effects-Android/commit/ce94ed309e98d5df78d7021907404c9db935bb11), [CanonicalSelection 56758bbf](https://github.com/sunmughan/After-Effects-Android/commit/56758bbfac3054ab328795d1be1c4dca385f61d3)). Latest full verification #1345 is queued; no acceptance until all gates pass.
+
+
+## Engineering progress — 2026-11-09 03:16 IST
+
+- CI #1347 failed after 177 API30 tests with two canonical layer-row visibility failures; native/JNI, Kotlin/JVM, debug and unsigned release packaging passed. The nested 210dp independently scrollable layer list was the product/UI root cause.
+- Fixed the actual inspector scroll architecture at [dfec81cb](https://github.com/sunmughan/After-Effects-Android/commit/dfec81cb18549e736d0af586c38b45995ccb4143): layer rows now use the same outer inspector scroll container, improving touch/semantics/TalkBack reachability for off-fold layers. Existing test assertions remain intact. Fresh exact-head CI and cold APK reproducibility are pending.
+- Acceptance remains M0 historical / M1–M6 partial / M7 NOT ACCEPTED. Physical GPU/media/codec/audio/performance/accessibility/install-run and owner signing gates remain open; Adobe .aep and complete Effekseer .efkproj support are not claimed.
