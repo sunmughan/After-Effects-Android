@@ -166,3 +166,22 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 
 - The first regression test draft over-escaped `\\t` and `\\u0009` inside a Kotlin raw string, producing literal backslash text rather than the intended JSON escapes. Corrected the fixture to contain one backslash for each JSON escape in [f27d312e](https://github.com/sunmughan/After-Effects-Android/commit/f27d312eb4e34ff46f73bad812e362173ac43c3a).
 - Standalone Kotlin scanner compilation plus four duplicate/valid structural and escape cases passed locally. This is a focused check only; Android/JVM/CI acceptance remains pending at exact HEAD.
+
+
+## Engineering checkpoint — 2026-11-09 02:03 IST
+
+### Exact-head CI #1317 accepted (historical SHA)
+- [Actions #1317](https://github.com/sunmughan/After-Effects-Android/actions/runs/42515531444) completed **success** at exact docs HEAD `791a44b90b951edb68db6375acf25a1a905daacd`. Both jobs passed: ARM64 + x86_64 Rust/JNI builds, Rust tests (70/70), Kotlin/JVM tests, debug APK, unsigned release APK/AAB + R8, API30 instrumentation (177/177), and independent cold debug APK rebuild/content + packaged JNI SHA equality.
+- Build/test artifact: [effectcraft-android-test-results.zip](https://github.com/sunmughan/After-Effects-Android/actions/runs/42515531444/artifacts/13631349033); reproducibility artifact: [effectcraft-android-reproducibility.zip](https://github.com/sunmughan/After-Effects-Android/actions/runs/42515531444/artifacts/13632063040). This acceptance applies to SHA `791a44b9`, not the subsequent Hexagon commits. Warnings about GitHub Actions Node 20 deprecation are upstream action-runtime notices, not test failures.
+
+### M4 — Add Hexagon: actual native shape authoring + editor wiring
+- Added a six-sided editable polygon Shape layer using the upstream `build::shape_star(..., star=false, points=6)` plus white Fill; it is serialized into the canonical project and rendered by the actual upstream compositor. Native regression asserts Shape source, geometry+fill children, JSON round-trip, 320×180 frame dimensions and nontransparent white pixels.
+- Commit sequence: [native implementation + compositor regression d029dc8a](https://github.com/sunmughan/After-Effects-Android/commit/d029dc8aadf7c16f7ad62341398cedcab79fbed0); [JNI/Kotlin bridge 7ac65cdb](https://github.com/sunmughan/After-Effects-Android/commit/7ac65cdb6c5a55bba38d1161448a3d97934c2d65); [canonical inspector Add Hexagon 6a766299](https://github.com/sunmughan/After-Effects-Android/commit/6a766299bc0d327aec6d398d11e41dd6e1fcf61e); [app persistence/selection wiring 4ef2ec2d](https://github.com/sunmughan/After-Effects-Android/commit/4ef2ec2d052117462dc3be9a497c6a5c158fdfb0); [Android instrumentation callback d6d8cedd](https://github.com/sunmughan/After-Effects-Android/commit/d6d8cedd0b8664416878de73da76163c08756e86); native wording correction [6d3d9e9c](https://github.com/sunmughan/After-Effects-Android/commit/6d3d9e9c0187ab53ea19884a0467b3b0c231c2d7).
+- Test `CanonicalSelectionEditorTest` taps Add Hexagon and asserts composition ID/name callback. The native test checks actual rendered pixels; no placeholder preview or test weakening.
+- **Fresh exact-head CI is required** after these source/test commits; no Hexagon acceptance claim until dual ABI, Rust/JVM, release R8/APK/AAB, full API30 instrumentation and cold reproducibility pass.
+
+### Current state / next actions
+- Branch `feat/android-app-foundation`; PR #4 remains Draft. PR #1 is merged.
+- Next: inspect the fresh CI triggered by Hexagon commits, diagnose every build/test failure, then continue M4 functional shape/property editing and M2 media/interoperability rather than stopping at the tracker.
+- M0 historical baseline is now corroborated through #1317 at its exact SHA; later code must earn a new exact-head run. M1/M2/M3/M4/M5/M6 remain partial; M7 remains **NOT ACCEPTED**.
+- Blockers unchanged: physical ARM64 GPU/Surface/media/codec/audio/performance/accessibility/install-run qualification; owner-controlled release signing credentials; broader Effekseer `.efkproj` support. Adobe `.aep` remains proprietary and is not claimed.
