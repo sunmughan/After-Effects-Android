@@ -1869,7 +1869,10 @@ private fun CanonicalProjectEditor(
                 ) { Text("Add Pentagon", color = EditorPalette.violet) }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
-            Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
+            // Keep the layer rows in the inspector's single outer scroll
+            // container. A nested fixed-height scroll list trapped rows below
+            // the fold and made performScrollTo/TalkBack scrolling unreliable.
+            Column {
                 composition.layers.forEach { item ->
                     // Tap selects one layer; long-press toggles it in or out
                     // of the multi-selection. The inspector always shows the
