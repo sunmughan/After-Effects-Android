@@ -111,3 +111,10 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 - **M4 keyframe target validation hardened:** [f097ac95](https://github.com/sunmughan/After-Effects-Android/commit/f097ac955557c326f5d95bbdf6600c45cffbac0f) extends explicit Move instrumentation with a mixed/negative oversized input, verifies digit-only 10-character sanitization and overflow-disabled Move, then clears and confirms frame 20 succeeds. This is additional boundary coverage; no tests removed. See [PHASES.md](PHASES.md).
 
 - Follow-up [47604d3c](https://github.com/sunmughan/After-Effects-Android/commit/47604d3cccca4d6387e8de00f9fff08b092991e3) removes the obsolete test comment that described appending to the prefilled frame. The source now explicitly describes clearing and entering a target frame. Current exact test SHA remains `f097ac95`; tracker/docs follow-up [22b273f8](https://github.com/sunmughan/After-Effects-Android/commit/22b273f88558c5d2a2b731c2404184a0369e5670). CI acceptance is still pending.
+
+
+## Engineering progress (2026-11-08 22:55 IST)
+
+- CI #1304 pinpointed the explicit transform Move instrumentation failure: its fixture omitted `transformKeyframes`, leaving the button disabled by design. [729f8409](https://github.com/sunmughan/After-Effects-Android/commit/729f840984aa0407df863c7805049e27fc578861) adds canonical position keys (0/15/30); no app gate was relaxed.
+- M4 native test [c09fe485](https://github.com/sunmughan/After-Effects-Android/commit/c09fe4854a61ef39a3b4c7d14eba5cd07cffa9ce) now verifies moving a Bezier key onto an occupied frame replaces the neighbor and preserves the moved key's value/interpolation in serialized project data. Fresh exact-head CI is required.
+- [PHASES.md](PHASES.md) is the authoritative M0–M7 ledger. Release remains NOT complete; physical device/GPU/media/install and owner-controlled signing are still blockers; Adobe `.aep` is not natively supported.
