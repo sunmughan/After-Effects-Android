@@ -608,6 +608,11 @@ class AdaptiveWorkspaceSmokeTest {
         val base = canonicalM4Layer(locked = false)
         val composition = base.compositions.single()
         val keyedLayer = composition.layers.first().copy(
+            // The Move control gates on transformKeyframes (same as the
+            // interpolation presets and the TRANSFORM-lane drag owner), so
+            // a keyed layer carries both maps, as canonicalRovingLayer
+            // does in this file. Curves alone leave the button disabled.
+            transformKeyframes = mapOf("position" to listOf(0, 15, 30)),
             transformCurves = mapOf(
                 "position" to listOf(
                     CanonicalCurveKey(frame = 0, value = 100.0),
