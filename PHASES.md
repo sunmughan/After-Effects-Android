@@ -224,3 +224,25 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 ### Canonical inspector nested-scroll follow-up — 2026-11-09 03:08 IST
 - Further source inspection confirmed that the selected row is nested under both the inspector sheet's outer scroll and a 210dp layer-list scroll. Scrolling only the header and inner row can still leave the **Layers section itself** below the outer viewport. Updated both affected tests to explicitly scroll the `Layers` section into view, then the selected row: [Adaptive ce94ed30](https://github.com/sunmughan/After-Effects-Android/commit/ce94ed309e98d5df78d7021907404c9db935bb11), [CanonicalSelection 56758bbf](https://github.com/sunmughan/After-Effects-Android/commit/56758bbfac3054ab328795d1be1c4dca385f61d3). This preserves all selection and visibility assertions and addresses the actual outer viewport, not just sheet reset.
 - Fresh latest-head Actions [#1345](https://github.com/sunmughan/After-Effects-Android/actions/runs/42524786340) is queued at 56758bbf. Earlier #1342/#1344 are superseded; require full suite and cold reproducibility at the latest source/test SHA.
+
+
+## Engineering checkpoint — 2026-11-09 03:16 IST
+
+### CI #1347: persistent inspector layer-row failures fixed in the UI, not by weakening tests
+- Exact [Actions #1347](https://github.com/sunmughan/After-Effects-Android/actions/runs/42524809788) at SHA a124386b completed failure: Rust tests and both JNI ABIs passed; Kotlin/JVM, debug APK and unsigned release APK/AAB + R8 passed; API30 instrumentation ran 177 tests with 2 failures; cold APK comparison was skipped.
+- Failing tests were AdaptiveWorkspaceSmokeTest.canonicalAnchor3dRotationTextShapeEffectAndLockControlsTargetSelectedLayer (● Headline) and CanonicalSelectionEditorTest.tapLongPressGestureUndoRedoAndReparseKeepCanonicalSelection (● Background). Exact logs show layer-row nodes clipped/not displayed after the canonical inspector opened. Prior test-only scroll fixes still left a nested scroll boundary: the outer inspector Column was scrollable while its 210dp layer list was independently scrollable.
+- **Product/UI root-cause correction:** [dfec81cb](https://github.com/sunmughan/After-Effects-Android/commit/dfec81cb18549e736d0af586c38b45995ccb4143) removes the fixed-height nested layer-list scroll container. Layer rows now participate in the inspector's single outer scroll; performScrollTo, touch scrolling and accessibility scrolling can reach off-fold rows through one scroll owner. This is an actual usability fix for large layer stacks, not a test bypass.
+- Existing layer selection/visibility assertions are unchanged. Fresh exact-head CI is triggered by dfec81cb; require Kotlin/JVM, both JNI ABIs, Rust, release R8/APK/AAB, all API30 tests and independent cold APK reproducibility. No acceptance is inferred from #1347.
+- Local Android SDK/Gradle is unavailable in this runtime; hosted Actions remains the compile/test authority.
+
+### Phase ledger — no premature completion
+- M0: historical foundation green at exact earlier SHA; reverify new HEAD.
+- M1: scoped offline/editor foundation; professional interaction/accessibility/device matrix remains partial.
+- M2: canonical JSON/XML integrity and SAF import/export foundations; media relinking and wider format interoperability partial.
+- M3: real native CPU/session compositor; physical GPU/media fallback qualification partial.
+- M4: functional shape/property/keyframe editing incremental; latest UI fix awaits CI.
+- M5: PNG/MP4/audio foundations; codec/audio/physical output validation partial.
+- M6: offline/recovery/cache safeguards; physical performance, memory and accessibility matrix partial.
+- M7: NOT ACCEPTED; signed release, owner-controlled keystore, install/run/device verification and release notes gate remain open.
+
+Adobe .aep remains proprietary and is not natively supported/claimed. Effekseer .efkproj compatibility is not claimed as complete. PR #4 stays Draft.
