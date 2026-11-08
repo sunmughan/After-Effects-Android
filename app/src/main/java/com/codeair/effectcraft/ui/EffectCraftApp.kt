@@ -214,6 +214,31 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var playheadFrame by remember { mutableIntStateOf(recoveredSession?.state?.playheadFrame ?: 0) }
     var isPlaying by remember { mutableStateOf(false) }
 
+    // Batch 2 (P21): the audible audio preview player. One clip at a
+    // time — the unmuted clip under the playhead — via MediaPlayer.
+    var audioPreviewError by remember { mutableStateOf<String?>(null) }
+    var audioClipEndedTick by remember { mutableIntStateOf(0) }
+    val audioPlayer = remember {
+        DraftAudioPlayer().apply {
+            onError = { audioPreviewError = it }
+            onClipEnded = { audioClipEndedTick++ }
+        }
+    }
+
+    /** The unmuted audio clip covering [frame], or null in a gap / muted. */
+    fun audibleClipAtPlayhead(frame: Int = playheadFrame): AudioClipDocument? =
+        AudioClipTimeline.audioClipAtPlayhead(project.audioTracks, frame)?.takeIf { !it.muted }
+
+    /** Starts the audible clip under the playhead from its position; stops audio when there is none. */
+    fun startAudioPreview() {
+        audioPreviewError = null
+        val clip = audibleClipAtPlayhead() ?: run {
+            audioPlayer.stop()
+            return
+        }
+        audioPlayer.play(clip, playheadFrame, project.frameRate)
+    }
+
     var saveMessage by remember {
         mutableStateOf(if (recoveredDraft != null) "Recovered unsaved changes" else "Stored on this device")
     }
@@ -1171,6 +1196,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         onDispose {
             renderSessionHolder.session?.close()
             renderSessionHolder.session = null
+            audioPlayer.release()
         }
     }
 
@@ -1242,18 +1268,39 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    // Batch 2 (P21): Play starts the audible clip under the playhead
+    // from its position; Pause pauses it. The effect keys on isPlaying
+    // only — never on the playhead, or every frame would restart audio.
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) startAudioPreview() else audioPlayer.pause()
+    }
+
+    // An edit that changes the audio tracks while playing restarts the
+    // preview from the (possibly new) clip under the playhead.
+    LaunchedEffect(project.audioTracks) {
+        if (isPlaying) startAudioPreview()
+    }
+
+    // A clip that plays to its end hands over to whatever clip the
+    // playhead has reached by then; silence when there is none.
+    LaunchedEffect(audioClipEndedTick) {
+        if (audioClipEndedTick == 0) return@LaunchedEffect
+        if (isPlaying) startAudioPreview()
+    }
+
     val selectedLayer = project.layers.firstOrNull { it.id == selectedLayerId }
     val selectedOpacityKeyframes = projectKeyframeTracks
         .firstOrNull { it.layerId == selectedLayerId && it.track.property == "opacity" }
         ?.track?.keyframes.orEmpty()
     // Batch 2 (P05/P21): what audio sits under the playhead, for the
-    // transport row. The P21 player updates the wording to the live
-    // playback state; until then this names the clip so Play's audio
-    // behaviour is never a mystery.
-    val audioPreviewLabel = run {
-        val clip = AudioClipTimeline.audioClipAtPlayhead(project.audioTracks, playheadFrame)
-            ?.takeIf { !it.muted }
-        if (clip == null) "" else "Audio · ${clip.sourcePath.substringAfterLast('/')}"
+    // transport row — the live playback state once the P21 player runs,
+    // never a claim the player cannot back.
+    val audioPreviewLabel = when {
+        audioPreviewError != null -> audioPreviewError!!
+        isPlaying -> audibleClipAtPlayhead()?.let { "Playing audio · ${it.sourcePath.substringAfterLast('/')}" }
+            ?: "Playing · no audio at playhead"
+        else -> audibleClipAtPlayhead()?.let { "Audio · ${it.sourcePath.substringAfterLast('/')} · Play to listen" }
+            ?: ""
     }
     // Batch 2 (P06): opacity at the playhead for every layer, so the draft
     // renderer draws keyframed opacity instead of the static layer value.
@@ -1696,7 +1743,18 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     )
                 }
             },
-            onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
+            onScrub = { frame ->
+                val next = frame.coerceIn(0, project.durationFrames - 1)
+                playheadFrame = next
+                // Batch 2 (P21): scrubbing seeks the preview audio. The
+                // clip under the new playhead keeps playing from its new
+                // position; a gap stops audio until the next clip starts.
+                if (isPlaying) {
+                    val clip = audibleClipAtPlayhead(next)
+                    if (clip == null) audioPlayer.stop()
+                    else if (!audioPlayer.seekToFrame(clip, next, project.frameRate)) startAudioPreview()
+                }
+            },
             onAddOpacityKeyframe = {
                 val layer = project.layers.firstOrNull { it.id == selectedLayerId }
                 if (layer == null) saveMessage = "Select a layer before adding a keyframe"
