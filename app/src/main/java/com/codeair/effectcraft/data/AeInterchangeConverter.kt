@@ -260,7 +260,7 @@ object AeInterchangeConverter {
             .put("uid", ids.alloc())
             .put("match", "layer")
             .put("name", layer.name)
-            .put("kind", "Plain")
+            .put("kind", JSONObject().put("kind", "Plain"))
             .put("enabled", true)
             .put("children", JSONArray(children))
     }
@@ -275,7 +275,7 @@ object AeInterchangeConverter {
             .put("uid", ids.alloc())
             .put("match", match)
             .put("name", name)
-            .put("kind", kind)
+            .put("kind", JSONObject().put("kind", kind))
             .put("enabled", true)
             .put("children", JSONArray(children))
 

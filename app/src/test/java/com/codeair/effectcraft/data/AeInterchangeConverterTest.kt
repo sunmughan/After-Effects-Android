@@ -66,6 +66,14 @@ class AeInterchangeConverterTest {
         // and properties share the same counter, so next_id is far
         // above the item/layer count — it only has to exceed it.
         assertTrue(doc.getLong("next_id") > 6)
+        // GroupKind is internally tagged in the canonical model, so
+        // a prop group's kind is an object {"kind": "Plain"}, never
+        // the bare string "Plain" (that shape fails native
+        // inspection). Pin it here so a regression is caught locally.
+        val rootKind = items.getJSONObject("1").getJSONObject("kind")
+            .getJSONArray("layers").getJSONObject(0)
+            .getJSONObject("props").getJSONObject("kind")
+        assertEquals("Plain", rootKind.getString("kind"))
     }
 
     @Test
