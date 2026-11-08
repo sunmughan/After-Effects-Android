@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
 import com.codeair.effectcraft.data.CanonicalProjectInfo
+import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.ui.EditorScreen
@@ -39,7 +40,7 @@ class Batch2EditorInstrumentedTest {
         audioPreviewLabel: String = "",
         hasCanonicalProject: Boolean = false,
         canonicalProject: CanonicalProjectInfo? = null,
-        onExportMp4Sequence: () -> Unit = {}
+        onExportMp4Sequence: (Int, Int, Int, Int, Int, Int, RenderOutputFormat) -> Unit = { _, _, _, _, _, _, _ -> }
     ) {
         EditorScreen(
             project = project,
@@ -110,7 +111,7 @@ class Batch2EditorInstrumentedTest {
             onSetCanonicalTextLayerTracking = { _, _, _ -> },
             onSetCanonicalLayerScalarProperty = { _, _, _, _ -> },
             onSetCanonicalLayerVecProperty = { _, _, _, _, _, _ -> },
-            onSetCanonicalLayerColorProperty = { _, _, _, _, _, _ -> },
+            onSetCanonicalLayerColorProperty = { _, _, _, _, _, _, _ -> },
             onRelinkCanonicalAsset = {},
             onRenderCanonicalFrame = { _, _ -> null },
             safGrants = emptyList(),
