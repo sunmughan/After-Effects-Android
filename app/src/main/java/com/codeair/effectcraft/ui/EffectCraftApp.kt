@@ -1814,9 +1814,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     // owns the grabbed frame; otherwise the inspector's
                     // per-property Move control or the curve graph disambiguates.
                     val candidates = composition.layers.filter { it.id in canonicalSelectedIds }.flatMap { layer ->
-                        layer.transformKeyframes
+                        val transformOwners = layer.transformKeyframes
                             .filter { (_, frames) -> fromFrame in frames }
                             .map { (property, _) -> layer.id to "transform:$property" }
+                        val opacityOwner = if (layer.opacityKeys.any { it.frame == fromFrame }) listOf(layer.id to "transform:opacity") else emptyList()
+                        transformOwners + opacityOwner
                     }
                     val owner = com.codeair.effectcraft.data.CanonicalKeyframeDrag.resolveMove(candidates)
                     if (owner == null) {
@@ -1885,6 +1887,21 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         saveMessage = "No canonical $property keyframe · frame $frame"
                     } else {
                         applyCanonicalEdit(envelope, "Canonical $property keyframe removed · frame $frame · saved locally")
+                    }
+                }
+            },
+            onMoveCanonicalLayerTransformKeyframe = { compositionId, layerId, property, fromFrame, toFrame ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else {
+                    val envelope = NativeProjectBridge.moveLayerKeyframeEcproj(source, compositionId, layerId, "transform:$property", fromFrame.toLong(), toFrame.toLong())
+                    val moved = runCatching { JSONObject(envelope ?: "").optBoolean("moved", true) }.getOrDefault(true)
+                    val valid = runCatching { JSONObject(envelope ?: "").optBoolean("valid") }.getOrDefault(false)
+                    val target = runCatching { JSONObject(envelope ?: "").optInt("targetFrame", toFrame) }.getOrDefault(toFrame)
+                    if (valid && !moved) {
+                        saveMessage = "Canonical $property keyframe already at frame $target"
+                    } else {
+                        applyCanonicalEdit(envelope, "Canonical $property keyframe moved · frame $fromFrame → $target · saved locally")
                     }
                 }
             },
