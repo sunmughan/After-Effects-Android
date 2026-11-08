@@ -2,13 +2,15 @@
 
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Work branch: `feat/android-app-foundation` · [PR #1 (merged 2026-11-07)](https://github.com/sunmughan/After-Effects-Android/pull/1) · [PR #2 (draft follow-up)](https://github.com/sunmughan/After-Effects-Android/pull/2)  
-Last checked: 2026-11-08 14:10 IST (engineering checkpoint)  
-Latest accepted CI SHA `3fbc4a96` includes native parametric Ellipse creation and UI regression; exact-head CI #1222 passed both jobs (176/176 API30 tests and cold APK byte match). Current implementation commit [a5529895](https://github.com/sunmughan/After-Effects-Android/commit/a55298952ce3afe0532fdef3ea1d00ee25e96687) adds Add Star and awaits exact-head CI #1226/#1227. PR #1 merged at 4ae22776; PR #2 remains Draft.  
+Last checked: 2026-11-08 14:47 IST (engineering checkpoint)  
+Latest accepted CI SHA `3fbc4a96` includes native parametric Ellipse creation and UI regression; exact-head CI #1222 passed both jobs (176/176 API30 tests and cold APK byte match). Add Star implementation [a5529895](https://github.com/sunmughan/After-Effects-Android/commit/a55298952ce3afe0532fdef3ea1d00ee25e96687) exposed a missing callback forwarding compile error in #1227; repaired in [0d880772](https://github.com/sunmughan/After-Effects-Android/commit/0d88077290cfdc42201cd8e1b5227b8dbfa4e1b1), with exact-head push CI #1229 running. PR #1 merged at 4ae22776; PR #2 remains Draft.  
 
 > This file is the durable acceptance ledger, not a chronological automation transcript. Keep one concise entry per phase and link implementation/test commits. Do not append repeated run summaries; update this ledger in place.
 
 ## Current CI / test evidence
 
+- **CI #1227 — FAILURE diagnosed and fixed** at documentation SHA `a7f0b3fc`: Kotlin `EditorScreen.kt:1860` referenced `onAddCanonicalStarLayer` inside `CanonicalProjectEditor`, but the callback had not been declared/forwarded into that private composable. No native/test failure occurred before compilation. [Repair 0d880772](https://github.com/sunmughan/After-Effects-Android/commit/0d88077290cfdc42201cd8e1b5227b8dbfa4e1b1) adds the private callback parameter and wires the parent argument; exact push CI #1229 is running.
+- **CI #1228 — workflow_dispatch in progress** at unrelated SHA `a928f36b`; not current branch acceptance.
 - **CI #1222 — PASS at exact feature-branch SHA 3fbc4a96**: [PR run 42460342703](https://github.com/sunmughan/After-Effects-Android/actions/runs/42460342703), 2026-11-08 14:01 IST. Both jobs passed: Rust 63/63, dual JNI ABIs, JVM, unsigned APK/AAB + R8, API30 **176/176** (0 skipped/failed), independent cold APK match (`43c55725694bfb8075f196de53cf2a3b4a15931ba429ed3ed3cdd1c03262b5ba`). This accepts Add Ellipse native creation and Android callback test.  
 - **CI #1210 — PASS at exact feature-branch SHA c1252f95**: [PR run 42456232210](https://github.com/sunmughan/After-Effects-Android/actions/runs/42456232210), 2026-11-08 12:48 IST. Both jobs completed successfully: Rust 63/63, ARM64+x86_64 JNI, JVM, debug APK, unsigned release APK/AAB + R8, API30 smoke and independent cold APK comparison. This accepts add-layer selection regression on that SHA; it is not the later Ellipse implementation.
 - **CI #1207 — PASS at SHA 75aa1a35**: [run 42449625616](https://github.com/sunmughan/After-Effects-Android/actions/runs/42449625616). Rust 61/61, dual ABI, JVM, unsigned APK/AAB+R8, API30 and cold comparison; native Add Rect pixel acceptance.
