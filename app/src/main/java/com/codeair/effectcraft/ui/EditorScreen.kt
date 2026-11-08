@@ -277,6 +277,7 @@ fun EditorScreen(
     onGestureEditCanonicalSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>, Map<Long, Double>) -> Unit = { _, _, _, _ -> },
     onRenameCanonicalLayer: (Long, Long, String) -> Unit,
     onAddCanonicalTextLayer: (Long, String) -> Unit,
+    onAddCanonicalShapeLayer: (Long, String) -> Unit = { _, _ -> },
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
@@ -893,6 +894,7 @@ fun EditorScreen(
                     onGestureEditSelection = onGestureEditCanonicalSelection,
                     onRenameLayer = onRenameCanonicalLayer,
                     onAddTextLayer = onAddCanonicalTextLayer,
+                    onAddShapeLayer = onAddCanonicalShapeLayer,
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
@@ -1566,6 +1568,7 @@ private fun CanonicalProjectEditor(
     onGestureEditSelection: (Long, Map<Long, Pair<Double, Double>>, Map<Long, Pair<Double, Double>>, Map<Long, Double>) -> Unit,
     onRenameLayer: (Long, Long, String) -> Unit,
     onAddTextLayer: (Long, String) -> Unit,
+    onAddShapeLayer: (Long, String) -> Unit,
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
@@ -1835,6 +1838,10 @@ private fun CanonicalProjectEditor(
                     enabled = canEdit && newTextName.trim().isNotEmpty(),
                     onClick = { onAddTextLayer(composition.id, newTextName) }
                 ) { Text("Add Text", color = EditorPalette.violet) }
+                TextButton(
+                    enabled = canEdit && newTextName.trim().isNotEmpty(),
+                    onClick = { onAddShapeLayer(composition.id, newTextName) }
+                ) { Text("Add Rect", color = EditorPalette.violet) }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
             Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
