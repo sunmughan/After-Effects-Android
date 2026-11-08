@@ -163,9 +163,14 @@ class DraftPreviewInstrumentedTest {
         // took longer than 10 s to appear in the retry, while it
         // passed the first attempt) — the budget is 30 s, matching
         // AdaptiveWorkspaceSmokeTest's wait for this same frame
-        // node. The assertions below are unchanged and still fail
+        // node. Run 42476880237: 30 s was too short on loaded
+        // runners — the frame landed after 30 s in all four
+        // emulator runs, while the same frame passed
+        // editorLaunches in the same run's second attempt, so the
+        // render lands late rather than never. Budget is 60 s.
+        // The assertions below are unchanged and still fail
         // if the frame never renders.
-        compose.waitUntil(timeoutMillis = 30_000) {
+        compose.waitUntil(timeoutMillis = 60_000) {
             compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()

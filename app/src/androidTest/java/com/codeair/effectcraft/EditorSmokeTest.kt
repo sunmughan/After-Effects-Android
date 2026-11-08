@@ -152,9 +152,13 @@ class EditorSmokeTest {
         // DraftPreview test in run 42441138764). Run 42445908283:
         // 10 s was still too short on a cold emulator — the budget
         // is 30 s, matching AdaptiveWorkspaceSmokeTest's wait for
-        // this same frame node. The assertions below are unchanged
-        // and still fail if the frame never renders.
-        compose.waitUntil(timeoutMillis = 30_000) {
+        // this same frame node. Run 42476880237: 30 s was too short
+        // on loaded runners — this test failed the wait while the
+        // same frame passed here in the run's second attempt, so
+        // the render lands late rather than never. Budget is 60 s.
+        // The assertions below are unchanged and still fail if the
+        // frame never renders.
+        compose.waitUntil(timeoutMillis = 60_000) {
             compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
