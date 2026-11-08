@@ -743,7 +743,8 @@ class M7FunctionCoverageTest {
             offlineAssets = listOf(asset),
             onVerifyOfflineAssets = { verificationCalls++ },
         )
-        compose.onNodeWithContentDescription("Offline media library").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Offline media library").performClick()
         compose.onNodeWithText("Verify media integrity").assertIsDisplayed().performClick()
         assertEquals(1, verificationCalls)
     }

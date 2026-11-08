@@ -114,6 +114,7 @@ class RepositoryPickerTest {
             }
         }
 
+        compose.onNodeWithContentDescription("File menu").performClick()
         compose.onNodeWithText("Projects").performClick()
         compose.onNodeWithText("Open canonical project").assertIsDisplayed()
         compose.onNodeWithText("Alpha project").assertIsDisplayed()
