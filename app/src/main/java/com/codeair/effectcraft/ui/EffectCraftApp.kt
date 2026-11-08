@@ -1697,6 +1697,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
                 else applyCanonicalLayerCreation(NativeProjectBridge.addStarLayerEcproj(source, compositionId, name), compositionId, "Canonical Star layer added · saved locally")
             },
+            onAddCanonicalTriangleLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addTriangleLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Triangle layer added · saved locally"
+                )
+            },
             onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
