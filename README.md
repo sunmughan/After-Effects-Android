@@ -106,3 +106,6 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 - Exact failure evidence: [Actions #1290](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493884493), `AdaptiveWorkspaceSmokeTest.explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame`; API30 176/177 passed, one failed. Cold reproducibility was skipped after the primary job failure. New CI at `95713180` is required before acceptance.
 - Tracker: [PHASES.md](PHASES.md) records the precise failure, source/test SHA, remediation and pending fresh run. PR #4 remains Draft. Release remains **NOT complete**; physical GPU/media/device, signed artifact/install and full M0–M7 gates are outstanding.
 
+
+
+- **M4 keyframe target validation hardened:** [f097ac95](https://github.com/sunmughan/After-Effects-Android/commit/f097ac955557c326f5d95bbdf6600c45cffbac0f) extends explicit Move instrumentation with a mixed/negative oversized input, verifies digit-only 10-character sanitization and overflow-disabled Move, then clears and confirms frame 20 succeeds. This is additional boundary coverage; no tests removed. See [PHASES.md](PHASES.md).
