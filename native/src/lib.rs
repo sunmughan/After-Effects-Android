@@ -3797,6 +3797,45 @@ mod tests {
     }
 
     #[test]
+    fn add_shape_layer_creates_drawable_canonical_rectangle_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let source = project.to_file_json().unwrap();
+
+        let updated_json = add_shape_layer(&source, comp_id.0, "  Rectangle  ").unwrap();
+        let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0];
+        assert_eq!(layer.name, "Rectangle");
+        assert_eq!(layer.source.type_name(), "Shape");
+        let contents = layer.props.sub("contents").unwrap();
+        assert_eq!(contents.children.len(), 2, "new shape must contain geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&updated_json).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["layerCount"], 1);
+        assert_eq!(metadata["compositions"][0]["layers"][0]["name"], "Rectangle");
+
+        // Render through the actual upstream compositor, not a synthetic UI frame.
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320);
+        assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200),
+            "rectangle fill must produce visible white pixels in the real composition frame");
+    }
+
+    #[test]
+    fn add_shape_layer_rejects_blank_name_and_missing_composition() {
+        let source = Project::default().to_file_json().unwrap();
+        assert!(add_shape_layer(&source, 1, "  ").is_err());
+        assert!(add_shape_layer(&source, 999, "Rectangle").is_err());
+    }
+
+    #[test]
     fn canonical_layer_stack_actions_roundtrip_visibility_order_and_delete() {
         use effectcraft_project::{build, Comp, ItemKind, LayerSource};
         use effectcraft_color::Label;
