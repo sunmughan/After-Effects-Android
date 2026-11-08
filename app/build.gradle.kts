@@ -81,6 +81,15 @@ android {
                 storePassword = releaseKeystorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
+                // AGP defaults v1 (JAR) signing off when minSdk >= 24
+                // (this app: 26), so a release APK carried only v2/v3
+                // signatures and no META-INF signature files — release
+                // run 42451191157 failed its META-INF check on exactly
+                // that. Enable all three explicitly so the APK is
+                // verifiable by apksigner AND carries v1 signature files.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
