@@ -47,7 +47,11 @@ object CanonicalProjectDocument {
         // retain ordinary leading whitespace so the JSON parser handles it.
         val withoutBom = document.removePrefix("\uFEFF")
         val probe = withoutBom.trimStart()
-        return if (probe.startsWith("<?xml") || probe.startsWith("<$XML_ROOT")) {
+        // XML declarations are optional. A legal .ecprojx document may begin
+        // with a comment before its root, so dispatch on the first markup
+        // delimiter rather than only the declaration/root prefix. The strict
+        // parser below still rejects unrelated XML roots and malformed input.
+        return if (probe.startsWith("<")) {
             parseXmlProject(probe).toString()
         } else {
             withoutBom
