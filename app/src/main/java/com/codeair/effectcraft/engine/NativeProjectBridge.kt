@@ -77,6 +77,12 @@ object NativeProjectBridge {
         ensureLoaded(); if (!available) return null
         return runCatching { addTriangleLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
+
+    /** Adds a real upstream Shape layer with a six-sided polygon and fill. */
+    fun addHexagonLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addHexagonLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
     /** Renders a canonical composition frame through the pinned upstream CPU compositor. */
     fun renderEcprojFrame(json: String, compositionId: Long, frame: Long, maxSide: Int = 512): ByteArray? {
         ensureLoaded()
@@ -648,6 +654,9 @@ object NativeProjectBridge {
     private external fun addStarLayerEcprojNative(json: String, compositionId: Long, name: String): String
     @JvmStatic
     private external fun addTriangleLayerEcprojNative(json: String, compositionId: Long, name: String): String
+
+    @JvmStatic
+    private external fun addHexagonLayerEcprojNative(json: String, compositionId: Long, name: String): String
 
     @JvmStatic
     private external fun addTextLayerEcprojNative(json: String, compositionId: Long, name: String): String
