@@ -1276,6 +1276,153 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_a
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
+fn add_shape_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id))
+        .cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape,
+        (comp.width, comp.height), None);
+    // A newly authored shape layer must contain drawable geometry and a fill,
+    // not just an empty Shape source that renders as a transparent placeholder.
+    // Use the same upstream builders exercised by the native shape renderer.
+    let mut ids = build::Ids(&mut project.next_id);
+    let rectangle = build::shape_rect(&mut ids, [200.0, 100.0], [0.0, 0.0], 0.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents")
+        .ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(rectangle.into());
+    contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?
+        .layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addShapeLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let name: String = match env.get_string(&name) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) }
+        else { add_shape_layer(&source, composition_id as u64, &name) };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+fn add_ellipse_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source)
+        .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id))
+        .cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape,
+        (comp.width, comp.height), None);
+    // Author a real upstream parametric ellipse and fill so the new layer is
+    // immediately visible and its Size/Position controls remain editable.
+    let mut ids = build::Ids(&mut project.next_id);
+    let ellipse = build::shape_ellipse(&mut ids, [160.0, 160.0], [0.0, 0.0]);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents")
+        .ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(ellipse.into());
+    contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id))
+        .ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?
+        .layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn add_star_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
+    let mut ids = build::Ids(&mut project.next_id);
+    let star = build::shape_star(&mut ids, true, 5.0, [0.0, 0.0], 120.0, 50.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(star.into()); contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn add_triangle_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
+    let mut ids = build::Ids(&mut project.next_id);
+    let triangle = build::shape_star(&mut ids, false, 3.0, [0.0, 0.0], 100.0, 100.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(triangle.into()); contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addStarLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_star_layer(&source, composition_id as u64, &name) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addTriangleLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_triangle_layer(&source, composition_id as u64, &name) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addEllipseLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let name: String = match env.get_string(&name) {
+        Ok(value) => value.into(),
+        Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()),
+    };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) }
+        else { add_ellipse_layer(&source, composition_id as u64, &name) };
+    let output = match result {
+        Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(),
+        Err(error) => json!({"valid": false, "error": error}).to_string(),
+    };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
 fn set_layer_visibility(source: &str, composition_id: u64, layer_id: u64, visible: bool) -> Result<String, String> {
     let mut project: Project = serde_json::from_str(source)
         .map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
@@ -3749,6 +3896,148 @@ mod tests {
     }
 
     #[test]
+    fn add_shape_layer_creates_drawable_canonical_rectangle_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let source = project.to_file_json().unwrap();
+
+        let updated_json = add_shape_layer(&source, comp_id.0, "  Rectangle  ").unwrap();
+        let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0];
+        assert_eq!(layer.name, "Rectangle");
+        assert_eq!(layer.source.type_name(), "Shape");
+        let contents = layer.props.sub("contents").unwrap();
+        assert_eq!(contents.children.len(), 2, "new shape must contain geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+
+        let metadata: serde_json::Value = serde_json::from_str(&inspect_project(&updated_json).unwrap()).unwrap();
+        assert_eq!(metadata["compositions"][0]["layerCount"], 1);
+        assert_eq!(metadata["compositions"][0]["layers"][0]["name"], "Rectangle");
+
+        // Render through the actual upstream compositor, not a synthetic UI frame.
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320);
+        assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200),
+            "rectangle fill must produce visible white pixels in the real composition frame");
+    }
+
+    #[test]
+    fn add_shape_layer_rejects_blank_name_and_missing_composition() {
+        let source = Project::default().to_file_json().unwrap();
+        assert!(add_shape_layer(&source, 1, "  ").is_err());
+        assert!(add_shape_layer(&source, 999, "Rectangle").is_err());
+    }
+
+    #[test]
+    fn add_ellipse_layer_creates_editable_parametric_ellipse_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let source = project.to_file_json().unwrap();
+
+        let updated_json = add_ellipse_layer(&source, comp_id.0, "  Ellipse  ").unwrap();
+        let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0];
+        assert_eq!(layer.name, "Ellipse");
+        assert_eq!(layer.source.type_name(), "Shape");
+        let contents = layer.props.sub("contents").unwrap();
+        assert_eq!(contents.children.len(), 2, "ellipse layer must contain geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320);
+        assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200),
+            "ellipse fill must produce visible white pixels in the real composition frame");
+    }
+
+    #[test]
+    fn add_star_layer_creates_editable_parametric_star_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
+        let updated_json = add_star_layer(&source, comp_id.0, "  Star  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Star"); assert_eq!(layer.source.type_name(), "Shape");
+        assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "star layer must contain geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "star fill must produce visible white pixels in the real composition frame");
+    }
+
+    #[test]
+    fn add_triangle_layer_creates_editable_polygon_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
+        let updated_json = add_triangle_layer(&source, comp_id.0, "  Triangle  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Triangle"); assert_eq!(layer.source.type_name(), "Shape");
+        assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "triangle layer must contain polygon geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "triangle fill must produce visible white pixels in the real composition frame");
+    }
+    #[test]
+    fn sequential_shape_creation_uses_project_wide_unique_property_uids() {
+        use effectcraft_project::{Comp, ItemKind};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+        use std::collections::HashSet;
+
+        fn collect_group_uids(group: &effectcraft_project::PropGroup, ids: &mut Vec<u64>) {
+            ids.push(group.uid);
+            for node in &group.children {
+                match node {
+                    Node::Prop(property) => ids.push(property.uid),
+                    Node::Group(child) => collect_group_uids(child, ids),
+                }
+            }
+        }
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let mut json = project.to_file_json().unwrap();
+        json = add_shape_layer(&json, comp_id.0, "Rectangle").unwrap();
+        json = add_ellipse_layer(&json, comp_id.0, "Ellipse").unwrap();
+        json = add_star_layer(&json, comp_id.0, "Star").unwrap();
+
+        let updated: Project = serde_json::from_str(&json).unwrap();
+        let composition = updated.comp(comp_id).unwrap();
+        assert_eq!(composition.layers.len(), 3);
+        let mut ids: Vec<u64> = updated.items.keys().map(|id| id.0).collect();
+        for layer in &composition.layers {
+            ids.push(layer.id.0);
+            collect_group_uids(&layer.props, &mut ids);
+        }
+        let unique: HashSet<u64> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len(), "items, layers and every property/group UID must share one collision-free allocator");
+        assert!(updated.next_id > ids.iter().copied().max().unwrap_or(0), "serialized allocator must remain ahead of every allocated UID");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+    }
+
+    #[test]
+    fn add_star_layer_rejects_blank_name_and_missing_composition() {
+        let source = Project::default().to_file_json().unwrap(); assert!(add_star_layer(&source, 1, "  ").is_err()); assert!(add_star_layer(&source, 99, "Star").is_err());
+    }
+    #[test]
+    fn add_ellipse_layer_rejects_blank_name_and_missing_composition() {
+        let source = Project::default().to_file_json().unwrap();
+        assert!(add_ellipse_layer(&source, 1, "  ").is_err());
+        assert!(add_ellipse_layer(&source, 999, "Ellipse").is_err());
+    }
+
+    #[test]
     fn canonical_layer_stack_actions_roundtrip_visibility_order_and_delete() {
         use effectcraft_project::{build, Comp, ItemKind, LayerSource};
         use effectcraft_color::Label;
@@ -5945,4 +6234,43 @@ mod tests {
         assert!(!moved_project.comp(ItemId(comp_id)).unwrap().layers[0].switches.locked);
         assert!(set_layer_locked(&source, comp_id, 999, true).is_err());
     }
+    #[test]
+    fn editing_star_fill_color_changes_real_compositor_pixels() {
+        use effectcraft_project::{Comp, ItemKind, PropGroup};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        fn first_color_uid(group: &PropGroup) -> Option<u64> {
+            for child in &group.children {
+                match child {
+                    Node::Prop(property) if matches!(&property.value, Value::Color(_)) => return Some(property.uid),
+                    Node::Group(nested) => if let Some(uid) = first_color_uid(nested) { return Some(uid); },
+                    _ => {}
+                }
+            }
+            None
+        }
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let source = project.to_file_json().unwrap();
+        let star_json = add_star_layer(&source, comp_id.0, "Star").unwrap();
+        let star: Project = serde_json::from_str(&star_json).unwrap();
+        let layer = &star.comp(comp_id).unwrap().layers[0];
+        let layer_id = layer.id.0;
+        let fill_uid = first_color_uid(&layer.props).expect("star must expose a color fill property");
+
+        let white_frame = render_frame_rgba(&star_json, comp_id.0, 0, 320).unwrap();
+        assert!(white_frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200),
+            "initial opaque white star must render visible pixels");
+
+        let red_json = set_layer_color_property(&star_json, comp_id.0, layer_id, fill_uid, 1.0, 0.0, 0.0, 1.0).unwrap();
+        let edited: Project = serde_json::from_str(&red_json).unwrap();
+        assert_eq!(serde_json::from_str::<Project>(&edited.to_file_json().unwrap()).unwrap(), edited);
+        let red_frame = render_frame_rgba(&red_json, comp_id.0, 0, 320).unwrap();
+        assert!(red_frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] < 50 && pixel[2] < 50 && pixel[3] > 200),
+            "editing the canonical fill color must update actual compositor pixels to red");
+    }
+
 }

@@ -1214,6 +1214,23 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
 
     /**
+     * Creates a canonical layer as one undoable edit and immediately focuses
+     * the newly appended layer. This keeps Add Text/Add Rect connected to the
+     * inspector rather than leaving the prior layer selected.
+     */
+    fun applyCanonicalLayerCreation(envelope: String?, compositionId: Long, successMessage: String) {
+        val beforeSource = importedEcproj
+        val previousSelection = canonicalSelectedIds
+        val previousLayerIds = canonicalProjectInfo?.compositions
+            ?.firstOrNull { it.id == compositionId }?.layers?.map { it.id }?.toSet().orEmpty()
+        applyCanonicalEdit(envelope, successMessage)
+        if (beforeSource == null || importedEcproj == beforeSource) return
+        val layersAfter = canonicalProjectInfo?.compositions
+            ?.firstOrNull { it.id == compositionId }?.layers.orEmpty()
+        canonicalSelectedIds = CanonicalLayerSelection.selectionAfterAdd(previousSelection, previousLayerIds, layersAfter)
+    }
+
+    /**
      * Applies several native canonical edits as one history step: each step
      * transforms the previous step's project, and only the final project is
      * committed. A failed step leaves the saved project untouched, and a
@@ -1651,9 +1668,42 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             onAddCanonicalTextLayer = { compositionId, name ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
-                else applyCanonicalEdit(
+                else applyCanonicalLayerCreation(
                     NativeProjectBridge.addTextLayerEcproj(source, compositionId, name),
+                    compositionId,
                     "Canonical Text layer added · saved locally"
+                )
+            },
+            onAddCanonicalShapeLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addShapeLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Rectangle layer added · saved locally"
+                )
+            },
+            onAddCanonicalEllipseLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addEllipseLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Ellipse layer added · saved locally"
+                )
+            },
+            onAddCanonicalStarLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(NativeProjectBridge.addStarLayerEcproj(source, compositionId, name), compositionId, "Canonical Star layer added · saved locally")
+            },
+            onAddCanonicalTriangleLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addTriangleLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Triangle layer added · saved locally"
                 )
             },
             onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->

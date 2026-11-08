@@ -120,6 +120,80 @@ class ProjectAssetManifestTest {
     }
 
     @Test
+    fun replaceBatchAndIndependentSaveSerializeAcrossStoreInstances() {
+        val workspace = Files.createTempDirectory("effectcraft-manifest-cross-instance").toFile()
+        val root = File(workspace, "real")
+        assertTrue(root.mkdirs())
+        val alias = File(workspace, "alias")
+        Files.createSymbolicLink(alias.toPath(), root.toPath())
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val initial = ProjectAssetManifestStore(root)
+            initial.load("project-a").also { it.link(1, firstHash) }.let(initial::save)
+            initial.load("project-b").also { it.link(2, firstHash) }.let(initial::save)
+            val targets = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }!!
+                .sortedBy { it.name }
+            val firstProject = ProjectAssetManifest.fromJson(targets.first().readText(Charsets.UTF_8)).projectId
+            val failTarget = targets.last().name
+
+            val publishReached = java.util.concurrent.CountDownLatch(1)
+            val allowFailure = java.util.concurrent.CountDownLatch(1)
+            val saveStarted = java.util.concurrent.CountDownLatch(1)
+            val transactional = ProjectAssetManifestStore(root) { source, target ->
+                if (target.name == failTarget && source.name.contains(".stage-")) {
+                    publishReached.countDown()
+                    check(allowFailure.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                    throw java.io.IOException("Injected batch publish failure")
+                }
+                Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+            // Use an explicit Callable so the captured failure is the Future's
+            // value (rather than relying on Runnable/Callable SAM overload inference).
+            val batch = executor.submit(java.util.concurrent.Callable<Exception?> {
+                try {
+                    transactional.replaceAssetEverywhere(firstHash, secondHash)
+                    null
+                } catch (failure: Exception) {
+                    failure
+                }
+            })
+            assertTrue("Batch must reach the injected second publish", publishReached.await(5, java.util.concurrent.TimeUnit.SECONDS))
+
+            // A symlink alias must resolve to the same transaction lock as the real root.
+            val independent = ProjectAssetManifestStore(alias)
+            val save = executor.submit {
+                saveStarted.countDown()
+                independent.load(firstProject).also { it.link(1, thirdHash) }.let(independent::save)
+            }
+            assertTrue(saveStarted.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            try {
+                save.get(250, java.util.concurrent.TimeUnit.MILLISECONDS)
+                throw AssertionError("Independent save must wait while the shared-root batch is publishing/rolling back")
+            } catch (_: java.util.concurrent.TimeoutException) {
+                // Expected: the batch owns the root-wide transaction lock.
+            }
+
+            allowFailure.countDown()
+            val batchFailure = batch.get(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertTrue(
+                "Injected batch failure must be surfaced as IOException; actual=${batchFailure?.javaClass?.name}: ${batchFailure?.message}",
+                batchFailure is java.io.IOException
+            )
+            save.get(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertEquals(
+                "The independent save must run after rollback, not be overwritten by its backup",
+                thirdHash,
+                ProjectAssetManifestStore(root).load(firstProject).entryFor(1)?.sha256
+            )
+            assertEquals("Unaffected project rollback must restore its original asset", firstHash,
+                ProjectAssetManifestStore(root).load(if (firstProject == "project-a") "project-b" else "project-a").entries().single().sha256)
+        } finally {
+            executor.shutdownNow()
+            workspace.deleteRecursively()
+        }
+    }
+
+    @Test
     fun replaceAssetEverywhereFailsBeforeWritesWhenAnyManifestIsCorrupt() {
         val root = Files.createTempDirectory("effectcraft-manifest-replace-safe").toFile()
         try {

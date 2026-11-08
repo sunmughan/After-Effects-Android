@@ -52,6 +52,31 @@ object NativeProjectBridge {
         return runCatching { addTextLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
 
+    /** Adds a real upstream Shape layer with a filled rectangle and returns a canonical project envelope. */
+    fun addShapeLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { addShapeLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
+    /** Adds a real upstream Shape layer with a parametric ellipse and returns a canonical project envelope. */
+    fun addEllipseLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { addEllipseLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
+    /** Adds a real upstream Shape layer with a parametric star and fill. */
+    fun addStarLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addStarLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
+    /** Adds a real upstream Shape layer with a three-sided polygon and fill. */
+    fun addTriangleLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addTriangleLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
     /** Renders a canonical composition frame through the pinned upstream CPU compositor. */
     fun renderEcprojFrame(json: String, compositionId: Long, frame: Long, maxSide: Int = 512): ByteArray? {
         ensureLoaded()
@@ -613,6 +638,16 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun splitLayerEcprojNative(json: String, compositionId: Long, layerId: Long, frame: Long): String
+
+    @JvmStatic
+    private external fun addShapeLayerEcprojNative(json: String, compositionId: Long, name: String): String
+
+    @JvmStatic
+    private external fun addEllipseLayerEcprojNative(json: String, compositionId: Long, name: String): String
+    @JvmStatic
+    private external fun addStarLayerEcprojNative(json: String, compositionId: Long, name: String): String
+    @JvmStatic
+    private external fun addTriangleLayerEcprojNative(json: String, compositionId: Long, name: String): String
 
     @JvmStatic
     private external fun addTextLayerEcprojNative(json: String, compositionId: Long, name: String): String

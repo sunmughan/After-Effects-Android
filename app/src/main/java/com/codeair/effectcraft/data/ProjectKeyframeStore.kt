@@ -6,7 +6,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
 import java.security.MessageDigest
 
 /**
@@ -19,13 +21,17 @@ import java.security.MessageDigest
 class ProjectKeyframeStore(private val root: File) {
     data class StoredTrack(val layerId: String, val track: PropertyTrack)
 
-    @Synchronized
-    fun load(projectId: String): List<StoredTrack> {
+    // All instances targeting the same directory must share the lock: UI,
+    // recovery workers and reopened repositories can otherwise race on the
+    // single per-project staging file and lose read-modify-write updates.
+    private val ioLock = lockFor(root)
+
+    fun load(projectId: String): List<StoredTrack> = synchronized(ioLock) {
         val id = validateProjectId(projectId)
         recoverInterruptedWrite(id)
         val file = fileFor(id)
         if (!file.isFile) return emptyList()
-        return readDocument(file, id)
+        readDocument(file, id)
     }
 
     /**
@@ -51,7 +57,7 @@ class ProjectKeyframeStore(private val root: File) {
                 StandardCopyOption.ATOMIC_MOVE,
                 StandardCopyOption.REPLACE_EXISTING
             )
-        } catch (_: Exception) {
+        } catch (_: AtomicMoveNotSupportedException) {
             try {
                 Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             } catch (_: Exception) {
@@ -96,9 +102,8 @@ class ProjectKeyframeStore(private val root: File) {
         }
     }
 
-    @Synchronized
     @Throws(IOException::class)
-    fun upsert(projectId: String, layerId: String, property: String, frame: Int, value: Float): StoredTrack {
+    fun upsert(projectId: String, layerId: String, property: String, frame: Int, value: Float): StoredTrack = synchronized(ioLock) {
         val id = validateProjectId(projectId)
         val layer = validateLayerId(layerId)
         val name = validateProperty(property)
@@ -108,28 +113,26 @@ class ProjectKeyframeStore(private val root: File) {
         val updated = StoredTrack(layer, PropertyTrackEditor.upsert(current, frame, value))
         if (index >= 0) tracks[index] = updated else tracks += updated
         write(id, tracks)
-        return updated
+        updated
     }
 
-    @Synchronized
     @Throws(IOException::class)
-    fun removeKeyframe(projectId: String, layerId: String, property: String, frame: Int): Boolean {
+    fun removeKeyframe(projectId: String, layerId: String, property: String, frame: Int): Boolean = synchronized(ioLock) {
         val id = validateProjectId(projectId)
         val layer = validateLayerId(layerId)
         val name = validateProperty(property)
         require(frame >= 0) { "Keyframe frame must be non-negative" }
         val tracks = load(id).toMutableList()
         val index = tracks.indexOfFirst { it.layerId == layer && it.track.property == name }
-        if (index < 0 || tracks[index].track.keyframes.none { it.frame == frame }) return false
+        if (index < 0 || tracks[index].track.keyframes.none { it.frame == frame }) return@synchronized false
         val updated = PropertyTrackEditor.remove(tracks[index].track, frame)
         if (updated.keyframes.isEmpty()) tracks.removeAt(index) else tracks[index] = StoredTrack(layer, updated)
         write(id, tracks)
-        return true
+        true
     }
 
-    @Synchronized
     @Throws(IOException::class)
-    fun clear(projectId: String): Boolean {
+    fun clear(projectId: String): Boolean = synchronized(ioLock) {
         val file = fileFor(validateProjectId(projectId))
         val temporary = File(root, "${file.name}.tmp")
         // Delete the interrupted-write temp FIRST: deleting the committed
@@ -138,9 +141,9 @@ class ProjectKeyframeStore(private val root: File) {
         // crash mid-clear leaves the committed file intact, never a
         // resurrection.
         if (temporary.exists()) temporary.delete()
-        if (!file.exists()) return false
+        if (!file.exists()) return@synchronized false
         if (!file.delete()) throw IOException("Unable to remove project keyframes")
-        return true
+        true
     }
 
     private fun write(projectId: String, tracks: List<StoredTrack>) {
@@ -176,7 +179,7 @@ class ProjectKeyframeStore(private val root: File) {
         }
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: AtomicMoveNotSupportedException) {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
@@ -221,6 +224,14 @@ class ProjectKeyframeStore(private val root: File) {
         .joinToString("") { "%02x".format(it) }
 
     companion object {
+        private val directoryLocks = ConcurrentHashMap<String, Any>()
+
+        private fun lockFor(directory: File): Any {
+            val key = runCatching { directory.canonicalPath }
+                .getOrElse { directory.absoluteFile.normalize().path }
+            return directoryLocks.computeIfAbsent(key) { Any() }
+        }
+
         private const val FORMAT = "effectcraft-android-keyframes"
         private const val VERSION = 1
     }

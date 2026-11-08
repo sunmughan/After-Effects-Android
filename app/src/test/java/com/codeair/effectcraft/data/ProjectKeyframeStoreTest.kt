@@ -121,4 +121,42 @@ class ProjectKeyframeStoreTest {
         }
     }
 
+    @Test
+    fun independentStoreInstancesSerializeConcurrentReadModifyWriteUpdates() {
+        val root = Files.createTempDirectory("effectcraft-keyframes-concurrent").toFile()
+        val workers = 6
+        val perWorker = 20
+        val ready = java.util.concurrent.CountDownLatch(workers)
+        val start = java.util.concurrent.CountDownLatch(1)
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(workers)
+        try {
+            val futures = (0 until workers).map { worker ->
+                executor.submit {
+                    val store = ProjectKeyframeStore(root)
+                    ready.countDown()
+                    check(start.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    repeat(perWorker) { index ->
+                        val frame = worker * perWorker + index
+                        store.upsert("shared-project", "layer-$worker-$index", "opacity", frame, frame / 120f)
+                    }
+                }
+            }
+            assertTrue("All writers should be ready", ready.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            start.countDown()
+            futures.forEach { it.get(30, java.util.concurrent.TimeUnit.SECONDS) }
+
+            val reopened = ProjectKeyframeStore(root).load("shared-project")
+            assertEquals(workers * perWorker, reopened.size)
+            assertEquals(
+                (0 until workers * perWorker).toSet(),
+                reopened.map { it.track.keyframes.single().frame }.toSet()
+            )
+            assertEquals(workers * perWorker, reopened.map { it.layerId }.toSet().size)
+        } finally {
+            start.countDown()
+            executor.shutdownNow()
+            root.deleteRecursively()
+        }
+    }
+
 }

@@ -32,6 +32,9 @@ import java.util.UUID
  *   without a sidecar is inert and never listed.
  */
 class CanonicalProjectRepository(private val root: File) {
+    // A repository instance monitor cannot protect the two-file update/recovery
+    // transaction from another instance opened for the same offline workspace.
+    private val rootLock = lockFor(root)
     data class Metadata(
         val id: String,
         val displayName: String,
@@ -49,9 +52,9 @@ class CanonicalProjectRepository(private val root: File) {
         val error: String?
     )
 
-    @Synchronized
-    @Throws(IOException::class)
+        @Throws(IOException::class)
     fun create(displayName: String, document: String, format: String, sourceName: String? = null): Metadata {
+        return synchronized(rootLock) {
         val name = validateDisplayName(displayName)
         val checkedFormat = validateFormat(format)
         validateDocument(document, checkedFormat)
@@ -70,16 +73,17 @@ class CanonicalProjectRepository(private val root: File) {
         }
         return metadata
     }
+    }
 
     /** Imports the old single-document cache as a repository entry. */
-    @Synchronized
-    @Throws(IOException::class)
-    fun importLegacyDocument(document: String, displayName: String): Metadata =
-        create(displayName, document, FORMAT_ECPROJ, null)
+        @Throws(IOException::class)
+    fun importLegacyDocument(document: String, displayName: String): Metadata {
+        return synchronized(rootLock) { create(displayName, document, FORMAT_ECPROJ, null) }
+    }
 
-    @Synchronized
-    @Throws(IOException::class)
+        @Throws(IOException::class)
     fun update(id: String, document: String): Metadata {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         val previous = metadata(checkedId) ?: throw IOException("Canonical project $checkedId is not in the repository")
         validateDocument(document, previous.format)
@@ -123,10 +127,11 @@ class CanonicalProjectRepository(private val root: File) {
         backupSidecar.delete()
         return updated
     }
+    }
 
-    @Synchronized
-    @Throws(IOException::class)
+        @Throws(IOException::class)
     fun load(id: String): String? {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         val metadata = metadata(checkedId) ?: return null
         val file = documentFile(metadata.id, metadata.format)
@@ -137,9 +142,10 @@ class CanonicalProjectRepository(private val root: File) {
         }
         return document
     }
+    }
 
-    @Synchronized
-    fun metadata(id: String): Metadata? {
+        fun metadata(id: String): Metadata? {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         recoverInterruptedUpdate(checkedId)
         val file = sidecarFile(checkedId)
@@ -148,10 +154,11 @@ class CanonicalProjectRepository(private val root: File) {
             .getOrNull()
             ?.takeIf { it.id == checkedId }
     }
+    }
 
     /** Sidecar-driven listing: newest first, display name breaks timestamp ties. */
-    @Synchronized
-    fun list(): List<Metadata> {
+        fun list(): List<Metadata> {
+        return synchronized(rootLock) {
         if (!root.isDirectory) return emptyList()
         val sidecars = root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
         sidecars.forEach { file -> runCatching { recoverInterruptedUpdate(file.nameWithoutExtension) } }
@@ -164,9 +171,10 @@ class CanonicalProjectRepository(private val root: File) {
             }
             .sortedWith(compareByDescending<Metadata> { it.updatedAtMillis }.thenBy { it.displayName })
     }
+    }
 
-    @Synchronized
-    fun delete(id: String): Boolean {
+        fun delete(id: String): Boolean {
+        return synchronized(rootLock) {
         val checkedId = validateId(id)
         val metadata = metadata(checkedId) ?: return false
         var removed = false
@@ -180,6 +188,7 @@ class CanonicalProjectRepository(private val root: File) {
         }
         return removed
     }
+    }
 
     /**
      * Migrates every legacy (version-less) sidecar to [CURRENT_SCHEMA_VERSION]
@@ -187,8 +196,8 @@ class CanonicalProjectRepository(private val root: File) {
      * version or is corrupt. Migration only fills sidecar defaults; document
      * bytes are never rewritten.
      */
-    @Synchronized
-    fun migrateAll(): List<MigrationResult> {
+        fun migrateAll(): List<MigrationResult> {
+        return synchronized(rootLock) {
         if (!root.isDirectory) return emptyList()
         return root.listFiles { file -> file.isFile && file.name.endsWith(".json") }.orEmpty()
             .sortedBy { it.name }
@@ -209,6 +218,7 @@ class CanonicalProjectRepository(private val root: File) {
                     MigrationResult(id, 0, CURRENT_SCHEMA_VERSION, null)
                 }
             }
+    }
     }
 
     /** Structural check only; native schema validation remains the JNI import gate. */
@@ -334,7 +344,7 @@ class CanonicalProjectRepository(private val root: File) {
     private fun moveReplacing(source: File, target: File) {
         try {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
             Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
@@ -357,7 +367,7 @@ class CanonicalProjectRepository(private val root: File) {
         writeDurably(temporary, document)
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
@@ -379,7 +389,7 @@ class CanonicalProjectRepository(private val root: File) {
         writeDurably(temporary, document.toString())
         try {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: Exception) {
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
@@ -420,6 +430,15 @@ class CanonicalProjectRepository(private val root: File) {
         .joinToString("") { "%02x".format(it) }
 
     companion object {
+        private val locks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+        /** Canonicalize symlink aliases so separate handles share the two-file transaction lock. */
+        private fun lockFor(root: File): Any {
+            val key = runCatching { root.canonicalPath }
+                .getOrElse { root.absoluteFile.normalize().path }
+            return locks.computeIfAbsent(key) { Any() }
+        }
+
         const val CURRENT_SCHEMA_VERSION = 1
         const val FORMAT_ECPROJ = "ecproj"
         const val FORMAT_ECPROJX = "ecprojx"

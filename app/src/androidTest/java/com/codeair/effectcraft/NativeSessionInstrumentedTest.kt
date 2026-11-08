@@ -10,6 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.json.JSONObject
 import org.junit.Test
 
 /**
@@ -203,6 +204,44 @@ class NativeSessionInstrumentedTest {
         assertTrue(NativeProjectBridge.isAvailable())
         assertNull(NativeSession.open("{}"))
         assertNull(NativeSession.open("not json"))
+    }
+
+    @Test
+    fun canonicalRectangleLayerIsCreatedAndRenderedByNativeSession() {
+        assertTrue(NativeProjectBridge.isAvailable())
+        val envelope = JSONObject(
+            NativeProjectBridge.addShapeLayerEcproj(FIXTURE_JSON, FIXTURE_COMPOSITION_ID, "Mobile Rectangle")
+                ?: error("Native rectangle creation must return an envelope")
+        )
+        assertTrue(envelope.optString("error"), envelope.optBoolean("valid"))
+        val projectJson = envelope.getString("project")
+        val metadata = JSONObject(NativeProjectBridge.inspectEcproj(projectJson) ?: error("Native inspection unavailable"))
+        val layers = metadata.getJSONArray("compositions").getJSONObject(0).getJSONArray("layers")
+        assertEquals(1, layers.length())
+        assertEquals("Mobile Rectangle", layers.getJSONObject(0).getString("name"))
+
+        val session = NativeSession.open(projectJson, 160)
+        assertNotNull("Session must open the newly authored canonical shape", session)
+        session!!
+        try {
+            val frame = session.render(FIXTURE_COMPOSITION_ID, 20)
+            assertNotNull("Native compositor must render the authored rectangle", frame)
+            assertEquals(160 to 90, frameDimensions(frame!!))
+            var visibleWhitePixel = false
+            var offset = 8
+            while (offset + 3 < frame.size) {
+                if ((frame[offset].toInt() and 0xff) > 200 &&
+                    (frame[offset + 1].toInt() and 0xff) > 200 &&
+                    (frame[offset + 2].toInt() and 0xff) > 200) {
+                    visibleWhitePixel = true
+                    break
+                }
+                offset += 4
+            }
+            assertTrue("The new rectangle must paint pixels in the real composition frame", visibleWhitePixel)
+        } finally {
+            session.close()
+        }
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.codeair.effectcraft.data
 
-import android.util.Xml
+import org.kxml2.io.KXmlParser
+import org.kxml2.io.KXmlSerializer
+import org.xmlpull.v1.XmlPullParserException
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
@@ -10,6 +12,9 @@ import java.io.InputStream
 import java.io.StringReader
 import java.io.StringWriter
 import java.math.BigDecimal
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 
 /**
  * Strict import boundary for upstream canonical EffectCraft project documents.
@@ -36,7 +41,19 @@ object CanonicalProjectDocument {
             output.write(buffer, 0, count)
             onProgress(output.size().toLong())
         }
-        return output.toString(Charsets.UTF_8.name())
+        // Charset's convenience conversion silently replaces malformed byte
+        // sequences with U+FFFD. That changes project keys/paths before schema
+        // validation and can make a corrupt import appear valid. Decode strictly
+        // so the caller can reject the original bytes and avoid caching them.
+        return try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(output.toByteArray()))
+                .toString()
+        } catch (failure: CharacterCodingException) {
+            throw IllegalArgumentException("Project document is not valid UTF-8", failure)
+        }
     }
 
     /** Normalizes a supported .ecproj JSON or .ecprojx XML document to canonical JSON. */
@@ -45,7 +62,11 @@ object CanonicalProjectDocument {
         // retain ordinary leading whitespace so the JSON parser handles it.
         val withoutBom = document.removePrefix("\uFEFF")
         val probe = withoutBom.trimStart()
-        return if (probe.startsWith("<?xml") || probe.startsWith("<$XML_ROOT")) {
+        // XML declarations are optional. A legal .ecprojx document may begin
+        // with a comment before its root, so dispatch on the first markup
+        // delimiter rather than only the declaration/root prefix. The strict
+        // parser below still rejects unrelated XML roots and malformed input.
+        return if (probe.startsWith("<")) {
             parseXmlProject(probe).toString()
         } else {
             withoutBom
@@ -56,7 +77,7 @@ object CanonicalProjectDocument {
     fun toXml(json: String): String {
         val project = JSONObject(json)
         val output = StringWriter()
-        val serializer = Xml.newSerializer()
+        val serializer = KXmlSerializer()
         serializer.setOutput(output)
         serializer.startDocument("UTF-8", true)
         serializer.startTag(null, XML_ROOT)
@@ -69,8 +90,7 @@ object CanonicalProjectDocument {
     }
 
     private fun parseXmlProject(xml: String): JSONObject {
-        val parser = Xml.newPullParser()
-        parser.setFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL, false)
+        val parser = KXmlParser()
         parser.setInput(StringReader(xml))
         parser.nextTag()
         require(parser.eventType == XmlPullParser.START_TAG && parser.name == XML_ROOT) {
@@ -89,19 +109,23 @@ object CanonicalProjectDocument {
         require(parser.eventType == XmlPullParser.END_TAG && parser.name == XML_ROOT) {
             "Malformed EffectCraft XML project root"
         }
-        var trailingEvent = parser.next()
-        while (trailingEvent != XmlPullParser.END_DOCUMENT) {
-            // XML permits whitespace and comments after the document element.
-            // Reject a second root or non-whitespace character data, but do
-            // not mistake legal formatting for an extra project payload.
-            when (trailingEvent) {
-                XmlPullParser.TEXT -> require(parser.text.isBlank()) {
-                    "Unexpected content after EffectCraft XML project"
+        try {
+            var trailingEvent = parser.next()
+            while (trailingEvent != XmlPullParser.END_DOCUMENT) {
+                // XML permits whitespace and comments after the document element.
+                // Reject a second root or non-whitespace character data, but do
+                // not mistake legal formatting for an extra project payload.
+                when (trailingEvent) {
+                    XmlPullParser.TEXT -> require(parser.text.isBlank()) {
+                        "Unexpected content after EffectCraft XML project"
+                    }
+                    XmlPullParser.COMMENT -> Unit
+                    else -> error("Unexpected content after EffectCraft XML project")
                 }
-                XmlPullParser.COMMENT -> Unit
-                else -> error("Unexpected content after EffectCraft XML project")
+                trailingEvent = parser.next()
             }
-            trailingEvent = parser.next()
+        } catch (error: XmlPullParserException) {
+            throw IllegalArgumentException("Unexpected content after EffectCraft XML project", error)
         }
         return value
     }
@@ -129,6 +153,9 @@ object CanonicalProjectDocument {
                             require(parser.name == "m") { "Expected <m> inside EffectCraft object" }
                             val key = parser.getAttributeValue(null, "n")
                                 ?: error("EffectCraft object member has no n attribute")
+                            require(!result.has(key)) {
+                                "Duplicate EffectCraft XML object member <$key>"
+                            }
                             parser.nextTag()
                             val value = readXmlValue(parser)
                             parser.nextTag()
