@@ -218,6 +218,7 @@ class CanonicalSelectionEditorTest {
         // Reopening restores the sheet scroll position. Explicitly bring
         // its header and nested layer list back into view before asserting.
         compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Layers").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("● Background", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Add Ellipse").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Ellipse"), ellipseAdded)
