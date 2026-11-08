@@ -185,3 +185,20 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 - Next: inspect the fresh CI triggered by Hexagon commits, diagnose every build/test failure, then continue M4 functional shape/property editing and M2 media/interoperability rather than stopping at the tracker.
 - M0 historical baseline is now corroborated through #1317 at its exact SHA; later code must earn a new exact-head run. M1/M2/M3/M4/M5/M6 remain partial; M7 remains **NOT ACCEPTED**.
 - Blockers unchanged: physical ARM64 GPU/Surface/media/codec/audio/performance/accessibility/install-run qualification; owner-controlled release signing credentials; broader Effekseer `.efkproj` support. Adobe `.aep` remains proprietary and is not claimed.
+
+
+## Engineering checkpoint — 2026-11-09 02:48 IST
+
+### CI #1328: two API30 instrumentation failures diagnosed
+- Exact run [#1328](https://github.com/sunmughan/After-Effects-Android/actions/runs/42520953988) at SHA dcde2ca2 built the debug app and completed all 177 emulator tests, but **2 tests failed**; cold APK rebuild was skipped because the primary test job failed.
+- Failures were visibility assertions after opening/reopening the canonical inspector, not renderer/JNI crashes:
+  - `AdaptiveWorkspaceSmokeTest.canonicalAnchor3dRotationTextShapeEffectAndLockControlsTargetSelectedLayer` — `● Headline` was not displayed at line 727.
+  - `CanonicalSelectionEditorTest.tapLongPressGestureUndoRedoAndReparseKeepCanonicalSelection` — `● Background` was not displayed at line 217.
+- Root cause: canonical inspector is a ModalBottomSheet with an outer sheet scroll container and a nested scrollable layer list. `performScrollTo()` on a row only targets its nested list; when the sheet is itself scrolled/reopened with its prior offset, the row remains clipped. The assertions did not first bring the sheet header back into view.
+- Corrected test navigation (no assertions or product gates removed): [Adaptive test f94933c9](https://github.com/sunmughan/After-Effects-Android/commit/f94933c9692568bdab2dd6a71fbd2a2603fcf13a) now scrolls CANONICAL .ECPROJ into view before the selected Headline row; [selection test edde8aeb](https://github.com/sunmughan/After-Effects-Android/commit/edde8aeb3486696cfee02e9bd59f5de1dc5e9dee) restores the sheet header and then scrolls Background in the nested list after reopening.
+- These changes correct test navigation for the two scroll containers. **Fresh exact-head CI is required** to verify both assertions and all remaining tests; do not infer acceptance from the previous run (actual #1328: 177 completed, 2 failed).
+- #1328 also verified Hexagon source compiles and reaches instrumentation; its native and device acceptance still depends on the new full CI. Reproducibility job was skipped after instrumentation failure.
+
+### Next gate
+- Await the Actions run triggered by edde8aeb / current branch HEAD. Require Rust tests + ARM64/x86_64 JNI, Kotlin/JVM, release R8/APK/AAB, API30 177/177 and independent cold APK reproducibility.
+- Continue M4 shape/property/keyframe work only after fixing any new test failures; M2 interoperability and physical M3/M5/M6 validation remain open. PR #4 stays Draft; M7 remains **NOT ACCEPTED**.
