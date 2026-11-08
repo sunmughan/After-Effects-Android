@@ -1840,7 +1840,12 @@ private fun CanonicalProjectEditor(
                 ) { Text("Add Text", color = EditorPalette.violet) }
                 TextButton(
                     enabled = canEdit && newTextName.trim().isNotEmpty(),
-                    onClick = { onAddShapeLayer(composition.id, newTextName) }
+                    onClick = {
+                        // The shared name field defaults to "Text" for the
+                        // adjacent Text action; give a fresh rectangle its
+                        // expected name unless the user entered another one.
+                        onAddShapeLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Rectangle")
+                    }
                 ) { Text("Add Rect", color = EditorPalette.violet) }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
