@@ -110,6 +110,20 @@ class CanonicalProjectDocumentTest {
     }
 
     @Test
+    fun ecprojxRejectsDuplicateObjectMembersInsteadOfSilentlyOverwriting() {
+        val xml = """<?xml version="1.0"?>
+            <EffectCraftProject encoding="json" version="1">
+              <obj>
+                <m n="name"><str>first</str></m>
+                <m n="name"><str>second</str></m>
+              </obj>
+            </EffectCraftProject>"""
+        val failure = runCatching { CanonicalProjectDocument.toCanonicalJson(xml) }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure?.message.orEmpty().contains("Duplicate EffectCraft XML object member <name>"))
+    }
+
+    @Test
     fun validatesNativeEnvelopeAndCompositionMetadata() {
         val metadata = """{"valid":true,"compositions":[{"id":1,"name":"Main","width":640,"height":360,"frameRateNum":30,"frameRateDen":1,"durationSeconds":5,"layers":[]}],"items":[]}"""
         assertEquals("Main", CanonicalProjectDocument.validateNativeEnvelope(metadata).compositions.single().name)
