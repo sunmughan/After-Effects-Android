@@ -2313,7 +2313,8 @@ private fun CanonicalTransformControls(
                 Text("Move key · to frame", color = EditorPalette.text, fontSize = 12.sp)
                 BasicTextField(
                     value = moveTargetDraft,
-                    onValueChange = { moveTargetDraft = it.take(16) },
+                    onValueChange = { moveTargetDraft = it.filter(Char::isDigit).take(10) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
                     modifier = Modifier.weight(1f).semantics { contentDescription = "Move key target frame" },
