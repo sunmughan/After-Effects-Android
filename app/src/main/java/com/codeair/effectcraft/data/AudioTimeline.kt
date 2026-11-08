@@ -4,12 +4,16 @@ import java.util.UUID
 
 /**
  * The immutable audio timeline: the ordered set of [AudioClip]s for one
- * project, kept separate from the canonical .ecproj until the native
+ * export mix, kept separate from the canonical .ecproj until the native
  * EffectCraft model exposes an audio schema (same split as the keyframe
  * store). Clips are kept sorted by timeline start; overlapping clips are
  * allowed and the mixer sums them, which is how layered audio is built.
- * Every mutation returns a new timeline; the caller persists the result
- * through [AudioTimelineStore].
+ * Every mutation returns a new timeline.
+ *
+ * Batch 2 (P15): this is NOT editor state. The editor's one audio model
+ * is the frame-based [AudioClipDocument] in [ProjectDocument.audioTracks];
+ * [fromAudioTracks] converts it for the export mixer, the only consumer
+ * left. The per-project AudioTimelineStore is deleted with it.
  */
 data class AudioTimeline(val clips: List<AudioClip> = emptyList()) {
     init {
@@ -21,6 +25,42 @@ data class AudioTimeline(val clips: List<AudioClip> = emptyList()) {
 
     companion object {
         val EMPTY = AudioTimeline()
+
+        /**
+         * Batch 2 (P15): the editor's one audio model is the frame-based
+         * [AudioClipDocument] in [ProjectDocument.audioTracks]. The export
+         * mixer still consumes microsecond [AudioClip]s, so this converts
+         * project clips for that one consumer — it is not a second editor
+         * model. Muted clips are skipped (the mixer would sum silence for
+         * them anyway) and gain above unity is clamped: the mixer takes
+         * volume in 0..1, while the project model allows up to +6 dB.
+         */
+        fun fromAudioTracks(
+            tracks: List<AudioTrackDocument>,
+            frameRateNum: Int,
+            frameRateDen: Int
+        ): AudioTimeline {
+            val num = frameRateNum.coerceAtLeast(1).toLong()
+            val den = frameRateDen.coerceAtLeast(1).toLong()
+            fun framesToUs(frames: Int): Long = frames.toLong() * 1_000_000L * den / num
+            val clips = tracks.flatMap { it.clips }
+                .filterNot { it.muted }
+                .map { doc ->
+                    AudioClip(
+                        id = doc.id,
+                        sourceUri = doc.sourcePath,
+                        sourceDurationUs = framesToUs(doc.clip.sourceLengthFrames),
+                        timelineStartUs = framesToUs(doc.clip.startFrame),
+                        sourceStartUs = framesToUs(doc.clip.sourceStartFrame),
+                        durationUs = framesToUs(doc.timelineLength),
+                        volume = doc.gain.toDouble().coerceIn(0.0, 1.0),
+                        fadeInUs = framesToUs(doc.fadeInFrames),
+                        fadeOutUs = framesToUs(doc.fadeOutFrames)
+                    )
+                }
+                .sortedWith(compareBy({ it.timelineStartUs }, { it.id }))
+            return AudioTimeline(clips)
+        }
     }
 
     val isEmpty: Boolean get() = clips.isEmpty()
