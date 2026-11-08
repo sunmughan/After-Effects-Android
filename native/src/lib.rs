@@ -6193,4 +6193,43 @@ mod tests {
         assert!(!moved_project.comp(ItemId(comp_id)).unwrap().layers[0].switches.locked);
         assert!(set_layer_locked(&source, comp_id, 999, true).is_err());
     }
+    #[test]
+    fn editing_star_fill_color_changes_real_compositor_pixels() {
+        use effectcraft_project::{Comp, ItemKind, PropGroup};
+        use effectcraft_color::Label;
+        use effectcraft_time::{FrameRate, Tick};
+
+        fn first_color_uid(group: &PropGroup) -> Option<u64> {
+            for child in &group.children {
+                match child {
+                    Node::Prop(property) if matches!(&property.value, Value::Color(_)) => return Some(property.uid),
+                    Node::Group(nested) => if let Some(uid) = first_color_uid(nested) { return Some(uid); },
+                    _ => {}
+                }
+            }
+            None
+        }
+
+        let mut project = Project::default();
+        let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into()));
+        let source = project.to_file_json().unwrap();
+        let star_json = add_star_layer(&source, comp_id.0, "Star").unwrap();
+        let star: Project = serde_json::from_str(&star_json).unwrap();
+        let layer = &star.comp(comp_id).unwrap().layers[0];
+        let layer_id = layer.id.0;
+        let fill_uid = first_color_uid(&layer.props).expect("star must expose a color fill property");
+
+        let white_frame = render_frame_rgba(&star_json, comp_id.0, 0, 320).unwrap();
+        assert!(white_frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200),
+            "initial opaque white star must render visible pixels");
+
+        let red_json = set_layer_color_property(&star_json, comp_id.0, layer_id, fill_uid, 1.0, 0.0, 0.0, 1.0).unwrap();
+        let edited: Project = serde_json::from_str(&red_json).unwrap();
+        assert_eq!(serde_json::from_str::<Project>(&edited.to_file_json().unwrap()).unwrap(), edited);
+        let red_frame = render_frame_rgba(&red_json, comp_id.0, 0, 320).unwrap();
+        assert!(red_frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] < 50 && pixel[2] < 50 && pixel[3] > 200),
+            "editing the canonical fill color must update actual compositor pixels to red");
+    }
+
 }
