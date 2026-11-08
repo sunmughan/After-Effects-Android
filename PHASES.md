@@ -105,3 +105,11 @@ Blockers: owner-controlled keystore/signing credentials and physical ARM64 devic
 - Root fix: complete the unavailable-ABI notice as `fontSize = 11.sp)`, close `CanonicalProjectEditor` and start the extracted helper at a top-level `@Composable` boundary. The source is now structurally restored around lines 2087–2090; no feature or test was removed. Commit: [3f86c5ac](https://github.com/sunmughan/After-Effects-Android/commit/3f86c5ac89eae327c49f1a7a731642a4f2b3b2c4).
 - **Verification pending:** this source commit has not yet run through PR CI. Create a fresh PR from the recreated branch and require Kotlin compilation, both native ABIs, JVM, release R8/APK/AAB, API30 instrumentation and independent cold APK comparison. Local Gradle/SDK remains unavailable in this automation runtime.
 - M4 remains partial; Triangle/Star and inspector refactor are not accepted solely by commit. M0–M7 release status remains unchanged; no signed/physical install evidence and no native Adobe `.aep` claim.
+
+
+## M2 follow-up — legal trailing XML processing instructions (2026-11-08 19:25 IST)
+
+- During the pending compiler CI, audited the XML post-root validator. It allowed XML whitespace/comments but rejected `PROCESSING_INSTRUCTION`, although XML permits processing instructions after the document element. This could reject valid exporter metadata without changing the canonical project payload.
+- Updated the trailing-event allowlist to accept `XmlPullParser.PROCESSING_INSTRUCTION` while continuing to reject a second root, non-whitespace text, and all other unexpected events: [4a8b7e63](https://github.com/sunmughan/After-Effects-Android/commit/4a8b7e63bc7fb79989252f270e0825d40271bca0).
+- Added `ecprojxAcceptsProcessingInstructionAfterRoot`, parsing a real XML fixture with `<?effectcraft-export complete?>` after the root and asserting the project name survives: [1f0f38b9](https://github.com/sunmughan/After-Effects-Android/commit/1f0f38b948e711c7a467870ed093af23be0121e5).
+- Latest source/test SHA: `1f0f38b9`; exact-head PR CI [#1275](https://github.com/sunmughan/After-Effects-Android/actions/runs/42486904072) queued/pending. Do not accept until Kotlin compile + JVM test (including this regression), both JNI ABIs, R8/APK/AAB, API30 and cold APK compare pass.
