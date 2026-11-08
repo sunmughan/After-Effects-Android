@@ -147,9 +147,12 @@ class EditorSmokeTest {
         // Dispatchers.Default, outside Compose idle tracking, so on a
         // loaded emulator the frame had not landed when this asserted
         // right after launch. Wait for it (same fix as the
-        // DraftPreview test in run 42441138764); the assertions below
-        // are unchanged and still fail if the frame never renders.
-        compose.waitUntil(timeoutMillis = 10_000) {
+        // DraftPreview test in run 42441138764). Run 42445908283:
+        // 10 s was still too short on a cold emulator — the budget
+        // is 30 s, matching AdaptiveWorkspaceSmokeTest's wait for
+        // this same frame node. The assertions below are unchanged
+        // and still fail if the frame never renders.
+        compose.waitUntil(timeoutMillis = 30_000) {
             compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()

@@ -158,12 +158,14 @@ class DraftPreviewInstrumentedTest {
         // idle, so the node was absent and assertIsDisplayed
         // reported "not displayed". Wait for the real condition
         // instead (the house pattern for async content — see
-        // EditorSmokeTest's dialog-removal wait); the assertions
-        // below are unchanged and still fail if the frame never
-        // renders. The render itself is correct: the pixel tests
-        // in this class pass, and the full-app smoke test asserting
-        // the same node passed in the same run.
-        compose.waitUntil(timeoutMillis = 10_000) {
+        // EditorSmokeTest's dialog-removal wait). Run 42445908283:
+        // 10 s was still too short on a cold emulator (the frame
+        // took longer than 10 s to appear in the retry, while it
+        // passed the first attempt) — the budget is 30 s, matching
+        // AdaptiveWorkspaceSmokeTest's wait for this same frame
+        // node. The assertions below are unchanged and still fail
+        // if the frame never renders.
+        compose.waitUntil(timeoutMillis = 30_000) {
             compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
