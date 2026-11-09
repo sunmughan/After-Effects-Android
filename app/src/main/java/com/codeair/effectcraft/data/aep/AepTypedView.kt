@@ -48,7 +48,11 @@ object AepTypedView {
             val stack = ArrayList(items())
             stack.reverse()
             while (stack.isNotEmpty()) {
-                val item = stack.removeLast()
+                // removeAt(lastIndex), NOT removeLast(): ArrayList.removeLast()
+                // is a Java 21 SequencedCollection member — it compiles on a
+                // JDK 21 host but throws NoSuchMethodError on the CI JDK 17
+                // (and on Android). removeAt is API 1 and JDK 1.2.
+                val item = stack.removeAt(stack.lastIndex)
                 val kids = ArrayList(item.children())
                 kids.reverse()
                 out.add(item)
