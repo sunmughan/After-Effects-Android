@@ -7,11 +7,15 @@ import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,10 +27,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -2654,29 +2663,56 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
 
         // First-run onboarding: three steps, nothing more. Dismissing
         // (button or back/scrim) sets the persisted flag, so it shows
-        // once per device.
+        // once per device. Step 3 names the Export button: the File
+        // menu no longer exists.
         if (showOnboarding) {
-            AnimatedDialogContent {
-            AlertDialog(
-                onDismissRequest = {
-                    OnboardingStore.markSeen(context)
-                    showOnboarding = false
-                },
-                title = { Text("Welcome to EffectCraft") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("1 · Import a project — EffectCraft (.ecproj), a ZIP bundle, or an After Effects project (.aep/.aepx).")
-                        Text("2 · Scrub the timeline, set the playhead, and edit layers in the inspector.")
-                        Text("3 · Export your video from the File menu when it is ready.")
+            EditsSheet(onDismissRequest = {
+                OnboardingStore.markSeen(context)
+                showOnboarding = false
+            }) {
+                Text(
+                    "Welcome to EffectCraft",
+                    style = AstryxTheme.Type.titleSmall,
+                    color = AstryxTheme.Colors.textPrimary
+                )
+                Text(
+                    "1 · Import a project — EffectCraft (.ecproj), a ZIP bundle, or an After Effects project (.aep/.aepx).",
+                    fontSize = 14.sp,
+                    color = AstryxTheme.Colors.textSecondary
+                )
+                Text(
+                    "2 · Scrub the timeline, set the playhead, and edit layers in the inspector.",
+                    fontSize = 14.sp,
+                    color = AstryxTheme.Colors.textSecondary
+                )
+                Text(
+                    "3 · Export your video from the Export button when it is ready.",
+                    fontSize = 14.sp,
+                    color = AstryxTheme.Colors.textSecondary
+                )
+                // Primary action: the white pill, like the Export pill.
+                Surface(
+                    color = AstryxTheme.Colors.backgroundInverted,
+                    shape = RoundedCornerShape(AstryxTheme.Radius.full),
+                    modifier = Modifier.height(AstryxTheme.Control.heightLg)
+                        .clickable {
+                            OnboardingStore.markSeen(context)
+                            showOnboarding = false
+                        }
+                        .semantics { contentDescription = "Get started" }
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(horizontal = AstryxTheme.Spacing.space4)
+                    ) {
+                        Text(
+                            "Get started",
+                            color = AstryxTheme.Colors.onLight,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        OnboardingStore.markSeen(context)
-                        showOnboarding = false
-                    }, modifier = Modifier.height(48.dp)) { Text("Get started") }
                 }
-            )
             }
         }
 
@@ -2715,7 +2751,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         // that option accepts; the resolver sniffs the content, so
         // a mislabelled file still takes the right path.
         if (showImportDialog) {
-            AnimatedDialogContent {
             ImportProjectDialog(
                 onDismiss = { showImportDialog = false },
                 onPickEcproj = {
@@ -2735,20 +2770,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
                 }
             )
-            }
         }
 
         // The .aep loss gate: the import coroutine waits on aepLossGate
         // until the user allows the losses or cancels.
         val lossReport = aepLossReport
         if (lossReport != null) {
-            AnimatedDialogContent {
             AepLossDialog(
                 report = lossReport,
                 onAllow = { aepLossGate?.complete(true) },
                 onCancel = { aepLossGate?.complete(false) }
             )
-            }
         }
     }
 }

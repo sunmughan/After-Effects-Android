@@ -694,159 +694,161 @@ fun EditorScreen(
         }
 
         if (showProjectPicker) {
-            AnimatedDialogContent {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showProjectPicker = false },
-                title = { Text("Open offline project") },
-                text = {
-                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                        if (savedProjects.isEmpty()) {
-                            Text("No saved drafts yet. Save a composition to open it later.", color = EditorPalette.muted)
-                        } else {
-                            savedProjects.forEach { saved ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            showProjectPicker = false
-                                            onOpenProject(saved.id)
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                                        .semantics { contentDescription = "Open project ${saved.name}" },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(saved.name, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text("${saved.width}×${saved.height} · ${saved.frameRate} FPS · ${saved.layers.size} layers",
-                                            color = EditorPalette.muted, fontSize = 11.sp)
+            EditsSheet(onDismissRequest = { showProjectPicker = false }) {
+                Text(
+                    "Open offline project",
+                    style = AstryxTheme.Type.titleSmall,
+                    color = AstryxTheme.Colors.textPrimary
+                )
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    if (savedProjects.isEmpty()) {
+                        Text("No saved drafts yet. Save a composition to open it later.", color = EditorPalette.muted)
+                    } else {
+                        savedProjects.forEach { saved ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        showProjectPicker = false
+                                        onOpenProject(saved.id)
                                     }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .semantics { contentDescription = "Open project ${saved.name}" },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(saved.name, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text("${saved.width}×${saved.height} · ${saved.frameRate} FPS · ${saved.layers.size} layers",
+                                        color = EditorPalette.muted, fontSize = 11.sp)
                                 }
                             }
                         }
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showProjectPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
-            )
+                TextButton(
+                    onClick = { showProjectPicker = false },
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) { Text("Close", color = AstryxTheme.Colors.textSecondary) }
             }
         }
 
         if (showRepositoryPicker) {
-            AnimatedDialogContent {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showRepositoryPicker = false },
-                title = { Text("Open canonical project") },
-                text = {
-                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                        if (repositoryProjects.isEmpty()) {
-                            Text("No canonical projects saved yet. Import a .ecproj or .ecprojx to add one.", color = EditorPalette.muted)
-                        } else {
-                            repositoryProjects.forEach { entry ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            showRepositoryPicker = false
-                                            onOpenRepositoryProject(entry.id)
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                                        .semantics { contentDescription = "Open canonical project ${entry.displayName}" },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(entry.displayName, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(
-                                            "${entry.format} · schema v${entry.schemaVersion}" + if (entry.id == activeRepositoryProjectId) " · Current" else "",
-                                            color = EditorPalette.muted, fontSize = 11.sp
-                                        )
+            EditsSheet(onDismissRequest = { showRepositoryPicker = false }) {
+                Text(
+                    "Open canonical project",
+                    style = AstryxTheme.Type.titleSmall,
+                    color = AstryxTheme.Colors.textPrimary
+                )
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    if (repositoryProjects.isEmpty()) {
+                        Text("No canonical projects saved yet. Import a .ecproj or .ecprojx to add one.", color = EditorPalette.muted)
+                    } else {
+                        repositoryProjects.forEach { entry ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        showRepositoryPicker = false
+                                        onOpenRepositoryProject(entry.id)
                                     }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .semantics { contentDescription = "Open canonical project ${entry.displayName}" },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(entry.displayName, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        "${entry.format} · schema v${entry.schemaVersion}" + if (entry.id == activeRepositoryProjectId) " · Current" else "",
+                                        color = EditorPalette.muted, fontSize = 11.sp
+                                    )
                                 }
                             }
                         }
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showRepositoryPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
-            )
+                TextButton(
+                    onClick = { showRepositoryPicker = false },
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) { Text("Close", color = AstryxTheme.Colors.textSecondary) }
             }
         }
 
         if (showMediaLibrary) {
-            AnimatedDialogContent {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showMediaLibrary = false },
-                title = { Text("Offline media library") },
-                text = {
-                    Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
-                        if (missingManifestEntries > 0) {
-                            Text(
-                                "$missingManifestEntries linked item${if (missingManifestEntries == 1) "" else "s"} ${if (missingManifestEntries == 1) "is" else "are"} missing media. Relink ${if (missingManifestEntries == 1) "it" else "them"} from the canonical project sheet.",
-                                color = EditorPalette.amber, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp)
-                            )
+            EditsSheet(onDismissRequest = { showMediaLibrary = false }) {
+                Text(
+                    "Offline media library",
+                    style = AstryxTheme.Type.titleSmall,
+                    color = AstryxTheme.Colors.textPrimary
+                )
+                Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                    if (missingManifestEntries > 0) {
+                        Text(
+                            "$missingManifestEntries linked item${if (missingManifestEntries == 1) "" else "s"} ${if (missingManifestEntries == 1) "is" else "are"} missing media. Relink ${if (missingManifestEntries == 1) "it" else "them"} from the canonical project sheet.",
+                            color = EditorPalette.amber, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    if (offlineAssets.isEmpty()) {
+                        Text("No media imported yet. Relink footage from a canonical project to copy it here for offline use.", color = EditorPalette.muted)
+                    } else {
+                        TextButton(onClick = onVerifyOfflineAssets, enabled = !isVerifyingOfflineAssets, modifier = Modifier.height(48.dp)) {
+                            Text(if (isVerifyingOfflineAssets) "Verifying media…" else "Verify media integrity", color = EditorPalette.violet, fontSize = 11.sp)
                         }
-                        if (offlineAssets.isEmpty()) {
-                            Text("No media imported yet. Relink footage from a canonical project to copy it here for offline use.", color = EditorPalette.muted)
-                        } else {
-                            TextButton(onClick = onVerifyOfflineAssets, enabled = !isVerifyingOfflineAssets, modifier = Modifier.height(48.dp)) {
-                                Text(if (isVerifyingOfflineAssets) "Verifying media…" else "Verify media integrity", color = EditorPalette.violet, fontSize = 11.sp)
-                            }
-                            if (offlineAssets.any { it.sha256 !in referencedOfflineAssetIds }) {
-                                TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }, modifier = Modifier.height(48.dp)) {
-                                    Text("Remove unused media", color = EditorPalette.violet, fontSize = 11.sp)
-                                }
-                            }
-                            offlineAssets.forEach { asset ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                                        Text(asset.displayName, color = EditorPalette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        Text("${asset.extension.uppercase()} · ${asset.sizeBytes / 1024} KB · ${asset.sha256.take(12)}…",
-                                            color = EditorPalette.muted, fontSize = 10.sp)
-                                    }
-                                    if (asset.sha256 in referencedOfflineAssetIds) {
-                                        Text("Linked", color = EditorPalette.mint, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp))
-                                        TextButton(onClick = { showMediaLibrary = false; onReplaceOfflineAsset(asset.sha256) }, modifier = Modifier.height(48.dp)) {
-                                            Text("Replace", color = EditorPalette.violet, fontSize = 11.sp)
-                                        }
-                                    } else {
-                                        TextButton(onClick = { assetPendingDelete = asset }, modifier = Modifier.height(48.dp)) {
-                                            Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
-                                        }
-                                    }
-                                }
+                        if (offlineAssets.any { it.sha256 !in referencedOfflineAssetIds }) {
+                            TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }, modifier = Modifier.height(48.dp)) {
+                                Text("Remove unused media", color = EditorPalette.violet, fontSize = 11.sp)
                             }
                         }
-                        Text("Storage access", color = EditorPalette.text, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
-                        if (safGrants.isEmpty()) {
-                            Text("No persisted document access recorded yet. Importing or exporting a document records its access here.", color = EditorPalette.muted, fontSize = 11.sp)
-                        } else {
-                            safGrants.forEach { grant ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                                        Text(grant.displayName, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
-                                        Text(
-                                            "${grant.kind.name} · ${if (grant.status == SafPermissionRegistry.Status.LOST) "LOST — re-open the document to restore it" else "Granted"}",
-                                            color = if (grant.status == SafPermissionRegistry.Status.LOST) EditorPalette.amber else EditorPalette.muted,
-                                            fontSize = 10.sp
-                                        )
+                        offlineAssets.forEach { asset ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(asset.displayName, color = EditorPalette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text("${asset.extension.uppercase()} · ${asset.sizeBytes / 1024} KB · ${asset.sha256.take(12)}…",
+                                        color = EditorPalette.muted, fontSize = 10.sp)
+                                }
+                                if (asset.sha256 in referencedOfflineAssetIds) {
+                                    Text("Linked", color = EditorPalette.mint, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp))
+                                    TextButton(onClick = { showMediaLibrary = false; onReplaceOfflineAsset(asset.sha256) }, modifier = Modifier.height(48.dp)) {
+                                        Text("Replace", color = EditorPalette.violet, fontSize = 11.sp)
                                     }
-                                    TextButton(onClick = { onReleaseSafGrant(grant.uri, grant.kind) }, modifier = Modifier.height(48.dp)) {
-                                        Text("Release", color = Color(0xFFFF8B91), fontSize = 11.sp)
+                                } else {
+                                    TextButton(onClick = { assetPendingDelete = asset }, modifier = Modifier.height(48.dp)) {
+                                        Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
                                     }
                                 }
                             }
                         }
                     }
-                },
-                confirmButton = { TextButton(onClick = { showMediaLibrary = false }, modifier = Modifier.height(48.dp)) { Text("Close") } }
-            )
+                    Text("Storage access", color = EditorPalette.text, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+                    if (safGrants.isEmpty()) {
+                        Text("No persisted document access recorded yet. Importing or exporting a document records its access here.", color = EditorPalette.muted, fontSize = 11.sp)
+                    } else {
+                        safGrants.forEach { grant ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(grant.displayName, color = EditorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
+                                    Text(
+                                        "${grant.kind.name} · ${if (grant.status == SafPermissionRegistry.Status.LOST) "LOST — re-open the document to restore it" else "Granted"}",
+                                        color = if (grant.status == SafPermissionRegistry.Status.LOST) EditorPalette.amber else EditorPalette.muted,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                TextButton(onClick = { onReleaseSafGrant(grant.uri, grant.kind) }, modifier = Modifier.height(48.dp)) {
+                                    Text("Release", color = Color(0xFFFF8B91), fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = { showMediaLibrary = false },
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) { Text("Close", color = AstryxTheme.Colors.textSecondary) }
             }
         }
 
@@ -879,133 +881,152 @@ fun EditorScreen(
                     }
                 }
             }
-            AnimatedDialogContent {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showSequenceSettings = false },
-                title = {
+            EditsSheet(onDismissRequest = { showSequenceSettings = false }) {
+                Text(
+                    when (sequenceOutputFormat) {
+                        RenderOutputFormat.MP4_H264 -> "H.264 MP4 settings"
+                        RenderOutputFormat.MP4_HEVC -> "H.265 MP4 settings"
+                        else -> "PNG sequence settings"
+                    },
+                    style = AstryxTheme.Type.titleSmall,
+                    color = AstryxTheme.Colors.textPrimary
+                )
+                Column(
+                    Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        composition?.let { "${it.name} · ${it.durationFrames} frames" } ?: "Canonical composition",
+                        color = EditorPalette.muted,
+                        fontSize = 12.sp
+                    )
+                    // Real selector: the current format is visibly
+                    // selected (P17). The sheet title already names
+                    // it ("H.264 MP4 settings" etc.).
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = sequenceOutputFormat == RenderOutputFormat.PNG_SEQUENCE_ZIP,
+                            onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP },
+                            label = { Text("PNG ZIP") },
+                            modifier = Modifier.height(48.dp)
+                        )
+                        FilterChip(
+                            selected = sequenceOutputFormat == RenderOutputFormat.MP4_H264,
+                            onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 },
+                            label = { Text("MP4 H.264") },
+                            modifier = Modifier.height(48.dp)
+                        )
+                        FilterChip(
+                            selected = sequenceOutputFormat == RenderOutputFormat.MP4_HEVC,
+                            onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_HEVC },
+                            enabled = hevcAvailable == true,
+                            label = { Text("MP4 H.265") },
+                            modifier = Modifier.height(48.dp)
+                        )
+                    }
+                    if (hevcAvailable == null) {
+                        Text("Checking for a hardware HEVC encoder…", color = EditorPalette.muted, fontSize = 11.sp)
+                    } else if (hevcAvailable == false) {
+                        Text("H.265 needs a hardware HEVC encoder — this device has none.", color = EditorPalette.muted, fontSize = 11.sp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = sequenceWidthText, onValueChange = { sequenceWidthText = it.filter(Char::isDigit) },
+                            label = { Text("Width") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true, modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = sequenceHeightText, onValueChange = { sequenceHeightText = it.filter(Char::isDigit) },
+                            label = { Text("Height") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true, modifier = Modifier.weight(1f)
+                        )
+                    }
+                    OutlinedTextField(
+                        value = sequenceFpsText, onValueChange = { sequenceFpsText = it.filter(Char::isDigit) },
+                        label = { Text("FPS") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Export FPS" }
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = sequenceStartText, onValueChange = { sequenceStartText = it.filter(Char::isDigit) },
+                            label = { Text("Start frame") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true, modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = sequenceEndText, onValueChange = { sequenceEndText = it.filter(Char::isDigit) },
+                            label = { Text("End frame") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true, modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (isMp4) {
+                        OutlinedTextField(
+                            value = sequenceBitrateText,
+                            onValueChange = { sequenceBitrateText = it.filter(Char::isDigit) },
+                            label = { Text("Bitrate (bps)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true, modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Text(
                         when (sequenceOutputFormat) {
-                            RenderOutputFormat.MP4_H264 -> "H.264 MP4 settings"
-                            RenderOutputFormat.MP4_HEVC -> "H.265 MP4 settings"
-                            else -> "PNG sequence settings"
-                        }
+                            RenderOutputFormat.MP4_H264 -> "H.264 MP4 uses the device MediaCodec encoder; timeline audio clips are mixed and encoded to AAC, otherwise AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
+                            RenderOutputFormat.MP4_HEVC -> "H.265 MP4 uses the device hardware HEVC encoder; timeline audio clips are mixed and encoded to AAC, otherwise AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
+                            else -> "PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track."
+                        },
+                        color = EditorPalette.muted, fontSize = 11.sp
                     )
-                },
-                text = {
-                    Column(
-                        Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            composition?.let { "${it.name} · ${it.durationFrames} frames" } ?: "Canonical composition",
-                            color = EditorPalette.muted,
-                            fontSize = 12.sp
-                        )
-                        // Real selector: the current format is visibly
-                        // selected (P17). The dialog title already names
-                        // it ("H.264 MP4 settings" etc.).
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = sequenceOutputFormat == RenderOutputFormat.PNG_SEQUENCE_ZIP,
-                                onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP },
-                                label = { Text("PNG ZIP") },
-                                modifier = Modifier.height(48.dp)
-                            )
-                            FilterChip(
-                                selected = sequenceOutputFormat == RenderOutputFormat.MP4_H264,
-                                onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 },
-                                label = { Text("MP4 H.264") },
-                                modifier = Modifier.height(48.dp)
-                            )
-                            FilterChip(
-                                selected = sequenceOutputFormat == RenderOutputFormat.MP4_HEVC,
-                                onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_HEVC },
-                                enabled = hevcAvailable == true,
-                                label = { Text("MP4 H.265") },
-                                modifier = Modifier.height(48.dp)
-                            )
-                        }
-                        if (hevcAvailable == null) {
-                            Text("Checking for a hardware HEVC encoder…", color = EditorPalette.muted, fontSize = 11.sp)
-                        } else if (hevcAvailable == false) {
-                            Text("H.265 needs a hardware HEVC encoder — this device has none.", color = EditorPalette.muted, fontSize = 11.sp)
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = sequenceWidthText, onValueChange = { sequenceWidthText = it.filter(Char::isDigit) },
-                                label = { Text("Width") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true, modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = sequenceHeightText, onValueChange = { sequenceHeightText = it.filter(Char::isDigit) },
-                                label = { Text("Height") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true, modifier = Modifier.weight(1f)
-                            )
-                        }
-                        OutlinedTextField(
-                            value = sequenceFpsText, onValueChange = { sequenceFpsText = it.filter(Char::isDigit) },
-                            label = { Text("FPS") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Export FPS" }
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = sequenceStartText, onValueChange = { sequenceStartText = it.filter(Char::isDigit) },
-                                label = { Text("Start frame") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true, modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = sequenceEndText, onValueChange = { sequenceEndText = it.filter(Char::isDigit) },
-                                label = { Text("End frame") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true, modifier = Modifier.weight(1f)
-                            )
-                        }
-                        if (isMp4) {
-                            OutlinedTextField(
-                                value = sequenceBitrateText,
-                                onValueChange = { sequenceBitrateText = it.filter(Char::isDigit) },
-                                label = { Text("Bitrate (bps)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true, modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        Text(
-                            when (sequenceOutputFormat) {
-                                RenderOutputFormat.MP4_H264 -> "H.264 MP4 uses the device MediaCodec encoder; timeline audio clips are mixed and encoded to AAC, otherwise AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
-                                RenderOutputFormat.MP4_HEVC -> "H.265 MP4 uses the device hardware HEVC encoder; timeline audio clips are mixed and encoded to AAC, otherwise AAC audio from the composition is passed through when available, otherwise the export is video-only and the result says so."
-                                else -> "PNG frames are rendered at the selected dimensions; the ZIP contains no video/audio track."
-                            },
-                            color = EditorPalette.muted, fontSize = 11.sp
-                        )
-                        sequenceSettingsError?.let { Text(it, color = EditorPalette.amber, fontSize = 12.sp) }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val width = sequenceWidthText.toIntOrNull()
-                        val height = sequenceHeightText.toIntOrNull()
-                        val fps = sequenceFpsText.toIntOrNull()
-                        val start = sequenceStartText.toIntOrNull()
-                        val end = sequenceEndText.toIntOrNull()
-                        val bitrate = sequenceBitrateText.toIntOrNull() ?: 8_000_000
-                        if (width == null || height == null || fps == null || start == null || end == null) {
-                            sequenceSettingsError = "Enter valid numeric settings"
-                        } else {
-                            val settings = RenderQueueSettings(width, height, fps, start, end, sequenceOutputFormat, bitrate)
-                            runCatching { RenderQueuePlan.create(settings, composition?.durationFrames ?: end + 1) }
-                                .onSuccess {
-                                    showSequenceSettings = false
-                                    if (isMp4)
-                                        onExportMp4Sequence(width, height, fps, start, end, bitrate, sequenceOutputFormat)
-                                    else onExportPngSequence(width, height, fps, start, end)
-                                }
-                                .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
-                        }
-                    }, modifier = Modifier.height(48.dp)) { Text(if (isMp4) "Render MP4" else "Render ZIP") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showSequenceSettings = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
+                    sequenceSettingsError?.let { Text(it, color = EditorPalette.amber, fontSize = 12.sp) }
                 }
-            )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AstryxTheme.Spacing.space2),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { showSequenceSettings = false },
+                        modifier = Modifier.height(48.dp)
+                    ) { Text("Cancel", color = AstryxTheme.Colors.textSecondary) }
+                    // Primary action: the white pill, like the Export pill.
+                    Surface(
+                        color = AstryxTheme.Colors.backgroundInverted,
+                        shape = RoundedCornerShape(AstryxTheme.Radius.full),
+                        modifier = Modifier.height(AstryxTheme.Control.heightLg)
+                            .clickable {
+                                val width = sequenceWidthText.toIntOrNull()
+                                val height = sequenceHeightText.toIntOrNull()
+                                val fps = sequenceFpsText.toIntOrNull()
+                                val start = sequenceStartText.toIntOrNull()
+                                val end = sequenceEndText.toIntOrNull()
+                                val bitrate = sequenceBitrateText.toIntOrNull() ?: 8_000_000
+                                if (width == null || height == null || fps == null || start == null || end == null) {
+                                    sequenceSettingsError = "Enter valid numeric settings"
+                                } else {
+                                    val settings = RenderQueueSettings(width, height, fps, start, end, sequenceOutputFormat, bitrate)
+                                    runCatching { RenderQueuePlan.create(settings, composition?.durationFrames ?: end + 1) }
+                                        .onSuccess {
+                                            showSequenceSettings = false
+                                            if (isMp4)
+                                                onExportMp4Sequence(width, height, fps, start, end, bitrate, sequenceOutputFormat)
+                                            else onExportPngSequence(width, height, fps, start, end)
+                                        }
+                                        .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
+                                }
+                            }
+                            .semantics { contentDescription = if (isMp4) "Render MP4" else "Render ZIP" }
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = AstryxTheme.Spacing.space4)
+                        ) {
+                            Text(
+                                if (isMp4) "Render MP4" else "Render ZIP",
+                                color = AstryxTheme.Colors.onLight,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -1013,8 +1034,9 @@ fun EditorScreen(
             ModalBottomSheet(
                 onDismissRequest = { showCompositionSettings = false },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = EditorPalette.background,
-                contentColor = EditorPalette.text
+                containerColor = AstryxTheme.Colors.backgroundPopover,
+                contentColor = AstryxTheme.Colors.textPrimary,
+                scrimColor = AstryxTheme.Colors.overlay
             ) {
                 CompositionSettingsPanel(
                     project = project,
@@ -1032,8 +1054,9 @@ fun EditorScreen(
             ModalBottomSheet(
                 onDismissRequest = { showCanonicalEditor = false },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = EditorPalette.background,
-                contentColor = EditorPalette.text
+                containerColor = AstryxTheme.Colors.backgroundPopover,
+                contentColor = AstryxTheme.Colors.textPrimary,
+                scrimColor = AstryxTheme.Colors.overlay
             ) {
                 CanonicalProjectEditor(
                     project = canonicalProject,
@@ -1119,8 +1142,9 @@ fun EditorScreen(
             ModalBottomSheet(
                 onDismissRequest = { showPhoneInspector = false },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = EditorPalette.background,
-                contentColor = EditorPalette.text
+                containerColor = AstryxTheme.Colors.backgroundPopover,
+                contentColor = AstryxTheme.Colors.textPrimary,
+                scrimColor = AstryxTheme.Colors.overlay
             ) {
                 InspectorPanel(
                     modifier = Modifier
