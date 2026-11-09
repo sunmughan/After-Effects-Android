@@ -87,22 +87,20 @@ class EditorRotationLifecycleTest {
         compose.onNodeWithContentDescription("Save draft").performClick()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
 
-        // Rotation recreates the activity, which lands on Projects
-        // now — reopen the saved project from its card. Opening a
-        // project selects its first layer, so the rotation proof here
-        // is the data, not the selection: the added layer survives
-        // both orientations with the project intact.
+        // MainActivity declares orientation|screenSize|
+        // smallestScreenSize in configChanges, so rotation does NOT
+        // recreate the activity and does NOT navigate home: the
+        // editor stays on screen in both orientations, with the
+        // saved state intact. The rotation proof here is the data,
+        // not the selection: the added layer survives both
+        // orientations with the project intact.
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Open project Untitled Composition").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Untitled Composition").assertIsDisplayed()
         scrollTimelineToLayer(3)
         compose.onNodeWithText("Shape 4").assertExists()
 
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Open project Untitled Composition").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Untitled Composition").assertIsDisplayed()
         scrollTimelineToLayer(3)

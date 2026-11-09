@@ -27,6 +27,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -708,7 +709,16 @@ class M7FunctionCoverageTest {
         // text, which also contains "30". Blanking the FPS field must
         // block the export with the dialog's own validation message,
         // not call back. Same field, same assertion — no weakening.
-        compose.onNodeWithContentDescription("Export FPS").performTextClearance()
+        // Focus the field before clearing it, and assert the blank
+        // value before clicking Render: on a loaded emulator an
+        // unfocused clearance can leave "30" in place, so Render
+        // would export instead of erroring — and the failure would
+        // then surface below as a 10 s validation timeout instead of
+        // its real cause.
+        val fpsField = compose.onNodeWithContentDescription("Export FPS")
+        fpsField.performClick()
+        fpsField.performTextClearance()
+        fpsField.assertTextEquals("")
         compose.onNodeWithText("Render ZIP").performClick()
         // Run 42441138764 (attempt 1): the validation error is set by
         // the click's recomposition, which can land after the fetch on
