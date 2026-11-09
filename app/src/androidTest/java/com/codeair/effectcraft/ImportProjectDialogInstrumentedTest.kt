@@ -9,11 +9,11 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Batch 3: the Import dialog through the real app. The header's
- * labelled Import button must open a dialog with three honest
- * options — including that direct .aep import is coming in a later
- * update (the ExtendScript export is an interim route, not the
- * solution) — and the After Effects export steps.
+ * Commit 1 (.aep import v1): the Import dialog through the real app. The
+ * header's labelled Import button must open a dialog with four options —
+ * including a real direct .aep/.aepx import, behind a loss gate — and the
+ * After Effects export steps. The old "Direct .aep import is coming in a
+ * later update." note is gone: the import exists now.
  */
 class ImportProjectDialogInstrumentedTest {
 
@@ -21,13 +21,14 @@ class ImportProjectDialogInstrumentedTest {
     val compose = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun importButtonOpensDialogWithThreeHonestOptions() {
+    fun importButtonOpensDialogWithFourOptionsIncludingAep() {
         compose.onNodeWithContentDescription("Import project").performClick()
         compose.onNodeWithText("EffectCraft project").assertIsDisplayed()
+        compose.onNodeWithText("After Effects project (.aep/.aepx)").assertIsDisplayed()
         compose.onNodeWithText("Project bundle (.zip)").assertIsDisplayed()
         compose.onNodeWithText("After Effects export (.zip)").assertIsDisplayed()
         compose.onNodeWithText("Direct .aep import is coming in a later update.", substring = true)
-            .assertIsDisplayed()
+            .assertDoesNotExist()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("EffectCraft project").assertDoesNotExist()
     }

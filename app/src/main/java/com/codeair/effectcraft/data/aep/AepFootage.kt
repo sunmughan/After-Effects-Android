@@ -54,7 +54,7 @@ object AepFootage {
             val den = BigInteger.valueOf(d.den)
             if (den <= BigInteger.ZERO || frames.mod(den) != BigInteger.ZERO) return null
             return try {
-                frames.divide(den).longValueExact()
+                frames.divide(den).toLongExactCompat()
             } catch (e: ArithmeticException) {
                 null
             }?.takeIf { it in 0L..0xFFFFFFFFL }

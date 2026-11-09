@@ -3,6 +3,28 @@ package com.codeair.effectcraft.data.aep
 import java.math.BigInteger
 
 /**
+ * Exact `BigInteger` -> `Long`, throwing `ArithmeticException` on overflow.
+ *
+ * `BigInteger.longValueExact()` does not exist in Android's core library at
+ * the API levels this app runs on (the API 30 emulator throws
+ * NoSuchMethodError for it — CI run 42568725647), so the range check is
+ * done by hand with API-1 calls. Callers catch `ArithmeticException` and
+ * treat the value as unavailable, exactly as they did with
+ * `longValueExact()`.
+ *
+ * Public (not `internal`) so unit tests in the test source set can call it
+ * directly; it is a small compat shim inside an app-internal package.
+ */
+fun BigInteger.toLongExactCompat(): Long {
+    if (this < BigInteger.valueOf(Long.MIN_VALUE) || this > BigInteger.valueOf(Long.MAX_VALUE)) {
+        throw ArithmeticException("BigInteger out of long range: $this")
+    }
+    // toLong() is Kotlin's spelling of BigInteger.longValue() (API 1);
+    // the Java name is not callable from Kotlin.
+    return toLong()
+}
+
+/**
  * The layer header (`ldta`) and the composition header (`cdta`, `PRin`).
  *
  * Port of `container/header.rs` from the official EffectCraft project
@@ -37,7 +59,7 @@ object AepHeader {
             val negative = (num < 0) != (den < 0)
             val signedNum = if (negative) reducedNum.negate() else reducedNum
             return try {
-                Rational(signedNum.longValueExact(), reducedDen.longValueExact())
+                Rational(signedNum.toLongExactCompat(), reducedDen.toLongExactCompat())
             } catch (e: ArithmeticException) {
                 null
             }
@@ -52,7 +74,7 @@ object AepHeader {
             val numBig = BigInteger.valueOf(num).multiply(scaledDen)
                 .add(scaledNum.multiply(BigInteger.valueOf(den)))
             return try {
-                Rational(numBig.longValueExact(), denBig.longValueExact()).reduced()
+                Rational(numBig.toLongExactCompat(), denBig.toLongExactCompat()).reduced()
             } catch (e: ArithmeticException) {
                 null
             }
