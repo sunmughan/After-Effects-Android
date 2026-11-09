@@ -3817,6 +3817,16 @@ private fun CompositionSettingsPanel(
     var fps by remember(project.frameRate) { mutableIntStateOf(project.frameRate) }
     var duration by remember(project.durationFrames) { mutableIntStateOf(project.durationFrames) }
 
+    // Typeable numbers beside the sliders, in the same pattern as
+    // CanonicalTransformControls: a draft keyed on the LIVE local
+    // value (not project.*), so the draft follows slider moves but
+    // never resets while typing; Apply is enabled only when the draft
+    // parses inside the slider range, and applying moves the slider.
+    var widthDraft by remember(width) { mutableStateOf(width.toString()) }
+    var heightDraft by remember(height) { mutableStateOf(height.toString()) }
+    var fpsDraft by remember(fps) { mutableStateOf(fps.toString()) }
+    var durationDraft by remember(duration) { mutableStateOf(duration.toString()) }
+
     Column(
         modifier = modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -3825,12 +3835,72 @@ private fun CompositionSettingsPanel(
         Text("Changes apply to this offline draft and participate in undo/redo.", color = EditorPalette.muted, fontSize = 12.sp)
         Text("Width · ${width} px", color = EditorPalette.text, fontSize = 12.sp)
         Slider(value = width.toFloat(), onValueChange = { width = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition width" })
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicTextField(
+                value = widthDraft,
+                onValueChange = { widthDraft = it.take(32) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Composition width value" },
+                decorationBox = { inner -> Box { if (widthDraft.isEmpty()) Text("Width", color = EditorPalette.muted); inner() } }
+            )
+            TextButton(
+                enabled = widthDraft.toIntOrNull() in 320..3840,
+                onClick = { width = widthDraft.toInt() },
+                modifier = Modifier.semantics { contentDescription = "Apply composition width" }
+            ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+        }
         Text("Height · ${height} px", color = EditorPalette.text, fontSize = 12.sp)
         Slider(value = height.toFloat(), onValueChange = { height = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition height" })
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicTextField(
+                value = heightDraft,
+                onValueChange = { heightDraft = it.take(32) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Composition height value" },
+                decorationBox = { inner -> Box { if (heightDraft.isEmpty()) Text("Height", color = EditorPalette.muted); inner() } }
+            )
+            TextButton(
+                enabled = heightDraft.toIntOrNull() in 320..3840,
+                onClick = { height = heightDraft.toInt() },
+                modifier = Modifier.semantics { contentDescription = "Apply composition height" }
+            ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+        }
         Text("Frame rate · ${fps} FPS", color = EditorPalette.text, fontSize = 12.sp)
         Slider(value = fps.toFloat(), onValueChange = { fps = it.roundToInt() }, valueRange = 1f..120f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition frame rate" })
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicTextField(
+                value = fpsDraft,
+                onValueChange = { fpsDraft = it.take(32) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Composition frame rate value" },
+                decorationBox = { inner -> Box { if (fpsDraft.isEmpty()) Text("FPS", color = EditorPalette.muted); inner() } }
+            )
+            TextButton(
+                enabled = fpsDraft.toIntOrNull() in 1..120,
+                onClick = { fps = fpsDraft.toInt() },
+                modifier = Modifier.semantics { contentDescription = "Apply composition frame rate" }
+            ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+        }
         Text("Duration · ${duration} frames", color = EditorPalette.text, fontSize = 12.sp)
         Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..3600f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition duration" })
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BasicTextField(
+                value = durationDraft,
+                onValueChange = { durationDraft = it.take(32) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Composition duration value" },
+                decorationBox = { inner -> Box { if (durationDraft.isEmpty()) Text("Frames", color = EditorPalette.muted); inner() } }
+            )
+            TextButton(
+                enabled = durationDraft.toIntOrNull() in 1..3600,
+                onClick = { duration = durationDraft.toInt() },
+                modifier = Modifier.semantics { contentDescription = "Apply composition duration" }
+            ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = onCancel, modifier = Modifier.height(48.dp)) { Text("Cancel", color = EditorPalette.muted) }
             Spacer(Modifier.weight(1f))

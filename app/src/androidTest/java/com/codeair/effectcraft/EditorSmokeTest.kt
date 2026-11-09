@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performTextClearance
@@ -339,6 +340,31 @@ class EditorSmokeTest {
                 .fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current,
             0.001f
         )
+    }
+
+    @Test
+    fun compositionSettingsNumericFieldsTypeAndApply() {
+        compose.onNodeWithText("New").performClick()
+        compose.onNodeWithText("Comp").performClick()
+        // Type a width: clear the draft first (it holds the current
+        // value), then type — performTextClearance returns Unit, so
+        // the two calls stay separate statements.
+        compose.onNodeWithContentDescription("Composition width value").performTextClearance()
+        compose.onNodeWithContentDescription("Composition width value").performTextInput("1920")
+        compose.onNodeWithContentDescription("Apply composition width").performClick()
+        compose.onNodeWithText("Width · 1920 px").assertIsDisplayed()
+        // The slider follows the typed value.
+        assertEquals(
+            1920f,
+            compose.onNodeWithContentDescription("Composition width")
+                .fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current,
+            0.001f
+        )
+        // Out of range disables Apply instead of clamping silently.
+        compose.onNodeWithContentDescription("Composition frame rate value").performTextClearance()
+        compose.onNodeWithContentDescription("Composition frame rate value").performTextInput("999")
+        compose.onNodeWithContentDescription("Apply composition frame rate").assertIsNotEnabled()
+        compose.onNodeWithText("Frame rate · 30 FPS").assertIsDisplayed()
     }
 
     @Test
