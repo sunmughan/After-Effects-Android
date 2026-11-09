@@ -71,6 +71,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ModalBottomSheet
@@ -533,7 +534,8 @@ fun EditorScreen(
                 onRedo = onRedo,
                 onOpenInspector = { showPhoneInspector = true },
                 onOpenCompositionSettings = { showCompositionSettings = true },
-                onAddLayer = onAddLayer
+                onAddLayer = onAddLayer,
+                compact = !isTabletLayout
             )
             }
 
@@ -1160,6 +1162,62 @@ private fun ExportProgressRow(
 }
 
 /**
+ * The four file-export entries, shared by the wide menu bar's
+ * overflow control and the compact (phone) menu: same labels,
+ * callbacks and enabled states; only the close action differs.
+ */
+@Composable
+private fun ColumnScope.ExportMenuItems(
+    onClose: () -> Unit,
+    onExportEcproj: () -> Unit,
+    onExportEcprojx: () -> Unit,
+    isExportingFrame: Boolean,
+    onExportRenderedFrame: () -> Unit,
+    onCancelFrameExport: () -> Unit,
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    onExportPngSequence: () -> Unit,
+    onCancelSequenceExport: () -> Unit,
+    sequenceExportProgress: Int,
+    hasCanonicalProject: Boolean
+) {
+    DropdownMenuItem(
+        text = { Text("Export .ecproj") },
+        onClick = { onClose(); onExportEcproj() }
+    )
+    DropdownMenuItem(
+        text = { Text("Export .ecprojx XML") },
+        onClick = { onClose(); onExportEcprojx() }
+    )
+    DropdownMenuItem(
+        text = {
+            Text(if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG")
+        },
+        onClick = {
+            onClose()
+            if (isExportingFrame) onCancelFrameExport() else onExportRenderedFrame()
+        },
+        enabled = isExportingFrame || hasCanonicalProject
+    )
+    DropdownMenuItem(
+        text = {
+            Text(
+                when {
+                    isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
+                    isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
+                    else -> "Export PNG sequence ZIP"
+                }
+            )
+        },
+        onClick = {
+            onClose()
+            if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport() else onExportPngSequence()
+        },
+        enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame
+    )
+}
+
+/**
  * Batch 2 export fix (user-verified defect): the phone and wide headers
  * showed four identical FileDownload icons with no labels — .ecproj,
  * .ecprojx, rendered frame PNG and PNG sequence ZIP were
@@ -1198,39 +1256,19 @@ private fun ExportOverflowMenu(
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Export .ecproj") },
-                onClick = { expanded = false; onExportEcproj() }
-            )
-            DropdownMenuItem(
-                text = { Text("Export .ecprojx XML") },
-                onClick = { expanded = false; onExportEcprojx() }
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG")
-                },
-                onClick = {
-                    expanded = false
-                    if (isExportingFrame) onCancelFrameExport() else onExportRenderedFrame()
-                },
-                enabled = isExportingFrame || hasCanonicalProject
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        when {
-                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
-                            isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
-                            else -> "Export PNG sequence ZIP"
-                        }
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport() else onExportPngSequence()
-                },
-                enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame
+            ExportMenuItems(
+                onClose = { expanded = false },
+                onExportEcproj = onExportEcproj,
+                onExportEcprojx = onExportEcprojx,
+                isExportingFrame = isExportingFrame,
+                onExportRenderedFrame = onExportRenderedFrame,
+                onCancelFrameExport = onCancelFrameExport,
+                isExportingSequence = isExportingSequence,
+                isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                onExportPngSequence = onExportPngSequence,
+                onCancelSequenceExport = onCancelSequenceExport,
+                sequenceExportProgress = sequenceExportProgress,
+                hasCanonicalProject = hasCanonicalProject
             )
         }
     }
@@ -1270,7 +1308,8 @@ private fun HeaderBar(
     onRedo: () -> Unit,
     onOpenInspector: () -> Unit,
     onOpenCompositionSettings: () -> Unit,
-    onAddLayer: () -> Unit
+    onAddLayer: () -> Unit,
+    compact: Boolean = false
 ) {
     // Batch 3: one header for every width. The title row is the app
     // name only — no tagline, no project name under it (the project
@@ -1369,7 +1408,8 @@ private fun HeaderBar(
             isExportingMp4 = isExportingMp4,
             isMp4ExportWritingOutput = isMp4ExportWritingOutput,
             onCancelMp4Sequence = onCancelMp4Sequence,
-            mp4ExportProgress = mp4ExportProgress
+            mp4ExportProgress = mp4ExportProgress,
+            compact = compact
         )
     }
 }
@@ -1382,6 +1422,13 @@ private fun HeaderBar(
  * button first in the row so it is visible without scrolling on
  * any width; Export video stays a labelled button too. The four
  * file exports stay behind the single overflow menu (Batch 2 rule).
+ *
+ * Compact (phone) mode: the full menu bar is wider than a phone
+ * screen, so its row scrolled and the last visible tab was cut off
+ * mid-word. On compact widths the bar is minimal instead — Import
+ * and Export buttons plus one overflow menu holding every other
+ * command — so nothing is ever cut off. Wide layouts keep the full
+ * menu bar above.
  */
 @Composable
 private fun MenuBar(
@@ -1416,10 +1463,94 @@ private fun MenuBar(
     isExportingMp4: Boolean,
     isMp4ExportWritingOutput: Boolean,
     onCancelMp4Sequence: () -> Unit,
-    mp4ExportProgress: Int
+    mp4ExportProgress: Int,
+    compact: Boolean = false
 ) {
     var expandedMenu by remember { mutableStateOf<String?>(null) }
+    var compactExpanded by remember { mutableStateOf(false) }
     val closeMenu = { expandedMenu = null }
+    if (compact) {
+        // Minimal phone bar: Import + Export + one overflow menu.
+        // No horizontal scroll, so no tab is ever cut off mid-word.
+        // Every command from the full bar stays reachable in the menu.
+        Row(
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            TextButton(
+                onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onImportProject,
+                modifier = Modifier.height(48.dp)
+                    .semantics {
+                        contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Import project"
+                    }
+            ) {
+                Text(
+                    if (isImportingCanonicalProject) "Cancel import" else "Import",
+                    color = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.violet,
+                    fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1
+                )
+            }
+            TextButton(
+                onClick = onExportMp4Sequence,
+                enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
+                modifier = Modifier.height(48.dp)
+                    .semantics { contentDescription = "Export video (MP4)" }
+            ) {
+                Text("Export", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
+            }
+            Spacer(Modifier.weight(1f))
+            Box {
+                IconButton(
+                    onClick = { compactExpanded = true },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = "More options",
+                        tint = EditorPalette.text
+                    )
+                }
+                DropdownMenu(
+                    expanded = compactExpanded,
+                    onDismissRequest = { compactExpanded = false }
+                ) {
+                    ExportMenuItems(
+                        onClose = { compactExpanded = false },
+                        onExportEcproj = onExportEcproj,
+                        onExportEcprojx = onExportEcprojx,
+                        isExportingFrame = isExportingFrame,
+                        onExportRenderedFrame = onExportRenderedFrame,
+                        onCancelFrameExport = onCancelFrameExport,
+                        isExportingSequence = isExportingSequence,
+                        isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                        onExportPngSequence = onExportPngSequence,
+                        onCancelSequenceExport = onCancelSequenceExport,
+                        sequenceExportProgress = sequenceExportProgress,
+                        hasCanonicalProject = hasCanonicalProject
+                    )
+                    HorizontalDivider()
+                    MenuItem("New composition") { compactExpanded = false; onNewProject() }
+                    MenuItem("Open offline project") { compactExpanded = false; onOpenProject() }
+                    MenuItem("Import project…") { compactExpanded = false; onImportProject() }
+                    MenuItem("Offline media library") { compactExpanded = false; onOpenMediaLibrary() }
+                    MenuItem("Projects") { compactExpanded = false; onOpenRepositoryPicker() }
+                    MenuItem("Save draft") { compactExpanded = false; onSave() }
+                    HorizontalDivider()
+                    MenuItem("Undo", enabled = canUndo) { compactExpanded = false; onUndo() }
+                    MenuItem("Redo", enabled = canRedo) { compactExpanded = false; onRedo() }
+                    HorizontalDivider()
+                    MenuItem("Composition settings") { compactExpanded = false; onOpenCompositionSettings() }
+                    MenuItem("Edit imported .ecproj", enabled = hasCanonicalProject) { compactExpanded = false; onOpenCanonicalEditor() }
+                    HorizontalDivider()
+                    MenuItem("Add shape layer") { compactExpanded = false; onAddLayer() }
+                    HorizontalDivider()
+                    MenuItem("Inspector") { compactExpanded = false; onOpenInspector() }
+                }
+            }
+        }
+        return
+    }
     Row(
         modifier = Modifier.fillMaxWidth().height(48.dp)
             .horizontalScroll(rememberScrollState()),
