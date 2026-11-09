@@ -168,3 +168,6 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 **2026-11-09 responsive inspector fix:** CI #1355 found Add Hexagon clipped horizontally on the phone emulator because shape actions shared one non-wrapping Row. [ff31b29b](https://github.com/sunmughan/After-Effects-Android/commit/ff31b29bb5445f20253b9ef6082f637eb112d96a) changes the shape actions to a wrapping FlowRow; fresh API30 and cold APK verification is pending. M0–M7 release acceptance remains open.
+
+
+**2026-11-09 CI #1358 test correction:** hosted build/JVM/native/release packaging passed, but API30 instrumentation failed only because the canonical editor test asserted `Frame 15 / 89` after scrolling the inspector down to layer/shape controls. The render callback had already been observed; the assertion was off-screen. [Test fix 1fe762bf](https://github.com/sunmughan/After-Effects-Android/commit/1fe762bf7934333be949c177de76f684a018afb2) now scrolls that label into view before asserting. Fresh exact-head CI including cold APK comparison is pending; no new acceptance claim.
