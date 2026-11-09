@@ -69,6 +69,7 @@ import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectEditorActions
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.ProjectFileFormats
+import com.codeair.effectcraft.ui.theme.AstryxTheme
 import com.codeair.effectcraft.data.ProjectKeyframeStore
 import com.codeair.effectcraft.data.PropertyTrackEditor
 import com.codeair.effectcraft.data.FinalCopyRecovery
@@ -205,6 +206,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var project by remember {
         mutableStateOf(recoveredDraft ?: committedDraft ?: ProjectDocument.starter())
     }
+    // Edits home: the app opens on the Projects list, not in the
+    // editor — except after a crash, when the recovered draft opens
+    // straight in the editor so no work is stranded behind a tap.
+    var showHome by remember { mutableStateOf(recoveredDraft == null) }
     var savedProjects by remember { mutableStateOf(projectStore.listSavedProjects()) }
     var offlineAssets by remember(offlineAssetStore) { mutableStateOf(offlineAssetStore.list()) }
     var mediaVerificationJob by remember { mutableStateOf<Job?>(null) }
@@ -414,6 +419,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         playheadFrame = 0
         isPlaying = false
         hasUnsavedChanges = false
+        showHome = false
     }
 
     /**
@@ -643,6 +649,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
                         }
                     }
+                    // An import opens in the editor, where the
+                    // imported project and its message are visible.
+                    showHome = false
                 } catch (cancelled: CancellationException) {
                     saveMessage = "Project import cancelled"
                 } catch (failure: Throwable) {
@@ -1481,10 +1490,47 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
 
 
 
+    // Opens a saved draft in the editor, from the Projects home or
+    // from the editor's own picker. One path, so both stay in sync.
+    fun openSavedProject(projectId: String) {
+        val opened = projectStore.load(projectId)
+        if (opened == null) {
+            saveMessage = "Saved project is unavailable"
+        } else {
+            project = opened
+            projectKeyframeTracks = projectKeyframeStore.load(opened.id)
+            selectedLayerId = opened.layers.firstOrNull()?.id.orEmpty()
+            selectedClipId = null
+            selectedAudioClipId = null
+            playheadFrame = 0
+            isPlaying = false
+            undoStack = emptyList()
+            redoStack = emptyList()
+            saveMessage = "Opened locally · ${opened.name}"
+            hasUnsavedChanges = false
+            showHome = false
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0A0C11)
+        color = AstryxTheme.Colors.backgroundBody
     ) {
+        if (showHome) {
+            ProjectsHomeScreen(
+                projects = savedProjects,
+                onOpenProject = { openSavedProject(it) },
+                onNewProject = {
+                    if (hasUnsavedChanges) showNewProjectConfirm = true else switchToNewProject()
+                },
+                onImportProject = { showImportDialog = true },
+                onDeleteProject = { projectId ->
+                    if (projectStore.delete(projectId)) {
+                        savedProjects = projectStore.listSavedProjects()
+                    }
+                }
+            )
+        } else {
         EditorScreen(
             project = project,
             selectedLayer = selectedLayer,
@@ -1537,24 +1583,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     hasUnsavedChanges = true
                 }
             },
-            onOpenProject = { projectId ->
-                val opened = projectStore.load(projectId)
-                if (opened == null) {
-                    saveMessage = "Saved project is unavailable"
-                } else {
-                    project = opened
-                    projectKeyframeTracks = projectKeyframeStore.load(opened.id)
-                    selectedLayerId = opened.layers.firstOrNull()?.id.orEmpty()
-                    selectedClipId = null
-                    selectedAudioClipId = null
-                    playheadFrame = 0
-                    isPlaying = false
-                    undoStack = emptyList()
-                    redoStack = emptyList()
-                    saveMessage = "Opened locally · ${opened.name}"
-                    hasUnsavedChanges = false
-                }
-            },
+            onOpenProject = { openSavedProject(it) },
             onDeleteOfflineAsset = { sha256 ->
                 if (sha256 in referencedOfflineAssetIds) {
                     saveMessage = "Cannot remove media · linked by a project"
@@ -1657,6 +1686,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 // Never silently destroy work: with unsaved changes the
                 // user picks Save / Discard / Cancel first (P07).
                 if (hasUnsavedChanges) showNewProjectConfirm = true else switchToNewProject()
+            },
+            onBackToProjects = {
+                isPlaying = false
+                showHome = true
             },
             onAddLayer = {
                 val layer = LayerDocument.newShape(project.layers.size + 1)
@@ -2617,6 +2650,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             isVerifyingOfflineAssets = mediaVerificationInProgress
         )
+        }
 
         // First-run onboarding: three steps, nothing more. Dismissing
         // (button or back/scrim) sets the persisted flag, so it shows

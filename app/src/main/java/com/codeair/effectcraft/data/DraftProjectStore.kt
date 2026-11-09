@@ -123,6 +123,14 @@ class DraftProjectStore(context: Context) {
     /** Opens a previously saved draft by its stable project ID. */
     fun load(projectId: String): ProjectDocument? = listSavedProjects().firstOrNull { it.id == projectId }
 
+    /** Deletes a saved draft by its stable project ID. Returns true when a file was removed. */
+    fun delete(projectId: String): Boolean {
+        val target = draftFiles().firstOrNull { file ->
+            runCatching { JSONObject(file.readText(Charsets.UTF_8)).optString("id") == projectId }.getOrDefault(false)
+        } ?: return false
+        return runCatching { target.delete() }.getOrDefault(false)
+    }
+
     fun loadLatest(): ProjectDocument? = listSavedProjects().firstOrNull()
 
     private fun draftFiles(): List<File> = projectDirectory.listFiles()
