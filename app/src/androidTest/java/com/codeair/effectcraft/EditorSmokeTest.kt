@@ -84,7 +84,8 @@ class EditorSmokeTest {
 
     @Test
     fun offlineMediaLibraryOpensAndExplainsEmptyState() {
-        compose.onNodeWithContentDescription("File menu").performClick()
+        // Phone bar: the library entry lives behind "More options".
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Offline media library").performClick()
         compose.onNodeWithText("Offline media library").assertIsDisplayed()
         compose.onNodeWithText(
@@ -116,7 +117,8 @@ class EditorSmokeTest {
 
         val firstProjectId = DraftProjectStore(appContext).listSavedProjects()
             .first { it.layers.size == 5 }.id
-        compose.onNodeWithContentDescription("File menu").performClick()
+        // Phone bar: the open-project entry lives behind "More options".
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 5 layers").performClick()
 

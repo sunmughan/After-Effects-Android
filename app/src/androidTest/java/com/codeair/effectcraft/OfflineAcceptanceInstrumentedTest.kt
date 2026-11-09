@@ -115,7 +115,8 @@ class OfflineAcceptanceInstrumentedTest {
         // itself lists it.
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("File menu").performClick()
+        // Phone bar: the library entry lives behind "More options".
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Offline media library").performClick()
         compose.onNodeWithText("offline-clip.png").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
@@ -132,7 +133,8 @@ class OfflineAcceptanceInstrumentedTest {
         assertEquals("Shape 4", saved.first().layers.last().name)
 
         startFreshComposition()
-        compose.onNodeWithContentDescription("File menu").performClick()
+        // Phone bar: the open-project entry lives behind "More options".
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         assertEditorStatus("Opened locally · Untitled Composition")

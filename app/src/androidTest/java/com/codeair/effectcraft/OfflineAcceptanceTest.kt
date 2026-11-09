@@ -106,7 +106,8 @@ class OfflineAcceptanceTest {
         assertEquals(4, saved.single().layers.size)
 
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithContentDescription("File menu").performClick()
+        // Phone bar: the open-project entry lives behind "More options".
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         compose.onNodeWithText("Opened locally · Untitled Composition").assertIsDisplayed()

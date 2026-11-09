@@ -52,10 +52,13 @@ class EditorAccessibilitySemanticsTest {
     @Test
     fun headerControlsExposeDescriptionsAndClickActions() {
         compose.onNodeWithContentDescription("Save draft").assertExists().assertHasClickAction()
-        compose.onNodeWithContentDescription("File menu").performClick()
+        // Phone bar: the File entries live behind the single "More options"
+        // overflow (no File tab on phones), so open that instead.
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Open offline project").assertExists().assertHasClickAction()
         compose.onNodeWithText("Offline media library").assertExists().assertHasClickAction()
-        compose.onNodeWithContentDescription("File menu").performClick()
+        // The menu stays open: the status node below is asserted through
+        // the popup, and each test gets a fresh activity anyway.
         // The status node must be announced at launch. Its exact message
         // legitimately depends on sibling autosave state that postdates
         // ec-m6: "Stored on this device" on a clean launch, "Recovered

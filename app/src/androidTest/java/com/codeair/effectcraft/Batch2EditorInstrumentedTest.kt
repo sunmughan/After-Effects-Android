@@ -217,7 +217,9 @@ class Batch2EditorInstrumentedTest {
     fun exportOverflowMenuListsFourLabelledExportsAndNoIconOnlyButtons() {
         compose.setContent { Editor(canonicalProject = canonicalProject()) }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("More export options").assertIsDisplayed().performClick()
+        // Phone bar: the four exports live in the single "More options"
+        // overflow, not behind a separate export overflow button.
+        compose.onNodeWithContentDescription("More options").assertIsDisplayed().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Export .ecproj").assertIsDisplayed()
         compose.onNodeWithText("Export .ecprojx XML").assertIsDisplayed()
@@ -245,13 +247,15 @@ class Batch2EditorInstrumentedTest {
             )
         }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("More export options").performClick()
+        // Phone bar: each export entry is reached through "More options";
+        // the menu closes after every entry, so it is reopened each time.
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Export .ecproj").performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Export .ecprojx XML").performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Export rendered frame PNG").performClick()
         compose.waitForIdle()
         assertEquals(1, ecproj)
@@ -263,7 +267,8 @@ class Batch2EditorInstrumentedTest {
     fun exportOverflowMenuSequenceEntryOpensPngSequenceSettings() {
         compose.setContent { Editor(canonicalProject = canonicalProject()) }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("More export options").performClick()
+        // Phone bar: the PNG sequence entry lives in "More options".
+        compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Export PNG sequence ZIP").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
