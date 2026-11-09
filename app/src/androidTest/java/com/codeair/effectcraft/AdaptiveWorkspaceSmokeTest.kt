@@ -4,6 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -136,6 +137,7 @@ class AdaptiveWorkspaceSmokeTest {
         }
         compose.onNodeWithText("COMPOSITION VIEWER", substring = true).assertIsDisplayed()
         compose.onNodeWithText("PROPERTIES").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Import ZIP project bundle").assertExists()
     }
 
     @Test
