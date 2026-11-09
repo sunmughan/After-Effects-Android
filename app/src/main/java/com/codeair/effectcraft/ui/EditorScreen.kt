@@ -60,14 +60,20 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Audiotrack
+import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Redo
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -118,6 +124,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -269,6 +276,7 @@ fun EditorScreen(
     onAudioClipTrim: (String, Int, Int) -> Unit = { _, _, _ -> },
     onExportMp4Sequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int, bitrate: Int, outputFormat: RenderOutputFormat) -> Unit = { _, _, _, _, _, _, _ -> },
     onNewProject: () -> Unit,
+    onBackToProjects: () -> Unit = {},
     onAddLayer: () -> Unit,
     onSelectLayer: (String) -> Unit,
     onDeleteLayer: () -> Unit,
@@ -502,49 +510,59 @@ fun EditorScreen(
         // Edge-to-edge: the header starts below the status bar and the
         // audio section clears the navigation bar / gesture area.
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            // Dim scrim behind the header (not a solid bar): content
-            // beneath stays dimmed while the status icons stay crisp.
-            // A true RenderEffect blur is Batch 3 work.
-            Surface(color = EditorPalette.background.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
-            HeaderBar(
+            EditsTopBar(
+                projectName = project.name,
                 saveMessage = saveMessage,
-                onSave = onSave,
-                onOpenProject = { showProjectPicker = true },
-                onOpenMediaLibrary = { showMediaLibrary = true },
-                onImportProject = onImportProject,
-                isImportingCanonicalProject = isImportingCanonicalProject,
-                onCancelCanonicalImport = onCancelCanonicalImport,
-                onExportEcproj = onExportEcproj,
-                onExportEcprojx = onExportEcprojx,
-                isExportingFrame = isExportingFrame,
-                onExportRenderedFrame = onExportRenderedFrame,
-                onCancelFrameExport = onCancelFrameExport,
-                isExportingSequence = isExportingSequence,
-                isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                onExportPngSequence = { openSequenceSettings(RenderOutputFormat.PNG_SEQUENCE_ZIP) },
-                onCancelSequenceExport = onCancelSequenceExport,
-                sequenceExportProgress = sequenceExportProgress,
-                isExportingMp4 = isExportingMp4,
-                isMp4ExportWritingOutput = isMp4ExportWritingOutput,
-                onExportMp4Sequence = {
-                    if (openSequenceSettings(RenderOutputFormat.MP4_H264)) onOpenMp4Settings()
-                },
-                onCancelMp4Sequence = onCancelMp4Sequence,
-                mp4ExportProgress = mp4ExportProgress,
-                onNewProject = onNewProject,
-                hasCanonicalProject = canonicalProject != null,
-                onOpenCanonicalEditor = { showCanonicalEditor = true },
-                onOpenRepositoryPicker = { showRepositoryPicker = true },
                 canUndo = canUndo,
                 canRedo = canRedo,
                 onUndo = onUndo,
                 onRedo = onRedo,
-                onOpenInspector = { showPhoneInspector = true },
-                onOpenCompositionSettings = { showCompositionSettings = true },
-                onAddLayer = onAddLayer,
-                compact = !isTabletLayout
+                onBackToProjects = onBackToProjects,
+                onExportVideo = {
+                    if (openSequenceSettings(RenderOutputFormat.MP4_H264)) onOpenMp4Settings()
+                },
+                isExportingMp4 = isExportingMp4,
+                moreMenuContent = { closeMenu ->
+                    MenuItem("New composition") { closeMenu(); onNewProject() }
+                    MenuItem("Open offline project") { closeMenu(); showProjectPicker = true }
+                    MenuItem("Import project…") { closeMenu(); onImportProject() }
+                    MenuItem("Offline media library") { closeMenu(); showMediaLibrary = true }
+                    MenuItem("Projects") { closeMenu(); showRepositoryPicker = true }
+                    MenuItem("Save draft") { closeMenu(); onSave() }
+                    MenuItem("Undo", enabled = canUndo) { closeMenu(); onUndo() }
+                    MenuItem("Redo", enabled = canRedo) { closeMenu(); onRedo() }
+                    MenuItem("Composition settings") { closeMenu(); showCompositionSettings = true }
+                    MenuItem("Edit imported .ecproj", enabled = canonicalProject != null) { closeMenu(); showCanonicalEditor = true }
+                    MenuItem("Add shape layer") { closeMenu(); onAddLayer() }
+                    MenuItem("Inspector") { closeMenu(); showPhoneInspector = true }
+                    ExportMenuItems(
+                        onClose = closeMenu,
+                        onExportEcproj = onExportEcproj,
+                        onExportEcprojx = onExportEcprojx,
+                        isExportingFrame = isExportingFrame,
+                        onExportRenderedFrame = onExportRenderedFrame,
+                        onCancelFrameExport = onCancelFrameExport,
+                        isExportingSequence = isExportingSequence,
+                        isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                        onExportPngSequence = { openSequenceSettings(RenderOutputFormat.PNG_SEQUENCE_ZIP) },
+                        onCancelSequenceExport = onCancelSequenceExport,
+                        sequenceExportProgress = sequenceExportProgress,
+                        hasCanonicalProject = canonicalProject != null
+                    )
+                }
             )
-            }
+            // Export progress stays visible while a render runs — bar
+            // + percentage + Cancel — below the top bar.
+            ExportProgressRow(
+                isExportingSequence = isExportingSequence,
+                isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+                sequenceExportProgress = sequenceExportProgress,
+                onCancelSequenceExport = onCancelSequenceExport,
+                isExportingMp4 = isExportingMp4,
+                isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+                mp4ExportProgress = mp4ExportProgress,
+                onCancelMp4Sequence = onCancelMp4Sequence
+            )
 
             if (isTabletLayout) {
                 Row(
@@ -597,15 +615,24 @@ fun EditorScreen(
                 )
             }
 
-            ToolBar(
-                canUndo = canUndo,
-                canRedo = canRedo,
-                onUndo = onUndo,
-                onRedo = onRedo,
-                onSave = onSave,
+            // Split is only enabled while a clip is selected and the
+            // playhead sits strictly inside it — the same guard the
+            // clip inspector uses.
+            val selectedClipForSplit = selectedClipId?.let { id ->
+                project.layers.flatMap { it.clips }.firstOrNull { it.id == id }
+            }
+            val canSplitClipAtPlayhead = selectedClipForSplit != null &&
+                playheadFrame > selectedClipForSplit.startFrame &&
+                playheadFrame < selectedClipForSplit.endFrame
+            EditsBottomToolbar(
+                canSplit = canSplitClipAtPlayhead,
+                onSplitClipAtPlayhead = onSplitClipAtPlayhead,
+                onDeleteLayer = handleDeleteLayer,
+                onAddLayer = onAddLayer,
+                onAddAudioClip = onAddAudioClip,
                 onOpenInspector = { showPhoneInspector = true },
                 onOpenCompositionSettings = { showCompositionSettings = true },
-                onAddLayer = onAddLayer
+                onSave = onSave
             )
 
             TimelinePanel(
@@ -1277,405 +1304,6 @@ private fun ExportOverflowMenu(
                 sequenceExportProgress = sequenceExportProgress,
                 hasCanonicalProject = hasCanonicalProject
             )
-        }
-    }
-}
-
-@Composable
-private fun HeaderBar(
-    saveMessage: String,
-    onSave: () -> Unit,
-    onOpenProject: () -> Unit,
-    onOpenMediaLibrary: () -> Unit,
-    onImportProject: () -> Unit,
-    isImportingCanonicalProject: Boolean,
-    onCancelCanonicalImport: () -> Unit,
-    onExportEcproj: () -> Unit,
-    onExportEcprojx: () -> Unit,
-    isExportingFrame: Boolean,
-    onExportRenderedFrame: () -> Unit,
-    onCancelFrameExport: () -> Unit,
-    isExportingSequence: Boolean,
-    isSequenceExportWritingOutput: Boolean,
-    onExportPngSequence: () -> Unit,
-    onCancelSequenceExport: () -> Unit,
-    sequenceExportProgress: Int,
-    isExportingMp4: Boolean = false,
-    isMp4ExportWritingOutput: Boolean = false,
-    onExportMp4Sequence: () -> Unit = {},
-    onCancelMp4Sequence: () -> Unit = {},
-    mp4ExportProgress: Int = 0,
-    onNewProject: () -> Unit,
-    hasCanonicalProject: Boolean,
-    onOpenCanonicalEditor: () -> Unit,
-    onOpenRepositoryPicker: () -> Unit = {},
-    canUndo: Boolean,
-    canRedo: Boolean,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
-    onOpenInspector: () -> Unit,
-    onOpenCompositionSettings: () -> Unit,
-    onAddLayer: () -> Unit,
-    compact: Boolean = false
-) {
-    // Batch 3: one header for every width. The title row is the app
-    // name only — no tagline, no project name under it (the project
-    // name lives in the Composition viewer tab and in the status
-    // line). Below it: the status on its own full-width line, the
-    // export progress row, and the AE-style menu bar. The old 840dp
-    // split and the scrolling row of unlabelled icons are gone.
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
-                    .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 18.sp)
-            }
-            Text(
-                "EFFECTCRAFT",
-                modifier = Modifier.weight(1f).padding(start = 8.dp),
-                color = EditorPalette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
-                maxLines = 1
-            )
-            Surface(
-                color = Color(0xFF13231F),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, Color(0xFF24453E))
-            ) {
-                Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                    color = EditorPalette.mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
-            }
-            IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
-            }
-            TextButton(onClick = onNewProject, modifier = Modifier.height(48.dp)) {
-                Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-            }
-        }
-        // Status on its own full-width line: it is never squeezed
-        // by the action bar, and it stays a single ellipsized line.
-        // 12sp so the save state ("Saved locally" vs "Unsaved
-        // changes") is readable at a glance (P14).
-        Text(
-            saveMessage,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
-                .semantics { contentDescription = "Editor status: $saveMessage" },
-            color = EditorPalette.mint,
-            fontSize = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        // Batch 2 (P10): export progress is visible in the header
-        // while a render runs — bar + percentage + Cancel — not
-        // just a TalkBack description on the Pause icon.
-        ExportProgressRow(
-            isExportingSequence = isExportingSequence,
-            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-            sequenceExportProgress = sequenceExportProgress,
-            onCancelSequenceExport = onCancelSequenceExport,
-            isExportingMp4 = isExportingMp4,
-            isMp4ExportWritingOutput = isMp4ExportWritingOutput,
-            mp4ExportProgress = mp4ExportProgress,
-            onCancelMp4Sequence = onCancelMp4Sequence
-        )
-        MenuBar(
-            isImportingCanonicalProject = isImportingCanonicalProject,
-            onImportProject = onImportProject,
-            onCancelCanonicalImport = onCancelCanonicalImport,
-            onNewProject = onNewProject,
-            onOpenProject = onOpenProject,
-            onOpenMediaLibrary = onOpenMediaLibrary,
-            onOpenRepositoryPicker = onOpenRepositoryPicker,
-            onSave = onSave,
-            canUndo = canUndo,
-            onUndo = onUndo,
-            canRedo = canRedo,
-            onRedo = onRedo,
-            onOpenCompositionSettings = onOpenCompositionSettings,
-            hasCanonicalProject = hasCanonicalProject,
-            onOpenCanonicalEditor = onOpenCanonicalEditor,
-            onAddLayer = onAddLayer,
-            onOpenInspector = onOpenInspector,
-            onExportEcproj = onExportEcproj,
-            onExportEcprojx = onExportEcprojx,
-            isExportingFrame = isExportingFrame,
-            onExportRenderedFrame = onExportRenderedFrame,
-            onCancelFrameExport = onCancelFrameExport,
-            isExportingSequence = isExportingSequence,
-            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-            onExportPngSequence = onExportPngSequence,
-            onCancelSequenceExport = onCancelSequenceExport,
-            sequenceExportProgress = sequenceExportProgress,
-            onExportMp4Sequence = onExportMp4Sequence,
-            isExportingMp4 = isExportingMp4,
-            isMp4ExportWritingOutput = isMp4ExportWritingOutput,
-            onCancelMp4Sequence = onCancelMp4Sequence,
-            mp4ExportProgress = mp4ExportProgress,
-            compact = compact
-        )
-    }
-}
-
-/**
- * Batch 3: the After Effects-style menu bar. File / Edit /
- * Composition / Layer / Window dropdowns hold every command the old
- * scrolling row of unlabelled icons held, with labelled items —
- * the same menu style as the desktop app. Import stays a labelled
- * button first in the row so it is visible without scrolling on
- * any width; Export video stays a labelled button too. The four
- * file exports stay behind the single overflow menu (Batch 2 rule).
- *
- * Compact (phone) mode: the full menu bar is wider than a phone
- * screen, so its row scrolled and the last visible tab was cut off
- * mid-word. On compact widths the bar is minimal instead — Import
- * and Export buttons plus one overflow menu holding every other
- * command — so nothing is ever cut off. Wide layouts keep the full
- * menu bar above.
- */
-@Composable
-private fun MenuBar(
-    isImportingCanonicalProject: Boolean,
-    onImportProject: () -> Unit,
-    onCancelCanonicalImport: () -> Unit,
-    onNewProject: () -> Unit,
-    onOpenProject: () -> Unit,
-    onOpenMediaLibrary: () -> Unit,
-    onOpenRepositoryPicker: () -> Unit,
-    onSave: () -> Unit,
-    canUndo: Boolean,
-    onUndo: () -> Unit,
-    canRedo: Boolean,
-    onRedo: () -> Unit,
-    onOpenCompositionSettings: () -> Unit,
-    hasCanonicalProject: Boolean,
-    onOpenCanonicalEditor: () -> Unit,
-    onAddLayer: () -> Unit,
-    onOpenInspector: () -> Unit,
-    onExportEcproj: () -> Unit,
-    onExportEcprojx: () -> Unit,
-    isExportingFrame: Boolean,
-    onExportRenderedFrame: () -> Unit,
-    onCancelFrameExport: () -> Unit,
-    isExportingSequence: Boolean,
-    isSequenceExportWritingOutput: Boolean,
-    onExportPngSequence: () -> Unit,
-    onCancelSequenceExport: () -> Unit,
-    sequenceExportProgress: Int,
-    onExportMp4Sequence: () -> Unit,
-    isExportingMp4: Boolean,
-    isMp4ExportWritingOutput: Boolean,
-    onCancelMp4Sequence: () -> Unit,
-    mp4ExportProgress: Int,
-    compact: Boolean = false
-) {
-    var expandedMenu by remember { mutableStateOf<String?>(null) }
-    var compactExpanded by remember { mutableStateOf(false) }
-    val closeMenu = { expandedMenu = null }
-    if (compact) {
-        // Minimal phone bar: Import + Export + one overflow menu.
-        // No horizontal scroll, so no tab is ever cut off mid-word.
-        // Every command from the full bar stays reachable in the menu.
-        Row(
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            TextButton(
-                onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onImportProject,
-                modifier = Modifier.height(48.dp)
-                    .semantics {
-                        contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Import project"
-                    }
-            ) {
-                Text(
-                    if (isImportingCanonicalProject) "Cancel import" else "Import",
-                    color = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.violet,
-                    fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1
-                )
-            }
-            TextButton(
-                onClick = onExportMp4Sequence,
-                enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
-                modifier = Modifier.height(48.dp)
-                    .semantics { contentDescription = "Export video (MP4)" }
-            ) {
-                Text("Export", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
-            }
-            Spacer(Modifier.weight(1f))
-            Box {
-                IconButton(
-                    onClick = { compactExpanded = true },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        Icons.Outlined.MoreVert,
-                        contentDescription = "More options",
-                        tint = EditorPalette.text
-                    )
-                }
-                DropdownMenu(
-                    expanded = compactExpanded,
-                    onDismissRequest = { compactExpanded = false }
-                ) {
-                    ExportMenuItems(
-                        onClose = { compactExpanded = false },
-                        onExportEcproj = onExportEcproj,
-                        onExportEcprojx = onExportEcprojx,
-                        isExportingFrame = isExportingFrame,
-                        onExportRenderedFrame = onExportRenderedFrame,
-                        onCancelFrameExport = onCancelFrameExport,
-                        isExportingSequence = isExportingSequence,
-                        isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                        onExportPngSequence = onExportPngSequence,
-                        onCancelSequenceExport = onCancelSequenceExport,
-                        sequenceExportProgress = sequenceExportProgress,
-                        hasCanonicalProject = hasCanonicalProject
-                    )
-                    HorizontalDivider()
-                    MenuItem("New composition") { compactExpanded = false; onNewProject() }
-                    MenuItem("Open offline project") { compactExpanded = false; onOpenProject() }
-                    MenuItem("Import project…") { compactExpanded = false; onImportProject() }
-                    MenuItem("Offline media library") { compactExpanded = false; onOpenMediaLibrary() }
-                    MenuItem("Projects") { compactExpanded = false; onOpenRepositoryPicker() }
-                    MenuItem("Save draft") { compactExpanded = false; onSave() }
-                    HorizontalDivider()
-                    MenuItem("Undo", enabled = canUndo) { compactExpanded = false; onUndo() }
-                    MenuItem("Redo", enabled = canRedo) { compactExpanded = false; onRedo() }
-                    HorizontalDivider()
-                    MenuItem("Composition settings") { compactExpanded = false; onOpenCompositionSettings() }
-                    MenuItem("Edit imported .ecproj", enabled = hasCanonicalProject) { compactExpanded = false; onOpenCanonicalEditor() }
-                    HorizontalDivider()
-                    MenuItem("Add shape layer") { compactExpanded = false; onAddLayer() }
-                    HorizontalDivider()
-                    MenuItem("Inspector") { compactExpanded = false; onOpenInspector() }
-                }
-            }
-        }
-        return
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth().height(48.dp)
-            .horizontalScroll(rememberScrollState()),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        // Import first, labelled, always visible without scrolling.
-        // While an import runs it becomes the cancel action, with
-        // the same content description the accessibility test asserts.
-        TextButton(
-            onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onImportProject,
-            modifier = Modifier.height(48.dp)
-                .semantics {
-                    contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Import project"
-                }
-        ) {
-            Text(
-                if (isImportingCanonicalProject) "Cancel import" else "Import project",
-                color = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.violet,
-                fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1
-            )
-        }
-        // Batch 2 (P12): the app's main output, one labelled tap
-        // from the header. It opens the sequence settings with MP4
-        // H.264 pre-selected. Disabled without an imported
-        // composition, like the other render buttons.
-        TextButton(
-            onClick = onExportMp4Sequence,
-            enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
-            modifier = Modifier.height(48.dp)
-                .semantics { contentDescription = "Export video (MP4)" }
-        ) {
-            Text("Export video", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
-        }
-        // Batch 2 export fix: the four FileDownload icons were
-        // indistinguishable — one overflow menu with labelled
-        // entries now holds all four exports.
-        ExportOverflowMenu(
-            onExportEcproj = onExportEcproj,
-            onExportEcprojx = onExportEcprojx,
-            isExportingFrame = isExportingFrame,
-            onExportRenderedFrame = onExportRenderedFrame,
-            onCancelFrameExport = onCancelFrameExport,
-            isExportingSequence = isExportingSequence,
-            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-            onExportPngSequence = onExportPngSequence,
-            onCancelSequenceExport = onCancelSequenceExport,
-            sequenceExportProgress = sequenceExportProgress,
-            hasCanonicalProject = hasCanonicalProject
-        )
-        MenuDropdown(
-            label = "File",
-            expanded = expandedMenu == "File",
-            onExpand = { expandedMenu = if (expandedMenu == "File") null else "File" },
-            onDismiss = closeMenu
-        ) {
-            MenuItem("New composition") { closeMenu(); onNewProject() }
-            MenuItem("Open offline project") { closeMenu(); onOpenProject() }
-            MenuItem("Import project…") { closeMenu(); onImportProject() }
-            MenuItem("Offline media library") { closeMenu(); onOpenMediaLibrary() }
-            MenuItem("Projects") { closeMenu(); onOpenRepositoryPicker() }
-            MenuItem("Save draft") { closeMenu(); onSave() }
-        }
-        MenuDropdown(
-            label = "Edit",
-            expanded = expandedMenu == "Edit",
-            onExpand = { expandedMenu = if (expandedMenu == "Edit") null else "Edit" },
-            onDismiss = closeMenu
-        ) {
-            MenuItem("Undo", enabled = canUndo) { closeMenu(); onUndo() }
-            MenuItem("Redo", enabled = canRedo) { closeMenu(); onRedo() }
-        }
-        MenuDropdown(
-            label = "Composition",
-            expanded = expandedMenu == "Composition",
-            onExpand = { expandedMenu = if (expandedMenu == "Composition") null else "Composition" },
-            onDismiss = closeMenu
-        ) {
-            MenuItem("Composition settings") { closeMenu(); onOpenCompositionSettings() }
-            MenuItem("Edit imported .ecproj", enabled = hasCanonicalProject) { closeMenu(); onOpenCanonicalEditor() }
-        }
-        MenuDropdown(
-            label = "Layer",
-            expanded = expandedMenu == "Layer",
-            onExpand = { expandedMenu = if (expandedMenu == "Layer") null else "Layer" },
-            onDismiss = closeMenu
-        ) {
-            MenuItem("Add shape layer") { closeMenu(); onAddLayer() }
-        }
-        MenuDropdown(
-            label = "Window",
-            expanded = expandedMenu == "Window",
-            onExpand = { expandedMenu = if (expandedMenu == "Window") null else "Window" },
-            onDismiss = closeMenu
-        ) {
-            MenuItem("Inspector") { closeMenu(); onOpenInspector() }
-        }
-    }
-}
-
-@Composable
-private fun MenuDropdown(
-    label: String,
-    expanded: Boolean,
-    onExpand: () -> Unit,
-    onDismiss: () -> Unit,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Box {
-        TextButton(
-            onClick = onExpand,
-            modifier = Modifier.height(48.dp)
-                .semantics { contentDescription = "$label menu" }
-        ) {
-            Text(label, color = EditorPalette.text, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-            content()
         }
     }
 }
@@ -4081,64 +3709,178 @@ private fun CompositionSettingsPanel(
     }
 }
 
+
+/**
+ * Instagram Edits editor top bar. Back chevron to the Projects
+ * home, project name, undo/redo, the white Export pill, and a More
+ * menu holding every other command the old AE-style menu bar held.
+ * The app wordmark, OFFLINE badge and desktop File/Edit menus are
+ * gone — Edits keeps the editor chrome to one row.
+ */
 @Composable
-private fun ToolBar(
+private fun EditsTopBar(
+    projectName: String,
+    saveMessage: String,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
-    onSave: () -> Unit,
+    onBackToProjects: () -> Unit,
+    onExportVideo: () -> Unit,
+    isExportingMp4: Boolean,
+    moreMenuContent: @Composable ColumnScope.(onClose: () -> Unit) -> Unit
+) {
+    var showMoreMenu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = AstryxTheme.Spacing.space2)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBackToProjects, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Back to projects",
+                    tint = EditorPalette.text
+                )
+            }
+            Text(
+                projectName,
+                modifier = Modifier.weight(1f),
+                color = EditorPalette.text,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            IconButton(onClick = onUndo, enabled = canUndo, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    Icons.Outlined.Undo,
+                    contentDescription = "Undo",
+                    tint = if (canUndo) EditorPalette.text else EditorPalette.muted
+                )
+            }
+            IconButton(onClick = onRedo, enabled = canRedo, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    Icons.Outlined.Redo,
+                    contentDescription = "Redo",
+                    tint = if (canRedo) EditorPalette.text else EditorPalette.muted
+                )
+            }
+            // Edits Export pill: white, black text, fully rounded.
+            // Disabled while a render runs — the progress row below
+            // carries the Cancel action for a running export.
+            Surface(
+                color = AstryxTheme.Colors.backgroundInverted,
+                shape = RoundedCornerShape(AstryxTheme.Radius.full),
+                modifier = Modifier.height(AstryxTheme.Control.heightLg)
+                    .semantics { contentDescription = if (isExportingMp4) "Exporting video" else "Export video" }
+                    .clickable(enabled = !isExportingMp4) { onExportVideo() }
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.padding(horizontal = AstryxTheme.Spacing.space6)
+                ) {
+                    Text(
+                        if (isExportingMp4) "Exporting…" else "Export",
+                        color = AstryxTheme.Colors.onLight,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            Box {
+                IconButton(onClick = { showMoreMenu = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.Outlined.MoreVert,
+                        contentDescription = "More options",
+                        tint = EditorPalette.text
+                    )
+                }
+                DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                    moreMenuContent { showMoreMenu = false }
+                }
+            }
+        }
+        // Save state on its own line, never squeezed by the actions.
+        Text(
+            saveMessage,
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = AstryxTheme.Spacing.space2, vertical = AstryxTheme.Spacing.space1)
+                .semantics { contentDescription = "Editor status: $saveMessage" },
+            color = EditorPalette.muted,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Instagram Edits bottom toolbar: a horizontally scrolling row of
+ * icon + label actions. Every item is wired to a real callback.
+ * There is no Text item: text layers can only be added to an
+ * imported .aep composition, from the canonical editor, so a Text
+ * button here would be dead.
+ */
+@Composable
+private fun EditsBottomToolbar(
+    canSplit: Boolean,
+    onSplitClipAtPlayhead: () -> Unit,
+    onDeleteLayer: () -> Unit,
+    onAddLayer: () -> Unit,
+    onAddAudioClip: () -> Unit,
     onOpenInspector: () -> Unit,
     onOpenCompositionSettings: () -> Unit,
-    onAddLayer: () -> Unit
+    onSave: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(54.dp)
-            .padding(horizontal = 12.dp),
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = AstryxTheme.Spacing.space2, vertical = AstryxTheme.Spacing.space2),
+        horizontalArrangement = Arrangement.spacedBy(AstryxTheme.Spacing.space1),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Only Shape survives the tool row: it is the one tool with real
-        // behaviour behind it (onAddLayer adds a shape layer, and selects
-        // it). Select/Move/Text/Effects had no behaviour anywhere — the
-        // selection state was written and never read — so those chips are
-        // gone instead of highlighted-but-dead. The chip is an action,
-        // not a mode, so it never renders as selected.
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FilterChip(
-                selected = false,
-                onClick = onAddLayer,
-                label = { Text("Shape", fontSize = 11.sp) }
-            )
-        }
+        EditsToolbarItem(icon = Icons.Outlined.ContentCut, label = "Split", enabled = canSplit, onClick = onSplitClipAtPlayhead)
+        EditsToolbarItem(icon = Icons.Outlined.DeleteOutline, label = "Delete", onClick = onDeleteLayer)
+        EditsToolbarItem(icon = Icons.Outlined.Add, label = "Add layer", onClick = onAddLayer)
+        EditsToolbarItem(icon = Icons.Outlined.Audiotrack, label = "Audio", onClick = onAddAudioClip)
+        EditsToolbarItem(icon = Icons.Outlined.Tune, label = "Props", onClick = onOpenInspector)
+        EditsToolbarItem(icon = Icons.Outlined.Settings, label = "Comp", onClick = onOpenCompositionSettings)
+        EditsToolbarItem(icon = Icons.Outlined.Save, label = "Save", onClick = onSave)
+    }
+}
 
-        // Labelled Save: the header icon alone never told the user where
-        // Save lives (P14). The header icon stays as a secondary action.
-        TextButton(onClick = onSave, modifier = Modifier.height(48.dp)) {
-            Icon(Icons.Outlined.Save, contentDescription = null, tint = EditorPalette.violet)
-            Text("Save", color = EditorPalette.violet, fontSize = 11.sp)
-        }
-        TextButton(onClick = onUndo, enabled = canUndo) {
-            Text("Undo", color = if (canUndo) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp)
-        }
-        TextButton(onClick = onRedo, enabled = canRedo) {
-            Text("Redo", color = if (canRedo) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp)
-        }
-        TextButton(onClick = onOpenInspector) {
-            Icon(Icons.Outlined.Tune, contentDescription = null, tint = EditorPalette.violet)
-            Text("Props", color = EditorPalette.violet, fontSize = 11.sp)
-        }
-        TextButton(onClick = onOpenCompositionSettings) {
-            Text("Comp", color = EditorPalette.violet, fontSize = 11.sp)
-        }
-        TextButton(onClick = onAddLayer) {
-            Icon(Icons.Outlined.Add, contentDescription = null, tint = EditorPalette.violet)
-            Text("Add layer", color = EditorPalette.violet, fontSize = 11.sp, maxLines = 1)
-        }
+@Composable
+private fun EditsToolbarItem(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .widthIn(min = 56.dp)
+            .height(48.dp)
+            .clip(RoundedCornerShape(AstryxTheme.Radius.element))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = AstryxTheme.Spacing.space3, vertical = AstryxTheme.Spacing.space2)
+            .semantics { contentDescription = label },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (enabled) EditorPalette.text else EditorPalette.muted,
+            modifier = Modifier.size(24.dp)
+        )
+        Text(
+            label,
+            color = if (enabled) EditorPalette.text else EditorPalette.muted,
+            fontSize = 11.sp,
+            maxLines = 1
+        )
     }
 }
 
