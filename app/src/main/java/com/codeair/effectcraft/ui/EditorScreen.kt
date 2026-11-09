@@ -284,6 +284,7 @@ fun EditorScreen(
     onAddCanonicalTriangleLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalHexagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalPentagonLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalDiamondLayer: (Long, String) -> Unit = { _, _ -> },
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
@@ -906,6 +907,7 @@ fun EditorScreen(
                     onAddTriangleLayer = onAddCanonicalTriangleLayer,
                     onAddHexagonLayer = onAddCanonicalHexagonLayer,
                     onAddPentagonLayer = onAddCanonicalPentagonLayer,
+                    onAddDiamondLayer = onAddCanonicalDiamondLayer,
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
@@ -1585,6 +1587,7 @@ private fun CanonicalProjectEditor(
     onAddTriangleLayer: (Long, String) -> Unit = { _, _ -> },
     onAddHexagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddPentagonLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddDiamondLayer: (Long, String) -> Unit = { _, _ -> },
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
@@ -1874,6 +1877,10 @@ private fun CanonicalProjectEditor(
                         enabled = canEdit && newTextName.trim().isNotEmpty(),
                         onClick = { onAddPentagonLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Pentagon") }
                     ) { Text("Add Pentagon", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddDiamondLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Diamond") }
+                    ) { Text("Add Diamond", color = EditorPalette.violet) }
                 }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
