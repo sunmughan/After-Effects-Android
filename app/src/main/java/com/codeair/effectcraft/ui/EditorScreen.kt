@@ -666,6 +666,7 @@ fun EditorScreen(
                 onAddOpacityKeyframe = onAddOpacityKeyframe,
                 onRemoveOpacityKeyframe = onRemoveOpacityKeyframe,
                 onTogglePlayback = onTogglePlayback,
+                onAddLayer = onAddLayer,
                 modifier = Modifier
                     .fillMaxWidth()
                     // Adaptive height (P11): the card takes ~42% of the
@@ -3916,8 +3917,16 @@ private fun TimelinePanel(
     onAddOpacityKeyframe: () -> Unit,
     onRemoveOpacityKeyframe: () -> Unit,
     onTogglePlayback: () -> Unit,
+    onAddLayer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // Edits zoom: 1x, 1.5x, 2.25x, 3.375x. The ruler and the track
+    // list share one horizontal scroll state, so they move together;
+    // the playhead slider stays full-width because it scrubs by
+    // fraction at any zoom. At 1x the panel is pixel-identical to
+    // the unzoomed layout.
+    var zoom by remember { mutableStateOf(1f) }
+    val timelineScroll = rememberScrollState()
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
@@ -3946,6 +3955,33 @@ private fun TimelinePanel(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            IconButton(
+                onClick = { zoom = (zoom / 1.5f).coerceAtLeast(1f) },
+                enabled = zoom > 1f,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.ZoomOut,
+                    contentDescription = "Zoom out timeline",
+                    tint = if (zoom > 1f) EditorPalette.text else EditorPalette.muted
+                )
+            }
+            Text(
+                String.format(Locale.US, "%.1f×", zoom),
+                color = EditorPalette.muted,
+                fontSize = 11.sp
+            )
+            IconButton(
+                onClick = { zoom = (zoom * 1.5f).coerceAtMost(3.375f) },
+                enabled = zoom < 3.375f,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.ZoomIn,
+                    contentDescription = "Zoom in timeline",
+                    tint = if (zoom < 3.375f) EditorPalette.text else EditorPalette.muted
+                )
+            }
         }
         // Row 2 — transport: Play/Pause + timecode + what audio (if any)
         // sits under the playhead. Always visible, never shared with the
@@ -3997,13 +4033,17 @@ private fun TimelinePanel(
         // Batch 3: a real time ruler above the playhead, After
         // Effects-style — second ticks with mm:ss labels — so the
         // playhead position reads against time instead of floating
-        // over a bare slider.
-        TimelineRuler(
-            durationFrames = project.durationFrames,
-            frameRate = project.frameRate,
-            modifier = Modifier.fillMaxWidth().height(20.dp)
-                .semantics { contentDescription = "Timeline ruler" }
-        )
+        // over a bare slider. The ruler shares the track list's
+        // horizontal scroll state and stretches with the zoom, so
+        // its labels stay true at any zoom.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            TimelineRuler(
+                durationFrames = project.durationFrames,
+                frameRate = project.frameRate,
+                modifier = Modifier.width(maxWidth * zoom).horizontalScroll(timelineScroll).height(20.dp)
+                    .semantics { contentDescription = "Timeline ruler" }
+            )
+        }
 
         Slider(
             value = playheadFrame.toFloat(),
@@ -4023,13 +4063,17 @@ private fun TimelinePanel(
         ) {
             Text("LAYER", color = EditorPalette.muted, fontSize = 11.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
             Text("OPACITY · ${selectedOpacityKeyframes.size} KEYS", color = EditorPalette.amber, fontSize = 11.sp)
-            Spacer(Modifier.width(8.dp))
-            Text("00:00", color = EditorPalette.muted, fontSize = 11.sp)
-            Spacer(Modifier.weight(1f))
-            Text(
-                timelineEndLabel(project.durationFrames, project.frameRate),
-                color = EditorPalette.muted, fontSize = 11.sp
-            )
+            // The static start/end labels only line up with the ruler
+            // at 1x. Zoomed in, the scrolling ruler carries the time.
+            if (zoom <= 1f) {
+                Spacer(Modifier.width(8.dp))
+                Text("00:00", color = EditorPalette.muted, fontSize = 11.sp)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    timelineEndLabel(project.durationFrames, project.frameRate),
+                    color = EditorPalette.muted, fontSize = 11.sp
+                )
+            }
         }
 
         // Every layer renders: the old take(4) cap hid layers 5+ with a
@@ -4039,13 +4083,32 @@ private fun TimelinePanel(
         // more rows sit below the fold, so a cut row reads as "scroll
         // for more" instead of "broken".
         val trackListState = rememberLazyListState()
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .drawWithContent {
-                    drawContent()
-                    val info = trackListState.layoutInfo
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) {
+            val trackContentWidth = maxWidth * zoom
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        drawContent()
+                        // Edits-style white playhead line across the
+                        // tracks. It lives in viewport coordinates:
+                        // the playhead's position in the zoomed
+                        // content minus how far the content scrolled.
+                        val playheadFraction = if (project.durationFrames > 1) {
+                            playheadFrame.toFloat() / (project.durationFrames - 1).coerceAtLeast(1)
+                        } else 0f
+                        val playheadX = playheadFraction * size.width * zoom - timelineScroll.value
+                        if (playheadX in 0f..size.width) {
+                            drawLine(
+                                color = Color.White,
+                                start = androidx.compose.ui.geometry.Offset(playheadX, 0f),
+                                end = androidx.compose.ui.geometry.Offset(playheadX, size.height),
+                                strokeWidth = 2.dp.toPx()
+                            )
+                        }
+                        val info = trackListState.layoutInfo
                     val visible = info.visibleItemsInfo
                     if (info.totalItemsCount > 0 && visible.isNotEmpty()) {
                         val avgSize = visible.map { it.size }.average().toFloat()
@@ -4080,7 +4143,8 @@ private fun TimelinePanel(
         LazyColumn(
             state = trackListState,
             modifier = Modifier
-                .fillMaxWidth()
+                .width(trackContentWidth)
+                .horizontalScroll(timelineScroll)
                 .testTag("timeline-track-list"),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -4151,6 +4215,13 @@ private fun TimelinePanel(
                     CanonicalColorTrack(canonicalColorKeys, canonicalColorDurationFrames, playheadFrame, onScrub)
                 }
             }
+            // Edits "+" at the end of the timeline: adds a layer.
+            item(key = "timeline-add-layer") {
+                TextButton(
+                    onClick = onAddLayer,
+                    modifier = Modifier.height(48.dp).semantics { contentDescription = "Add layer" }
+                ) { Text("+ Add layer", color = EditorPalette.violet, fontSize = 11.sp) }
+            }
         }
             if (trackListState.canScrollForward) {
                 Box(
@@ -4165,6 +4236,7 @@ private fun TimelinePanel(
                         )
                 )
             }
+        }
         }
     }
 }
