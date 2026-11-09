@@ -3828,11 +3828,21 @@ private fun CompositionSettingsPanel(
     var durationDraft by remember(duration) { mutableStateOf(duration.toString()) }
 
     Column(
-        modifier = modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+        modifier = modifier.heightIn(max = 560.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("COMPOSITION SETTINGS", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-        Text("Changes apply to this offline draft and participate in undo/redo.", color = EditorPalette.muted, fontSize = 12.sp)
+        // The settings scroll; the actions do not. With the four
+        // typeable numeric rows the content is taller than the sheet
+        // on a phone, and "Apply settings" slid below the fold — the
+        // existing apply-and-undo test broke in both CI attempts of
+        // run 42600205036 because the button was no longer reachable
+        // without scrolling. Actions stay pinned at the bottom.
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("COMPOSITION SETTINGS", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+            Text("Changes apply to this offline draft and participate in undo/redo.", color = EditorPalette.muted, fontSize = 12.sp)
         Text("Width · ${width} px", color = EditorPalette.text, fontSize = 12.sp)
         Slider(value = width.toFloat(), onValueChange = { width = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition width" })
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -3900,6 +3910,7 @@ private fun CompositionSettingsPanel(
                 onClick = { duration = durationDraft.toInt() },
                 modifier = Modifier.semantics { contentDescription = "Apply composition duration" }
             ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
+        }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = onCancel, modifier = Modifier.height(48.dp)) { Text("Cancel", color = EditorPalette.muted) }
