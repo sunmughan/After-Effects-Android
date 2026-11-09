@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import com.codeair.effectcraft.data.CanonicalProjectRepository
 import com.codeair.effectcraft.data.ProjectDocument
@@ -115,8 +116,8 @@ class RepositoryPickerTest {
             }
         }
 
-        compose.onNodeWithContentDescription("File menu").performClick()
-        compose.onNodeWithText("Projects").performClick()
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("Projects").performScrollTo().performClick()
         compose.onNodeWithText("Open canonical project").assertIsDisplayed()
         compose.onNodeWithText("Alpha project").assertIsDisplayed()
         compose.onNodeWithText("Beta project").assertIsDisplayed()

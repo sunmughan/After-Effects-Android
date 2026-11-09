@@ -65,7 +65,15 @@ class EditorSmokeTest {
      * discard them to start fresh, exactly as a user starting over would.
      */
     private fun startFreshComposition() {
-        compose.onNodeWithText("New").performClick()
+        // The app opens on Projects: "New" is the home pill there.
+        // Inside the editor the same action lives behind "More options"
+        // as "New composition".
+        if (compose.onAllNodesWithText("New").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("New").performClick()
+        } else {
+            compose.onNodeWithContentDescription("More options").performClick()
+            compose.onNodeWithText("New composition").performScrollTo().performClick()
+        }
         if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
             compose.onNodeWithText("Discard").performClick()
         }
@@ -84,9 +92,10 @@ class EditorSmokeTest {
 
     @Test
     fun offlineMediaLibraryOpensAndExplainsEmptyState() {
+        compose.onNodeWithText("New").performClick()
         // Phone bar: the library entry lives behind "More options".
         compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Offline media library").performClick()
+        compose.onNodeWithText("Offline media library").performScrollTo().performClick()
         compose.onNodeWithText("Offline media library").assertIsDisplayed()
         compose.onNodeWithText(
             "No media imported yet. Relink footage from a canonical project to copy it here for offline use."
@@ -110,7 +119,7 @@ class EditorSmokeTest {
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithContentDescription("Save draft").performClick()
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals(2, DraftProjectStore(appContext).listSavedProjects().size)
@@ -119,7 +128,7 @@ class EditorSmokeTest {
             .first { it.layers.size == 5 }.id
         // Phone bar: the open-project entry lives behind "More options".
         compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Open offline project").performClick()
+        compose.onNodeWithText("Open offline project").performScrollTo().performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 5 layers").performClick()
 
         assertEditorStatus("Opened locally · Untitled Composition")
@@ -156,9 +165,13 @@ class EditorSmokeTest {
 
     @Test
     fun editorLaunchesWithOfflineCompositionWorkspace() {
-        compose.onNodeWithText("EFFECTCRAFT").assertIsDisplayed()
-        compose.onNodeWithText("OFFLINE").assertIsDisplayed()
-        compose.onNodeWithText("COMPOSITION VIEWER", substring = true).assertIsDisplayed()
+        // The app opens on Projects (or straight into the editor
+        // when a previous run left a recovery journal); either way
+        // a fresh composition opens the offline workspace. The old
+        // EFFECTCRAFT / OFFLINE header wordmark is gone with the
+        // old header.
+        startFreshComposition()
+        compose.onNodeWithText("TIMELINE").assertIsDisplayed()
         // Batch 2 (P06): a fresh draft renders its own layers now — the
         // dead "Draft preview not rendered" placeholder is gone.
         // Run 42444179683: the draft render lands on
@@ -184,8 +197,8 @@ class EditorSmokeTest {
 
     @Test
     fun newCompositionActionRemainsAvailable() {
-        compose.onNodeWithText("New").assertIsDisplayed().performClick()
-        compose.onNodeWithText("OFFLINE").assertIsDisplayed()
+        startFreshComposition()
+        compose.onNodeWithText("TIMELINE").assertIsDisplayed()
     }
 
     @Test
@@ -199,9 +212,9 @@ class EditorSmokeTest {
     fun layerMutationCanBeUndoneAndRedone() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Add layer").performClick()
-        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithContentDescription("Undo").performClick()
         assertEditorStatus("Undo · unsaved")
-        compose.onNodeWithText("Redo").performClick()
+        compose.onNodeWithContentDescription("Redo").performClick()
         assertEditorStatus("Redo · unsaved")
     }
 
@@ -252,13 +265,13 @@ class EditorSmokeTest {
         compose.onNodeWithText("50%").assertIsDisplayed()
 
         // Each property mutation is a separate undo snapshot; redo restores the exact values.
-        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithContentDescription("Undo").performClick()
         assertEquals(1f, opacity.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0.001f)
-        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithContentDescription("Undo").performClick()
         visibility.assertIsOn()
-        compose.onNodeWithText("Redo").performClick()
+        compose.onNodeWithContentDescription("Redo").performClick()
         visibility.assertIsOff()
-        compose.onNodeWithText("Redo").performClick()
+        compose.onNodeWithContentDescription("Redo").performClick()
         assertEquals(0.5f, opacity.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, 0.001f)
     }
 
@@ -342,10 +355,10 @@ class EditorSmokeTest {
         scrollTimelineToLayer(2)
         compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
 
-        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithContentDescription("Undo").performClick()
         scrollTimelineToLayer(3)
         compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
-        compose.onNodeWithText("Redo").performClick()
+        compose.onNodeWithContentDescription("Redo").performClick()
         scrollTimelineToLayer(2)
         compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
     }
@@ -360,7 +373,7 @@ class EditorSmokeTest {
         compose.onNodeWithText("Apply settings").performClick()
         assertEditorStatus("Composition updated · unsaved")
 
-        compose.onNodeWithText("Undo").performClick()
+        compose.onNodeWithContentDescription("Undo").performClick()
         compose.onNodeWithText("Undo · unsaved").assertIsDisplayed()
 
         // Reopen settings and verify the model value, not merely the status label.

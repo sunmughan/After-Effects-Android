@@ -103,8 +103,11 @@ class EditorLifecycleInstrumentedTest {
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
 
-        // The explicit save discarded the journal, so recreation must load
-        // the committed draft normally, not as a recovery.
+        // The explicit save discarded the journal, so recreation lands
+        // on Projects now — reopen the saved project from its card.
+        // It must load the committed draft normally, not as a recovery.
+        compose.onNodeWithContentDescription("Open project Untitled Composition").performClick()
+        compose.waitForIdle()
         scrollTimelineToLayer(3)
         compose.onNodeWithText("Shape 4").assertExists()
         compose.onNodeWithText("Recovered unsaved changes").assertDoesNotExist()

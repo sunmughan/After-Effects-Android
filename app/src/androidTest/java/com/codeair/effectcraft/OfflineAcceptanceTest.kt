@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.test.platform.app.InstrumentationRegistry
@@ -105,10 +106,12 @@ class OfflineAcceptanceTest {
         assertEquals(1, saved.size)
         assertEquals(4, saved.single().layers.size)
 
-        compose.onNodeWithText("New").performClick()
+        // Inside the editor now: New lives behind "More options".
+        compose.onNodeWithContentDescription("More options").performClick()
+        compose.onNodeWithText("New composition").performScrollTo().performClick()
         // Phone bar: the open-project entry lives behind "More options".
         compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Open offline project").performClick()
+        compose.onNodeWithText("Open offline project").performScrollTo().performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         compose.onNodeWithText("Opened locally · Untitled Composition").assertIsDisplayed()
         compose.onNodeWithContentDescription("Selected timeline layer: Background").assertExists()

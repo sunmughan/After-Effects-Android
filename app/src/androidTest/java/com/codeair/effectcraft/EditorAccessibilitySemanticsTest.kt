@@ -36,6 +36,16 @@ class EditorAccessibilitySemanticsTest {
         if (compose.onAllNodesWithText("Get started").fetchSemanticsNodes().isNotEmpty()) {
             compose.onNodeWithText("Get started").performClick()
         }
+        // The app opens on Projects now; these tests assert editor
+        // controls, so open a fresh composition. A recovery journal
+        // opens the editor directly, in which case there is no New
+        // pill to tap.
+        if (compose.onAllNodesWithText("New").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("New").performClick()
+        }
+        if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Discard").performClick()
+        }
     }
 
 

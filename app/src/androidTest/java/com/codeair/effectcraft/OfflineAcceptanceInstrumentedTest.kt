@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.platform.app.InstrumentationRegistry
 import com.codeair.effectcraft.data.DraftProjectStore
@@ -84,7 +85,15 @@ class OfflineAcceptanceInstrumentedTest {
      * discard them to start fresh, exactly as a user starting over would.
      */
     private fun startFreshComposition() {
-        compose.onNodeWithText("New").performClick()
+        // The app opens on Projects: "New" is the home pill there.
+        // Inside the editor the same action lives behind "More options"
+        // as "New composition".
+        if (compose.onAllNodesWithText("New").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("New").performClick()
+        } else {
+            compose.onNodeWithContentDescription("More options").performClick()
+            compose.onNodeWithText("New composition").performScrollTo().performClick()
+        }
         if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
             compose.onNodeWithText("Discard").performClick()
         }
@@ -115,9 +124,10 @@ class OfflineAcceptanceInstrumentedTest {
         // itself lists it.
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
+        compose.onNodeWithText("New").performClick()
         // Phone bar: the library entry lives behind "More options".
         compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Offline media library").performClick()
+        compose.onNodeWithText("Offline media library").performScrollTo().performClick()
         compose.onNodeWithText("offline-clip.png").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
 
@@ -135,7 +145,7 @@ class OfflineAcceptanceInstrumentedTest {
         startFreshComposition()
         // Phone bar: the open-project entry lives behind "More options".
         compose.onNodeWithContentDescription("More options").performClick()
-        compose.onNodeWithText("Open offline project").performClick()
+        compose.onNodeWithText("Open offline project").performScrollTo().performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 4 layers").performClick()
         assertEditorStatus("Opened locally · Untitled Composition")
         // Batch 2 (P11): the track list is a LazyColumn — the fourth

@@ -12,7 +12,7 @@ import org.junit.Test
 
 /**
  * Commit 1 (.aep import v1): the Import dialog through the real app. The
- * header's labelled Import button must open a dialog with four options —
+ * home screen's Import button must open a sheet with four options —
  * including a real direct .aep/.aepx import, behind a loss gate — and the
  * After Effects export help. The old "Direct .aep import is coming in a
  * later update." note is gone: the import exists now.
@@ -40,7 +40,7 @@ class ImportProjectDialogInstrumentedTest {
 
     @Test
     fun importButtonOpensDialogWithFourOptionsIncludingAep() {
-        compose.onNodeWithContentDescription("Import project").performClick()
+        compose.onNodeWithText("Import").performClick()
         compose.onNodeWithText("EffectCraft project").assertIsDisplayed()
         compose.onNodeWithText("After Effects project").assertIsDisplayed()
         compose.onNodeWithText("Project bundle").assertIsDisplayed()
@@ -53,7 +53,7 @@ class ImportProjectDialogInstrumentedTest {
 
     @Test
     fun aeStepsExpandFromTheDialog() {
-        compose.onNodeWithContentDescription("Import project").performClick()
+        compose.onNodeWithText("Import").performClick()
         compose.onNodeWithText("How to export from After Effects").performClick()
         compose.onNodeWithText("Zip that folder.", substring = true).assertIsDisplayed()
         compose.onNodeWithText("A .ecproj or .ecprojx file saved by EffectCraft.", substring = true)
