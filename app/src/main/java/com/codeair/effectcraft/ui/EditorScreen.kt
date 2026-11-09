@@ -74,6 +74,8 @@ import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Undo
+import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.ZoomOut
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -3731,7 +3733,7 @@ private fun EditsTopBar(
     moreMenuContent: @Composable ColumnScope.(onClose: () -> Unit) -> Unit
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = AstryxTheme.Spacing.space2)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = AstryxTheme.Spacing.space1)) {
         Row(
             modifier = Modifier.fillMaxWidth().height(56.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -3778,7 +3780,7 @@ private fun EditsTopBar(
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = AstryxTheme.Spacing.space6)
+                    modifier = Modifier.padding(horizontal = AstryxTheme.Spacing.space4)
                 ) {
                     Text(
                         if (isExportingMp4) "Exporting…" else "Export",
@@ -3805,7 +3807,7 @@ private fun EditsTopBar(
         Text(
             saveMessage,
             modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = AstryxTheme.Spacing.space2, vertical = AstryxTheme.Spacing.space1)
+                .padding(horizontal = AstryxTheme.Spacing.space1, vertical = AstryxTheme.Spacing.space05)
                 .semantics { contentDescription = "Editor status: $saveMessage" },
             color = EditorPalette.muted,
             fontSize = 12.sp,
@@ -3837,8 +3839,8 @@ private fun EditsBottomToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = AstryxTheme.Spacing.space2, vertical = AstryxTheme.Spacing.space2),
-        horizontalArrangement = Arrangement.spacedBy(AstryxTheme.Spacing.space1),
+            .padding(horizontal = AstryxTheme.Spacing.space1, vertical = AstryxTheme.Spacing.space1),
+        horizontalArrangement = Arrangement.spacedBy(AstryxTheme.Spacing.space05),
         verticalAlignment = Alignment.CenterVertically
     ) {
         EditsToolbarItem(icon = Icons.Outlined.ContentCut, label = "Split", enabled = canSplit, onClick = onSplitClipAtPlayhead)
@@ -3864,7 +3866,7 @@ private fun EditsToolbarItem(
             .height(48.dp)
             .clip(RoundedCornerShape(AstryxTheme.Radius.element))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = AstryxTheme.Spacing.space3, vertical = AstryxTheme.Spacing.space2)
+            .padding(horizontal = AstryxTheme.Spacing.space15, vertical = AstryxTheme.Spacing.space1)
             .semantics { contentDescription = label },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
