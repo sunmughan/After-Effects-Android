@@ -2622,6 +2622,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         // (button or back/scrim) sets the persisted flag, so it shows
         // once per device.
         if (showOnboarding) {
+            AnimatedDialogContent {
             AlertDialog(
                 onDismissRequest = {
                     OnboardingStore.markSeen(context)
@@ -2642,6 +2643,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }, modifier = Modifier.height(48.dp)) { Text("Get started") }
                 }
             )
+            }
         }
 
         // P07: starting a new composition with unsaved changes asks
@@ -2649,6 +2651,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         // is the user's explicit choice to drop it (the only path that
         // discards the old journal on New); Cancel keeps editing.
         if (showNewProjectConfirm) {
+            AnimatedDialogContent {
             AlertDialog(
                 onDismissRequest = { showNewProjectConfirm = false },
                 title = { Text("Start a new composition?") },
@@ -2670,6 +2673,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     TextButton(onClick = { showNewProjectConfirm = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
                 }
             )
+            }
         }
 
         // Batch 3: import is a labelled dialog, not a hidden icon.
@@ -2677,6 +2681,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         // that option accepts; the resolver sniffs the content, so
         // a mislabelled file still takes the right path.
         if (showImportDialog) {
+            AnimatedDialogContent {
             ImportProjectDialog(
                 onDismiss = { showImportDialog = false },
                 onPickEcproj = {
@@ -2696,17 +2701,20 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
                 }
             )
+            }
         }
 
         // The .aep loss gate: the import coroutine waits on aepLossGate
         // until the user allows the losses or cancels.
         val lossReport = aepLossReport
         if (lossReport != null) {
+            AnimatedDialogContent {
             AepLossDialog(
                 report = lossReport,
                 onAllow = { aepLossGate?.complete(true) },
                 onCancel = { aepLossGate?.complete(false) }
             )
+            }
         }
     }
 }

@@ -220,6 +220,22 @@ class EditorSmokeTest {
     }
 
     @Test
+    fun appearanceSectionCollapsesAndExpands() {
+        compose.onNodeWithText("New").performClick()
+        compose.onNodeWithText("Props").performClick()
+        // The section starts expanded: the opacity slider is there.
+        compose.onNodeWithContentDescription("Layer opacity").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Collapse appearance").performClick()
+        // The shrink animation must finish before the slider is gone
+        // from the tree; waitForIdle waits for the animation to settle.
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Layer opacity").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Expand appearance").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Layer opacity").assertIsDisplayed()
+    }
+
+    @Test
     fun inspectorOpacityAndVisibilityControlsUpdateSelectedLayerAndUndoRedo() {
         compose.onNodeWithText("New").performClick()
         compose.onNodeWithText("Props").performClick()

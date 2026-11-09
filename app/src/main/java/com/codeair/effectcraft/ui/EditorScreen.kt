@@ -79,6 +79,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -649,6 +655,7 @@ fun EditorScreen(
         }
 
         if (showProjectPicker) {
+            AnimatedDialogContent {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showProjectPicker = false },
                 title = { Text("Open offline project") },
@@ -683,9 +690,11 @@ fun EditorScreen(
                     TextButton(onClick = { showProjectPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
             )
+            }
         }
 
         if (showRepositoryPicker) {
+            AnimatedDialogContent {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showRepositoryPicker = false },
                 title = { Text("Open canonical project") },
@@ -722,9 +731,11 @@ fun EditorScreen(
                     TextButton(onClick = { showRepositoryPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
             )
+            }
         }
 
         if (showMediaLibrary) {
+            AnimatedDialogContent {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showMediaLibrary = false },
                 title = { Text("Offline media library") },
@@ -797,10 +808,12 @@ fun EditorScreen(
                 },
                 confirmButton = { TextButton(onClick = { showMediaLibrary = false }, modifier = Modifier.height(48.dp)) { Text("Close") } }
             )
+            }
         }
 
         if (assetPendingDelete != null) {
             val asset = assetPendingDelete!!
+            AnimatedDialogContent {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { assetPendingDelete = null },
                 title = { Text("Remove offline media?") },
@@ -813,6 +826,7 @@ fun EditorScreen(
                 },
                 dismissButton = { TextButton(onClick = { assetPendingDelete = null }, modifier = Modifier.height(48.dp)) { Text("Cancel") } }
             )
+            }
         }
 
         if (showSequenceSettings) {
@@ -826,6 +840,7 @@ fun EditorScreen(
                     }
                 }
             }
+            AnimatedDialogContent {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showSequenceSettings = false },
                 title = {
@@ -952,6 +967,7 @@ fun EditorScreen(
                     TextButton(onClick = { showSequenceSettings = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
                 }
             )
+            }
         }
 
         if (showCompositionSettings) {
@@ -1778,7 +1794,14 @@ private fun InspectorPanel(
                 Text(if (appearanceExpanded) "⌃" else "⌄", color = EditorPalette.muted, fontSize = 14.sp)
             }
             Spacer(Modifier.height(12.dp))
-            if (appearanceExpanded) {
+            // The section grows and shrinks instead of snapping: the
+            // opacity row and slider animate in and out with the
+            // section, so collapsing never jumps the panel.
+            AnimatedVisibility(
+                visible = appearanceExpanded,
+                enter = expandVertically(animationSpec = tween(200)) + fadeIn(animationSpec = tween(200)),
+                exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(200))
+            ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Opacity", color = EditorPalette.text, fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
