@@ -20,7 +20,8 @@ internal fun AnimatedDialogContent(content: @Composable () -> Unit) {
     AnimatedVisibility(
         visible = true,
         enter = fadeIn(animationSpec = tween(180)) +
-            scaleIn(initialScale = 0.96f, animationSpec = tween(180)),
-        content = content
-    )
+            scaleIn(initialScale = 0.96f, animationSpec = tween(180))
+    ) {
+        content()
+    }
 }
