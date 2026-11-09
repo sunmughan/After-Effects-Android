@@ -21,13 +21,9 @@ class ProjectFileFormatsTest {
             "Effekseer .efkproj is not supported yet; no Effekseer parser/converter is integrated.",
             ProjectFileFormats.importError("scene.efkproj")
         )
-        assertEquals(
-            "Direct .aep import is not in this build yet — it is being built from the official " +
-                "EffectCraft .aep importer. For now, export the project from After Effects with " +
-                "the included ExtendScript (docs/ae-export/ExportToEffectCraft.jsx) and import " +
-                "the .zip it creates.",
-            ProjectFileFormats.importError("scene.aep")
-        )
+        // .aep is importable now (the .aep importer), so there is no error.
+        assertNull(ProjectFileFormats.importError("scene.aep"))
+        assertNull(ProjectFileFormats.importError("scene.aepx"))
     }
 
     @Test

@@ -1,0 +1,1329 @@
+package com.codeair.effectcraft.data.aep
+
+import com.codeair.effectcraft.data.AeComp
+import com.codeair.effectcraft.data.AeInterchangeConverter
+import com.codeair.effectcraft.data.AeKeyframe
+import com.codeair.effectcraft.data.AeLayer
+import com.codeair.effectcraft.data.AeLayerType
+import com.codeair.effectcraft.data.AeProject
+import com.codeair.effectcraft.data.AeValue
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import kotlin.math.abs
+import kotlin.math.roundToLong
+
+/**
+ * Imports an After Effects project (`.aep` binary or `.aepx` XML) into a canonical
+ * EffectCraft document (schema 2).
+ *
+ * The first composition only is imported, through the same [AeInterchangeConverter] the
+ * ExtendScript export uses, so the canonical JSON is built by the proven path. The fields
+ * the interchange model does not carry (stretch, blend mode, switches, work area, shutter,
+ * renderer, display start, pixel aspect, full keyframes with interpolation/ease/spatial
+ * tangents/roving/label, expressions) are patched into the converted JSON afterwards.
+ *
+ * Nothing is silently dropped: every skipped piece is recorded in the [AepImportReport]
+ * under its loss category. [analyze] is the dry run the import dialog shows; [import]
+ * refuses when there are losses and the user has not allowed them.
+ *
+ * Honest v1 coverage: first composition only; footage/solid/null layers with timing,
+ * switches, blend mode, stretch and parent links; transform static values and keyframes
+ * for Anchor Point, Position, Scale, Rotation and Opacity; footage linked by its stored
+ * path (missing files are listed, never a refusal); expressions kept as source text.
+ * NOT imported in v1 (all reported as losses): text content, shape contents, camera and
+ * light layers, precomp layers, all effects, masks, markers, layer styles, 3D rotations,
+ * orientation, time remapping, project settings, compositions after the first, folders.
+ * There is no `.aep` export in this build.
+ *
+ * Ports the mapping of `import/build.rs`, `import/props.rs`, `import/time.rs` and
+ * `container/values.rs` from the official EffectCraft project (storytold/effectcraft,
+ * MIT OR Apache-2.0), cut to what this app's renderer can do.
+ */
+object AepImporter {
+
+    /** What [analyze] returned: the converted project and its loss report. */
+    data class Analysis(
+        val project: AeProject,
+        val report: AepImportReport.ImportReport,
+        val lossCategories: Set<AepImportReport.LossCategory>
+    )
+
+    /** What [import] returned. */
+    sealed class ImportResult {
+        /** The file has losses the user has not allowed: nothing was imported. */
+        class Refused(val report: AepImportReport.ImportReport) : ImportResult()
+
+        /** The canonical document and its loss report. */
+        class Imported(val canonicalJson: String, val report: AepImportReport.ImportReport) : ImportResult()
+    }
+
+    /**
+     * Dry run: parses the file and builds the project and its loss report without
+     * producing a document. Used by the import dialog before the user allows losses.
+     * @throws IllegalArgumentException with a user-facing reason for a file that cannot
+     * be read at all (not a project, no composition, unreadable headers).
+     */
+    fun analyze(bytes: ByteArray): Analysis {
+        val built = build(AepxReader.parseAny(bytes))
+        return Analysis(
+            built.project,
+            built.report,
+            built.report.losses.map { it.category }.toSet()
+        )
+    }
+
+    /**
+     * Imports the file. When [allowLosses] is false and the report has any loss, returns
+     * [ImportResult.Refused] with the report instead of a document.
+     * @throws IllegalArgumentException with a user-facing reason for a file that cannot
+     * be read at all.
+     */
+    fun import(bytes: ByteArray, allowLosses: Boolean): ImportResult {
+        val built = build(AepxReader.parseAny(bytes))
+        if (!allowLosses && built.report.losses.isNotEmpty()) {
+            return ImportResult.Refused(built.report)
+        }
+        val json = AeInterchangeConverter.toCanonicalJson(built.project) { relative ->
+            File(relative).takeIf { it.exists() }?.absolutePath
+        }
+        return ImportResult.Imported(patchCanonical(json, built), built.report)
+    }
+
+    // ------------------------------------------------------------------ internals
+
+    /** No sensible coordinate, angle or percentage comes near this; larger numbers (and NaN
+     * or infinity) mean damaged data. */
+    private const val LIMIT = 1e9
+
+    private fun ticks(seconds: Double): Long =
+        (seconds * AeInterchangeConverter.TICKS_PER_SECOND).roundToLong()
+
+    private fun secondsToTicks(seconds: Double?): Long? =
+        seconds?.takeIf { it.isFinite() }?.let { ticks(it) }
+
+    private data class RichEase(val speed: Double, val influence: Double)
+
+    private data class RichKeyframe(
+        val timeTicks: Long,
+        /** Converted value: 3 components for Vec3 props, 1 for Scalar props. */
+        val value: List<Double>,
+        val isVec3: Boolean,
+        val inInterp: String,
+        val outInterp: String,
+        val inEase: List<RichEase>,
+        val outEase: List<RichEase>,
+        val spatialIn: DoubleArray?,
+        val spatialOut: DoubleArray?,
+        val spatialAuto: Boolean?,
+        val roving: Boolean,
+        val label: Int
+    )
+
+    private data class Switches(
+        val video: Boolean,
+        val audio: Boolean,
+        val solo: Boolean,
+        val locked: Boolean,
+        val shy: Boolean,
+        val collapse: Boolean,
+        val quality: String,
+        val effects: Boolean,
+        val motionBlur: Boolean,
+        val adjustment: Boolean,
+        val threeD: Boolean,
+        val guide: Boolean
+    )
+
+    private data class LayerPatch(
+        val stretch: Double,
+        val blendMode: String,
+        val switches: Switches,
+        /** Rich keyframes by canonical property id (`anchor`, `position`, `scale`,
+         * `rotation`, `opacity`, `rotationX`, `rotationY`). */
+        val richKeys: Map<String, List<RichKeyframe>>,
+        /** Expressions by canonical property id: text to enabled. */
+        val expressions: Map<String, Pair<String, Boolean>>,
+        /** Static values by canonical property id, for properties the converter
+         * writes as a default (`rotationX`, `rotationY`, `orientation`). */
+        val staticValues: Map<String, List<Double>> = emptyMap()
+    )
+
+    private data class CompPatch(
+        val pixelAspect: Double,
+        val displayStartTicks: Long,
+        val workAreaStartTicks: Long,
+        val workAreaEndTicks: Long,
+        val shutterAngle: Double,
+        val shutterPhase: Double,
+        val renderer: String
+    )
+
+    private data class Built(
+        val project: AeProject,
+        val report: AepImportReport.ImportReport,
+        val compPatch: CompPatch,
+        val layerPatches: List<LayerPatch>
+    )
+
+    private enum class PropKind { ANCHOR, POSITION, SCALE, ROTATION, OPACITY }
+
+    private val TRANSFORM_SPECS: List<Triple<String, String, PropKind>> = listOf(
+        Triple("ADBE Anchor Point", "anchor", PropKind.ANCHOR),
+        Triple("ADBE Position", "position", PropKind.POSITION),
+        Triple("ADBE Scale", "scale", PropKind.SCALE),
+        Triple("ADBE Rotate Z", "rotation", PropKind.ROTATION),
+        Triple("ADBE Opacity", "opacity", PropKind.OPACITY)
+    )
+
+    /** Match names of the transform group that are always present and carry nothing in
+     * their default state (props.rs IGNORED). */
+    private val IGNORED_TRANSFORM: Set<String> = setOf(
+        "ADBE Position_0", "ADBE Position_1", "ADBE Position_2",
+        "ADBE Envir Appear in Reflect"
+    )
+
+    /** Layer property groups the official importer does not read (no loss in build.rs):
+     * always present, default/empty in every layer. */
+    private val IGNORED_LAYER_GROUPS: Set<String> = setOf(
+        "ADBE Plane Options Group",
+        "ADBE Extrsn Options Group",
+        "ADBE Data Group",
+        "ADBE Layer Overrides",
+        "ADBE Layer Sets",
+        "ADBE Source Options Group"
+    )
+
+    /** The blend mode codes the reader knows (`ldta` byte 99): the six sampled modes plus
+     * the codes the official importer established by name (906) and by rendering (907).
+     * Codes 0, 1, 3, 21, 22 and above 34 are not imported. */
+    private fun blendName(code: Int): String? = when (code) {
+        2 -> "Normal"
+        4 -> "Add"
+        5 -> "Multiply"
+        6 -> "Screen"
+        7 -> "Overlay"
+        26 -> "Difference"
+        8 -> "SoftLight"
+        9 -> "HardLight"
+        10 -> "Darken"
+        11 -> "Lighten"
+        12 -> "ClassicDifference"
+        13 -> "Hue"
+        14 -> "Saturation"
+        15 -> "Color"
+        16 -> "Luminosity"
+        17 -> "StencilAlpha"
+        18 -> "StencilLuma"
+        19 -> "SilhouetteAlpha"
+        20 -> "SilhouetteLuma"
+        23 -> "ClassicColorDodge"
+        24 -> "ClassicColorBurn"
+        25 -> "Exclusion"
+        27 -> "ColorDodge"
+        28 -> "ColorBurn"
+        29 -> "LinearDodge"
+        30 -> "LinearBurn"
+        31 -> "LinearLight"
+        32 -> "VividLight"
+        33 -> "PinLight"
+        34 -> "HardMix"
+        else -> null
+    }
+
+    private fun build(file: AepContainer.AepFile): Built {
+        val versions = AepImportReport.AeVersionInfo.of(file)
+        val col = AepImportReport.Collector()
+        val project = AepTypedView.Project.of(file)
+            ?: throw IllegalArgumentException(
+                "This .aep file has no project items; it may be damaged."
+            )
+        val allItems = project.allItems()
+        val comps = allItems.filter { it.kind() == AepTypedView.ItemKind.Composition }
+        val firstComp = comps.firstOrNull()
+            ?: throw IllegalArgumentException("This .aep file has no composition to import.")
+        for (comp in comps.drop(1)) {
+            col.lose(
+                AepImportReport.LossCategory.UnsupportedItems,
+                "composition '${comp.name() ?: "Composition"}' is not imported in this build " +
+                    "(only the first composition is imported)"
+            )
+        }
+        for (item in allItems) {
+            when (item.kind()) {
+                AepTypedView.ItemKind.Folder -> col.lose(
+                    AepImportReport.LossCategory.UnsupportedItems,
+                    "folder '${item.name() ?: "Folder"}' is not imported in this build " +
+                        "(folders are not in this project's model); its contents are still imported"
+                )
+                is AepTypedView.ItemKind.Other -> col.lose(
+                    AepImportReport.LossCategory.UnsupportedItems,
+                    "project item '${item.name() ?: "Item"}' is not imported in this build"
+                )
+                else -> Unit
+            }
+        }
+        // Project settings are not decoded in this build; the converter defaults are used.
+        col.lose(
+            AepImportReport.LossCategory.ProjectSettings,
+            "project settings were not read in this build (working space, colour depth, " +
+                "time display); the defaults are used"
+        )
+
+        val compView = firstComp.comp()
+            ?: throw IllegalArgumentException(
+                "composition \"${firstComp.name() ?: "Composition"}\": the composition data is unreadable"
+            )
+        val compName = compView.name() ?: "Composition"
+        val header = compView.header()
+            ?: throw IllegalArgumentException(
+                "composition \"$compName\": the composition header is unreadable"
+            )
+        val frameRate = header.frameRate()
+            ?: throw IllegalArgumentException(
+                "composition \"$compName\": the frame rate is unreadable"
+            )
+        val durationSeconds = header.durationSeconds()
+            ?: throw IllegalArgumentException(
+                "composition \"$compName\": the duration is unreadable"
+            )
+        val background = header.backgroundRgb().toList()
+        val compWidth = header.width
+        val compHeight = header.height
+
+        // First pass over the layers: decide what imports, so parent links can point only
+        // at imported layers.
+        val layerRows = compView.layers().mapNotNull { layer ->
+            val layerHeader = layer.header()
+            if (layerHeader == null) {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "layer '${layer.name() ?: "Layer"}': the layer header is unreadable, " +
+                        "the layer is skipped"
+                )
+                return@mapNotNull null
+            }
+            val name = layer.name() ?: project.layerDisplayName(layer) ?: "Layer"
+            LayerRow(layer, layerHeader, name)
+        }
+        val importable = layerRows.filter { row -> layerImports(row, project, col) }
+        val idToName = importable.associate { it.header.id to it.name }
+        val nameCounts = importable.groupingBy { it.name }.eachCount()
+        // Parent links, with loop detection: follow each chain; a cycle breaks the link.
+        val parentNameById = HashMap<Long, String?>()
+        for (row in importable) {
+            val parentId = row.header.parentId
+            if (parentId == null) {
+                parentNameById[row.header.id] = null
+                continue
+            }
+            if (parentId == row.header.id) {
+                col.lose(
+                    AepImportReport.LossCategory.ParentLinks,
+                    "layer '${row.name}': the layer is its own parent, the link is dropped"
+                )
+                parentNameById[row.header.id] = null
+                continue
+            }
+            val parentName = idToName[parentId]
+            if (parentName == null) {
+                col.lose(
+                    AepImportReport.LossCategory.ParentLinks,
+                    "layer '${row.name}': the parent layer was not imported, the link is dropped"
+                )
+                parentNameById[row.header.id] = null
+                continue
+            }
+            if (nameCounts.getValue(parentName) > 1) {
+                col.lose(
+                    AepImportReport.LossCategory.ParentLinks,
+                    "layer '${row.name}': the parent name '$parentName' is ambiguous, " +
+                        "the link is dropped"
+                )
+                parentNameById[row.header.id] = null
+                continue
+            }
+            // Walk the chain from the parent: a cycle drops the link.
+            val seen = HashSet<Long>()
+            var cursor: Long? = parentId
+            var cyclic = false
+            while (cursor != null) {
+                if (!seen.add(cursor)) {
+                    cyclic = true
+                    break
+                }
+                val next = importable.firstOrNull { it.header.id == cursor }?.header?.parentId
+                cursor = next?.takeIf { idToName.containsKey(it) }
+            }
+            if (cyclic) {
+                col.lose(
+                    AepImportReport.LossCategory.ParentLinks,
+                    "layer '${row.name}': the parent link forms a loop, the link is dropped"
+                )
+                parentNameById[row.header.id] = null
+            } else {
+                parentNameById[row.header.id] = parentName
+            }
+        }
+
+        val aeLayers = ArrayList<AeLayer>()
+        val layerPatches = ArrayList<LayerPatch>()
+        for (row in importable) {
+            val built = buildLayer(row, project, compView, header, durationSeconds, parentNameById[row.header.id], col)
+            if (built == null) {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "layer '${row.name}': the layer could not be built and is skipped"
+                )
+                continue
+            }
+            aeLayers.add(built.first)
+            layerPatches.add(built.second)
+        }
+        col.imported.compositions = 1
+        col.imported.layers = aeLayers.size
+
+        val pixelAspect = header.pixelAspectRatio()?.takeIf { it.isFinite() && it > 0.0 }
+            ?: run {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "composition \"$compName\": the pixel aspect ratio is unreadable, 1.0 is used"
+                )
+                1.0
+            }
+        val rendererName = compView.renderer()?.matchName
+        val renderer = when (rendererName) {
+            null -> "Classic3D"
+            "ADBE Escher" -> "Classic3D"
+            "ADBE Calder" -> "Advanced3D"
+            else -> {
+                col.lose(
+                    AepImportReport.LossCategory.ProjectSettings,
+                    "composition \"$compName\": the renderer '$rendererName' is not known, " +
+                        "Classic 3D is used"
+                )
+                "Classic3D"
+            }
+        }
+        val compPatch = CompPatch(
+            pixelAspect = pixelAspect,
+            displayStartTicks = secondsToTicks(header.displayStartSeconds()) ?: 0L,
+            workAreaStartTicks = secondsToTicks(header.workAreaStartSeconds()) ?: 0L,
+            workAreaEndTicks = secondsToTicks(header.workAreaEndSeconds()) ?: ticks(durationSeconds),
+            shutterAngle = header.shutterAngle.toDouble(),
+            shutterPhase = header.shutterPhase?.toDouble() ?: -90.0,
+            renderer = renderer
+        )
+        // Composition markers are not imported in v1.
+        val secl = firstComp.chunk.findList("SecL")
+        val compMarkers = secl?.findList("mrst")
+        if (compMarkers != null) {
+            val count = markerCount(compMarkers)
+            col.lose(
+                AepImportReport.LossCategory.Markers,
+                "composition \"$compName\": $count marker(s) are not imported in this build"
+            )
+        }
+
+        val aeProject = AeProject(
+            projectName = compName,
+            comps = listOf(
+                AeComp(
+                    name = compName,
+                    width = compWidth,
+                    height = compHeight,
+                    frameRate = frameRate,
+                    durationSeconds = durationSeconds,
+                    background = background,
+                    layers = aeLayers
+                )
+            ),
+            warnings = emptyList()
+        )
+        return Built(aeProject, col.finish(versions), compPatch, layerPatches)
+    }
+
+    private data class LayerRow(
+        val layer: AepTypedView.Layer,
+        val header: AepHeader.LayerHeader,
+        val name: String
+    )
+
+    /** Whether the layer imports at all (type + source), recording the loss when it does not. */
+    private fun layerImports(
+        row: LayerRow,
+        project: AepTypedView.Project,
+        col: AepImportReport.Collector
+    ): Boolean {
+        val name = row.name
+        return when (row.header.layerType) {
+            AepHeader.LayerType.Light -> {
+                col.lose(
+                    AepImportReport.LossCategory.UnsupportedLayers,
+                    "light layer '$name' is not imported in this build"
+                )
+                false
+            }
+            AepHeader.LayerType.Camera -> {
+                col.lose(
+                    AepImportReport.LossCategory.UnsupportedLayers,
+                    "camera layer '$name' is not imported in this build"
+                )
+                false
+            }
+            AepHeader.LayerType.Text, AepHeader.LayerType.Shape -> true
+            AepHeader.LayerType.Av -> {
+                if (row.header.isNullObject()) return true
+                val source = project.layerSource(row.layer)
+                if (source == null) {
+                    col.lose(
+                        AepImportReport.LossCategory.UnsupportedLayers,
+                        "layer '$name' has no source item and is skipped"
+                    )
+                    return false
+                }
+                when (source.kind()) {
+                    AepTypedView.ItemKind.Composition -> {
+                        col.lose(
+                            AepImportReport.LossCategory.UnsupportedLayers,
+                            "precomp layer '$name' is not imported in this build"
+                        )
+                        false
+                    }
+                    AepTypedView.ItemKind.Footage -> {
+                        val footage = source.footage()
+                        if (footage == null) {
+                            col.lose(
+                                AepImportReport.LossCategory.DamagedData,
+                                "layer '$name': the footage data is unreadable, the layer is skipped"
+                            )
+                            false
+                        } else if (!footage.isSolid && footage.path == null) {
+                            col.lose(
+                                AepImportReport.LossCategory.UnsupportedLayers,
+                                "footage layer '$name' has no stored file path and is skipped"
+                            )
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    else -> {
+                        col.lose(
+                            AepImportReport.LossCategory.UnsupportedLayers,
+                            "layer '$name' has an unsupported source and is skipped"
+                        )
+                        false
+                    }
+                }
+            }
+            is AepHeader.LayerType.Other -> {
+                col.lose(
+                    AepImportReport.LossCategory.UnsupportedLayers,
+                    "layer '$name' has an unknown layer type and is skipped"
+                )
+                false
+            }
+        }
+    }
+
+    /** Builds one importable layer: the [AeLayer] for the converter and its patch. */
+    private fun buildLayer(
+        row: LayerRow,
+        project: AepTypedView.Project,
+        compView: AepTypedView.Comp,
+        compHeader: AepHeader.CompHeader,
+        compDuration: Double,
+        parentName: String?,
+        col: AepImportReport.Collector
+    ): Pair<AeLayer, LayerPatch>? {
+        val layer = row.layer
+        val header = row.header
+        val name = row.name
+        val compWidth = compHeader.width
+        val compHeight = compHeader.height
+        val rootProps = layer.properties()
+        val transformGroup = (rootProps?.get("ADBE Transform Group") as? AepTypedView.PropNode.Group)?.group
+        val sourceSize = project.layerSourceSize(layer)
+        val isAv = header.layerType == AepHeader.LayerType.Av && !header.isNullObject()
+
+        // The layer type and source.
+        var type = AeLayerType.NULL
+        var file: String? = null
+        var kind = "video"
+        var hasAudio = false
+        var frameRate: Double? = null
+        var width = compWidth
+        var height = compHeight
+        var durationSeconds = compDuration
+        var color = listOf(1.0, 1.0, 1.0, 1.0)
+        when (header.layerType) {
+            AepHeader.LayerType.Text -> {
+                type = AeLayerType.TEXT
+                col.imported.textLayers++
+                col.lose(
+                    AepImportReport.LossCategory.TextLayers,
+                    "text layer '$name': the text itself is not imported in this build " +
+                        "(an empty text layer is imported)"
+                )
+            }
+            AepHeader.LayerType.Shape -> {
+                type = AeLayerType.SHAPE
+                col.imported.shapeLayers++
+                col.lose(
+                    AepImportReport.LossCategory.ShapeLayers,
+                    "shape layer '$name': shape contents are not imported in this build"
+                )
+            }
+            AepHeader.LayerType.Av -> {
+                if (header.isNullObject()) {
+                    type = AeLayerType.NULL
+                    col.imported.nullLayers++
+                } else {
+                    val source = project.layerSource(layer) ?: return null
+                    val footage = source.footage() ?: return null
+                    width = footage.width.toInt().coerceAtLeast(1)
+                    height = footage.height.toInt().coerceAtLeast(1)
+                    if (footage.isSolid) {
+                        type = AeLayerType.SOLID
+                        col.imported.solids++
+                        col.imported.solidLayers++
+                        val rgb = footage.solidRgb()
+                        color = if (rgb != null) {
+                            listOf(rgb[0].toDouble(), rgb[1].toDouble(), rgb[2].toDouble())
+                        } else {
+                            listOf(1.0, 1.0, 1.0)
+                        }
+                    } else {
+                        type = AeLayerType.FOOTAGE
+                        col.imported.footage++
+                        col.imported.footageLayers++
+                        val storedPath = footage.path!!.replace('\\', '/')
+                        file = storedPath
+                        if (!File(storedPath).exists()) {
+                            col.missingFootage.add(storedPath)
+                        }
+                        hasAudio = footage.audioSampleRate != null
+                        kind = footageKind(storedPath, hasAudio, footage.width)
+                        frameRate = footage.nativeFrameRate.takeIf { it > 0 }?.toDouble()
+                        durationSeconds = footage.duration?.toDoubleOrNull()
+                            ?.takeIf { it > 0.0 && it.isFinite() } ?: compDuration
+                    }
+                }
+            }
+            else -> return null
+        }
+
+        // Transform: static values (or the first key) with the official conversions.
+        val anchorSize: Pair<Double, Double>? = if (isAv) {
+            sourceSize?.let { it.first.toDouble() to it.second.toDouble() }
+        } else {
+            null
+        }
+        val anchorDefault = if (anchorSize != null) {
+            listOf(anchorSize.first / 2.0, anchorSize.second / 2.0, 0.0)
+        } else {
+            listOf(0.0, 0.0, 0.0)
+        }
+        val positionDefault = listOf(compWidth / 2.0, compHeight / 2.0, 0.0)
+        val values = HashMap<String, List<Double>>()
+        val richKeys = HashMap<String, List<RichKeyframe>>()
+        val expressions = HashMap<String, Pair<String, Boolean>>()
+        val timescale = compHeader.timeBase.timescale
+        for ((matchName, propId, propKind) in TRANSFORM_SPECS) {
+            val prop = (transformGroup?.get(matchName) as? AepTypedView.PropNode.Property)?.property
+            val default = when (propKind) {
+                PropKind.ANCHOR -> anchorDefault
+                PropKind.POSITION -> positionDefault
+                PropKind.SCALE -> listOf(100.0, 100.0, 100.0)
+                PropKind.ROTATION -> listOf(0.0)
+                PropKind.OPACITY -> listOf(100.0)
+            }
+            if (prop == null) {
+                values[propId] = default
+                continue
+            }
+            val read = readTransformValue(prop, default) { raw ->
+                convertValue(propKind, raw, anchorSize)
+            }
+            if (read.unreadable) {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "layer '$name': $matchName is unreadable, the default is used"
+                )
+            }
+            values[propId] = read.value
+            if (prop.isAnimated()) {
+                val keys = importKeys(prop, propKind, name, matchName, timescale, anchorSize, col)
+                if (keys.isNotEmpty()) richKeys[propId] = keys
+            }
+            val enabled = prop.expressionEnabled()
+            val text = prop.expression()
+            if (enabled != null && text != null) {
+                expressions[propId] = text to enabled
+                col.imported.expressions++
+            }
+        }
+
+        // 3D rotations (X/Y): imported like rotation — static value, keys, expression
+        // (props.rs ROTATIONS).
+        val staticValues = HashMap<String, List<Double>>()
+        for ((matchName, propId) in listOf("ADBE Rotate X" to "rotationX", "ADBE Rotate Y" to "rotationY")) {
+            val prop = (transformGroup?.get(matchName) as? AepTypedView.PropNode.Property)?.property
+                ?: continue
+            val raw = if (prop.isAnimated()) prop.firstKeyValue() else prop.staticValue()
+            val v = raw?.firstOrNull()
+            if (v == null || !v.isFinite() || abs(v) > LIMIT) {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "layer '$name': $matchName is unreadable, the default is used"
+                )
+            } else {
+                staticValues[propId] = listOf(v)
+            }
+            if (prop.isAnimated()) {
+                val keys = importKeys(prop, PropKind.ROTATION, name, matchName, timescale, anchorSize, col)
+                if (keys.isNotEmpty()) richKeys[propId] = keys
+            }
+            val enabled = prop.expressionEnabled()
+            val text = prop.expression()
+            if (enabled != null && text != null) {
+                expressions[propId] = text to enabled
+                col.imported.expressions++
+            }
+        }
+
+        // Orientation: the static value is imported; keyframes and expressions are not
+        // (values.rs orientation(), props.rs import_orientation_keys). Absent means the
+        // default [0, 0, 0], which the converter already writes — nothing to lose.
+        val orientation = layer.orientation()
+        if (orientation != null) {
+            when {
+                orientation.animated -> col.lose(
+                    AepImportReport.LossCategory.TransformProperties,
+                    "layer '$name': ADBE Orientation keyframes are not imported in this build"
+                )
+                orientation.hasExpression -> col.lose(
+                    AepImportReport.LossCategory.TransformProperties,
+                    "layer '$name': ADBE Orientation expression is not imported in this build"
+                )
+                orientation.degrees.any { !it.isFinite() || abs(it) > LIMIT } -> col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "layer '$name': ADBE Orientation is unreadable, the default is used"
+                )
+                orientation.degrees.any { it != 0.0 } ->
+                    staticValues["orientation"] = orientation.degrees.toList()
+            }
+        }
+
+        // Everything else in the transform group: a property in its default state holds
+        // nothing to lose (props.rs report_other_properties). Only a stored property
+        // (animated, flags 1, expression) that is not in the known set is a loss.
+        if (transformGroup != null) {
+            val known = TRANSFORM_SPECS.map { it.first }.toSet() +
+                setOf("ADBE Rotate X", "ADBE Rotate Y", "ADBE Orientation", "ADBE Group End")
+            for (entry in transformGroup.entries()) {
+                if (entry.matchName in known) continue
+                val p = (entry.node as? AepTypedView.PropNode.Property)?.property ?: continue
+                val stored = p.isAnimated() || p.flags() == 1L || p.expression() != null
+                val ignored = entry.matchName in IGNORED_TRANSFORM &&
+                    p.flags() != 1L && !p.isAnimated()
+                if (stored && !ignored) {
+                    col.lose(
+                        AepImportReport.LossCategory.TransformProperties,
+                        "layer '$name': ${entry.matchName}"
+                    )
+                }
+            }
+        }
+
+        // Everything else in the layer's property tree is reported, never silent.
+        if (rootProps != null) {
+            for (entry in rootProps.entries()) {
+                val entryName = entry.matchName
+                when {
+                    entryName == "ADBE Transform Group" -> Unit
+                    entryName.contains("Effect Parade", ignoreCase = true) -> {
+                        val parade = (entry.node as? AepTypedView.PropNode.Group)?.group
+                        val effects = parade?.entries().orEmpty()
+                        for (effect in effects) {
+                            col.lose(
+                                AepImportReport.LossCategory.Effects,
+                                "layer '$name': effect '${effect.matchName}' is not imported in this build"
+                            )
+                        }
+                        if (effects.isEmpty()) {
+                            col.lose(
+                                AepImportReport.LossCategory.Effects,
+                                "layer '$name': effects are not imported in this build"
+                            )
+                        }
+                    }
+                    entryName.contains("Mask", ignoreCase = true) -> {
+                        col.lose(
+                            AepImportReport.LossCategory.Masks,
+                            "layer '$name': masks are not imported in this build"
+                        )
+                    }
+                    entryName.contains("Time Remap", ignoreCase = true) -> {
+                        val remap = (entry.node as? AepTypedView.PropNode.Property)?.property
+                        val active = remap != null &&
+                            (remap.isAnimated() || remap.flags() == 1L || remap.expression() != null)
+                        if (active) {
+                            col.lose(
+                                AepImportReport.LossCategory.TimeRemapping,
+                                "layer '$name': time remapping is not imported in this build"
+                            )
+                        }
+                    }
+                    entryName.contains("Layer Styles", ignoreCase = true) -> {
+                        // A style group with no entries holds nothing set (the fixture's
+                        // styles are all empty groups); only a style with values is a loss.
+                        // "ADBE Blend Options Group" is blend settings, not a style.
+                        val styles = (entry.node as? AepTypedView.PropNode.Group)?.group
+                        val set = styles?.entries().orEmpty().count {
+                            it.matchName != "ADBE Blend Options Group" &&
+                                (it.node as? AepTypedView.PropNode.Group)?.group
+                                    ?.entries()?.isNotEmpty() == true
+                        } ?: 0
+                        if (set > 0) {
+                            col.lose(
+                                AepImportReport.LossCategory.LayerStyles,
+                                "layer '$name': $set layer style(s) with set values are not " +
+                                    "imported in this build"
+                            )
+                        }
+                    }
+                    entryName.contains("Text Properties", ignoreCase = true) -> {
+                        // The text loss was already recorded for text layers.
+                        if (type != AeLayerType.TEXT) {
+                            col.lose(
+                                AepImportReport.LossCategory.TextLayers,
+                                "layer '$name': text properties are not imported in this build"
+                            )
+                        }
+                    }
+                    entryName.contains("Marker", ignoreCase = true) -> {
+                        // Markers live under `mrst`, handled after this loop; nothing to do here.
+                    }
+                    entryName.contains("Audio", ignoreCase = true) -> {
+                        // Covered by the standing limitations (audio levels are not decoded).
+                    }
+                    entryName.contains("Material", ignoreCase = true) -> {
+                        // Covered by the standing limitations (3D material options are not decoded).
+                    }
+                    entryName in IGNORED_LAYER_GROUPS -> {
+                        // Always present, never read by the official importer either.
+                    }
+                    else -> {
+                        col.lose(
+                            AepImportReport.LossCategory.UnsupportedLayers,
+                            "layer '$name': property group '$entryName' is not imported in this build"
+                        )
+                    }
+                }
+            }
+        }
+        // Layer markers live under `mrst`, not in the property tree entries.
+        val layerMarkers = layer.chunk.findList("mrst")
+        if (layerMarkers != null) {
+            val count = markerCount(layerMarkers)
+            col.lose(
+                AepImportReport.LossCategory.Markers,
+                "layer '$name': $count marker(s) are not imported in this build"
+            )
+        }
+
+        val startSeconds = header.startSeconds()
+        val inSeconds = header.inPointSeconds()
+        val outSeconds = header.outPointSeconds()
+        if (startSeconds == null || inSeconds == null || outSeconds == null) {
+            col.lose(
+                AepImportReport.LossCategory.DamagedData,
+                "layer '$name': the layer times are unreadable, the composition range is used"
+            )
+        }
+        val anchor = values.getValue("anchor")
+        val position = values.getValue("position")
+        val scale = values.getValue("scale")
+        val aeLayer = AeLayer(
+            name = name,
+            type = type,
+            color = color,
+            file = file,
+            kind = kind,
+            hasAudio = hasAudio,
+            frameRate = frameRate,
+            width = width,
+            height = height,
+            durationSeconds = durationSeconds,
+            position = position[0] to position[1],
+            anchorPoint = anchor[0] to anchor[1],
+            scale = scale[0] to scale[1],
+            rotation = values.getValue("rotation")[0],
+            opacity = values.getValue("opacity")[0],
+            startTime = startSeconds ?: 0.0,
+            inPoint = inSeconds ?: 0.0,
+            outPoint = outSeconds ?: compDuration,
+            parentName = parentName,
+            keyframes = simpleKeys(richKeys)
+        )
+        val blend = blendName(header.blendMode.code())
+        if (blend == null) {
+            col.lose(
+                AepImportReport.LossCategory.BlendModes,
+                "layer '$name': blend mode code ${header.blendMode.code()} is not known, " +
+                    "Normal is used"
+            )
+        }
+        val patch = LayerPatch(
+            stretch = header.stretchPercent(),
+            blendMode = blend ?: "Normal",
+            switches = Switches(
+                video = header.isVideoEnabled(),
+                audio = header.isAudioEnabled(),
+                solo = header.isSolo(),
+                locked = header.isLocked(),
+                shy = header.isShy(),
+                collapse = header.collapsesTransformations(),
+                quality = when (header.quality) {
+                    AepHeader.Quality.Draft -> "Draft"
+                    else -> "Best"
+                },
+                effects = header.isEffectsEnabled(),
+                motionBlur = header.isMotionBlur(),
+                adjustment = header.isAdjustment(),
+                threeD = header.isThreeD(),
+                guide = header.isGuide()
+            ),
+            richKeys = richKeys,
+            expressions = expressions,
+            staticValues = staticValues
+        )
+        return aeLayer to patch
+    }
+
+    private data class PropRead(val value: List<Double>, val unreadable: Boolean)
+
+    /** Reads a transform property: the static value, or the first key's value when animated.
+     * Absent means the default; present-but-unreadable means the default plus a flag. */
+    private fun readTransformValue(
+        prop: AepTypedView.Property,
+        default: List<Double>,
+        convert: (List<Double>) -> List<Double>?
+    ): PropRead {
+        val raw = if (prop.isAnimated()) prop.firstKeyValue() else prop.staticValue()
+        if (raw == null) return PropRead(default, true)
+        val converted = convert(raw) ?: return PropRead(default, true)
+        return PropRead(converted, false)
+    }
+
+    /** The stored value in project units, or null when a needed component is missing or
+     * not a finite number within the sane range. */
+    private fun convertValue(
+        kind: PropKind,
+        raw: List<Double>,
+        anchorSize: Pair<Double, Double>?
+    ): List<Double>? {
+        fun component(i: Int): Double? =
+            raw.getOrNull(i)?.takeIf { it.isFinite() && abs(it) <= LIMIT }
+        return when (kind) {
+            PropKind.ANCHOR -> {
+                val x = component(0) ?: return null
+                val y = component(1) ?: return null
+                val z = component(2) ?: 0.0
+                if (anchorSize != null) {
+                    listOf(x * anchorSize.first, y * anchorSize.second, z)
+                } else {
+                    listOf(x, y, z)
+                }
+            }
+            PropKind.POSITION -> {
+                val x = component(0) ?: return null
+                val y = component(1) ?: return null
+                val z = component(2) ?: 0.0
+                listOf(x, y, z)
+            }
+            PropKind.SCALE -> {
+                val x = component(0) ?: return null
+                val y = component(1) ?: return null
+                val z = raw.getOrNull(2)?.takeIf { it.isFinite() && abs(it) <= LIMIT }
+                    ?.let { it * 100.0 } ?: 100.0
+                listOf(x * 100.0, y * 100.0, z)
+            }
+            PropKind.ROTATION -> {
+                val v = component(0) ?: return null
+                listOf(v)
+            }
+            PropKind.OPACITY -> {
+                val v = component(0) ?: return null
+                listOf(v * 100.0)
+            }
+        }
+    }
+
+    /** The keyframes of an animated transform property as rich keyframes. */
+    private fun importKeys(
+        prop: AepTypedView.Property,
+        kind: PropKind,
+        layerName: String,
+        matchName: String,
+        compTimescale: Long,
+        anchorSize: Pair<Double, Double>?,
+        col: AepImportReport.Collector
+    ): List<RichKeyframe> {
+        val what = "layer '$layerName': $matchName"
+        val list = prop.keys() ?: return emptyList()
+        val scale = prop.timeScale()?.takeIf { it != 0L } ?: compTimescale
+        if (scale == 0L) {
+            col.lose(
+                AepImportReport.LossCategory.DamagedData,
+                "$what: the time scale is zero, the keyframes are skipped"
+            )
+            return emptyList()
+        }
+        val isVec3 = kind == PropKind.ANCHOR || kind == PropKind.POSITION || kind == PropKind.SCALE
+        val factor = when (kind) {
+            PropKind.ANCHOR -> anchorSize?.second ?: 1.0
+            PropKind.SCALE, PropKind.OPACITY -> 100.0
+            else -> 1.0
+        }
+        val keys = ArrayList<RichKeyframe>()
+        for (rec in list.keyframes()) {
+            val units = rec.timeUnits()
+            val raw = rec.value()
+            if (units == null || raw == null) {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "$what: unreadable keyframe"
+                )
+                continue
+            }
+            val value = convertValue(kind, raw, anchorSize)
+            if (value == null) {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "$what: keyframe value is missing or not a number"
+                )
+                continue
+            }
+            var inInterp = interp(rec.interpolationIn(), col, what)
+            var outInterp = interp(rec.interpolationOut(), col, what)
+            val spatial = rec.spatial()
+            val spatialIn = spatial?.let { convertTangent(kind, it.inTangent, anchorSize) }
+            val spatialOut = spatial?.let { convertTangent(kind, it.outTangent, anchorSize) }
+            val spatialAuto = spatial?.let { it.autoBezierFlag != 0L }
+            val roving = rec.isRoving() ?: false
+            val label = rec.label()?.takeIf { it <= 16 } ?: 0
+            var inEase = emptyList<RichEase>()
+            var outEase = emptyList<RichEase>()
+            if (inInterp == "Bezier" || outInterp == "Bezier") {
+                val eases = keyEases(rec, factor)
+                if (eases == null) {
+                    col.lose(
+                        AepImportReport.LossCategory.ApproximatedKeyframes,
+                        "$what: bezier key read as linear (ease data not decodable)"
+                    )
+                    if (inInterp == "Bezier") inInterp = "Linear"
+                    if (outInterp == "Bezier") outInterp = "Linear"
+                } else {
+                    if (inInterp == "Bezier") inEase = eases.first
+                    if (outInterp == "Bezier") outEase = eases.second
+                }
+            }
+            keys.add(
+                RichKeyframe(
+                    timeTicks = ticks(units.toDouble() / scale.toDouble()),
+                    value = value,
+                    isVec3 = isVec3,
+                    inInterp = inInterp,
+                    outInterp = outInterp,
+                    inEase = inEase,
+                    outEase = outEase,
+                    spatialIn = spatialIn,
+                    spatialOut = spatialOut,
+                    spatialAuto = spatialAuto,
+                    roving = roving,
+                    label = label
+                )
+            )
+        }
+        if (keys.isEmpty()) return emptyList()
+        keys.sortBy { it.timeTicks }
+        val deduped = ArrayList<RichKeyframe>(keys.size)
+        var lastTime: Long? = null
+        var hadDupes = false
+        for (key in keys) {
+            if (key.timeTicks == lastTime) {
+                hadDupes = true
+                continue
+            }
+            deduped.add(key)
+            lastTime = key.timeTicks
+        }
+        if (hadDupes) {
+            col.lose(
+                AepImportReport.LossCategory.DamagedData,
+                "$what: keyframes at the same time"
+            )
+        }
+        // The first key's incoming and the last key's outgoing ease mean nothing.
+        val cleaned = deduped.mapIndexed { index, key ->
+            when (index) {
+                0 -> key.copy(inEase = emptyList())
+                deduped.lastIndex -> key.copy(outEase = emptyList())
+                else -> key
+            }
+        }
+        col.imported.keyframes += cleaned.size
+        return cleaned
+    }
+
+    /** The interpolation of one side of a key; unknown codes read as linear. */
+    private fun interp(
+        interp: AepKeys.Interpolation?,
+        col: AepImportReport.Collector,
+        what: String
+    ): String = when (interp) {
+        null, AepKeys.Interpolation.Linear -> "Linear"
+        AepKeys.Interpolation.Bezier -> "Bezier"
+        AepKeys.Interpolation.Hold -> "Hold"
+        is AepKeys.Interpolation.Other -> {
+            col.lose(
+                AepImportReport.LossCategory.ApproximatedKeyframes,
+                "$what: unknown interpolation ${interp.code} read as linear"
+            )
+            "Linear"
+        }
+    }
+
+    /** The temporal ease of both sides of a key: one entry per dimension, or null where the
+     * data cannot be used. */
+    private fun keyEases(
+        rec: AepTypedView.Keyframe,
+        factor: Double
+    ): Pair<List<RichEase>, List<RichEase>>? {
+        fun ease(speed: Double, influence: Double): RichEase? {
+            val scaled = speed * factor
+            if (!scaled.isFinite() || abs(scaled) > LIMIT * 100.0 || !influence.isFinite()) {
+                return null
+            }
+            return RichEase(scaled, influence.coerceIn(0.001, 1.0))
+        }
+        return when (val kind = rec.kind()) {
+            is AepKeys.KeyframeKind.Spatial, is AepKeys.KeyframeKind.Plain -> {
+                if (kind is AepKeys.KeyframeKind.Plain && kind.components != 1) {
+                    val all = rec.easeComponents() ?: return null
+                    if (all.size != kind.components) return null
+                    val inEases = ArrayList<RichEase>(all.size)
+                    val outEases = ArrayList<RichEase>(all.size)
+                    for (e in all) {
+                        inEases.add(ease(e.inSpeed, e.inInfluence) ?: return null)
+                        outEases.add(ease(e.outSpeed, e.outInfluence) ?: return null)
+                    }
+                    inEases to outEases
+                } else {
+                    val e = rec.ease() ?: return null
+                    listOf(ease(e.inSpeed, e.inInfluence) ?: return null) to
+                        listOf(ease(e.outSpeed, e.outInfluence) ?: return null)
+                }
+            }
+            else -> null
+        }
+    }
+
+    /** A tangent offset, in the same units as the value. */
+    private fun convertTangent(
+        kind: PropKind,
+        tangent: List<Double>,
+        anchorSize: Pair<Double, Double>?
+    ): DoubleArray {
+        fun component(i: Int): Double =
+            tangent.getOrNull(i)?.takeIf { it.isFinite() } ?: 0.0
+        val t = when (kind) {
+            PropKind.ANCHOR -> if (anchorSize != null) {
+                doubleArrayOf(
+                    component(0) * anchorSize.first,
+                    component(1) * anchorSize.second,
+                    component(2)
+                )
+            } else {
+                doubleArrayOf(component(0), component(1), component(2))
+            }
+            else -> doubleArrayOf(component(0), component(1), component(2))
+        }
+        return if (t.all { abs(it) <= LIMIT }) t else doubleArrayOf(0.0, 0.0, 0.0)
+    }
+
+    /** The number of markers in an `mrst` list (the keyframe count of its `tdbs` property). */
+    private fun markerCount(mrstHolder: AepContainer.Chunk): Int {
+        val tdbs = mrstHolder.findList("mrst")?.childList("tdbs")
+            ?: mrstHolder.childList("tdbs")
+            ?: return 1
+        val prop = AepTypedView.Property.fromChunk(tdbs) ?: return 1
+        return prop.keys()?.len()?.takeIf { it > 0 } ?: 1
+    }
+
+    /** The footage kind for the converter: still, audio or video. */
+    private fun footageKind(file: String, hasAudio: Boolean, width: Long): String {
+        val ext = file.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            "png", "jpg", "jpeg", "webp", "bmp", "gif", "tif", "tiff" -> "still"
+            "mp3", "wav", "aac", "flac", "ogg", "m4a", "opus" -> "audio"
+            else -> if (hasAudio && width == 0L) "audio" else "video"
+        }
+    }
+
+    /** The simple keyframes the converter writes (time + value); the patch replaces them
+     * with the rich keyframes. */
+    private fun simpleKeys(richKeys: Map<String, List<RichKeyframe>>): Map<String, List<AeKeyframe>> {
+        val out = HashMap<String, List<AeKeyframe>>()
+        for ((propId, keys) in richKeys) {
+            val frames = keys.map { key ->
+                val seconds = key.timeTicks.toDouble() / AeInterchangeConverter.TICKS_PER_SECOND
+                val value = if (key.isVec3) {
+                    AeValue.Vec2(key.value[0], key.value[1])
+                } else {
+                    AeValue.Scalar(key.value[0])
+                }
+                AeKeyframe(seconds, value)
+            }
+            out[propId] = frames
+        }
+        return out
+    }
+
+    // ------------------------------------------------------------------ patching
+
+    /** Patches the converter output with the fields the interchange model does not carry. */
+    private fun patchCanonical(json: String, built: Built): String {
+        val root = JSONObject(json)
+        val items = root.getJSONObject("items")
+        var compKind: JSONObject? = null
+        val itemKeys = items.keys()
+        while (itemKeys.hasNext()) {
+            val key = itemKeys.next()
+            val item = items.getJSONObject(key)
+            val kind = item.optJSONObject("kind") ?: continue
+            if (kind.optString("type") == "Comp") {
+                compKind = kind
+                break
+            }
+        }
+        val comp = compKind
+            ?: throw IllegalStateException("converter output has no composition")
+        val patch = built.compPatch
+        comp.put("pixel_aspect", patch.pixelAspect)
+        comp.put("display_start", patch.displayStartTicks)
+        comp.put("work_area", JSONArray().put(patch.workAreaStartTicks).put(patch.workAreaEndTicks))
+        comp.put("shutter_angle", patch.shutterAngle)
+        comp.put("shutter_phase", patch.shutterPhase)
+        comp.put("renderer", patch.renderer)
+        val layers = comp.getJSONArray("layers")
+        for (i in 0 until layers.length()) {
+            val layerJson = layers.getJSONObject(i)
+            val layerPatch = built.layerPatches.getOrNull(i) ?: continue
+            layerJson.put("stretch", layerPatch.stretch)
+            layerJson.put("blend_mode", layerPatch.blendMode)
+            layerJson.put("switches", switchesJson(layerPatch.switches))
+            val props = layerJson.optJSONObject("props") ?: continue
+            val children = props.optJSONArray("children") ?: continue
+            for (c in 0 until children.length()) {
+                val child = children.getJSONObject(c)
+                if (child.optString("match") != "transform") continue
+                val tchildren = child.optJSONArray("children") ?: continue
+                for (t in 0 until tchildren.length()) {
+                    val prop = tchildren.getJSONObject(t)
+                    val match = prop.optString("match")
+                    val keys = layerPatch.richKeys[match]
+                    if (keys != null) {
+                        prop.put("keys", richKeysJson(keys))
+                    }
+                    val static = layerPatch.staticValues[match]
+                    if (static != null) {
+                        prop.put("value", staticValueJson(match, static))
+                    }
+                    val expr = layerPatch.expressions[match]
+                    if (expr != null) {
+                        prop.put(
+                            "expr",
+                            JSONObject().put("text", expr.first).put("enabled", expr.second)
+                        )
+                    }
+                }
+            }
+        }
+        return root.toString()
+    }
+
+    private fun switchesJson(switches: Switches): JSONObject = JSONObject()
+        .put("video", switches.video)
+        .put("audio", switches.audio)
+        .put("solo", switches.solo)
+        .put("locked", switches.locked)
+        .put("shy", switches.shy)
+        .put("collapse", switches.collapse)
+        .put("quality", switches.quality)
+        .put("sampling", "Bilinear")
+        .put("effects", switches.effects)
+        .put("frame_blend", "Off")
+        .put("motion_blur", switches.motionBlur)
+        .put("adjustment", switches.adjustment)
+        .put("three_d", switches.threeD)
+        .put("guide", switches.guide)
+
+    /** The static value of a patched property: a scalar for the rotations, a Vec3
+     * for the orientation. */
+    private fun staticValueJson(match: String, values: List<Double>): JSONObject =
+        if (match == "orientation") {
+            JSONObject().put("t", "Vec3").put(
+                "v",
+                numberArray(listOf(values.getOrElse(0) { 0.0 }, values.getOrElse(1) { 0.0 }, values.getOrElse(2) { 0.0 }))
+            )
+        } else {
+            JSONObject().put("t", "Scalar").put("v", values.firstOrNull() ?: 0.0)
+        }
+
+    private fun richKeysJson(keys: List<RichKeyframe>): JSONArray {
+        val array = JSONArray()
+        for (key in keys) {
+            if (!key.value.all { it.isFinite() }) continue
+            val obj = JSONObject()
+                .put("time", key.timeTicks)
+                .put("value", valueJson(key))
+                .put("in_interp", key.inInterp)
+                .put("out_interp", key.outInterp)
+            if (key.inEase.isNotEmpty()) obj.put("in_ease", easeArray(key.inEase))
+            if (key.outEase.isNotEmpty()) obj.put("out_ease", easeArray(key.outEase))
+            if (key.spatialIn != null) obj.put("spatial_in", numberArray(key.spatialIn.toList()))
+            if (key.spatialOut != null) obj.put("spatial_out", numberArray(key.spatialOut.toList()))
+            if (key.spatialAuto == false) obj.put("spatial_auto", false)
+            if (key.roving) obj.put("roving", true)
+            if (key.label != 0) obj.put("label", key.label)
+            array.put(obj)
+        }
+        return array
+    }
+
+    private fun valueJson(key: RichKeyframe): JSONObject =
+        if (key.isVec3) {
+            JSONObject().put("t", "Vec3")
+                .put("v", numberArray(listOf(key.value[0], key.value[1], key.value.getOrElse(2) { 0.0 })))
+        } else {
+            JSONObject().put("t", "Scalar").put("v", key.value[0])
+        }
+
+    private fun easeArray(eases: List<RichEase>): JSONArray {
+        val array = JSONArray()
+        for (e in eases) {
+            array.put(JSONObject().put("speed", e.speed).put("influence", e.influence))
+        }
+        return array
+    }
+
+    private fun numberArray(values: List<Double>): JSONArray {
+        val array = JSONArray()
+        for (value in values) array.put(value)
+        return array
+    }
+}

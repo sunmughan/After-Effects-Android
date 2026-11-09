@@ -46,6 +46,7 @@ import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalProjectDocument
 import com.codeair.effectcraft.data.CanonicalProjectRepository
 import com.codeair.effectcraft.data.ImportDocumentResolver
+import com.codeair.effectcraft.data.aep.AepImportReport
 import com.codeair.effectcraft.data.ClipEditOutcome
 import com.codeair.effectcraft.data.ClipRenderCoverage
 import com.codeair.effectcraft.data.ClipTimeline
@@ -84,6 +85,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
@@ -253,6 +255,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
     var showNewProjectConfirm by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
+    // The .aep loss gate: the report the dialog shows, and the gate the
+    // import coroutine waits on for the user's answer.
+    var aepLossReport by remember { mutableStateOf<AepImportReport.ImportReport?>(null) }
+    var aepLossGate by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     var undoStack by remember {
         mutableStateOf(
             recoveredSession?.state?.undoStack?.map {
@@ -567,8 +573,30 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         } ?: error("Unable to read selected document")
                     }
                     currentCoroutineContext().ensureActive()
-                    val resolved = withContext(Dispatchers.Default) {
-                        ImportDocumentResolver.resolve(rawBytes, File(context.filesDir, "ae-imports"))
+                    val resolved = if (ImportDocumentResolver.isAep(rawBytes)) {
+                        // Raw .aep/.aepx: dry run first, show the loss report,
+                        // and import only with the user's allowance.
+                        val report = withContext(Dispatchers.Default) {
+                            ImportDocumentResolver.analyzeAep(rawBytes)
+                        }
+                        if (report.losses.isNotEmpty()) {
+                            val gate = CompletableDeferred<Boolean>()
+                            aepLossReport = report
+                            aepLossGate = gate
+                            try {
+                                if (!gate.await()) throw CancellationException("Project import cancelled")
+                            } finally {
+                                aepLossReport = null
+                                aepLossGate = null
+                            }
+                        }
+                        withContext(Dispatchers.Default) {
+                            ImportDocumentResolver.importAep(rawBytes, allowLosses = true)
+                        }
+                    } else {
+                        withContext(Dispatchers.Default) {
+                            ImportDocumentResolver.resolve(rawBytes, File(context.filesDir, "ae-imports"))
+                        }
                     }
                     val source = resolved.canonicalJson
                     val native = withContext(Dispatchers.Default) { NativeProjectBridge.inspectEcproj(source) }
@@ -598,10 +626,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     canonicalRedoStack = emptyList()
                     refreshReferences()
                     canonicalImportBytes = rawBytes.size.toLong()
-                    saveMessage = if (resolved.wasAeInterchange) {
-                        "Imported from After Effects · ${parsedInfo.compositions.size} compositions"
-                    } else {
-                        "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
+                    saveMessage = when {
+                        resolved.wasAep -> {
+                            val losses = resolved.aepReport?.losses?.sumOf { it.count } ?: 0
+                            "Imported .aep · ${parsedInfo.compositions.size} compositions · $losses losses"
+                        }
+                        resolved.wasAeInterchange -> {
+                            "Imported from After Effects · ${parsedInfo.compositions.size} compositions"
+                        }
+                        else -> {
+                            "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
+                        }
                     }
                 } catch (cancelled: CancellationException) {
                     saveMessage = "Project import cancelled"
@@ -2617,6 +2652,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     showImportDialog = false
                     importProjectLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
                 },
+                onPickAep = {
+                    showImportDialog = false
+                    importProjectLauncher.launch(arrayOf("*/*"))
+                },
                 onPickZipBundle = {
                     showImportDialog = false
                     importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
@@ -2625,6 +2664,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     showImportDialog = false
                     importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
                 }
+            )
+        }
+
+        // The .aep loss gate: the import coroutine waits on aepLossGate
+        // until the user allows the losses or cancels.
+        val lossReport = aepLossReport
+        if (lossReport != null) {
+            AepLossDialog(
+                report = lossReport,
+                onAllow = { aepLossGate?.complete(true) },
+                onCancel = { aepLossGate?.complete(false) }
             )
         }
     }

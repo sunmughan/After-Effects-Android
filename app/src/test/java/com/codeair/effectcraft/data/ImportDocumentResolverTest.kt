@@ -14,9 +14,10 @@ import java.util.zip.ZipOutputStream
  * Batch 3: the import resolver. One entry point for every document the
  * picker can hand over — plain .ecproj/.ecprojx, an AE interchange
  * document, or a ZIP bundle holding either — and one canonical JSON
- * string out. A raw .aep binary is rejected with the honest reason
- * (direct import is coming; use the ExtendScript export meanwhile)
- * instead of a native parse failure.
+ * string out. A raw .aep binary is imported by the ported official
+ * .aep importer, through the loss gate (analyzeAep + importAep);
+ * resolve() without an allowance refuses a lossy file instead of
+ * silently dropping content.
  */
 class ImportDocumentResolverTest {
 
@@ -126,12 +127,31 @@ class ImportDocumentResolverTest {
     }
 
     @Test
-    fun rawAepBinaryIsRejectedWithExportGuidance() {
+    fun rawAepBinaryWithoutAProjectIsRejectedAsUnparsable() {
         val aep = byteArrayOf('R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'X'.code.toByte(), 0, 0, 0, 0)
         val failure = assertThrows(IllegalArgumentException::class.java) {
             ImportDocumentResolver.resolve(aep, tempDir())
         }
-        assertTrue(failure.message!!.contains("ExtendScript"))
+        // A parse failure, not the old "not in this build yet" guidance.
+        assertTrue(failure.message!!.contains("RIFX") || failure.message!!.contains("not a valid"))
+    }
+
+    @Test
+    fun realAepResolvesThroughTheLossGate() {
+        val bytes = ImportDocumentResolverTest::class.java
+            .getResourceAsStream("/aep/synthetic.aep")!!.readBytes()
+        assertTrue(ImportDocumentResolver.isAep(bytes))
+        val report = ImportDocumentResolver.analyzeAep(bytes)
+        assertTrue(report.losses.isNotEmpty())
+        // resolve() without an explicit allowance refuses a lossy file.
+        assertThrows(IllegalArgumentException::class.java) {
+            ImportDocumentResolver.resolve(bytes, tempDir())
+        }
+        val out = ImportDocumentResolver.importAep(bytes, allowLosses = true)
+        assertTrue(out.wasAep)
+        assertEquals(false, out.wasAeInterchange)
+        assertEquals(2, JSONObject(out.canonicalJson).getInt("schema"))
+        assertEquals(report.losses.sumOf { it.count }, out.aepReport!!.losses.sumOf { it.count })
     }
 
     @Test

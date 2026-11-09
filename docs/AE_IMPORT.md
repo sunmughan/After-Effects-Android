@@ -3,28 +3,76 @@
 ## What each import type accepts
 
 The **Import project** button (header, and File > Import project)
-offers three options. Each one says honestly what it takes:
+offers four options. Each one says honestly what it takes:
 
 | Option | Accepts | Notes |
 |---|---|---|
 | EffectCraft project (.ecproj / .ecprojx) | A project saved by EffectCraft (JSON `.ecproj` or XML `.ecprojx`) | The native inspector validates it before anything is kept. |
+| After Effects project (.aep / .aepx) | A raw After Effects project file | Direct import (below). Shows its loss report first; nothing is dropped silently. |
 | Project bundle (.zip) | A `.zip` holding `project.json` plus its media files | `project.json` is either an `.ecproj` document or an After Effects export (below). Media is extracted and relinked. |
-| After Effects export (.zip) | A `.zip` produced by the included ExtendScript (below) | Interim route only — direct `.aep` import is being built (below), and is the real solution. |
+| After Effects export (.zip) | A `.zip` produced by the included ExtendScript (below) | Interim route for projects the direct `.aep` import cannot fully read. |
 
-## Direct .aep import: in progress, not in this build
+## Direct .aep import: in this build (v1, honest coverage)
 
 CORRECTION (2026-11-08): an earlier version of this doc claimed a
 raw `.aep` binary cannot be imported at all. That was wrong. The
 official EffectCraft project (storytold/effectcraft) imports
 `.aep` / `.aepx` files partially since v0.21.1 (Nov 5, 2026), and
 open-source parsers (py_aep / aep-parser) have reverse-engineered
-the RIFX format. Direct `.aep` import is the requirement for this
-app — the ExtendScript export below is only an interim route until
-the real importer lands, not the solution. A separate audit of the
-official `.aep` import code is in progress; this app's real `.aep`
-importer will be built from its port plan. Until then, picking a
-`.aep` explains this and points at the interim export instead of
-failing with a parse error.
+the RIFX format. This app now imports raw `.aep` / `.aepx` directly
+with a port of the official importer (see Attribution below).
+
+Picking a `.aep` / `.aepx` runs a dry run first and shows the loss
+report: what is kept, what is lost, and which media files are
+missing. The import proceeds only when the user chooses "Import
+with losses". A file with no losses imports straight away. The
+original file is never modified.
+
+### What v1 imports
+
+- The first composition: size, frame rate, duration, work area,
+  background, pixel aspect, display start, shutter, renderer.
+- AV, null, text (as an empty text layer) and shape (as an empty
+  shape layer) layers, with parent links, stretch, blend mode and
+  the layer switches (video, audio, solo, locked, shy, collapse,
+  quality, effects, motion blur, adjustment, 3D, guide).
+- Footage (still / video / audio) and solids, with the stored file
+  path. A missing media file does not fail the import; that footage
+  is marked missing.
+- Transform: anchor point, position, scale, rotation (Z), opacity,
+  X/Y rotation, and the static orientation value — with keyframes
+  (linear, bezier with eases, hold, spatial tangents, roving,
+  labels) and expressions kept as source text.
+- The project version (file / saved-by) and a loss report for
+  everything else.
+
+### What v1 loses (always reported, never silent)
+
+- Effects (including Levels, Glow and every other effect).
+- Layer styles (only when a style has values set).
+- Text contents, shape contents, cameras, lights, precompositions,
+  track mattes, masks, markers, time remapping.
+- Keyframed orientation and orientation expressions.
+- Compositions after the first, and folders (their contents still
+  import).
+- Project settings (working space, colour depth, time display).
+- `.aep` export, expression evaluation, Lumetri and third-party
+  plug-ins: not in v1.
+
+Tested with After Effects 24.x, 25.x and 26.x files. The fixture
+`synthetic.aep` (one comp, an image sequence, a solid, a folder,
+Levels + Glow) imports with exactly 5 losses: 2 effects, 2 folders,
+1 project-settings note.
+
+### Attribution
+
+The `.aep` / `.aepx` reader and importer
+(`app/src/main/java/com/codeair/effectcraft/data/aep/`) are a port
+of the official EffectCraft project (github.com/storytold/effectcraft,
+MIT OR Apache-2.0), crates `aep` and `keyframe` at revision e71dd62,
+with the fixture `synthetic.aep` from its test corpus (see
+`app/src/test/resources/aep/synthetic.aep.attribution`). No Adobe
+code, artwork or file-format documentation was used.
 
 ## Exporting from After Effects (exact steps)
 

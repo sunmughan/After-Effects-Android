@@ -28,15 +28,11 @@ object ProjectFileFormats {
         else -> Kind.UNKNOWN
     }
 
-    /** Returns a user-facing reason for known non-canonical files, or null. */
+    /** Returns a user-facing reason for known non-canonical files, or null.
+     * `.aep`/`.aepx` are importable (the .aep importer), so they return null. */
     fun importError(displayName: String): String? = when (classify(displayName)) {
         Kind.EFFEKSEER_PROJECT ->
             "Effekseer .efkproj is not supported yet; no Effekseer parser/converter is integrated."
-        Kind.ADOBE_AFTER_EFFECTS ->
-            "Direct .aep import is not in this build yet — it is being built from the official " +
-                "EffectCraft .aep importer. For now, export the project from After Effects with " +
-                "the included ExtendScript (docs/ae-export/ExportToEffectCraft.jsx) and import " +
-                "the .zip it creates."
         Kind.ANDROID_DRAFT ->
             "This is an Android offline draft (.efx-draft). Use Open offline project instead of canonical import."
         else -> null

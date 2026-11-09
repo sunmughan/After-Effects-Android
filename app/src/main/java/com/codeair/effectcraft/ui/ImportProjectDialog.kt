@@ -25,23 +25,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Batch 3: the import picker dialog. Three labelled options, each
+ * Batch 3: the import picker dialog. Four labelled options, each
  * honest about what it accepts — the old flow hid import behind an
  * unlabelled icon and reported a dismissal as "Project import
  * cancelled" with no way to reach a real import at all.
  *
  * - EffectCraft project: a .ecproj / .ecprojx file saved by EffectCraft.
+ * - After Effects project: a raw .aep / .aepx file, imported directly
+ *   by the ported official EffectCraft .aep importer. The import shows
+ *   its loss report first; nothing is dropped silently.
  * - Project bundle (.zip): a .zip holding project.json plus its media.
  * - After Effects export (.zip): a .zip produced by the included
- *   ExtendScript. This is an INTERIM route only: direct .aep import
- *   is the real requirement and is being built from the official
- *   EffectCraft .aep importer (v0.21.1+); the dialog says it is
- *   coming instead of claiming .aep can never be imported.
+ *   ExtendScript. This stays as an interim route for projects the
+ *   .aep importer cannot fully read.
  */
 @Composable
 fun ImportProjectDialog(
     onDismiss: () -> Unit,
     onPickEcproj: () -> Unit,
+    onPickAep: () -> Unit,
     onPickZipBundle: () -> Unit,
     onPickAeExport: () -> Unit
 ) {
@@ -59,13 +61,18 @@ fun ImportProjectDialog(
                     onClick = onPickEcproj
                 )
                 ImportOption(
+                    title = "After Effects project (.aep/.aepx)",
+                    description = "A raw After Effects project, imported directly. Shows what is lost before importing.",
+                    onClick = onPickAep
+                )
+                ImportOption(
                     title = "Project bundle (.zip)",
                     description = "A .zip with project.json and its media files.",
                     onClick = onPickZipBundle
                 )
                 ImportOption(
                     title = "After Effects export (.zip)",
-                    description = "A .zip made by the included ExtendScript (interim route). Direct .aep import is coming in a later update.",
+                    description = "A .zip made by the included ExtendScript (interim route).",
                     onClick = onPickAeExport
                 )
                 TextButton(
