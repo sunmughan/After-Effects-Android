@@ -2,7 +2,7 @@
 
 ## Engineering progress (2026-11-09 09:05 IST)
 
-- **M0 reproducibility correction accepted at exact SHA:** [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) passed Rust 73/73, dual JNI ABI, Kotlin/JVM, debug + unsigned release APK/AAB/R8, API30 177/177 and an independent cold APK rebuild. \`CONTENT_MATCH=true\` and \`NATIVE_SO_MATCH=true\`; packaged ARM64/x86_64 library hashes matched. This validates the Rust release \`codegen-units=1\` mitigation at #1376's SHA only. [Repro artifact](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992/artifacts/13646315661).
+- **M0 reproducibility correction accepted at exact SHA:** [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) passed Rust 73/73, dual JNI ABI, Kotlin/JVM, debug + unsigned release APK/AAB/R8, API30 177/177 and an independent cold APK rebuild. `CONTENT_MATCH=true` and `NATIVE_SO_MATCH=true`; packaged ARM64/x86_64 library hashes matched. This validates the Rust release `codegen-units=1` mitigation at #1376's SHA only. [Repro artifact](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992/artifacts/13646315661).
 - **M4 Add six-point star implemented, pending CI:** native parametric star + Fill, JNI/Kotlin bridge, Compose inspector action, saved canonical project callback, native serialize/reopen/real-pixel regression and Android callback instrumentation are added in the current commit. Exact-head CI is required; no acceptance claim yet.
 - M0–M7 remain tracked in [PHASES.md](PHASES.md). Release is NOT complete; physical device/GPU/media/codec/audio/accessibility/install and owner-controlled signing gates remain open.
 

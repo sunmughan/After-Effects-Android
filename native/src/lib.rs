@@ -1369,14 +1369,14 @@ fn add_hex_star_layer(source: &str, composition_id: u64, name: &str) -> Result<S
     let normalized = name.trim();
     if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
     let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
-    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition \${composition_id} was not found"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition ${composition_id} was not found"))?;
     let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
     let mut ids = build::Ids(&mut project.next_id);
     let hex_star = build::shape_star(&mut ids, true, 6.0, [0.0, 0.0], 120.0, 50.0);
     let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
     let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
     contents.children.push(hex_star.into()); contents.children.push(fill.into());
-    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition \${composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition ${composition_id} disappeared during layer creation"))?.layers.push(layer);
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
