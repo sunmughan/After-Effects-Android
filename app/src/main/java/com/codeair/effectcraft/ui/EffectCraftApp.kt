@@ -22,6 +22,8 @@ import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.ByteArrayInputStream
+import java.net.URLConnection
 import com.codeair.effectcraft.data.AudioClipDocument
 import com.codeair.effectcraft.data.AudioClipEditOutcome
 import com.codeair.effectcraft.data.AudioClipTimeline
@@ -59,6 +61,7 @@ import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectEditorActions
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.ProjectFileFormats
+import com.codeair.effectcraft.data.ProjectBundleZip
 import com.codeair.effectcraft.data.ProjectKeyframeStore
 import com.codeair.effectcraft.data.FinalCopyRecovery
 import com.codeair.effectcraft.data.ForegroundPngSequenceExport
@@ -518,6 +521,131 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             }
         }
     }
+    val importBundleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) saveMessage = "ZIP bundle import cancelled" else {
+            canonicalImportJob?.cancel()
+            canonicalImportInProgress = true
+            canonicalImportBytes = 0L
+            saveMessage = "Importing ZIP project bundle…"
+            canonicalImportJob = exportScope.launch {
+                val importJob = currentCoroutineContext()[Job]
+                val staging = File(context.cacheDir, "effectcraft-bundle-${System.nanoTime()}")
+                try {
+                    // Stream the compressed archive from SAF; neither the ZIP nor
+                    // its media payloads are accumulated in a single byte array.
+                    val unpacked = withContext(Dispatchers.IO) {
+                        val input = context.contentResolver.openInputStream(uri)
+                            ?: error("Unable to open selected ZIP bundle")
+                        ProjectBundleZip.unpack(input, staging)
+                    }
+                    currentCoroutineContext().ensureActive()
+                    val source = withContext(Dispatchers.Default) {
+                        CanonicalProjectDocument.toCanonicalJson(
+                            CanonicalProjectDocument.readUtf8(ByteArrayInputStream(unpacked.projectDocument))
+                        )
+                    }
+                    var editableSource = source
+                    val envelope = withContext(Dispatchers.Default) {
+                        NativeProjectBridge.inspectEcproj(editableSource)
+                    } ?: error("Native EffectCraft validation is unavailable on this ABI")
+                    var parsedInfo = withContext(Dispatchers.Default) {
+                        CanonicalProjectInfo.parse(envelope)
+                    }
+
+                    // Import each extracted asset into the content-addressed,
+                    // app-private media library. Exact relative paths win; a
+                    // basename fallback is allowed only when it is unambiguous.
+                    val assetsByPath = withContext(Dispatchers.IO) {
+                        unpacked.mediaFiles.associateWith { relativePath ->
+                            currentCoroutineContext().ensureActive()
+                            val file = File(unpacked.mediaDir, relativePath)
+                            require(file.isFile) { "ZIP media entry is missing after extraction: $relativePath" }
+                            file.inputStream().use { input ->
+                                offlineAssetStore.import(
+                                    input,
+                                    file.name,
+                                    URLConnection.guessContentTypeFromName(file.name),
+                                    cancelRequested = { importJob?.isActive != true }
+                                )
+                            }
+                        }
+                    }
+                    val uniqueAssetsByName = assetsByPath.keys
+                        .groupBy { it.substringAfterLast('/') }
+                        .filterValues { it.size == 1 }
+                        .mapValues { (_, paths) -> assetsByPath.getValue(paths.single()) }
+                    val linkedReferences = mutableMapOf<Long, String>()
+                    for (item in parsedInfo.items) {
+                        currentCoroutineContext().ensureActive()
+                        val originalPath = item.path ?: continue
+                        val normalizedPath = originalPath.replace('\\\\', '/').trimStart('/')
+                        val asset = assetsByPath[normalizedPath]
+                            ?: uniqueAssetsByName[normalizedPath.substringAfterLast('/')]
+                            ?: continue
+                        val payload = offlineAssetStore.fileFor(asset.sha256)
+                            ?: error("Offline media payload is unavailable for ${item.name}")
+                        val relinkEnvelope = withContext(Dispatchers.Default) {
+                            NativeProjectBridge.relinkFootageEcproj(editableSource, item.id, payload.absolutePath)
+                        } ?: error("Native media relinking is unavailable for ${item.name}")
+                        val relinkResponse = JSONObject(relinkEnvelope)
+                        check(relinkResponse.optBoolean("valid")) {
+                            relinkResponse.optString("error", "Media relink failed for ${item.name}")
+                        }
+                        editableSource = relinkResponse.getString("project")
+                        linkedReferences[item.id] = asset.sha256
+                    }
+                    val finalEnvelope = withContext(Dispatchers.Default) {
+                        NativeProjectBridge.inspectEcproj(editableSource)
+                    } ?: error("Unable to validate relinked ZIP project")
+                    parsedInfo = withContext(Dispatchers.Default) {
+                        CanonicalProjectInfo.parse(finalEnvelope)
+                    }
+                    val sourceName = unpacked.projectFileName
+                    val displayName = sourceName.substringAfterLast('/').substringBeforeLast('.', sourceName.substringAfterLast('/'))
+                        .ifBlank { "Imported ZIP project" }
+                    val metadata = withContext(Dispatchers.IO) {
+                        val created = projectRepository.create(displayName, editableSource, "ecproj", sourceName)
+                        try {
+                            ecprojStore.save(editableSource)
+                            offlineAssetReferences.clear()
+                            linkedReferences.forEach { (itemId, hash) ->
+                                offlineAssetReferences.setReference(itemId, hash)
+                            }
+                        } catch (failure: Throwable) {
+                            runCatching { projectRepository.delete(created.id) }
+                            throw failure
+                        }
+                        created
+                    }
+                    repositoryProjectId = metadata.id
+                    importedEcproj = editableSource
+                    canonicalProjectInfo = parsedInfo
+                    canonicalSelectedIds = parsedInfo.compositions.firstOrNull()?.layers?.firstOrNull()?.let { setOf(it.id) } ?: emptySet()
+                    canonicalUndoStack = emptyList()
+                    canonicalRedoStack = emptyList()
+                    offlineAssets = offlineAssetStore.list()
+                    referencedOfflineAssetIds = offlineAssetReferences.referencedAssetIds()
+                    if (runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }.isSuccess) {
+                        runCatching { safRegistry.record(uri.toString(), SafPermissionRegistry.Kind.READ, sourceName) }
+                        safGrants = safRegistry.grants()
+                    }
+                    refreshReferences()
+                    saveMessage = "ZIP project imported · ${linkedReferences.size} media linked · ${assetsByPath.size} assets stored offline"
+                } catch (cancelled: CancellationException) {
+                    saveMessage = "ZIP bundle import cancelled"
+                } catch (failure: Throwable) {
+                    saveMessage = "ZIP import failed · ${failure.message ?: "invalid bundle"}"
+                } finally {
+                    staging.deleteRecursively()
+                    if (canonicalImportJob === importJob) {
+                        canonicalImportInProgress = false
+                        canonicalImportJob = null
+                    }
+                }
+            }
+        }
+    }
+
     val exportEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) {
             runCatching {
@@ -1344,6 +1472,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     .onFailure { saveMessage = "Media removal failed · ${it.message ?: "storage error"}" }
             },
             onValidateEcproj = { validateEcprojLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
+            onImportProjectBundle = { importBundleLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
             isImportingCanonicalProject = canonicalImportInProgress,
             onCancelCanonicalImport = { canonicalImportJob?.cancel() },
             onExportEcproj = {
