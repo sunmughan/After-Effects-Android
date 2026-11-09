@@ -910,6 +910,7 @@ fun EditorScreen(
                     onAddHexagonLayer = onAddCanonicalHexagonLayer,
                     onAddPentagonLayer = onAddCanonicalPentagonLayer,
                     onAddDiamondLayer = onAddCanonicalDiamondLayer,
+                    onAddRoundedRectLayer = onAddCanonicalRoundedRectLayer,
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
@@ -1591,6 +1592,7 @@ private fun CanonicalProjectEditor(
     onAddHexagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddPentagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddDiamondLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddRoundedRectLayer: (Long, String) -> Unit = { _, _ -> },
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
@@ -1888,6 +1890,10 @@ private fun CanonicalProjectEditor(
                         enabled = canEdit && newTextName.trim().isNotEmpty(),
                         onClick = { onAddDiamondLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Diamond") }
                     ) { Text("Add Diamond", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddRoundedRectLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Rounded Rectangle") }
+                    ) { Text("Add Rounded Rect", color = EditorPalette.violet) }
                 }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)

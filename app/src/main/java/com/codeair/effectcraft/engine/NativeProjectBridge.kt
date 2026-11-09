@@ -101,6 +101,12 @@ object NativeProjectBridge {
         return runCatching { addDiamondLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
 
+    /** Adds a real upstream rounded-rectangle Shape layer with editable corner radius and Fill. */
+    fun addRoundedRectLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addRoundedRectLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
     /** Renders a canonical composition frame through the pinned upstream CPU compositor. */
     fun renderEcprojFrame(json: String, compositionId: Long, frame: Long, maxSide: Int = 512): ByteArray? {
         ensureLoaded()
@@ -685,6 +691,9 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun addTextLayerEcprojNative(json: String, compositionId: Long, name: String): String
+
+    @JvmStatic
+    private external fun addRoundedRectLayerEcprojNative(json: String, compositionId: Long, name: String): String
 
     @JvmStatic
     private external fun inspectEcprojNative(json: String): String

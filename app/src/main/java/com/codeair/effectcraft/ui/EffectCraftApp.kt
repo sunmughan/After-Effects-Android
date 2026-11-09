@@ -1742,6 +1742,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical Diamond layer added · saved locally"
                 )
             },
+            onAddCanonicalRoundedRectLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addRoundedRectLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical rounded rectangle added · saved locally"
+                )
+            },
             onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"

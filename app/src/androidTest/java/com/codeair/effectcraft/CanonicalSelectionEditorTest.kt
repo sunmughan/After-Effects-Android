@@ -83,6 +83,7 @@ class CanonicalSelectionEditorTest {
         var hexagonAdded: List<Any>? = null
         var pentagonAdded: List<Any>? = null
         var diamondAdded: List<Any>? = null
+        var roundedRectAdded: List<Any>? = null
         val project = ProjectDocument.starter()
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
@@ -156,6 +157,7 @@ class CanonicalSelectionEditorTest {
                     onAddCanonicalHexagonLayer = { compositionId, name -> hexagonAdded = listOf(compositionId, name) },
                     onAddCanonicalPentagonLayer = { compositionId, name -> pentagonAdded = listOf(compositionId, name) },
                     onAddCanonicalDiamondLayer = { compositionId, name -> diamondAdded = listOf(compositionId, name) },
+                    onAddCanonicalRoundedRectLayer = { compositionId, name -> roundedRectAdded = listOf(compositionId, name) },
                     onSetCanonicalLayerVisibility = { _, _, _ -> },
                     onMoveCanonicalLayer = { _, _, _ -> },
                     onDeleteCanonicalLayer = { _, _ -> deleteCalls += 1 },
@@ -239,6 +241,8 @@ class CanonicalSelectionEditorTest {
         assertEquals(listOf<Any>(10L, "Pentagon"), pentagonAdded)
         compose.onNodeWithText("Add Diamond").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Diamond"), diamondAdded)
+        compose.onNodeWithText("Add Rounded Rect").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Rounded Rectangle"), roundedRectAdded)
 
         // The canonical preview follows the workspace timeline in both
         // directions; scrubbing the main playhead requests that real frame.
