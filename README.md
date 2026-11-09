@@ -1,5 +1,11 @@
 # EffectCraft for Android
 
+## Engineering progress (2026-11-09 09:20 IST)
+
+- **M4 Add Rounded Rect implemented, CI pending:** source/test commit [64acaa73](https://github.com/sunmughan/After-Effects-Android/commit/64acaa73c9600417348eff194d26cf5bbe96d532) authors an upstream rounded rectangle (`shape_rect` radius 24 + Fill) through Rust/JNI/Kotlin/Compose, saves canonical project state, and adds native round-trip/real-pixel plus API30 callback regressions. CI #1379 is still testing the previous six-point-star SHA; fresh exact-head CI required.
+- **M0 exact historical acceptance:** [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) passed all native/JVM/API30 177/177 and independent cold APK + both ABI `.so` hash comparisons at SHA `762b9756`; later changes require revalidation.
+- Branch/main divergence (44 branch-only vs 77 main-only commits from merge base) is now explicitly tracked in [PHASES.md](PHASES.md); main has newer project import/bundle and AE interchange workflow work that needs reconciliation before final PR merge.
+
 ## Engineering progress (2026-11-09 09:05 IST)
 
 - **M0 reproducibility correction accepted at exact SHA:** [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) passed Rust 73/73, dual JNI ABI, Kotlin/JVM, debug + unsigned release APK/AAB/R8, API30 177/177 and an independent cold APK rebuild. `CONTENT_MATCH=true` and `NATIVE_SO_MATCH=true`; packaged ARM64/x86_64 library hashes matched. This validates the Rust release `codegen-units=1` mitigation at #1376's SHA only. [Repro artifact](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992/artifacts/13646315661).

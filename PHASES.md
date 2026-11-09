@@ -3,9 +3,17 @@
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
 [PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #4 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/4) (PR #2 and #3 merged).  
-Tracker updated: 2026-11-08 22:55 IST · native collision regression c09fe485 · fresh CI queued
+Tracker updated: 2026-11-09 09:20 IST · rounded-rectangle source/test 64acaa73 · CI pending
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
+
+## Engineering checkpoint — 2026-11-09 09:20 IST
+
+- **M0 reproducibility accepted at exact historical SHA:** [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) passed Rust 73/73, ARM64+x86_64 JNI, Kotlin/JVM, debug + unsigned release APK/AAB/R8, API30 177/177 and independent cold APK/native `.so` byte equality. This is evidence for SHA `762b9756`; newer source must be revalidated.
+- **M4 Add Rounded Rect implemented in source commit [64acaa73](https://github.com/sunmughan/After-Effects-Android/commit/64acaa73c9600417348eff194d26cf5bbe96d532):** Rust authors an upstream parametric `shape_rect` with non-zero corner radius (24) and Fill; JNI/Kotlin bridge, canonical inspector action, app-state save/selection callback and API30 instrumentation are wired. Native regression serializes/reopens and asserts actual CPU compositor frame dimensions + visible pixels. No synthetic preview or weakened assertion.
+- **Fresh exact-head CI required:** prior [CI #1379](https://github.com/sunmughan/After-Effects-Android/actions/runs/42557398531) is still in progress at six-point-star SHA `0a7763a7` (native/JVM/unit gates passed; unsigned release packaging was running at last inspection). The rounded-rectangle source/test commit must receive a new full run; CI is not accepted from #1379 for this feature.
+- PR #1 is merged; active continuation is [Draft PR #4](https://github.com/sunmughan/After-Effects-Android/pull/4). The branch has diverged from current main (main includes newer import/bundle/AE-interchange UI work); merge/rebase reconciliation is a tracked integration risk, not silently ignored.
+- M0–M7 acceptance and release blockers remain in this ledger. Direct native `.aep` compatibility is not claimed; the current main branch's AE JSON interchange/ExtendScript route is not a native `.aep` parser. Physical GPU/media/codec/audio/accessibility/install and owner-controlled signing gates remain open.
 
 ## Latest implementation / verification
 
@@ -66,7 +74,7 @@ Evidence: native `render_frame_rgba` and session/JNI preview, rendered-frame cac
 Remaining: physical GPU/Surface/device lifecycle, media parity, renderer fallback and device performance acceptance.
 
 ### M4 — Functional layer/effect/timeline/property editing
-**Status: PARTIAL — native Shape creation and edit→render foundations; six-point-star feature pending exact-head CI.**
+**Status: PARTIAL — native Shape creation and edit→render foundations; Rounded Rect source/test added, exact-head CI pending.**
 
 Acceptance: editable layer/effect stack; transforms and keyframes/interpolation; Shape geometry/fill/stroke; properties; real preview refresh; golden edit→save→reopen→render tests.
 
@@ -75,6 +83,7 @@ Evidence:
 - Add Ellipse native [3a989ee3](https://github.com/sunmughan/After-Effects-Android/commit/3a989ee381257e9135d3aef64b5a66658d3b4d68), JNI/UI/test commits [a78bb5cf](https://github.com/sunmughan/After-Effects-Android/commit/a78bb5cf330ef28771fe2319f273f816eb474c0e), [34e2800d](https://github.com/sunmughan/After-Effects-Android/commit/34e2800d6f3b7b004a9854ecb83de727ead335d4), [f9bc2db1](https://github.com/sunmughan/After-Effects-Android/commit/f9bc2db1641d6cf4d1c52e9344c2d66a99e6bdd5); accepted #1222.
 - Add Star [a5529895](https://github.com/sunmughan/After-Effects-Android/commit/a55298952ce3afe0532fdef3ea1d00ee25e96687), callback correction [d0b14cbe](https://github.com/sunmughan/After-Effects-Android/commit/d0b14cbeef0c6baa325442d5180196c9f2699b06), global UID fix [448f2537](https://github.com/sunmughan/After-Effects-Android/commit/448f25377c44f79074776c1cda8ac4394e3d9e0c), fill edit pixel test [52d1caad](https://github.com/sunmughan/After-Effects-Android/commit/52d1caad505f8891ef053cb1ddff19054ee52189).
 - Add Triangle: native/JNI/app/UI/instrumentation [fdc86fa8](https://github.com/sunmughan/After-Effects-Android/commit/fdc86fa853e95b2af9afc39a60ddaa86c286d096), [14ddb5a8](https://github.com/sunmughan/After-Effects-Android/commit/14ddb5a84d3f62fe74dea103383698e11ac7577b), [9b560709](https://github.com/sunmughan/After-Effects-Android/commit/9b5607095235491978f1f9a16608ef5cf60a4a97), [b95c1ad5](https://github.com/sunmughan/After-Effects-Android/commit/b95c1ad58bb580fa3187005874082e61ed100242), [7a89868f](https://github.com/sunmughan/After-Effects-Android/commit/7a89868f5531935253adb4545006ae54e4c0098f); [CI #1255](https://github.com/sunmughan/After-Effects-Android/actions/runs/42481722017) pending at exact HEAD.
+- Rounded Rect: [source + native/JNI/app/UI/API30 test 64acaa73](https://github.com/sunmughan/After-Effects-Android/commit/64acaa73c9600417348eff194d26cf5bbe96d532) uses upstream `shape_rect` with radius 24 and Fill, round-trips canonical JSON, and asserts actual CPU compositor pixels. Fresh exact-head CI pending.
 - Transform/keyframe/Bezier/ShapePath editors and canonical property setters are present; full upstream effect/interpolation/3D/roving parity and comprehensive golden fixtures remain.
 
 ### M5 — Render/export pipeline
