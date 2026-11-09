@@ -2,14 +2,20 @@ package com.codeair.effectcraft.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,16 +25,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Batch 3: the import picker dialog. Four labelled options, each
- * honest about what it accepts — the old flow hid import behind an
- * unlabelled icon and reported a dismissal as "Project import
- * cancelled" with no way to reach a real import at all.
+ * The import picker dialog, Muse-app minimal: four tappable rows, a
+ * short title and an icon each, no paragraph text. What each option
+ * accepts lives on the "How to export from After Effects" help
+ * screen, not in the picker.
  *
  * - EffectCraft project: a .ecproj / .ecprojx file saved by EffectCraft.
  * - After Effects project: a raw .aep / .aepx file, imported directly
@@ -47,53 +53,42 @@ fun ImportProjectDialog(
     onPickZipBundle: () -> Unit,
     onPickAeExport: () -> Unit
 ) {
-    var showAeSteps by remember { mutableStateOf(false) }
+    var showAeHelp by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Import project") },
         text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 ImportOption(
                     title = "EffectCraft project",
-                    description = "A .ecproj or .ecprojx file saved by EffectCraft.",
+                    icon = Icons.Outlined.Folder,
                     onClick = onPickEcproj
                 )
                 ImportOption(
-                    title = "After Effects project (.aep/.aepx)",
-                    description = "A raw After Effects project, imported directly. Shows what is lost before importing.",
+                    title = "After Effects project",
+                    icon = Icons.Outlined.Movie,
                     onClick = onPickAep
                 )
                 ImportOption(
-                    title = "Project bundle (.zip)",
-                    description = "A .zip with project.json and its media files.",
+                    title = "Project bundle",
+                    icon = Icons.Outlined.Archive,
                     onClick = onPickZipBundle
                 )
                 ImportOption(
-                    title = "After Effects export (.zip)",
-                    description = "A .zip made by the included ExtendScript (interim route).",
+                    title = "After Effects export",
+                    icon = Icons.Outlined.FileUpload,
                     onClick = onPickAeExport
                 )
                 TextButton(
-                    onClick = { showAeSteps = !showAeSteps },
+                    onClick = { showAeHelp = true },
                     modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
                     Text(
-                        if (showAeSteps) "Hide After Effects export steps" else "How to export from After Effects",
+                        "How to export from After Effects",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
-                }
-                if (showAeSteps) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)) {
-                        Text("1. In After Effects: File > Scripts > Run Script File.", fontSize = 12.sp)
-                        Text("2. Choose ExportToEffectCraft.jsx from the repo.", fontSize = 12.sp)
-                        Text("3. It writes a folder next to your .aep.", fontSize = 12.sp)
-                        Text("4. Zip that folder.", fontSize = 12.sp)
-                        Text("5. Here: choose After Effects export (.zip) and pick the .zip.", fontSize = 12.sp)
-                    }
                 }
             }
         },
@@ -104,18 +99,90 @@ fun ImportProjectDialog(
             }
         }
     )
+    if (showAeHelp) {
+        AeExportHelpDialog(onDismiss = { showAeHelp = false })
+    }
 }
 
+/** One import route: icon + short title only, no description. */
 @Composable
-private fun ImportOption(title: String, description: String, onClick: () -> Unit) {
-    OutlinedButton(
+private fun ImportOption(title: String, icon: ImageVector, onClick: () -> Unit) {
+    TextButton(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 56.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).height(48.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
     ) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
-            Text(description, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Text(
+                title,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 12.dp)
+            )
         }
     }
+}
+
+/**
+ * The help screen behind "How to export from After Effects": what each
+ * import option accepts, and the ExtendScript export steps. The picker
+ * itself stays free of paragraph text.
+ */
+@Composable
+private fun AeExportHelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Export from After Effects") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+            ) {
+                Text("EffectCraft project", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("A .ecproj or .ecprojx file saved by EffectCraft.", fontSize = 12.sp)
+                Text(
+                    "After Effects project",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Text(
+                    "A raw After Effects project, imported directly. Shows what is lost before importing.",
+                    fontSize = 12.sp
+                )
+                Text(
+                    "Project bundle",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Text("A .zip with project.json and its media files.", fontSize = 12.sp)
+                Text(
+                    "After Effects export",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Text("A .zip made by the included ExtendScript (interim route).", fontSize = 12.sp)
+                Text(
+                    "How to export",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                Text("1. In After Effects: File > Scripts > Run Script File.", fontSize = 12.sp)
+                Text("2. Choose ExportToEffectCraft.jsx from the repo.", fontSize = 12.sp)
+                Text("3. It writes a folder next to your .aep.", fontSize = 12.sp)
+                Text("4. Zip that folder.", fontSize = 12.sp)
+                Text("5. Here: choose After Effects export and pick the .zip.", fontSize = 12.sp)
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.height(48.dp)) {
+                Text("Close")
+            }
+        }
+    )
 }

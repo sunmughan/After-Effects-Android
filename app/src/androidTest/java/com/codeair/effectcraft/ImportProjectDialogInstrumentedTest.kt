@@ -14,8 +14,12 @@ import org.junit.Test
  * Commit 1 (.aep import v1): the Import dialog through the real app. The
  * header's labelled Import button must open a dialog with four options —
  * including a real direct .aep/.aepx import, behind a loss gate — and the
- * After Effects export steps. The old "Direct .aep import is coming in a
+ * After Effects export help. The old "Direct .aep import is coming in a
  * later update." note is gone: the import exists now.
+ *
+ * Minimal dialog (user order 2026-11-09): each option is a short title
+ * with an icon only, no paragraph text; the explanations live on the
+ * export help screen behind "How to export from After Effects".
  */
 class ImportProjectDialogInstrumentedTest {
 
@@ -38,9 +42,9 @@ class ImportProjectDialogInstrumentedTest {
     fun importButtonOpensDialogWithFourOptionsIncludingAep() {
         compose.onNodeWithContentDescription("Import project").performClick()
         compose.onNodeWithText("EffectCraft project").assertIsDisplayed()
-        compose.onNodeWithText("After Effects project (.aep/.aepx)").assertIsDisplayed()
-        compose.onNodeWithText("Project bundle (.zip)").assertIsDisplayed()
-        compose.onNodeWithText("After Effects export (.zip)").assertIsDisplayed()
+        compose.onNodeWithText("After Effects project").assertIsDisplayed()
+        compose.onNodeWithText("Project bundle").assertIsDisplayed()
+        compose.onNodeWithText("After Effects export").assertIsDisplayed()
         compose.onNodeWithText("Direct .aep import is coming in a later update.", substring = true)
             .assertDoesNotExist()
         compose.onNodeWithText("Cancel").performClick()
@@ -52,6 +56,10 @@ class ImportProjectDialogInstrumentedTest {
         compose.onNodeWithContentDescription("Import project").performClick()
         compose.onNodeWithText("How to export from After Effects").performClick()
         compose.onNodeWithText("Zip that folder.", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("A .ecproj or .ecprojx file saved by EffectCraft.", substring = true)
+            .assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Zip that folder.", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Cancel").performClick()
     }
 }

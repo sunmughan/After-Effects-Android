@@ -18,7 +18,7 @@
 //   4. The script writes a folder next to your .aep named
 //      "<Project>-effectcraft" with project.json + a media/ folder.
 //   5. Zip that folder.
-//   6. In EffectCraft: Import project > After Effects export (.zip)
+//   6. In EffectCraft: Import project > After Effects export
 //      > choose the .zip.
 //
 // What exports: comps (size, frame rate, duration, background),
@@ -338,7 +338,7 @@
         "EffectCraft import for \"" + comp.name + "\"\n" +
         "\n" +
         "1. Zip this whole folder.\n" +
-        "2. In EffectCraft (Android): Import project > After Effects export (.zip) > choose the .zip.\n" +
+        "2. In EffectCraft (Android): Import project > After Effects export > choose the .zip.\n" +
         "\n" +
         "Exported: " + project.comps[0].layers.length + " layers from composition \"" + comp.name + "\".\n" +
         (notes.length > 0 ? "Notes:\n- " + notes.join("\n- ") + "\n" : "Nothing was skipped.\n")
@@ -349,7 +349,7 @@
         "Exported \"" + comp.name + "\" (" + project.comps[0].layers.length + " layers) to:\n" +
         exportFolder.fsName + "\n\n" +
         "Zip that folder, then import the .zip in EffectCraft:\n" +
-        "Import project > After Effects export (.zip)." +
+        "Import project > After Effects export." +
         (notes.length > 0 ? "\n\n" + notes.length + " note(s) — see project.json \"notes\" and README.txt." : "")
     );
 })();

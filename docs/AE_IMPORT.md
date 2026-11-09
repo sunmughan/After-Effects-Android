@@ -7,10 +7,10 @@ offers four options. Each one says honestly what it takes:
 
 | Option | Accepts | Notes |
 |---|---|---|
-| EffectCraft project (.ecproj / .ecprojx) | A project saved by EffectCraft (JSON `.ecproj` or XML `.ecprojx`) | The native inspector validates it before anything is kept. |
-| After Effects project (.aep / .aepx) | A raw After Effects project file | Direct import (below). Shows its loss report first; nothing is dropped silently. |
-| Project bundle (.zip) | A `.zip` holding `project.json` plus its media files | `project.json` is either an `.ecproj` document or an After Effects export (below). Media is extracted and relinked. |
-| After Effects export (.zip) | A `.zip` produced by the included ExtendScript (below) | Interim route for projects the direct `.aep` import cannot fully read. |
+| EffectCraft project | A project saved by EffectCraft (JSON `.ecproj` or XML `.ecprojx`) | The native inspector validates it before anything is kept. |
+| After Effects project | A raw After Effects project file | Direct import (below). Shows its loss report first; nothing is dropped silently. |
+| Project bundle | A `.zip` holding `project.json` plus its media files | `project.json` is either an `.ecproj` document or an After Effects export (below). Media is extracted and relinked. |
+| After Effects export | A `.zip` produced by the included ExtendScript (below) | Interim route for projects the direct `.aep` import cannot fully read. |
 
 ## Direct .aep import: in this build (v1, honest coverage)
 
@@ -85,7 +85,7 @@ code, artwork or file-format documentation was used.
    `<Project>-effectcraft` containing `project.json`, a `media/`
    folder with the footage files, and a `README.txt`.
 6. Zip that whole folder.
-7. In EffectCraft: Import project > After Effects export (.zip) >
+7. In EffectCraft: Import project > After Effects export >
    choose the `.zip`.
 
 ## What the export carries
