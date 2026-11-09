@@ -124,6 +124,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -525,19 +526,11 @@ fun EditorScreen(
                     if (openSequenceSettings(RenderOutputFormat.MP4_H264)) onOpenMp4Settings()
                 },
                 isExportingMp4 = isExportingMp4,
+                hasCanonicalProject = canonicalProject != null,
                 moreMenuContent = { closeMenu ->
-                    MenuItem("New composition") { closeMenu(); onNewProject() }
-                    MenuItem("Open offline project") { closeMenu(); showProjectPicker = true }
-                    MenuItem("Import project…") { closeMenu(); onImportProject() }
-                    MenuItem("Offline media library") { closeMenu(); showMediaLibrary = true }
-                    MenuItem("Projects") { closeMenu(); showRepositoryPicker = true }
-                    MenuItem("Save draft") { closeMenu(); onSave() }
-                    MenuItem("Undo", enabled = canUndo) { closeMenu(); onUndo() }
-                    MenuItem("Redo", enabled = canRedo) { closeMenu(); onRedo() }
-                    MenuItem("Composition settings") { closeMenu(); showCompositionSettings = true }
-                    MenuItem("Edit imported .ecproj", enabled = canonicalProject != null) { closeMenu(); showCanonicalEditor = true }
-                    MenuItem("Add shape layer") { closeMenu(); onAddLayer() }
-                    MenuItem("Inspector") { closeMenu(); showPhoneInspector = true }
+                    // Exports first: they are the primary action, and the
+                    // four entries must be visible the moment the menu
+                    // opens instead of sitting below the fold.
                     ExportMenuItems(
                         onClose = closeMenu,
                         onExportEcproj = onExportEcproj,
@@ -552,6 +545,18 @@ fun EditorScreen(
                         sequenceExportProgress = sequenceExportProgress,
                         hasCanonicalProject = canonicalProject != null
                     )
+                    MenuItem("Edit imported .ecproj", enabled = canonicalProject != null) { closeMenu(); showCanonicalEditor = true }
+                    MenuItem("Composition settings") { closeMenu(); showCompositionSettings = true }
+                    MenuItem("New composition") { closeMenu(); onNewProject() }
+                    MenuItem("Open offline project") { closeMenu(); showProjectPicker = true }
+                    MenuItem("Import project…") { closeMenu(); onImportProject() }
+                    MenuItem("Offline media library") { closeMenu(); showMediaLibrary = true }
+                    MenuItem("Projects") { closeMenu(); showRepositoryPicker = true }
+                    MenuItem("Save draft") { closeMenu(); onSave() }
+                    MenuItem("Undo", enabled = canUndo) { closeMenu(); onUndo() }
+                    MenuItem("Redo", enabled = canRedo) { closeMenu(); onRedo() }
+                    MenuItem("Add shape layer") { closeMenu(); onAddLayer() }
+                    MenuItem("Inspector") { closeMenu(); showPhoneInspector = true }
                 }
             )
             // Export progress stays visible while a render runs — bar
@@ -566,6 +571,28 @@ fun EditorScreen(
                 mp4ExportProgress = mp4ExportProgress,
                 onCancelMp4Sequence = onCancelMp4Sequence
             )
+            // A canonical import runs in the background while the
+            // editor stays usable; this row below the top bar carries
+            // its Cancel action (the old header's Import button used
+            // to toggle to Cancel while an import ran).
+            if (isImportingCanonicalProject) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Importing project…",
+                        color = EditorPalette.muted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = onCancelCanonicalImport,
+                        modifier = Modifier.height(48.dp)
+                            .semantics { contentDescription = "Cancel canonical project import" }
+                    ) { Text("Cancel", color = EditorPalette.text) }
+                }
+            }
 
             if (isTabletLayout) {
                 Row(
@@ -1279,62 +1306,6 @@ private fun ColumnScope.ExportMenuItems(
     )
 }
 
-/**
- * Batch 2 export fix (user-verified defect): the phone and wide headers
- * showed four identical FileDownload icons with no labels — .ecproj,
- * .ecprojx, rendered frame PNG and PNG sequence ZIP were
- * indistinguishable. One MoreVert overflow control now holds all four
- * as labelled menu entries; each entry keeps the exact callback and
- * enabled state its old icon button had (frame/sequence entries toggle
- * to Cancel while their export runs). MP4 export stays separate: the
- * labelled "Export video" button on phones, the MP4 icon on wide
- * layouts. Used by both header branches so the menu is identical
- * everywhere.
- */
-@Composable
-private fun ExportOverflowMenu(
-    onExportEcproj: () -> Unit,
-    onExportEcprojx: () -> Unit,
-    isExportingFrame: Boolean,
-    onExportRenderedFrame: () -> Unit,
-    onCancelFrameExport: () -> Unit,
-    isExportingSequence: Boolean,
-    isSequenceExportWritingOutput: Boolean,
-    onExportPngSequence: () -> Unit,
-    onCancelSequenceExport: () -> Unit,
-    sequenceExportProgress: Int,
-    hasCanonicalProject: Boolean
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(
-            onClick = { expanded = true },
-            modifier = Modifier.size(48.dp)
-        ) {
-            Icon(
-                Icons.Outlined.MoreVert,
-                contentDescription = "More export options",
-                tint = EditorPalette.text
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, containerColor = AstryxTheme.Colors.backgroundPopover) {
-            ExportMenuItems(
-                onClose = { expanded = false },
-                onExportEcproj = onExportEcproj,
-                onExportEcprojx = onExportEcprojx,
-                isExportingFrame = isExportingFrame,
-                onExportRenderedFrame = onExportRenderedFrame,
-                onCancelFrameExport = onCancelFrameExport,
-                isExportingSequence = isExportingSequence,
-                isSequenceExportWritingOutput = isSequenceExportWritingOutput,
-                onExportPngSequence = onExportPngSequence,
-                onCancelSequenceExport = onCancelSequenceExport,
-                sequenceExportProgress = sequenceExportProgress,
-                hasCanonicalProject = hasCanonicalProject
-            )
-        }
-    }
-}
 
 @Composable
 private fun MenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
@@ -3757,6 +3728,7 @@ private fun EditsTopBar(
     onBackToProjects: () -> Unit,
     onExportVideo: () -> Unit,
     isExportingMp4: Boolean,
+    hasCanonicalProject: Boolean,
     moreMenuContent: @Composable ColumnScope.(onClose: () -> Unit) -> Unit
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
@@ -3796,14 +3768,16 @@ private fun EditsTopBar(
                 )
             }
             // Edits Export pill: white, black text, fully rounded.
-            // Disabled while a render runs — the progress row below
-            // carries the Cancel action for a running export.
+            // Disabled while a render runs, and without a canonical
+            // project there is nothing to export — the progress row
+            // below carries the Cancel action for a running export.
             Surface(
                 color = AstryxTheme.Colors.backgroundInverted,
                 shape = RoundedCornerShape(AstryxTheme.Radius.full),
                 modifier = Modifier.height(AstryxTheme.Control.heightLg)
-                    .semantics { contentDescription = if (isExportingMp4) "Exporting video" else "Export video" }
-                    .clickable(enabled = !isExportingMp4) { onExportVideo() }
+                    .alpha(if (hasCanonicalProject && !isExportingMp4) 1f else 0.4f)
+                    .semantics { contentDescription = if (isExportingMp4) "Exporting video" else "Export video (MP4)" }
+                    .clickable(enabled = hasCanonicalProject && !isExportingMp4) { onExportVideo() }
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -3876,7 +3850,7 @@ private fun EditsBottomToolbar(
         EditsToolbarItem(icon = Icons.Outlined.Audiotrack, label = "Audio", onClick = onAddAudioClip)
         EditsToolbarItem(icon = Icons.Outlined.Tune, label = "Props", onClick = onOpenInspector)
         EditsToolbarItem(icon = Icons.Outlined.Settings, label = "Comp", onClick = onOpenCompositionSettings)
-        EditsToolbarItem(icon = Icons.Outlined.Save, label = "Save", onClick = onSave)
+        EditsToolbarItem(icon = Icons.Outlined.Save, label = "Save", description = "Save draft", onClick = onSave)
     }
 }
 
@@ -3885,6 +3859,10 @@ private fun EditsToolbarItem(
     icon: ImageVector,
     label: String,
     enabled: Boolean = true,
+    // The spoken label: usually the visible label, but the Save
+    // action is announced as "Save draft", the contract the old
+    // header button (and the tests) relied on.
+    description: String? = null,
     onClick: () -> Unit
 ) {
     Column(
@@ -3894,7 +3872,7 @@ private fun EditsToolbarItem(
             .clip(RoundedCornerShape(AstryxTheme.Radius.element))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = AstryxTheme.Spacing.space15, vertical = AstryxTheme.Spacing.space1)
-            .semantics { contentDescription = label },
+            .semantics { contentDescription = description ?: label },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
