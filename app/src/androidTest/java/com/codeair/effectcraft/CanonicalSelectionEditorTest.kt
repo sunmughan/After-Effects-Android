@@ -81,6 +81,7 @@ class CanonicalSelectionEditorTest {
         var triangleAdded: List<Any>? = null
         var hexagonAdded: List<Any>? = null
         var pentagonAdded: List<Any>? = null
+        var diamondAdded: List<Any>? = null
         val project = ProjectDocument.starter()
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
@@ -152,6 +153,7 @@ class CanonicalSelectionEditorTest {
                     onAddCanonicalTriangleLayer = { compositionId, name -> triangleAdded = listOf(compositionId, name) },
                     onAddCanonicalHexagonLayer = { compositionId, name -> hexagonAdded = listOf(compositionId, name) },
                     onAddCanonicalPentagonLayer = { compositionId, name -> pentagonAdded = listOf(compositionId, name) },
+                    onAddCanonicalDiamondLayer = { compositionId, name -> diamondAdded = listOf(compositionId, name) },
                     onSetCanonicalLayerVisibility = { _, _, _ -> },
                     onMoveCanonicalLayer = { _, _, _ -> },
                     onDeleteCanonicalLayer = { _, _ -> deleteCalls += 1 },
@@ -231,6 +233,8 @@ class CanonicalSelectionEditorTest {
         assertEquals(listOf<Any>(10L, "Hexagon"), hexagonAdded)
         compose.onNodeWithText("Add Pentagon").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Pentagon"), pentagonAdded)
+        compose.onNodeWithText("Add Diamond").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Diamond"), diamondAdded)
 
         // The canonical preview follows the workspace timeline in both
         // directions; scrubbing the main playhead requests that real frame.
