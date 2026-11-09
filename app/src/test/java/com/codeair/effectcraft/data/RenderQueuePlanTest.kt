@@ -71,6 +71,29 @@ class RenderQueuePlanTest {
     }
 
     @Test
+    fun longExportsAreAccepted() {
+        // Edits parity: a video longer than 5 minutes must export. A
+        // 10-minute 1080p queue and a 3-hour queue are both accepted;
+        // the plan streams frames one at a time, so the queue length
+        // is not a memory bound.
+        val tenMinutes = RenderQueuePlan.create(
+            settings(start = 0, end = 17_999, width = 1920, height = 1080)
+        )
+        assertEquals(18_000, tenMinutes.frameCount)
+        val threeHours = RenderQueuePlan.create(
+            settings(start = 0, end = RenderQueuePlan.MAX_FRAME_COUNT - 1, width = 640, height = 360)
+        )
+        assertEquals(RenderQueuePlan.MAX_FRAME_COUNT, threeHours.frameCount)
+    }
+
+    @Test
+    fun beyondMaxFrameCountIsRejected() {
+        assertThrows(IllegalArgumentException::class.java) {
+            RenderQueuePlan.create(settings(start = 0, end = RenderQueuePlan.MAX_FRAME_COUNT))
+        }
+    }
+
+    @Test
     fun defaultExportFormatIsMp4H264AndPngRemainsSelectable() {
         assertEquals(
             RenderOutputFormat.MP4_H264,

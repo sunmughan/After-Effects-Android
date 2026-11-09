@@ -4049,7 +4049,7 @@ private fun CompositionSettingsPanel(
             ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
         }
         Text("Duration · ${duration} frames", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..3600f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition duration" })
+        Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..ProjectDocument.MAX_DURATION_FRAMES.toFloat(), modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition duration" })
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             BasicTextField(
                 value = durationDraft,
@@ -4060,7 +4060,7 @@ private fun CompositionSettingsPanel(
                 decorationBox = { inner -> Box { if (durationDraft.isEmpty()) Text("Frames", color = EditorPalette.muted); inner() } }
             )
             TextButton(
-                enabled = durationDraft.toIntOrNull() in 1..3600,
+                enabled = durationDraft.toIntOrNull() in 1..ProjectDocument.MAX_DURATION_FRAMES,
                 onClick = { duration = durationDraft.toInt() },
                 modifier = Modifier.semantics { contentDescription = "Apply composition duration" }
             ) { Text("Apply", color = EditorPalette.violet, fontSize = 10.sp) }
@@ -4275,7 +4275,10 @@ private fun TimelinePanel(
             Spacer(Modifier.width(8.dp))
             Text("00:00", color = EditorPalette.muted, fontSize = 11.sp)
             Spacer(Modifier.weight(1f))
-            Text("00:${(project.durationFrames / project.frameRate).toString().padStart(2, '0')}", color = EditorPalette.muted, fontSize = 11.sp)
+            Text(
+                timelineEndLabel(project.durationFrames, project.frameRate),
+                color = EditorPalette.muted, fontSize = 11.sp
+            )
         }
 
         // Every layer renders: the old take(4) cap hid layers 5+ with a
@@ -5478,6 +5481,12 @@ private fun timecode(frame: Int, fps: Int): String {
     )
 }
 
+/** End-of-timeline label as mm:ss, so a 10-minute composition reads "10:00", not "00:600". */
+internal fun timelineEndLabel(durationFrames: Int, frameRate: Int): String {
+    val totalSeconds = if (frameRate > 0) durationFrames / frameRate else 0
+    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+}
+
 /**
  * Project audio: the clips of the unified [ProjectDocument.audioTracks]
  * model, listed with their timeline window, a volume slider, 1-second
@@ -5487,6 +5496,20 @@ private fun timecode(frame: Int, fps: Int): String {
  * mixes. Times are frames; the panel converts to milliseconds for
  * display with the composition frame rate.
  */
+/**
+ * Ruler label step in seconds, chosen from the composition length so
+ * labels never collide: every second up to 30 s, every 5 s up to
+ * 5 min, every 15 s up to 30 min, every minute beyond that. Pure, so
+ * unit tests pin the steps — the ruler scales to the real project
+ * duration instead of stopping at a fixed length.
+ */
+internal fun rulerLabelStepSeconds(durationSeconds: Float): Int = when {
+    durationSeconds <= 30f -> 1
+    durationSeconds <= 300f -> 5
+    durationSeconds <= 1800f -> 15
+    else -> 60
+}
+
 @Composable
 private fun TimelineRuler(
     durationFrames: Int,
@@ -5494,9 +5517,10 @@ private fun TimelineRuler(
     modifier: Modifier = Modifier
 ) {
     val durationSeconds = if (frameRate > 0) durationFrames / frameRate.toFloat() else 0f
-    // Labels every second on short comps, every five on long ones,
-    // so labels never collide.
-    val labelEverySeconds = if (durationSeconds <= 30f) 1 else 5
+    val labelEverySeconds = rulerLabelStepSeconds(durationSeconds)
+    // Minor ticks stay proportional to the label step so a 3-hour
+    // composition does not draw a tick every half second.
+    val tickStepSeconds = (labelEverySeconds / 5f).coerceAtLeast(0.5f)
     val textMeasurer = rememberTextMeasurer()
     Canvas(modifier) {
         if (durationSeconds <= 0f || size.width <= 0f) return@Canvas
@@ -5521,7 +5545,7 @@ private fun TimelineRuler(
                     style = androidx.compose.ui.text.TextStyle(color = EditorPalette.muted, fontSize = 9.sp)
                 )
             }
-            seconds += 0.5f
+            seconds += tickStepSeconds
         }
     }
 }

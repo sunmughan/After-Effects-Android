@@ -79,7 +79,14 @@ data class RenderQueuePlan private constructor(
         const val MAX_DIMENSION = 4096
         const val MAX_PIXELS_PER_FRAME = 8_388_608L
         const val MAX_FRAME_INDEX = 1_000_000
-        const val MAX_FRAME_COUNT = 10_000
+        /**
+         * Longest render queue: 3 hours at 30 fps, matching
+         * [ProjectDocument.MAX_DURATION_FRAMES]. The executors consume
+         * frames one at a time (see the class KDoc), so queue length
+         * is not a memory bound — the per-frame guard is
+         * [MAX_PIXELS_PER_FRAME].
+         */
+        const val MAX_FRAME_COUNT = 324_000
         const val MAX_UNCOMPRESSED_RGBA_BYTES = 8L * 1024L * 1024L * 1024L
 
         /**
@@ -137,10 +144,16 @@ data class RenderQueuePlan private constructor(
             require(pixels <= MAX_PIXELS_PER_FRAME) {
                 "Render dimensions exceed the per-frame pixel budget"
             }
+            // No total-bytes bound: the executors stream one frame at
+            // a time and never hold the queue, so the uncompressed
+            // size of the whole queue is not a real resource. The
+            // estimate is still reported (see
+            // [RenderQueuePlan.estimatedUncompressedRgbaBytes]) for
+            // callers that display it. The old 8 GiB total bound
+            // rejected a 1080p export longer than ~35 seconds at
+            // 30 fps, and the old 10,000-frame bound rejected every
+            // export longer than ~5.5 minutes — the 5-minute wall.
             val bytes = Math.multiplyExact(Math.multiplyExact(pixels, 4L), countLong)
-            require(bytes <= MAX_UNCOMPRESSED_RGBA_BYTES) {
-                "Render queue exceeds the 8 GiB uncompressed RGBA budget"
-            }
             return RenderQueuePlan(settings, countLong.toInt(), bytes)
         }
     }

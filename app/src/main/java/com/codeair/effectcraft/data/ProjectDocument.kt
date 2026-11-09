@@ -20,7 +20,7 @@ data class ProjectDocument(
         if (width !in 320..3840) add("Composition width must be between 320 and 3840")
         if (height !in 320..3840) add("Composition height must be between 320 and 3840")
         if (frameRate !in 1..120) add("Frame rate must be between 1 and 120")
-        if (durationFrames !in 1..3600) add("Duration must be between 1 and 3600 frames")
+        if (durationFrames !in 1..MAX_DURATION_FRAMES) add("Duration must be between 1 and $MAX_DURATION_FRAMES frames")
         if (layers.isEmpty()) add("A composition must contain at least one layer")
         if (layers.map { it.id }.toSet().size != layers.size) add("Layer IDs must be unique")
         layers.forEachIndexed { index, layer ->
@@ -44,6 +44,15 @@ data class ProjectDocument(
     }
 
     companion object {
+        /**
+         * Longest composition the editor accepts: 3 hours at 30 fps.
+         * The timeline, ruler, playback and export all scale to the
+         * real project duration — there is no 5-minute wall anywhere.
+         * One place owns the number; the settings slider, the apply
+         * gate and this validation all read it.
+         */
+        const val MAX_DURATION_FRAMES = 324_000
+
         fun starter(): ProjectDocument = ProjectDocument(
             id = UUID.randomUUID().toString(),
             name = "Untitled Composition",

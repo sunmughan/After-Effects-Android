@@ -1846,7 +1846,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             onTogglePlayback = { isPlaying = !isPlaying },
             onApplyComposition = { width, height, fps, duration ->
-                if (width in 320..3840 && height in 320..3840 && fps in 1..120 && duration in 1..3600) {
+                if (width in 320..3840 && height in 320..3840 && fps in 1..120 && duration in 1..ProjectDocument.MAX_DURATION_FRAMES) {
                     // A shorter composition trims clips that ran past it and
                     // drops clips that started at or after the new end, so
                     // the project stays valid after the change. Audio clips

@@ -18,6 +18,24 @@ class ProjectDocumentTest {
     }
 
     @Test
+    fun longCompositionsValidateClean() {
+        // Edits parity: the timeline must scale to the real project
+        // duration. A 10-minute and a 60-minute composition at 30 fps
+        // are valid; only absurd durations are rejected.
+        val tenMinutes = ProjectDocument.starter().copy(durationFrames = 18_000)
+        assertTrue(tenMinutes.validationErrors().isEmpty())
+        val sixtyMinutes = ProjectDocument.starter().copy(durationFrames = 108_000)
+        assertTrue(sixtyMinutes.validationErrors().isEmpty())
+    }
+
+    @Test
+    fun durationBeyondThreeHoursIsRejected() {
+        val tooLong = ProjectDocument.starter()
+            .copy(durationFrames = ProjectDocument.MAX_DURATION_FRAMES + 1)
+        assertTrue(tooLong.validationErrors().any { it.contains("Duration") })
+    }
+
+    @Test
     fun starterCompositionUsesVerticalVideoDefaults() {
         val project = ProjectDocument.starter()
 
