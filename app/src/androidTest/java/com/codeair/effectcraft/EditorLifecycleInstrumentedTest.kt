@@ -37,6 +37,15 @@ class EditorLifecycleInstrumentedTest {
         if (compose.onAllNodesWithText("Get started").fetchSemanticsNodes().isNotEmpty()) {
             compose.onNodeWithText("Get started").performClick()
         }
+        // Isolate the project cards from drafts saved by earlier cases
+        // in this run: every case saves an "Untitled Composition", so
+        // without this the Home grid holds several cards with that
+        // name and the "Open project" lookup is ambiguous (2 nodes in
+        // portrait) or off-screen and uncomposed (0 nodes in
+        // landscape, where the grid shows one row). The save in each
+        // test re-lists from disk, so only its own draft is present.
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.filesDir, "projects").listFiles()?.forEach { it.delete() }
     }
 
 

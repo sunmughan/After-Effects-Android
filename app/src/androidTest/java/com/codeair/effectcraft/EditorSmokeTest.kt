@@ -356,7 +356,12 @@ class EditorSmokeTest {
         compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
 
         compose.onNodeWithContentDescription("Undo").performClick()
-        scrollTimelineToLayer(3)
+        // Undo restores the pre-delete state, where Shape 4 sits at
+        // index 2 (it was moved up before the delete) — scroll to its
+        // own row, not index 3: with the add-layer row at the end of
+        // the list, scrolling to 3 can push index 2 out of
+        // composition and the assertion reads a missing node.
+        scrollTimelineToLayer(2)
         compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
         compose.onNodeWithContentDescription("Redo").performClick()
         scrollTimelineToLayer(2)

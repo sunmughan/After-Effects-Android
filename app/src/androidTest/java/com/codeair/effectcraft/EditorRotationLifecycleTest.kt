@@ -10,9 +10,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 /**
  * Lifecycle/rotation: MainActivity declares
@@ -36,6 +38,15 @@ class EditorRotationLifecycleTest {
         if (compose.onAllNodesWithText("Get started").fetchSemanticsNodes().isNotEmpty()) {
             compose.onNodeWithText("Get started").performClick()
         }
+        // Isolate the project cards from drafts saved by earlier cases
+        // in this run: every case saves an "Untitled Composition", so
+        // without this the Home grid holds several cards with that
+        // name and the "Open project" lookup is ambiguous — and in
+        // landscape the grid shows one row, so a second card sits
+        // below the fold uncomposed (0 nodes). The save in this test
+        // re-lists from disk, so only its own draft is present.
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.filesDir, "projects").listFiles()?.forEach { it.delete() }
     }
 
 
