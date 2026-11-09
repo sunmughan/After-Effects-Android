@@ -51,11 +51,11 @@ Tracker updated: 2026-11-09 11:20 IST · ZIP import UI/media relinking implement
 ## Phase acceptance
 
 ### M0 — Repository/toolchain/build/CI/native bridge
-**Status: ACCEPTED at exact-head CI #1376 (`762b9756`); subsequent feature commits require fresh exact-head revalidation.**
+**Status: ACCEPTED at exact-head CI #1382 (`bd1ca9be`); subsequent feature commits require fresh exact-head revalidation.**
 
 Acceptance: pinned Gradle/JDK/SDK/NDK; reproducible Rust/JNI builds for ARM64 and x86_64; Rust/JVM tests; API30 instrumentation; debug/release APK+AAB; independent cold APK byte equality; no weakened tests.
 
-Evidence: [CI #1011](https://github.com/sunmughan/After-Effects-Android/actions/runs/42315397626) at `9ebcdc36` (Rust 59/59, API30 165/165, JVM, dual ABI and cold rebuild); [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) at exact SHA `762b9756`: Rust **73/73**, ARM64+x86_64 JNI, Kotlin/JVM, debug and unsigned release APK/AAB + R8, API30 **177/177**, independent cold APK content and both native `.so` hashes identical. Repro report: [artifact 13646315661](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992/artifacts/13646315661).  
+Evidence: [CI #1011](https://github.com/sunmughan/After-Effects-Android/actions/runs/42315397626) at `9ebcdc36` (Rust 59/59, API30 165/165, JVM, dual ABI and cold rebuild); [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) at `762b9756` (Rust 73/73, API30 177/177 and cold match); latest complete [CI #1382](https://github.com/sunmughan/After-Effects-Android/actions/runs/42559043025) at exact SHA `bd1ca9be`: Rust **75/75**, ARM64+x86_64 JNI, Kotlin/JVM, debug and unsigned release APK/AAB + R8, API30 **177/177**, independent cold APK content and both native `.so` hashes identical. Repro report: [artifact 13650395402](https://github.com/sunmughan/After-Effects-Android/actions/runs/42559043025/artifacts/13650395402).  
 Remaining: revalidate exact-head after new commits; physical hardware runtime qualification belongs to M6/M7.
 
 ### M1 — Professional Android editor foundation
@@ -67,12 +67,12 @@ Evidence: canonical selection/add actions and API30 workspace/editor smoke at #1
 Remaining: full professional interaction parity, TalkBack/large-font/foldable/physical-device UX and complete M1 acceptance matrix.
 
 ### M2 — Project import, format compatibility and media assets
-**Status: PARTIAL — canonical EffectCraft JSON/XML persistence and integrity foundations.**
+**Status: PARTIAL — canonical EffectCraft JSON/XML persistence plus bounded ZIP bundle import and offline media relinking UI (exact-head CI pending).**
 
 Acceptance: strict parser/serializer; schema/version validation and migration; atomic import/save; media manifest/asset relinking; round-trip/golden fixtures; interoperable supported format matrix.
 
 Evidence: `.ecproj` JSON + `.ecprojx` XML; strict UTF-8 [ccf60a7c](https://github.com/sunmughan/After-Effects-Android/commit/ccf60a7cf89b7846d00a3126fb786d6e50953098); duplicate XML member guard [69335d64](https://github.com/sunmughan/After-Effects-Android/commit/69335d64f69134520c8b5474717f3e3f793445c9) + [test 2568aabb](https://github.com/sunmughan/After-Effects-Android/commit/2568aabb4cd3f08ebcded1438f2867e8e4d80bce); comment-before-root XML sniff [0a489e9c](https://github.com/sunmughan/After-Effects-Android/commit/0a489e9c7db218f034d3700e98e7642bc1a81655) + [test d2ef6771](https://github.com/sunmughan/After-Effects-Android/commit/d2ef67715a98129d547539f1db1704be2cd49beb); canonical/symlink transaction locking [60dc6bcd](https://github.com/sunmughan/After-Effects-Android/commit/60dc6bcd49a9b9439a70ab8435128a2e8cfaa9c4) + [200-writer regression 46c27832](https://github.com/sunmughan/After-Effects-Android/commit/46c2783257fc1b9aa8a5363267fed2bddd74586).  
-Remaining: broader Effekseer interoperability, complete media relink/migration fixtures and exact-head tests. Adobe `.aep` is proprietary; no licensed parser is integrated and native support is **not** claimed. `.efkproj` support is also not claimed.
+ZIP bundle source/tests/UI are committed at [61dcf2f3](https://github.com/sunmughan/After-Effects-Android/commit/61dcf2f3c06176afa5242678eb13d8880dcf4aa0), [bd2f087a](https://github.com/sunmughan/After-Effects-Android/commit/bd2f087a857290d2cf8f75408dbb12366ee12fd1), [b35d28b0](https://github.com/sunmughan/After-Effects-Android/commit/b35d28b0099c8d7565abf51fa6f0aa08214b8a1b), [40ea68c7](https://github.com/sunmughan/After-Effects-Android/commit/40ea68c763b41365025a79be9f6a6d89584af69a), [e2e86160](https://github.com/sunmughan/After-Effects-Android/commit/e2e8616032c66705d5411a9bb609d8589835e476): stream ZIP from SAF, validate native project, import extracted assets offline, relink exact/unique paths, persist canonical repository and references. Streaming and header accessibility tests added. Exact-head [CI #1393](https://github.com/sunmughan/After-Effects-Android/actions/runs/42569905605) is pending. Remaining: broader Effekseer interoperability, migration/golden fixtures, unmatched media UI and exact-head tests. Adobe `.aep` is proprietary; no licensed parser is integrated and native support is **not** claimed. `.efkproj` support is also not claimed.
 
 ### M3 — Actual composition preview/render integration
 **Status: PARTIAL — real Rust CPU/session compositor and Android frame presentation.**
@@ -83,7 +83,7 @@ Evidence: native `render_frame_rgba` and session/JNI preview, rendered-frame cac
 Remaining: physical GPU/Surface/device lifecycle, media parity, renderer fallback and device performance acceptance.
 
 ### M4 — Functional layer/effect/timeline/property editing
-**Status: PARTIAL — native Shape creation and edit→render foundations; Rounded Rect source/test added, exact-head CI pending.**
+**Status: PARTIAL — native Shape creation and edit→render foundations; Rect/Ellipse accepted historically, Rounded Rect accepted at CI #1382, newer shapes and ZIP UI require exact-head revalidation.**
 
 Acceptance: editable layer/effect stack; transforms and keyframes/interpolation; Shape geometry/fill/stroke; properties; real preview refresh; golden edit→save→reopen→render tests.
 
