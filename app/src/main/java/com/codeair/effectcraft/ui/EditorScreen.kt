@@ -286,6 +286,7 @@ fun EditorScreen(
     onAddCanonicalHexagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalPentagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalDiamondLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalRoundedRectLayer: (Long, String) -> Unit = { _, _ -> },
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
