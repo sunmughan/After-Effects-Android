@@ -556,11 +556,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     // app-private media library. Exact relative paths win; a
                     // basename fallback is allowed only when it is unambiguous.
                     val assetsByPath = withContext(Dispatchers.IO) {
-                        unpacked.mediaFiles.associateWith { relativePath ->
+                        val imported = mutableMapOf<String, OfflineAssetStore.Asset>()
+                        for (relativePath in unpacked.mediaFiles) {
                             currentCoroutineContext().ensureActive()
                             val file = File(unpacked.mediaDir, relativePath)
                             require(file.isFile) { "ZIP media entry is missing after extraction: $relativePath" }
-                            file.inputStream().use { input ->
+                            val asset = file.inputStream().use { input ->
                                 offlineAssetStore.import(
                                     input,
                                     file.name,
@@ -568,7 +569,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                                     cancelRequested = { importJob?.isActive != true }
                                 )
                             }
+                            imported[relativePath] = asset
                         }
+                        imported
                     }
                     val uniqueAssetsByName = assetsByPath.keys
                         .groupBy { it.substringAfterLast('/') }
