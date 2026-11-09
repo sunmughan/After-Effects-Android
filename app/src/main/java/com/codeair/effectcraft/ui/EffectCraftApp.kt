@@ -581,7 +581,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     for (item in parsedInfo.items) {
                         currentCoroutineContext().ensureActive()
                         val originalPath = item.path ?: continue
-                        val normalizedPath = originalPath.replace('\\\\', '/').trimStart('/')
+                        val normalizedPath = originalPath.replace('\\', '/').trimStart('/')
                         val asset = assetsByPath[normalizedPath]
                             ?: uniqueAssetsByName[normalizedPath.substringAfterLast('/')]
                             ?: continue

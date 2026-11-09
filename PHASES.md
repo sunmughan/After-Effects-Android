@@ -1,3 +1,10 @@
+# Kotlin compile failure — ZIP path normalization (2026-11-09 12:18 IST)
+
+- **Exact-head CI #1393 failed at `compileDebugKotlin`, not native/JNI:** [run #1393](https://github.com/sunmughan/After-Effects-Android/actions/runs/42569905605), tested SHA `e2e86160`. Both diagnostics were `Unsupported escape sequence`: `ProjectBundleZip.kt:172:42` and `EffectCraftApp.kt:584:67`.
+- Root cause: source emitted a Kotlin character literal containing **four** backslashes (`'\\\\'`) where a single backslash character requires exactly **two** source backslashes (`'\\'`). Both ZIP entry sanitization and footage relative-path normalization were affected. Native ARM64/x86_64 builds and Rust tests had passed; Gradle stopped before JVM, APK/release, instrumentation and cold rebuild.
+- Corrected both sites to the valid Kotlin `'\\'` char literal (replace Windows separators with `/`); no test or validation was weakened. Source fix is committed below. Fresh exact-head CI must run all downstream gates.
+- PR #1 is merged; PR #4 remains the active Draft. Local Android SDK/Gradle is unavailable in this execution container, so hosted Actions is the Android build authority.
+
 # EffectCraft Android — Phase Acceptance Tracker
 
 ## Engineering checkpoint — 2026-11-09 11:20 IST

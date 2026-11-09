@@ -169,7 +169,7 @@ object ProjectBundleZip {
     }
 
     private fun sanitizeEntryName(rawName: String): String? {
-        val normalized = rawName.replace('\\\\', '/')
+        val normalized = rawName.replace('\\', '/')
         if (normalized.startsWith("/") ||
             normalized.startsWith("//") ||
             (normalized.length >= 2 && normalized[1] == ':')
