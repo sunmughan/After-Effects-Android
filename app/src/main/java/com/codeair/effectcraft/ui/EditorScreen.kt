@@ -178,6 +178,15 @@ private fun shapePathCanvasMapping(
     return ShapePathCanvasMapping(minX, minY, scale, (width - drawnWidth) / 2f, (height - drawnHeight) / 2f, height)
 }
 
+/**
+ * Draft preview throttle while playing: re-render the draft frame
+ * only on every Nth playhead frame (5th at 30 fps is ~6 fps of
+ * preview). A fresh bitmap per frame saturated the software-rendered
+ * emulator (run 42588722406); scrubbing and still frames are
+ * unaffected — they render every time.
+ */
+private const val DRAFT_RENDER_EVERY_NTH_FRAME_WHILE_PLAYING = 5
+
 private object EditorPalette {
     val background = Color(0xFF0A0C11)
     val panel = Color(0xFF131720)
@@ -439,11 +448,24 @@ fun EditorScreen(
     // previewComposition comment above) displayed in the same runs.
     // The render is a millisecond CPU Canvas draw of a ≤720px bitmap,
     // so it needs no background thread.
+    //
+    // While playing, re-render only every Nth frame: a fresh bitmap
+    // per frame saturated the software-rendered emulator — run
+    // 42588722406 showed every frame ~1.3 s late (OpenGLRenderer
+    // "Davey!" warnings) and the playhead never advanced inside the
+    // 10 s transport wait, failing
+    // EditorSmokeTest.timelinePlayheadScrubsAndTransportToggles in
+    // both attempts. The preview does not need 30 fps draft
+    // re-renders; the playhead and timeline stay live, and pausing
+    // re-runs the effect (isPlaying is a key) so the frame catches
+    // up immediately. Scrubbing and still frames render every time.
     var draftFrame by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(project, playheadFrame, layerOpacityAtPlayhead) {
-        draftFrame = if (previewComposition == null) {
-            DraftFrameRenderer.render(project, playheadFrame, layerOpacityAtPlayhead)
-        } else null
+    LaunchedEffect(project, playheadFrame, layerOpacityAtPlayhead, isPlaying) {
+        if (previewComposition != null) {
+            draftFrame = null
+        } else if (!isPlaying || playheadFrame % DRAFT_RENDER_EVERY_NTH_FRAME_WHILE_PLAYING == 0) {
+            draftFrame = DraftFrameRenderer.render(project, playheadFrame, layerOpacityAtPlayhead)
+        }
     }
 
     BoxWithConstraints(
