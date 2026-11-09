@@ -1,9 +1,18 @@
 # EffectCraft Android — Phase Acceptance Tracker
 
+## Engineering checkpoint — 2026-11-09 11:20 IST
+
+- **M2 ZIP import is now wired end-to-end in source (exact-head CI pending):** the SAF ZIP picker streams the archive into the bounded/safe extractor, validates the contained canonical project through JNI, imports extracted media into the SHA-addressed offline library, relinks matching footage by exact relative path or unique basename, persists the resulting canonical project/repository entry and item→asset references, refreshes media state, and reports linked/stored counts. UI actions exist in both responsive header layouts. Commits: [streaming extractor 61dcf2f3](https://github.com/sunmughan/After-Effects-Android/commit/61dcf2f3c06176afa5242678eb13d8880dcf4aa0), [streaming test bd2f087a](https://github.com/sunmughan/After-Effects-Android/commit/bd2f087a857290d2cf8f75408dbb12366ee12fd1), [ZIP import workflow b35d28b0](https://github.com/sunmughan/After-Effects-Android/commit/b35d28b0099c8d7565abf51fa6f0aa08214b8a1b), [suspend-loop correction 05692f36](https://github.com/sunmughan/After-Effects-Android/commit/05692f369e73d9c76edd5e277c313cfc00479df5), [responsive UI action 40ea68c7](https://github.com/sunmughan/After-Effects-Android/commit/40ea68c763b41365025a79be9f6a6d89584af69a), [UI instrumentation e2e86160](https://github.com/sunmughan/After-Effects-Android/commit/e2e8616032c66705d5411a9bb609d8589835e476). The import intentionally leaves unmatched/missing footage as native project references; it does not silently fabricate media.
+- **Streaming extraction regression:** ProjectBundleZip has an InputStream overload that verifies the PK header then streams ZIP entries directly; the byte-array overload remains for compatibility. New test covers a 64 KiB media entry via ByteArrayInputStream. Existing path/duplicate/limit/symlink/empty-destination safety remains unchanged.
+- **CI #1386 exact SHA 10aa7114 failed only before build at JDK bootstrap:** setup-java v4 requested Temurin 17.0.21+9 from Adoptium GitHub release and received HTTP 504 twice (05:38:34Z and 05:39:05Z; final 05:39:19Z). Disk cleanup showed 108 GiB available; Gradle/Rust/JNI/Kotlin/tests never started. Job 128999655525 was retried, but attempt 2 was superseded/cancelled by the newer source pushes. This is external runner bootstrap, not a source/test failure. Latest code SHA [e2e86160](https://github.com/sunmughan/After-Effects-Android/commit/e2e8616032c66705d5411a9bb609d8589835e476) requires a fresh full CI + cold reproducibility run.
+- PR #1 is merged (merge SHA 4ae22776); active development/release gates are on [Draft PR #4](https://github.com/sunmughan/After-Effects-Android/pull/4). Do not describe PR #1 as open or claim PR #4 merged.
+- M0 accepted historically at #1382 SHA bd1ca9be; M4 Rounded Rect accepted at that same exact CI SHA. New ZIP importer is **not accepted until exact-head CI passes**. M7 remains NOT accepted; physical install/GPU/media/codec/audio/accessibility/performance and owner-controlled signing gates remain.
+
+
 Repository: [sunmughan/After-Effects-Android](https://github.com/sunmughan/After-Effects-Android)  
 Implementation branch: `feat/android-app-foundation`  
 [PR #1 merged](https://github.com/sunmughan/After-Effects-Android/pull/1) at `4ae22776`; [PR #4 draft follow-up](https://github.com/sunmughan/After-Effects-Android/pull/4) (PR #2 and #3 merged).  
-Tracker updated: 2026-11-09 09:22 IST · rounded-rectangle callback fix 00fa887c · exact-head CI pending
+Tracker updated: 2026-11-09 11:20 IST · ZIP import UI/media relinking implementation e2e86160 · exact-head CI pending
 
 > This is the acceptance ledger. A phase is not complete because a feature is committed or a workflow is queued. CI evidence is tied to its exact SHA; device/credential gates remain explicit.
 
