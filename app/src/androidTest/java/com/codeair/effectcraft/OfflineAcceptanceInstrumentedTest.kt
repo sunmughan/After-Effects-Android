@@ -30,6 +30,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -55,6 +56,18 @@ import org.junit.Test
 class OfflineAcceptanceInstrumentedTest {
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+    /**
+     * The first-run welcome dialog shows on a fresh install only.
+     * Dismiss it so the editor underneath is reachable; on later
+     * tests in the run the flag is already set and this is a no-op.
+     */
+    @Before
+    fun dismissWelcomeDialogIfShown() {
+        if (compose.onAllNodesWithText("Get started").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Get started").performClick()
+        }
+    }
+
 
     private fun appContext() = InstrumentationRegistry.getInstrumentation().targetContext
 

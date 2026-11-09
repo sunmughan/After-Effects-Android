@@ -8,7 +8,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.onAllNodesWithText
 import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -23,6 +25,18 @@ class EditorRotationLifecycleTest {
 
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+    /**
+     * The first-run welcome dialog shows on a fresh install only.
+     * Dismiss it so the editor underneath is reachable; on later
+     * tests in the run the flag is already set and this is a no-op.
+     */
+    @Before
+    fun dismissWelcomeDialogIfShown() {
+        if (compose.onAllNodesWithText("Get started").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Get started").performClick()
+        }
+    }
+
 
     /**
      * Batch 2 (P11): the track list is a LazyColumn, so the selected

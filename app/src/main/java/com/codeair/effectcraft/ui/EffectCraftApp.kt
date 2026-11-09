@@ -102,6 +102,9 @@ private data class EditorHistorySnapshot(
 @Composable
 fun EffectCraftApp(projectStore: DraftProjectStore) {
     val context = LocalContext.current
+    // First-run onboarding: a short welcome dialog, shown once.
+    // Dismissing it sets the persisted flag in OnboardingStore.
+    var showOnboarding by remember { mutableStateOf(!OnboardingStore.isSeen(context)) }
     val exportScope = rememberCoroutineScope()
     var frameExportJob by remember { mutableStateOf<Job?>(null) }
     var canonicalImportJob by remember { mutableStateOf<Job?>(null) }
@@ -2612,6 +2615,32 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             isVerifyingOfflineAssets = mediaVerificationInProgress
         )
+
+        // First-run onboarding: three steps, nothing more. Dismissing
+        // (button or back/scrim) sets the persisted flag, so it shows
+        // once per device.
+        if (showOnboarding) {
+            AlertDialog(
+                onDismissRequest = {
+                    OnboardingStore.markSeen(context)
+                    showOnboarding = false
+                },
+                title = { Text("Welcome to EffectCraft") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("1 · Import a project — EffectCraft (.ecproj), a ZIP bundle, or an After Effects project (.aep/.aepx).")
+                        Text("2 · Scrub the timeline, set the playhead, and edit layers in the inspector.")
+                        Text("3 · Export your video from the File menu when it is ready.")
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        OnboardingStore.markSeen(context)
+                        showOnboarding = false
+                    }, modifier = Modifier.height(48.dp)) { Text("Get started") }
+                }
+            )
+        }
 
         // P07: starting a new composition with unsaved changes asks
         // first. Save commits the old draft and then switches; Discard

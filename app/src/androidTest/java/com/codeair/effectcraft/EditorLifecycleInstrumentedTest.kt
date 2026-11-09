@@ -7,11 +7,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.test.platform.app.InstrumentationRegistry
 import com.codeair.effectcraft.data.DraftProjectStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
 import java.io.File
 
@@ -24,6 +26,18 @@ import java.io.File
 class EditorLifecycleInstrumentedTest {
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+    /**
+     * The first-run welcome dialog shows on a fresh install only.
+     * Dismiss it so the editor underneath is reachable; on later
+     * tests in the run the flag is already set and this is a no-op.
+     */
+    @Before
+    fun dismissWelcomeDialogIfShown() {
+        if (compose.onAllNodesWithText("Get started").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Get started").performClick()
+        }
+    }
+
 
     private fun waitForJournalFile() {
         val journalDir = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "recovery-journal")

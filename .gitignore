@@ -13,3 +13,6 @@ captures/
 # OS
 .DS_Store
 Thumbs.db
+
+# Rust bridge build output (never committed; 3 GB of local artifacts)
+native/target/

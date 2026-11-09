@@ -6,11 +6,13 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
 import java.io.File
 
@@ -37,6 +39,18 @@ class OfflineAcceptanceTest {
 
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+    /**
+     * The first-run welcome dialog shows on a fresh install only.
+     * Dismiss it so the editor underneath is reachable; on later
+     * tests in the run the flag is already set and this is a no-op.
+     */
+    @Before
+    fun dismissWelcomeDialogIfShown() {
+        if (compose.onAllNodesWithText("Get started").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Get started").performClick()
+        }
+    }
+
 
     @Test
     fun appRequestsNoAccountOrCredentialPermission() {
