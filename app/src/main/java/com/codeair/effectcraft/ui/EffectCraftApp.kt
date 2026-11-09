@@ -1724,6 +1724,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     "Canonical Pentagon layer added · saved locally"
                 )
             },
+            onAddCanonicalDiamondLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addDiamondLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Diamond layer added · saved locally"
+                )
+            },
             onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
