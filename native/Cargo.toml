@@ -8,6 +8,14 @@ publish = false
 name = "effectcraft_android"
 crate-type = ["cdylib"]
 
+# Release builds are independently rebuilt on clean CI runners and their
+# packaged .so files are compared byte-for-byte. Rust's default multi-CGU
+# release layout can leave merged constant/string ordering dependent on
+# codegen-unit partitioning; one CGU gives LLVM a stable whole-crate input.
+# This trades some compile parallelism for reproducible native artifacts.
+[profile.release]
+codegen-units = 1
+
 [dependencies]
 effectcraft-project = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
 effectcraft-render = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
