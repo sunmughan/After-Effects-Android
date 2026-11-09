@@ -281,6 +281,7 @@ fun EditorScreen(
     onAddCanonicalShapeLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalEllipseLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalStarLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalHexStarLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalTriangleLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalHexagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalPentagonLayer: (Long, String) -> Unit = { _, _ -> },
@@ -904,6 +905,7 @@ fun EditorScreen(
                     onAddShapeLayer = onAddCanonicalShapeLayer,
                     onAddEllipseLayer = onAddCanonicalEllipseLayer,
                     onAddStarLayer = onAddCanonicalStarLayer,
+                    onAddHexStarLayer = onAddCanonicalHexStarLayer,
                     onAddTriangleLayer = onAddCanonicalTriangleLayer,
                     onAddHexagonLayer = onAddCanonicalHexagonLayer,
                     onAddPentagonLayer = onAddCanonicalPentagonLayer,
@@ -1584,6 +1586,7 @@ private fun CanonicalProjectEditor(
     onAddShapeLayer: (Long, String) -> Unit,
     onAddEllipseLayer: (Long, String) -> Unit,
     onAddStarLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddHexStarLayer: (Long, String) -> Unit = { _, _ -> },
     onAddTriangleLayer: (Long, String) -> Unit = { _, _ -> },
     onAddHexagonLayer: (Long, String) -> Unit = { _, _ -> },
     onAddPentagonLayer: (Long, String) -> Unit = { _, _ -> },
@@ -1865,6 +1868,10 @@ private fun CanonicalProjectEditor(
                         enabled = canEdit && newTextName.trim().isNotEmpty(),
                         onClick = { onAddStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Star") }
                     ) { Text("Add Star", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddHexStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Hex Star") }
+                    ) { Text("Add 6-Point Star", color = EditorPalette.violet) }
                     TextButton(
                         enabled = canEdit && newTextName.trim().isNotEmpty(),
                         onClick = { onAddTriangleLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Triangle") }

@@ -34,12 +34,12 @@ Tracker updated: 2026-11-08 22:55 IST · native collision regression c09fe485 ·
 ## Phase acceptance
 
 ### M0 — Repository/toolchain/build/CI/native bridge
-**Status: ACCEPTED historically; latest-head revalidation pending.**
+**Status: ACCEPTED at exact-head CI #1376 (`762b9756`); subsequent feature commits require fresh exact-head revalidation.**
 
 Acceptance: pinned Gradle/JDK/SDK/NDK; reproducible Rust/JNI builds for ARM64 and x86_64; Rust/JVM tests; API30 instrumentation; debug/release APK+AAB; independent cold APK byte equality; no weakened tests.
 
-Evidence: [CI #1011](https://github.com/sunmughan/After-Effects-Android/actions/runs/42315397626) at `9ebcdc36` (Rust 59/59, API30 165/165, JVM, dual ABI and cold rebuild). Newer complete accepted checkpoint #1222 is linked above.  
-Remaining: latest-head all-gate cold comparison; hardware runtime qualification belongs to M6/M7.
+Evidence: [CI #1011](https://github.com/sunmughan/After-Effects-Android/actions/runs/42315397626) at `9ebcdc36` (Rust 59/59, API30 165/165, JVM, dual ABI and cold rebuild); [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) at exact SHA `762b9756`: Rust **73/73**, ARM64+x86_64 JNI, Kotlin/JVM, debug and unsigned release APK/AAB + R8, API30 **177/177**, independent cold APK content and both native `.so` hashes identical. Repro report: [artifact 13646315661](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992/artifacts/13646315661).  
+Remaining: revalidate exact-head after new commits; physical hardware runtime qualification belongs to M6/M7.
 
 ### M1 — Professional Android editor foundation
 **Status: PARTIAL — offline workspace and scoped editor flows accepted.**
@@ -66,7 +66,7 @@ Evidence: native `render_frame_rgba` and session/JNI preview, rendered-frame cac
 Remaining: physical GPU/Surface/device lifecycle, media parity, renderer fallback and device performance acceptance.
 
 ### M4 — Functional layer/effect/timeline/property editing
-**Status: PARTIAL — native Shape creation and edit→render foundations; latest Triangle CI pending.**
+**Status: PARTIAL — native Shape creation and edit→render foundations; six-point-star feature pending exact-head CI.**
 
 Acceptance: editable layer/effect stack; transforms and keyframes/interpolation; Shape geometry/fill/stroke; properties; real preview refresh; golden edit→save→reopen→render tests.
 
@@ -291,3 +291,10 @@ Adobe .aep remains proprietary and is not natively supported/claimed. Effekseer 
 - Mitigation committed in [0e874688](https://github.com/sunmughan/After-Effects-Android/commit/0e874688575f801e0e99bb92c7d160111a8f785f): native release profile now sets `codegen-units = 1` to provide a single stable LLVM input and remove parallel CGU partition/merge ordering. This intentionally trades release compile parallelism for deterministic artifact output; no tests or optimizations are disabled.
 - Fresh hosted CI is mandatory to prove this hypothesis. Accept reproducibility only when the packaged APK content and both ABI .so hashes match across independent cold runners. If it still differs, inspect ELF sections/linker and pin deterministic linker/build settings next.
 - Current branch HEAD after mitigation: `0e874688`; M0 reproducibility remains **pending**, despite the prior primary job's 177/177 green tests. M7 remains NOT ACCEPTED.
+
+
+## Engineering checkpoint — CI #1376 reproducibility accepted; M4 six-point star authored (2026-11-09 09:05 IST)
+
+- Exact [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) succeeded at SHA \`762b975684025bbf3ded71c4470ccb9212609e5d\`: Rust **73/73**, ARM64 and x86_64 JNI, Kotlin/JVM, debug APK, unsigned release APK/AAB + R8, API30 **177/177**, and independent cold APK comparison. The report states \`RAW_APK_MATCH=true\`, \`CONTENT_MATCH=true\`, \`NATIVE_SO_MATCH=true\`; packaged ARM64 SHA-256 \`139bb52fa343147786c2bb5a18e658f4177d4aacc9a36c2df4e46f940893510a\`, x86_64 \`ba456b72da100f1ee3ac0a068e0670895c3039b70e89404de12bfea12ac30b47\`. This validates the \`codegen-units=1\` mitigation at that exact source SHA and closes the previous M0 cold-rebuild mismatch there.
+- **M4 Add six-point star (new, pending CI):** native upstream \`build::shape_star(..., star=true, points=6)\` creates editable geometry + Fill; JNI, Kotlin bridge, app-state/save callback, Compose inspector action and instrumentation callback are wired. Native regression checks canonical round-trip and visible pixels from the real CPU compositor. Changes in this run are awaiting a new exact-head workflow; do not accept the feature before Rust/JNI/JVM/API30 and cold APK comparison pass.
+- M0 remains historically accepted at #1376 SHA; subsequent feature code needs exact-head revalidation. M1–M6 remain partial and M7 is NOT ACCEPTED. Physical ARM64 install/run, GPU/media/codec/audio/performance/accessibility, Effekseer interoperability and owner-controlled signing remain explicit blockers. Adobe \`.aep\` is proprietary and unsupported natively; no compatibility claim.

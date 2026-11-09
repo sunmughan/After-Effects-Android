@@ -78,6 +78,7 @@ class CanonicalSelectionEditorTest {
         var deleteCalls = 0
         var ellipseAdded: List<Any>? = null
         var starAdded: List<Any>? = null
+        var hexStarAdded: List<Any>? = null
         var triangleAdded: List<Any>? = null
         var hexagonAdded: List<Any>? = null
         var pentagonAdded: List<Any>? = null
@@ -150,6 +151,7 @@ class CanonicalSelectionEditorTest {
                     onAddCanonicalTextLayer = { _, _ -> },
                     onAddCanonicalEllipseLayer = { compositionId, name -> ellipseAdded = listOf(compositionId, name) },
                     onAddCanonicalStarLayer = { compositionId, name -> starAdded = listOf(compositionId, name) },
+                    onAddCanonicalHexStarLayer = { compositionId, name -> hexStarAdded = listOf(compositionId, name) },
                     onAddCanonicalTriangleLayer = { compositionId, name -> triangleAdded = listOf(compositionId, name) },
                     onAddCanonicalHexagonLayer = { compositionId, name -> hexagonAdded = listOf(compositionId, name) },
                     onAddCanonicalPentagonLayer = { compositionId, name -> pentagonAdded = listOf(compositionId, name) },
@@ -227,6 +229,8 @@ class CanonicalSelectionEditorTest {
         assertEquals(listOf<Any>(10L, "Ellipse"), ellipseAdded)
         compose.onNodeWithText("Add Star").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Star"), starAdded)
+        compose.onNodeWithText("Add 6-Point Star").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Hex Star"), hexStarAdded)
         compose.onNodeWithText("Add Triangle").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Triangle"), triangleAdded)
         compose.onNodeWithText("Add Hexagon").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
