@@ -138,6 +138,7 @@ import com.codeair.effectcraft.data.LayerDocument
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.PropertyKeyframe
 import com.codeair.effectcraft.data.HevcEncoderProbe
+import com.codeair.effectcraft.ui.theme.AstryxTheme
 import com.codeair.effectcraft.data.RenderOutputFormat
 import com.codeair.effectcraft.data.RenderQueuePlan
 import com.codeair.effectcraft.data.RenderQueueSettings
@@ -194,16 +195,22 @@ private fun shapePathCanvasMapping(
  */
 private const val DRAFT_RENDER_EVERY_NTH_FRAME_WHILE_PLAYING = 5
 
+/**
+ * The editor's palette. Legacy field names are kept for the 170+
+ * call sites; every value is an Astryx token, so this object is the
+ * single lever for the editor's colors: violet = accent, mint =
+ * success, amber = warning. No raw hex lives here.
+ */
 private object EditorPalette {
-    val background = Color(0xFF0A0C11)
-    val panel = Color(0xFF131720)
-    val panelRaised = Color(0xFF1A202B)
-    val border = Color(0xFF293241)
-    val text = Color(0xFFE9EAF2)
-    val muted = Color(0xFF929BAD)
-    val violet = Color(0xFFAA95FF)
-    val mint = Color(0xFF67D7C5)
-    val amber = Color(0xFFFFC477)
+    val background = AstryxTheme.Colors.backgroundBody
+    val panel = AstryxTheme.Colors.backgroundCard
+    val panelRaised = AstryxTheme.Colors.backgroundSurface
+    val border = AstryxTheme.Colors.border
+    val text = AstryxTheme.Colors.textPrimary
+    val muted = AstryxTheme.Colors.textSecondary
+    val violet = AstryxTheme.Colors.accent
+    val mint = AstryxTheme.Colors.successText
+    val amber = AstryxTheme.Colors.warningText
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

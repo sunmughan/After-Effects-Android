@@ -1,28 +1,49 @@
 package com.codeair.effectcraft.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+/**
+ * The app theme, built from Astryx tokens. Every color and type
+ * value below comes from [AstryxTheme]; no raw hex or size lives
+ * here — this file only maps the Astryx token roles onto the
+ * Material 3 slots the app's components already use.
+ */
 private val EffectCraftColors = darkColorScheme(
-    primary = Color(0xFFB6A3FF),
-    onPrimary = Color(0xFF1B1534),
-    secondary = Color(0xFF67D7C5),
+    primary = AstryxTheme.Colors.accent,
+    onPrimary = AstryxTheme.Colors.onAccent,
+    secondary = AstryxTheme.Colors.successText,
     onSecondary = Color(0xFF06211D),
-    background = Color(0xFF0A0C11),
-    onBackground = Color(0xFFE9EAF2),
-    surface = Color(0xFF131720),
-    onSurface = Color(0xFFE9EAF2),
-    surfaceVariant = Color(0xFF202633),
-    onSurfaceVariant = Color(0xFFADB4C4),
-    outline = Color(0xFF343C4B)
+    background = AstryxTheme.Colors.backgroundBody,
+    onBackground = AstryxTheme.Colors.textPrimary,
+    surface = AstryxTheme.Colors.backgroundCard,
+    onSurface = AstryxTheme.Colors.textPrimary,
+    surfaceVariant = AstryxTheme.Colors.backgroundSurface,
+    onSurfaceVariant = AstryxTheme.Colors.textSecondary,
+    outline = AstryxTheme.Colors.border,
+    outlineVariant = AstryxTheme.Colors.borderEmphasized,
+    error = AstryxTheme.Colors.errorText,
+    onError = AstryxTheme.Colors.onLight
+)
+
+private val EffectCraftTypography = Typography(
+    bodyLarge = AstryxTheme.Type.bodyLarge,
+    bodyMedium = AstryxTheme.Type.body,
+    bodySmall = AstryxTheme.Type.caption,
+    titleLarge = AstryxTheme.Type.title,
+    titleMedium = AstryxTheme.Type.titleSmall,
+    headlineMedium = AstryxTheme.Type.headline,
+    labelLarge = AstryxTheme.Type.label
 )
 
 @Composable
 fun EffectCraftTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = EffectCraftColors,
+        typography = EffectCraftTypography,
         content = content
     )
 }
