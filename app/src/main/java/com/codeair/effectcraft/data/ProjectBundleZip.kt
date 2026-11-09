@@ -1,6 +1,8 @@
 package com.codeair.effectcraft.data
 
 import java.io.ByteArrayInputStream
+import java.io.BufferedInputStream
+import java.io.InputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -31,8 +33,28 @@ object ProjectBundleZip {
             bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte() &&
             bytes[2] == 0x03.toByte() && bytes[3] == 0x04.toByte()
 
-    fun unpack(zipBytes: ByteArray, destDir: File): Unpacked {
-        require(isZip(zipBytes)) { "Not a ZIP bundle (missing PK signature)" }
+    /** Byte-array convenience overload; large callers should prefer the streaming overload. */
+    fun unpack(zipBytes: ByteArray, destDir: File): Unpacked =
+        unpack(ByteArrayInputStream(zipBytes), destDir)
+
+    /**
+     * Streaming ZIP import. The input is consumed and closed, so SAF callers
+     * need not buffer an archive (or its compressed media) in memory.
+     */
+    fun unpack(zipInput: InputStream, destDir: File): Unpacked {
+        val buffered = if (zipInput.markSupported()) zipInput else BufferedInputStream(zipInput)
+        buffered.mark(4)
+        val signature = ByteArray(4)
+        var signatureBytes = 0
+        while (signatureBytes < signature.size) {
+            val read = buffered.read(signature, signatureBytes, signature.size - signatureBytes)
+            if (read < 0) break
+            signatureBytes += read
+        }
+        buffered.reset()
+        require(signatureBytes == 4 && signature[0] == 0x50.toByte() &&
+            signature[1] == 0x4B.toByte() && signature[2] == 0x03.toByte() &&
+            signature[3] == 0x04.toByte()) { "Not a ZIP bundle (missing PK signature)" }
         require(!Files.isSymbolicLink(destDir.toPath())) { "Import destination must not be a symbolic link" }
         val created = destDir.mkdirs()
         require(created || destDir.isDirectory) {
@@ -49,7 +71,7 @@ object ProjectBundleZip {
         var totalBytes = 0L
         var entries = 0
         try {
-            ZipInputStream(ByteArrayInputStream(zipBytes)).use { zip ->
+            ZipInputStream(buffered).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
                     entries++
