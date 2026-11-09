@@ -181,3 +181,10 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 - M4 Diamond test-fixture cleanup: native regression now uses/asserts the Diamond name rather than copied Pentagon labels ([0fbe1084](https://github.com/sunmughan/After-Effects-Android/commit/0fbe1084bf44cbfc8d421d2fb13781325767fdd9)). Exact-head CI pending; #1369 was superseded and #1370 is for prior docs SHA only. [PHASES.md](PHASES.md) remains the acceptance ledger.
+
+
+## Engineering progress — 2026-11-09 (native reproducibility)
+
+- CI [#1373](https://github.com/sunmughan/After-Effects-Android/actions/runs/42545389447) passed the complete primary job (Rust/JNI, JVM, release R8/APK/AAB and API30 **177/177**) but its independent cold rebuild detected packaged native-library byte differences on both ABIs. See [repro artifact/log](https://github.com/sunmughan/After-Effects-Android/actions/runs/42545389447/artifacts/13644122640). This is an actual M0 reproducibility failure; do not treat the primary job alone as green.
+- Mitigation [0e874688](https://github.com/sunmughan/After-Effects-Android/commit/0e874688575f801e0e99bb92c7d160111a8f785f) sets Rust release `codegen-units = 1`, addressing suspected nondeterministic merged constant ordering. Fresh independent CI comparison must validate it. Latest phase evidence/blockers are in [PHASES.md](PHASES.md).
+- Release remains NOT COMPLETE; physical device/GPU/media/codec/audio/accessibility and owner-controlled signing gates remain open.
