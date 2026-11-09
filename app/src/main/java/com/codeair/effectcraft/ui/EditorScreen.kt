@@ -429,12 +429,20 @@ fun EditorScreen(
     // draft layers to a bitmap on every project/playhead change, so the
     // preview follows edits and playback. With a canonical project the
     // native frame wins and no draft bitmap is produced.
+    //
+    // The render runs on the effect's own (main) dispatcher, NOT via a
+    // Dispatchers.Default hop: the hop stranded the result — the render
+    // fired but the frame never landed in the DraftPreview wait, in
+    // both emulator attempts of runs 42576011373 (60 s) and 42583665386
+    // (120 s), while the same render called directly took ~0.8 s and
+    // the workspace frame (synchronous decode, no hop — see the
+    // previewComposition comment above) displayed in the same runs.
+    // The render is a millisecond CPU Canvas draw of a ≤720px bitmap,
+    // so it needs no background thread.
     var draftFrame by remember { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(project, playheadFrame, layerOpacityAtPlayhead) {
         draftFrame = if (previewComposition == null) {
-            withContext(Dispatchers.Default) {
-                DraftFrameRenderer.render(project, playheadFrame, layerOpacityAtPlayhead)
-            }
+            DraftFrameRenderer.render(project, playheadFrame, layerOpacityAtPlayhead)
         } else null
     }
 
