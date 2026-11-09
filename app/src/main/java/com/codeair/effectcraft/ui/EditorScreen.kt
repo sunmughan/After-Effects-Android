@@ -1316,7 +1316,7 @@ private fun ExportOverflowMenu(
                 tint = EditorPalette.text
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, containerColor = AstryxTheme.Colors.backgroundPopover) {
             ExportMenuItems(
                 onClose = { expanded = false },
                 onExportEcproj = onExportEcproj,
@@ -3510,7 +3510,7 @@ private fun CanonicalParamGroupRows(
                     TextButton(enabled = editable, onClick = { expandedLayerRefUid = param.uid }, modifier = Modifier.semantics { contentDescription = "Canonical $section layer reference ${group.name} ${param.name}" }) {
                         Text("${param.name}: ${selected?.name ?: "None"}", color = EditorPalette.text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    DropdownMenu(expanded = expandedLayerRefUid == param.uid, onDismissRequest = { expandedLayerRefUid = null }) {
+                    DropdownMenu(expanded = expandedLayerRefUid == param.uid, onDismissRequest = { expandedLayerRefUid = null }, containerColor = AstryxTheme.Colors.backgroundPopover) {
                         DropdownMenuItem(text = { Text("None") }, onClick = {
                             expandedLayerRefUid = null
                             if (param.keyframes.isEmpty()) onApplyLayerReference(param.uid, null)
@@ -3582,7 +3582,8 @@ private fun CanonicalParamGroupRows(
                     ) { Text(heldOption, color = EditorPalette.text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     DropdownMenu(
                         expanded = expandedPopupUid == param.uid,
-                        onDismissRequest = { expandedPopupUid = null }
+                        onDismissRequest = { expandedPopupUid = null },
+                        containerColor = AstryxTheme.Colors.backgroundPopover
                     ) {
                         param.options.forEachIndexed { index, option ->
                             DropdownMenuItem(
@@ -3823,7 +3824,7 @@ private fun EditsTopBar(
                         tint = EditorPalette.text
                     )
                 }
-                DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }, containerColor = AstryxTheme.Colors.backgroundPopover) {
                     moreMenuContent { showMoreMenu = false }
                 }
             }
