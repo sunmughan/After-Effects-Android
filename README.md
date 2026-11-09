@@ -1,5 +1,9 @@
 # EffectCraft for Android
 
+## Engineering progress (2026-11-09 09:22 IST)
+
+- **Rounded Rect callback compile fix:** static source audit found the app supplied `onAddCanonicalRoundedRectLayer` to `EditorScreen` before its top-level signature declared it. Added the missing defaulted callback parameter at [00fa887c](https://github.com/sunmughan/After-Effects-Android/commit/00fa887c81ecc009e92d06955a4b2f388cee2d28). Fresh exact-head CI now needs to verify Kotlin compilation and the new instrumentation.
+
 ## Engineering progress (2026-11-09 09:20 IST)
 
 - **M4 Add Rounded Rect implemented, CI pending:** source/test commit [64acaa73](https://github.com/sunmughan/After-Effects-Android/commit/64acaa73c9600417348eff194d26cf5bbe96d532) authors an upstream rounded rectangle (`shape_rect` radius 24 + Fill) through Rust/JNI/Kotlin/Compose, saves canonical project state, and adds native round-trip/real-pixel plus API30 callback regressions. CI #1379 is still testing the previous six-point-star SHA; fresh exact-head CI required.
