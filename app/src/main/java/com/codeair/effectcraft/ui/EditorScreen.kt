@@ -119,6 +119,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -443,10 +444,16 @@ fun EditorScreen(
             .background(EditorPalette.background)
     ) {
         val isTabletLayout = maxWidth >= 760.dp
+        val isLandscape = maxWidth > maxHeight
         // Adaptive timeline height (P11), captured here: BoxWithConstraints
         // scope values are not reachable with an implicit receiver from
         // inside the nested Column below.
-        val timelineCardHeight = (maxHeight * 0.42f).coerceIn(260.dp, 340.dp)
+        // Landscape phones are short (~360dp tall): the portrait floor
+        // (260dp) plus header + toolbar already exceeds the height and
+        // squeezes the preview to nothing. In landscape the timeline
+        // takes ~30% with a much lower floor, so header + toolbar +
+        // timeline + audio fit and the preview keeps a visible strip.
+        val timelineCardHeight = timelineCardHeight(maxHeight, isLandscape)
 
         // Edge-to-edge: the header starts below the status bar and the
         // audio section clears the navigation bar / gesture area.
@@ -588,8 +595,9 @@ fun EditorScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     // Adaptive height (P11): the card takes ~42% of the
-                    // available height instead of a fixed dp value, so
-                    // the track viewport scales with the screen. The
+                    // available height in portrait, ~30% in landscape
+                    // (timelineCardHeight), instead of a fixed dp value,
+                    // so the track viewport scales with the screen. The
                     // transport row's +48dp is inside that budget.
                     .height(timelineCardHeight)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
@@ -598,6 +606,7 @@ fun EditorScreen(
             AudioTimelinePanel(
                 tracks = audioTracks,
                 frameRate = project.frameRate,
+                compact = isLandscape,
                 onAddAudioClip = onAddAudioClip,
                 onRemoveAudioClip = onRemoveAudioClip,
                 onVolumeChange = onAudioVolumeChange,
@@ -5252,10 +5261,21 @@ private fun TimelineRuler(
     }
 }
 
+/**
+ * Timeline card height for the available space. Portrait takes ~42% with
+ * a 260–340dp band; landscape takes ~30% with a 140–220dp band, because a
+ * landscape phone is short and the portrait floor plus header + toolbar
+ * would exceed the height and squeeze the preview to nothing.
+ */
+internal fun timelineCardHeight(availableHeight: Dp, isLandscape: Boolean): Dp =
+    if (isLandscape) (availableHeight * 0.30f).coerceIn(140.dp, 220.dp)
+    else (availableHeight * 0.42f).coerceIn(260.dp, 340.dp)
+
 @Composable
 private fun AudioTimelinePanel(
     tracks: List<AudioTrackDocument>,
     frameRate: Int,
+    compact: Boolean = false,
     onAddAudioClip: () -> Unit,
     onRemoveAudioClip: (String) -> Unit,
     onVolumeChange: (String, Double) -> Unit,
@@ -5277,22 +5297,38 @@ private fun AudioTimelinePanel(
             }
         }
         if (clips.isEmpty()) {
-            Text(
-                "No audio clips yet. Added clips are mixed into the MP4 export.",
-                color = EditorPalette.muted,
-                fontSize = 11.sp
-            )
-        }
-        clips.forEach { (track, clip) ->
-            AudioClipRow(
-                trackName = track.name,
-                clip = clip,
-                frameRate = safeFps,
-                onRemoveAudioClip = onRemoveAudioClip,
-                onVolumeChange = onVolumeChange,
-                onMove = onMove,
-                onTrim = onTrim
-            )
+            // Compact (landscape): the empty-state line is dropped — the
+            // header row with "Add audio" is all that fits on a short
+            // screen. The clips themselves are unchanged.
+            if (!compact) {
+                Text(
+                    "No audio clips yet. Added clips are mixed into the MP4 export.",
+                    color = EditorPalette.muted,
+                    fontSize = 11.sp
+                )
+            }
+        } else {
+            // Compact (landscape): the clip list scrolls inside a 120dp
+            // cap instead of growing without bound, so the panel can
+            // never push the preview off a short screen.
+            val listModifier = if (compact) {
+                Modifier.heightIn(max = 120.dp).verticalScroll(rememberScrollState())
+            } else {
+                Modifier
+            }
+            Column(listModifier) {
+                clips.forEach { (track, clip) ->
+                    AudioClipRow(
+                        trackName = track.name,
+                        clip = clip,
+                        frameRate = safeFps,
+                        onRemoveAudioClip = onRemoveAudioClip,
+                        onVolumeChange = onVolumeChange,
+                        onMove = onMove,
+                        onTrim = onTrim
+                    )
+                }
+            }
         }
     }
 }
