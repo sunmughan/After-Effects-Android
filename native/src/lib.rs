@@ -4107,8 +4107,8 @@ mod tests {
         use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
         let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
         let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
-        let updated_json = add_diamond_layer(&source, comp_id.0, "  Pentagon  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
-        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Pentagon"); assert_eq!(layer.source.type_name(), "Shape");
+        let updated_json = add_diamond_layer(&source, comp_id.0, "  Diamond  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Diamond"); assert_eq!(layer.source.type_name(), "Shape");
         assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "diamond layer must contain polygon geometry and fill");
         assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
         let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
