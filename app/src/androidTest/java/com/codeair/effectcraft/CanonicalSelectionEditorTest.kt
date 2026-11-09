@@ -61,7 +61,7 @@ class CanonicalSelectionEditorTest {
                 layer(2, "Background", 10.0, 20.0).copy(transformKeyframes = mapOf("position" to listOf(0, 15, 30), "scale" to listOf(0), "rotation" to listOf(30))),
                 layer(3, "Title", 30.0, 40.0),
                 layer(4, "Locked", 50.0, 60.0, locked = true)
-            )
+            ) + (5L..54L).map { id -> layer(id, "Layer $id", id.toDouble(), id.toDouble()) }
         )
         val canonicalState = mutableStateOf(CanonicalProjectInfo(compositions = listOf(composition)))
         val selectionState = mutableStateOf(setOf(2L))
@@ -78,7 +78,11 @@ class CanonicalSelectionEditorTest {
         var deleteCalls = 0
         var ellipseAdded: List<Any>? = null
         var starAdded: List<Any>? = null
+        var hexStarAdded: List<Any>? = null
         var triangleAdded: List<Any>? = null
+        var hexagonAdded: List<Any>? = null
+        var pentagonAdded: List<Any>? = null
+        var diamondAdded: List<Any>? = null
         val project = ProjectDocument.starter()
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
@@ -147,7 +151,11 @@ class CanonicalSelectionEditorTest {
                     onAddCanonicalTextLayer = { _, _ -> },
                     onAddCanonicalEllipseLayer = { compositionId, name -> ellipseAdded = listOf(compositionId, name) },
                     onAddCanonicalStarLayer = { compositionId, name -> starAdded = listOf(compositionId, name) },
+                    onAddCanonicalHexStarLayer = { compositionId, name -> hexStarAdded = listOf(compositionId, name) },
                     onAddCanonicalTriangleLayer = { compositionId, name -> triangleAdded = listOf(compositionId, name) },
+                    onAddCanonicalHexagonLayer = { compositionId, name -> hexagonAdded = listOf(compositionId, name) },
+                    onAddCanonicalPentagonLayer = { compositionId, name -> pentagonAdded = listOf(compositionId, name) },
+                    onAddCanonicalDiamondLayer = { compositionId, name -> diamondAdded = listOf(compositionId, name) },
                     onSetCanonicalLayerVisibility = { _, _, _ -> },
                     onMoveCanonicalLayer = { _, _, _ -> },
                     onDeleteCanonicalLayer = { _, _ -> deleteCalls += 1 },
@@ -211,20 +219,32 @@ class CanonicalSelectionEditorTest {
         assertEquals(15, workspaceFrame.intValue)
 
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
-        compose.onNodeWithText("CANONICAL .ECPROJ").assertIsDisplayed()
-        compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
+        // A 53-layer fixture verifies that off-fold rows remain reachable
+        // through the inspector's single outer scroll container.
+        compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Layers").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("○ Layer 54", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("● Background", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Add Ellipse").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Ellipse"), ellipseAdded)
         compose.onNodeWithText("Add Star").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Star"), starAdded)
+        compose.onNodeWithText("Add 6-Point Star").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Hex Star"), hexStarAdded)
         compose.onNodeWithText("Add Triangle").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf<Any>(10L, "Triangle"), triangleAdded)
+        compose.onNodeWithText("Add Hexagon").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Hexagon"), hexagonAdded)
+        compose.onNodeWithText("Add Pentagon").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Pentagon"), pentagonAdded)
+        compose.onNodeWithText("Add Diamond").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, "Diamond"), diamondAdded)
 
         // The canonical preview follows the workspace timeline in both
         // directions; scrubbing the main playhead requests that real frame.
         workspaceFrame.intValue = 15
         compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(15L) }
-        compose.onNodeWithText("Frame 15 / 89").assertIsDisplayed()
+        compose.onNodeWithText("Frame 15 / 89").performScrollTo().assertIsDisplayed()
 
         // Native transform metadata exposes key markers; tapping the inspector
         // jump action updates the shared playhead and requests that preview.
@@ -254,11 +274,8 @@ class CanonicalSelectionEditorTest {
         // on Background (line-205 failure: expected [3] but was [2]).
         // Scroll each row back into view first, as the indicator and preview
         // steps below already do.
-        // The row scrollTo above only scrolls the inner layer list, not the
-        // sheet itself, so the sheet stays scrolled down at the inspector
-        // and the tap is still swallowed. Scroll the sheet header, a direct
-        // child of the sheet column, back into view first to bring the rows
-        // back, then tap the row.
+        // All layer rows share the outer sheet scroll; bring the section
+        // and target row into view before injecting a click.
         compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo()
         compose.onNodeWithContentDescription("Canonical layer row Title").performScrollTo().performClick()
         assertEquals(setOf(3L), selectionState.value)

@@ -1364,6 +1364,22 @@ fn add_star_layer(source: &str, composition_id: u64, name: &str) -> Result<Strin
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+fn add_hex_star_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition \${composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
+    let mut ids = build::Ids(&mut project.next_id);
+    let hex_star = build::shape_star(&mut ids, true, 6.0, [0.0, 0.0], 120.0, 50.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(hex_star.into()); contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition \${composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 fn add_triangle_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
     use effectcraft_project::{build, LayerSource};
     let normalized = name.trim();
@@ -1380,6 +1396,56 @@ fn add_triangle_layer(source: &str, composition_id: u64, name: &str) -> Result<S
     project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
 }
 
+fn add_hexagon_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
+    let mut ids = build::Ids(&mut project.next_id);
+    let hexagon = build::shape_star(&mut ids, false, 6.0, [0.0, 0.0], 100.0, 100.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(hexagon.into()); contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+fn add_pentagon_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
+    let mut ids = build::Ids(&mut project.next_id);
+    let pentagon = build::shape_star(&mut ids, false, 5.0, [0.0, 0.0], 100.0, 100.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(pentagon.into()); contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
+
+
+fn add_diamond_layer(source: &str, composition_id: u64, name: &str) -> Result<String, String> {
+    use effectcraft_project::{build, LayerSource};
+    let normalized = name.trim();
+    if normalized.is_empty() { return Err("Layer name cannot be blank".into()); }
+    let mut project: Project = serde_json::from_str(source).map_err(|error| format!("Invalid EffectCraft project: {error}"))?;
+    let comp = project.comp(ItemId(composition_id)).cloned().ok_or_else(|| format!("Composition {composition_id} was not found"))?;
+    let mut layer = build::layer(&mut project, &comp, normalized, LayerSource::Shape, (comp.width, comp.height), None);
+    let mut ids = build::Ids(&mut project.next_id);
+    let diamond = build::shape_star(&mut ids, false, 4.0, [0.0, 0.0], 100.0, 100.0);
+    let fill = build::shape_fill(&mut ids, [1.0, 1.0, 1.0, 1.0]);
+    let contents = layer.props.sub_mut("contents").ok_or_else(|| "New Shape layer has no contents group".to_owned())?;
+    contents.children.push(diamond.into()); contents.children.push(fill.into());
+    project.comp_mut(ItemId(composition_id)).ok_or_else(|| format!("Composition {composition_id} disappeared during layer creation"))?.layers.push(layer);
+    project.to_file_json().map_err(|error| format!("Unable to serialize project: {error}"))
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addStarLayerEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
@@ -1392,12 +1458,58 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_a
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addHexStarLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_hex_star_layer(&source, composition_id as u64, &name) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addTriangleLayerEcprojNative(
     mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
 ) -> jstring {
     let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
     let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
     let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_triangle_layer(&source, composition_id as u64, &name) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addPentagonLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_pentagon_layer(&source, composition_id as u64, &name) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addDiamondLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_diamond_layer(&source, composition_id as u64, &name) };
+    let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_addHexagonLayerEcprojNative(
+    mut env: JNIEnv, _class: JClass, source: JString, composition_id: jlong, name: JString,
+) -> jstring {
+    let source: String = match env.get_string(&source) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let name: String = match env.get_string(&name) { Ok(value) => value.into(), Err(error) => return env.new_string(json!({"valid": false, "error": error.to_string()}).to_string()).map_or(std::ptr::null_mut(), |v| v.into_raw()) };
+    let result = if composition_id < 0 { Err("Composition ID must be non-negative".to_owned()) } else { add_hexagon_layer(&source, composition_id as u64, &name) };
     let output = match result { Ok(project_json) => json!({"valid": true, "project": project_json}).to_string(), Err(error) => json!({"valid": false, "error": error}).to_string() };
     env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
@@ -3975,6 +4087,20 @@ mod tests {
     }
 
     #[test]
+    fn add_hex_star_layer_creates_editable_parametric_star_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
+        let updated_json = add_hex_star_layer(&source, comp_id.0, "  Hex Star  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Hex Star"); assert_eq!(layer.source.type_name(), "Shape");
+        assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "six-point star layer must contain geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "six-point star fill must produce visible white pixels in the real composition frame");
+    }
+
+    #[test]
     fn add_triangle_layer_creates_editable_polygon_and_renders() {
         use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
         let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
@@ -3987,6 +4113,50 @@ mod tests {
         assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
         assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "triangle fill must produce visible white pixels in the real composition frame");
     }
+
+    #[test]
+    fn add_hexagon_layer_creates_editable_polygon_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
+        let updated_json = add_hexagon_layer(&source, comp_id.0, "  Hexagon  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Hexagon"); assert_eq!(layer.source.type_name(), "Shape");
+        assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "hexagon layer must contain polygon geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "hexagon fill must produce visible white pixels in the real composition frame");
+    }
+    #[test]
+    fn add_pentagon_layer_creates_editable_polygon_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
+        let updated_json = add_pentagon_layer(&source, comp_id.0, "  Pentagon  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Pentagon"); assert_eq!(layer.source.type_name(), "Shape");
+        assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "pentagon layer must contain polygon geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "pentagon fill must produce visible white pixels in the real composition frame");
+    }
+
+
+
+    #[test]
+    fn add_diamond_layer_creates_editable_polygon_and_renders() {
+        use effectcraft_project::{Comp, ItemId, ItemKind}; use effectcraft_color::Label; use effectcraft_time::{FrameRate, Tick};
+        let mut project = Project::default(); let comp = Comp::new(640, 360, FrameRate::FPS_30, Tick::from_seconds_f64(3.0));
+        let comp_id = project.add_item("Main", Label::Sandstone, None, ItemKind::Comp(comp.into())); let source = project.to_file_json().unwrap();
+        let updated_json = add_diamond_layer(&source, comp_id.0, "  Diamond  ").unwrap(); let updated: Project = serde_json::from_str(&updated_json).unwrap();
+        let layer = &updated.comp(comp_id).unwrap().layers[0]; assert_eq!(layer.name, "Diamond"); assert_eq!(layer.source.type_name(), "Shape");
+        assert_eq!(layer.props.sub("contents").unwrap().children.len(), 2, "diamond layer must contain polygon geometry and fill");
+        assert_eq!(serde_json::from_str::<Project>(&updated.to_file_json().unwrap()).unwrap(), updated);
+        let frame = render_frame_rgba(&updated_json, comp_id.0, 0, 320).unwrap();
+        assert_eq!(u32::from_be_bytes(frame[0..4].try_into().unwrap()), 320); assert_eq!(u32::from_be_bytes(frame[4..8].try_into().unwrap()), 180);
+        assert!(frame[8..].chunks_exact(4).any(|pixel| pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200), "diamond fill must produce visible white pixels in the real composition frame");
+    }
+
     #[test]
     fn sequential_shape_creation_uses_project_wide_unique_property_uids() {
         use effectcraft_project::{Comp, ItemKind};
@@ -6163,6 +6333,21 @@ mod tests {
         assert_eq!(param_keys[1]["inInterp"], "Bezier");
         assert!(set_layer_param_keyframe(&source, comp_id.0, null_id, 999_999, 15, 1.0, 0.0, 0.0).is_err());
         assert!(move_keyframe(&bezier, comp_id.0, null_id, &selector, 15, -1).is_err());
+
+        // Moving a key onto an existing neighbor is an intentional same-frame
+        // replacement. The moved key (including its Bezier interpolation)
+        // must win, rather than inheriting the replaced neighbor's metadata.
+        let collided = move_keyframe(&bezier, comp_id.0, null_id, &selector, 15, 0).unwrap();
+        let collided_project: Project = serde_json::from_str(&collided).unwrap();
+        let collided_blur = collided_project.comp(comp_id).unwrap().layers[1].props.prop(&format!("@{blur_uid}")).unwrap();
+        assert_eq!(collided_blur.keys.len(), 1, "destination frame replaces its neighbor");
+        assert_eq!(collided_blur.keys[0].time, Tick::ZERO);
+        assert_eq!(collided_blur.keys[0].value, Value::Scalar(12.0));
+        assert_eq!(collided_blur.keys[0].in_interp, Interp::Bezier);
+        let collided_meta = serde_json::from_str::<serde_json::Value>(&inspect_project(&collided).unwrap()).unwrap();
+        let collided_keys = &collided_meta["compositions"][0]["layers"][1]["effects"][0]["scalars"][0]["keys"];
+        assert_eq!(collided_keys.as_array().unwrap().len(), 1);
+        assert_eq!(collided_keys[0]["frame"], 0);
         let (without_param_mid, removed_param_mid) = remove_curve_keyframe(&dragged, comp_id.0, null_id, &selector, 24).unwrap();
         assert!(removed_param_mid);
         let param_after_mid: Project = serde_json::from_str(&without_param_mid).unwrap();

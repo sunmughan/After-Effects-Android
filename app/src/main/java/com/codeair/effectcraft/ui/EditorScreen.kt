@@ -281,7 +281,11 @@ fun EditorScreen(
     onAddCanonicalShapeLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalEllipseLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalStarLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalHexStarLayer: (Long, String) -> Unit = { _, _ -> },
     onAddCanonicalTriangleLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalHexagonLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalPentagonLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddCanonicalDiamondLayer: (Long, String) -> Unit = { _, _ -> },
     onSetCanonicalLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveCanonicalLayer: (Long, Long, Int) -> Unit,
     onDeleteCanonicalLayer: (Long, Long) -> Unit,
@@ -901,7 +905,11 @@ fun EditorScreen(
                     onAddShapeLayer = onAddCanonicalShapeLayer,
                     onAddEllipseLayer = onAddCanonicalEllipseLayer,
                     onAddStarLayer = onAddCanonicalStarLayer,
+                    onAddHexStarLayer = onAddCanonicalHexStarLayer,
                     onAddTriangleLayer = onAddCanonicalTriangleLayer,
+                    onAddHexagonLayer = onAddCanonicalHexagonLayer,
+                    onAddPentagonLayer = onAddCanonicalPentagonLayer,
+                    onAddDiamondLayer = onAddCanonicalDiamondLayer,
                     onSetLayerVisibility = onSetCanonicalLayerVisibility,
                     onMoveLayer = onMoveCanonicalLayer,
                     onDeleteLayer = onDeleteCanonicalLayer,
@@ -1557,7 +1565,7 @@ private fun InspectorPanel(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun CanonicalProjectEditor(
     project: CanonicalProjectInfo,
@@ -1578,7 +1586,11 @@ private fun CanonicalProjectEditor(
     onAddShapeLayer: (Long, String) -> Unit,
     onAddEllipseLayer: (Long, String) -> Unit,
     onAddStarLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddHexStarLayer: (Long, String) -> Unit = { _, _ -> },
     onAddTriangleLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddHexagonLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddPentagonLayer: (Long, String) -> Unit = { _, _ -> },
+    onAddDiamondLayer: (Long, String) -> Unit = { _, _ -> },
     onSetLayerVisibility: (Long, Long, Boolean) -> Unit,
     onMoveLayer: (Long, Long, Int) -> Unit,
     onDeleteLayer: (Long, Long) -> Unit,
@@ -1814,48 +1826,75 @@ private fun CanonicalProjectEditor(
                 valueRange = 0f..(composition.durationFrames - 1).coerceAtLeast(1).toFloat(),
                 modifier = Modifier.semantics { contentDescription = "Canonical preview frame" }
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicTextField(
-                    value = newTextName,
-                    onValueChange = { newTextName = it.take(120) },
-                    singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 13.sp),
-                    modifier = Modifier.weight(1f).semantics { contentDescription = "New text layer name" },
-                    decorationBox = { inner ->
-                        Box {
-                            if (newTextName.isEmpty()) Text("New text layer name", color = EditorPalette.muted)
-                            inner()
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicTextField(
+                        value = newTextName,
+                        onValueChange = { newTextName = it.take(120) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 13.sp),
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "New text layer name" },
+                        decorationBox = { inner ->
+                            Box {
+                                if (newTextName.isEmpty()) Text("New text layer name", color = EditorPalette.muted)
+                                inner()
+                            }
                         }
-                    }
-                )
-                TextButton(
-                    enabled = canEdit && newTextName.trim().isNotEmpty(),
-                    onClick = { onAddTextLayer(composition.id, newTextName) }
-                ) { Text("Add Text", color = EditorPalette.violet) }
-                TextButton(
-                    enabled = canEdit && newTextName.trim().isNotEmpty(),
-                    onClick = {
-                        // The shared name field defaults to "Text" for the
-                        // adjacent Text action; give a fresh rectangle its
-                        // expected name unless the user entered another one.
-                        onAddShapeLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Rectangle")
-                    }
-                ) { Text("Add Rect", color = EditorPalette.violet) }
-                TextButton(
-                    enabled = canEdit && newTextName.trim().isNotEmpty(),
-                    onClick = { onAddEllipseLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Ellipse") }
-                ) { Text("Add Ellipse", color = EditorPalette.violet) }
-                TextButton(
-                    enabled = canEdit && newTextName.trim().isNotEmpty(),
-                    onClick = { onAddStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Star") }
-                ) { Text("Add Star", color = EditorPalette.violet) }
-                TextButton(
-                    enabled = canEdit && newTextName.trim().isNotEmpty(),
-                    onClick = { onAddTriangleLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Triangle") }
-                ) { Text("Add Triangle", color = EditorPalette.violet) }
+                    )
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddTextLayer(composition.id, newTextName) }
+                    ) { Text("Add Text", color = EditorPalette.violet) }
+                }
+                // Wrap shape actions instead of placing every action in one
+                // non-scrollable horizontal Row. On phones the later actions
+                // (Hexagon/Pentagon) otherwise extend beyond the viewport and
+                // cannot be reached with the inspector's vertical scrolling.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = {
+                            onAddShapeLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Rectangle")
+                        }
+                    ) { Text("Add Rect", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddEllipseLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Ellipse") }
+                    ) { Text("Add Ellipse", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Star") }
+                    ) { Text("Add Star", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddHexStarLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Hex Star") }
+                    ) { Text("Add 6-Point Star", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddTriangleLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Triangle") }
+                    ) { Text("Add Triangle", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddHexagonLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Hexagon") }
+                    ) { Text("Add Hexagon", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddPentagonLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Pentagon") }
+                    ) { Text("Add Pentagon", color = EditorPalette.violet) }
+                    TextButton(
+                        enabled = canEdit && newTextName.trim().isNotEmpty(),
+                        onClick = { onAddDiamondLayer(composition.id, newTextName.takeUnless { it == "Text" } ?: "Diamond") }
+                    ) { Text("Add Diamond", color = EditorPalette.violet) }
+                }
             }
             Text("Layers", color = EditorPalette.muted, fontSize = 10.sp)
-            Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())) {
+            // Keep the layer rows in the inspector's single outer scroll
+            // container. A nested fixed-height scroll list trapped rows below
+            // the fold and made performScrollTo/TalkBack scrolling unreliable.
+            Column {
                 composition.layers.forEach { item ->
                     // Tap selects one layer; long-press toggles it in or out
                     // of the multi-selection. The inspector always shows the
@@ -2307,13 +2346,14 @@ private fun CanonicalTransformControls(
                     }
                 }
             }
+            var moveTargetDraft by remember(composition.id, layer.id, previewFrame) { mutableStateOf(previewFrame.toString()) }
             Text("Both edits both tangents; Incoming/Outgoing preserves the opposite side. Ease In slows the segment after this key; Ease Out slows the segment before it; Bezier is an asymmetric custom curve. The renderer evaluates the ease.", color = EditorPalette.muted, fontSize = 10.sp)
-                var moveTargetDraft by remember(composition.id, layer.id, previewFrame) { mutableStateOf(previewFrame.toString()) }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Move key · to frame", color = EditorPalette.text, fontSize = 12.sp)
                 BasicTextField(
                     value = moveTargetDraft,
-                    onValueChange = { moveTargetDraft = it.take(16) },
+                    onValueChange = { moveTargetDraft = it.filter(Char::isDigit).take(10) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     textStyle = androidx.compose.ui.text.TextStyle(color = EditorPalette.text, fontSize = 12.sp),
                     modifier = Modifier.weight(1f).semantics { contentDescription = "Move key target frame" },

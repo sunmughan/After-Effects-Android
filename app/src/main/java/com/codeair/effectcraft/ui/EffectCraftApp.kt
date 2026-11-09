@@ -1697,6 +1697,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
                 else applyCanonicalLayerCreation(NativeProjectBridge.addStarLayerEcproj(source, compositionId, name), compositionId, "Canonical Star layer added · saved locally")
             },
+            onAddCanonicalHexStarLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addHexStarLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical six-point Star layer added · saved locally"
+                )
+            },
             onAddCanonicalTriangleLayer = { compositionId, name ->
                 val source = importedEcproj
                 if (source == null) saveMessage = "Import a canonical .ecproj first"
@@ -1704,6 +1713,33 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     NativeProjectBridge.addTriangleLayerEcproj(source, compositionId, name),
                     compositionId,
                     "Canonical Triangle layer added · saved locally"
+                )
+            },
+            onAddCanonicalHexagonLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addHexagonLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Hexagon layer added · saved locally"
+                )
+            },
+            onAddCanonicalPentagonLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addPentagonLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Pentagon layer added · saved locally"
+                )
+            },
+            onAddCanonicalDiamondLayer = { compositionId, name ->
+                val source = importedEcproj
+                if (source == null) saveMessage = "Import a canonical .ecproj first"
+                else applyCanonicalLayerCreation(
+                    NativeProjectBridge.addDiamondLayerEcproj(source, compositionId, name),
+                    compositionId,
+                    "Canonical Diamond layer added · saved locally"
                 )
             },
             onSetCanonicalLayerVisibility = { compositionId, layerId, visible ->

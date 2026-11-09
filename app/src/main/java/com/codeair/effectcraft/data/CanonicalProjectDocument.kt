@@ -56,6 +56,129 @@ object CanonicalProjectDocument {
         }
     }
 
+    /**
+     * org.json.JSONObject silently keeps the last occurrence of a duplicate
+     * member. That is unsafe at an import boundary: two exporters (or an
+     * attacker) can disagree about which project value is authoritative.
+     * Scan JSON structure before handing it to JSONObject/native schema
+     * validation, decoding escaped member names so "name" and "\\u006eame"
+     * are treated as the same key. String contents and array siblings are
+     * deliberately not interpreted as object members.
+     */
+    private fun rejectDuplicateJsonMembers(json: String) {
+        JsonDuplicateMemberScanner(json).scan()
+    }
+
+    private class JsonDuplicateMemberScanner(private val source: String) {
+        private var cursor = 0
+
+        fun scan() {
+            parseValue()
+            skipWhitespace()
+            require(cursor == source.length) { "Unexpected trailing JSON content at offset $cursor" }
+        }
+
+        private fun parseValue() {
+            skipWhitespace()
+            when (source.getOrNull(cursor)) {
+                '{' -> parseObject()
+                '[' -> parseArray()
+                '"' -> parseString()
+                null -> fail("Expected JSON value")
+                else -> parsePrimitive()
+            }
+        }
+
+        private fun parseObject() {
+            cursor++ // {
+            skipWhitespace()
+            if (consume('}')) return
+            val names = HashSet<String>()
+            while (true) {
+                skipWhitespace()
+                require(source.getOrNull(cursor) == '"') { "Expected JSON object member name at offset $cursor" }
+                val name = parseString()
+                require(names.add(name)) { "Duplicate JSON object member <$name>" }
+                skipWhitespace()
+                expect(':')
+                parseValue()
+                skipWhitespace()
+                if (consume('}')) return
+                expect(',')
+            }
+        }
+
+        private fun parseArray() {
+            cursor++ // [
+            skipWhitespace()
+            if (consume(']')) return
+            while (true) {
+                parseValue()
+                skipWhitespace()
+                if (consume(']')) return
+                expect(',')
+            }
+        }
+
+        private fun parseString(): String {
+            expect('"')
+            val decoded = StringBuilder()
+            while (cursor < source.length) {
+                val char = source[cursor++]
+                when {
+                    char == '"' -> return decoded.toString()
+                    char == '\\' -> {
+                        require(cursor < source.length) { "Incomplete JSON escape at offset $cursor" }
+                        when (val escaped = source[cursor++]) {
+                            '"', '\\', '/' -> decoded.append(escaped)
+                            'b' -> decoded.append(8.toChar())
+                            'f' -> decoded.append(12.toChar())
+                            'n' -> decoded.append(10.toChar())
+                            'r' -> decoded.append(13.toChar())
+                            't' -> decoded.append(9.toChar())
+                            'u' -> {
+                                require(cursor + 4 <= source.length) { "Incomplete JSON unicode escape at offset $cursor" }
+                                val code = source.substring(cursor, cursor + 4).toIntOrNull(16)
+                                    ?: fail("Invalid JSON unicode escape at offset $cursor")
+                                decoded.append(code.toChar())
+                                cursor += 4
+                            }
+                            else -> fail("Invalid JSON escape at offset ${cursor - 1}")
+                        }
+                    }
+                    char < ' ' -> fail("Unescaped control character in JSON string at offset ${cursor - 1}")
+                    else -> decoded.append(char)
+                }
+            }
+            fail("Unterminated JSON string")
+        }
+
+        private fun isJsonWhitespace(char: Char): Boolean =
+            char == ' ' || char.code == 0x09 || char.code == 0x0A || char.code == 0x0D
+
+        private fun parsePrimitive() {
+            val start = cursor
+            while (cursor < source.length && !isJsonWhitespace(source[cursor]) && source[cursor] !in charArrayOf(',', ']', '}')) cursor++
+            require(cursor > start) { "Expected JSON primitive at offset $cursor" }
+        }
+
+        private fun skipWhitespace() {
+            while (cursor < source.length && isJsonWhitespace(source[cursor])) cursor++
+        }
+
+        private fun consume(expected: Char): Boolean {
+            if (source.getOrNull(cursor) != expected) return false
+            cursor++
+            return true
+        }
+
+        private fun expect(expected: Char) {
+            require(consume(expected)) { "Expected '$expected' at offset $cursor" }
+        }
+
+        private fun fail(message: String): Nothing = throw IllegalArgumentException(message)
+    }
+
     /** Normalizes a supported .ecproj JSON or .ecprojx XML document to canonical JSON. */
     fun toCanonicalJson(document: String): String {
         // UTF-8 exports may carry a BOM. Remove only that prefix for JSON;
@@ -69,6 +192,7 @@ object CanonicalProjectDocument {
         return if (probe.startsWith("<")) {
             parseXmlProject(probe).toString()
         } else {
+            rejectDuplicateJsonMembers(withoutBom)
             withoutBom
         }
     }

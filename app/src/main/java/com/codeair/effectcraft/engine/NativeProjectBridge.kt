@@ -72,11 +72,35 @@ object NativeProjectBridge {
         return runCatching { addStarLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
 
+    /** Adds a real upstream Shape layer with a six-point parametric star and fill. */
+    fun addHexStarLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addHexStarLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
     /** Adds a real upstream Shape layer with a three-sided polygon and fill. */
     fun addTriangleLayerEcproj(json: String, compositionId: Long, name: String): String? {
         ensureLoaded(); if (!available) return null
         return runCatching { addTriangleLayerEcprojNative(json, compositionId, name) }.getOrNull()
     }
+
+    /** Adds a real upstream Shape layer with a six-sided polygon and fill. */
+    fun addHexagonLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addHexagonLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
+    /** Adds a real upstream Shape layer with a five-sided polygon and fill. */
+    fun addPentagonLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addPentagonLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+    /** Adds a real upstream Shape layer with a four-sided diamond polygon and fill. */
+    fun addDiamondLayerEcproj(json: String, compositionId: Long, name: String): String? {
+        ensureLoaded(); if (!available) return null
+        return runCatching { addDiamondLayerEcprojNative(json, compositionId, name) }.getOrNull()
+    }
+
     /** Renders a canonical composition frame through the pinned upstream CPU compositor. */
     fun renderEcprojFrame(json: String, compositionId: Long, frame: Long, maxSide: Int = 512): ByteArray? {
         ensureLoaded()
@@ -647,7 +671,17 @@ object NativeProjectBridge {
     @JvmStatic
     private external fun addStarLayerEcprojNative(json: String, compositionId: Long, name: String): String
     @JvmStatic
+    private external fun addHexStarLayerEcprojNative(json: String, compositionId: Long, name: String): String
+
+    @JvmStatic
     private external fun addTriangleLayerEcprojNative(json: String, compositionId: Long, name: String): String
+
+    @JvmStatic
+    private external fun addHexagonLayerEcprojNative(json: String, compositionId: Long, name: String): String
+    private external fun addPentagonLayerEcprojNative(json: String, compositionId: Long, name: String): String
+
+    @JvmStatic
+    private external fun addDiamondLayerEcprojNative(json: String, compositionId: Long, name: String): String
 
     @JvmStatic
     private external fun addTextLayerEcprojNative(json: String, compositionId: Long, name: String): String

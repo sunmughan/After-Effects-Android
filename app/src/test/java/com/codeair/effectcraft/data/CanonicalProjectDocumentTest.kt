@@ -58,6 +58,40 @@ class CanonicalProjectDocumentTest {
     }
 
     @Test
+    fun ecprojRejectsDuplicateMembersAtEveryObjectDepth() {
+        val duplicate = """{"name":"Scene","nested":{"uid":1,"uid":2}}"""
+        val failure = runCatching { CanonicalProjectDocument.toCanonicalJson(duplicate) }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure?.message.orEmpty().contains("Duplicate JSON object member <uid>"))
+    }
+
+    @Test
+    fun ecprojRejectsDuplicateMembersWithEquivalentEscapedNames() {
+        // JSON escape decoding must happen before member-name comparison.
+        val duplicate = """{"name":"Scene","\u006eame":"Other"}"""
+        val failure = runCatching { CanonicalProjectDocument.toCanonicalJson(duplicate) }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure?.message.orEmpty().contains("Duplicate JSON object member <name>"))
+    }
+
+    @Test
+    fun ecprojDuplicateScannerIgnoresStringContentsAndSeparateArrayObjects() {
+        val valid = """{"note":"\"uid\":1, \"uid\":2","items":[{"uid":1},{"uid":2}]}"""
+        val canonical = JSONObject(CanonicalProjectDocument.toCanonicalJson(valid))
+        assertEquals(2, canonical.getJSONArray("items").length())
+        assertEquals("\"uid\":1, \"uid\":2", canonical.getString("note"))
+    }
+
+    @Test
+    fun ecprojRejectsDuplicateMembersWithEquivalentEscapedControlCharacters() {
+        // Both JSON spellings decode to the same tab-containing member name.
+        val duplicate = """{"tab\tkey":1,"tab\u0009key":2}"""
+        val failure = runCatching { CanonicalProjectDocument.toCanonicalJson(duplicate) }.exceptionOrNull()
+        assertTrue(failure is IllegalArgumentException)
+        assertTrue(failure?.message.orEmpty().contains("Duplicate JSON object member"))
+    }
+
+    @Test
     fun ecprojxRoundTripsNestedJsonTypesAndEscaping() {
         val source = JSONObject()
             .put("project", "EffectCraft <motion> & \"quoted\"")

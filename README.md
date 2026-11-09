@@ -1,5 +1,12 @@
 # EffectCraft for Android
 
+## Engineering progress (2026-11-09 09:05 IST)
+
+- **M0 reproducibility correction accepted at exact SHA:** [CI #1376](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992) passed Rust 73/73, dual JNI ABI, Kotlin/JVM, debug + unsigned release APK/AAB/R8, API30 177/177 and an independent cold APK rebuild. \`CONTENT_MATCH=true\` and \`NATIVE_SO_MATCH=true\`; packaged ARM64/x86_64 library hashes matched. This validates the Rust release \`codegen-units=1\` mitigation at #1376's SHA only. [Repro artifact](https://github.com/sunmughan/After-Effects-Android/actions/runs/42549277992/artifacts/13646315661).
+- **M4 Add six-point star implemented, pending CI:** native parametric star + Fill, JNI/Kotlin bridge, Compose inspector action, saved canonical project callback, native serialize/reopen/real-pixel regression and Android callback instrumentation are added in the current commit. Exact-head CI is required; no acceptance claim yet.
+- M0–M7 remain tracked in [PHASES.md](PHASES.md). Release is NOT complete; physical device/GPU/media/codec/audio/accessibility/install and owner-controlled signing gates remain open.
+
+
 An offline-first native Android motion-graphics editor for phones, tablets, and foldables. This branch is a product implementation in progress—not a CI-only sample.
 
 - Native Kotlin/Jetpack Compose UI; no WebView.
@@ -8,6 +15,11 @@ An offline-first native Android motion-graphics editor for phones, tablets, and 
 - Supported canonical project paths: EffectCraft `.ecproj` JSON and `.ecprojx` XML, with validation/migration and SAF import/export foundations.
 - Actual native CPU/session preview frames; GPU/device compatibility and media parity still require qualification.
 - Layer, transform, keyframe, Bezier/ShapePath editing and PNG/MP4 export foundations are implemented incrementally.
+
+## Engineering progress (2026-11-09 00:59 IST)
+
+- **M2 duplicate-member escape test fixture corrected:** [f27d312e](https://github.com/sunmughan/After-Effects-Android/commit/f27d312eb4e34ff46f73bad812e362173ac43c3a) changes the Kotlin raw JSON fixture to single-backslash `\\t` and `\\u0009` escapes so both keys decode to a tab. Standalone Kotlin scanner compilation and four structural/escape cases pass; exact Android CI remains pending.
+- **M2 duplicate JSON scanner Kotlin compile failure fixed:** CI [#1312](https://github.com/sunmughan/After-Effects-Android/actions/runs/42508463104) reached Kotlin compilation after native ARM64/x86_64 and Rust tests passed, then failed on unsupported escape sequences in the scanner's control-character literals. Corrected the implementation to decode JSON escapes via explicit character codes and scan JSON whitespace without fragile Kotlin escapes; added duplicate escaped-tab key regression. This is a source compile fix; fresh exact-head CI is required for acceptance. Details and gate status in [PHASES.md](PHASES.md).
 
 ## Engineering progress (2026-11-08 18:12 IST)
 
@@ -87,3 +99,99 @@ Continue implementation phase-by-phase and fix failures without weakening tests.
 
 
 - **M2 XML edge case:** valid processing instructions after the EffectCraft XML root are now accepted as exporter metadata (the parser still rejects extra roots/non-whitespace trailing text). Implementation [4a8b7e63](https://github.com/sunmughan/After-Effects-Android/commit/4a8b7e63bc7fb79989252f270e0825d40271bca0), regression [1f0f38b9](https://github.com/sunmughan/After-Effects-Android/commit/1f0f38b948e711c7a467870ed093af23be0121e5). Exact-head CI #1275 pending.
+
+
+## Engineering progress (2026-11-08 20:42 IST)
+
+- PR #3 merged and its branch deleted; recreated feat/android-app-foundation from main (including [post-merge compile repair ed80c34a](https://github.com/sunmughan/After-Effects-Android/commit/ed80c34aa2439831913fb56ebffea168cf045ab0)). Current continuation: [draft PR #4](https://github.com/sunmughan/After-Effects-Android/pull/4).
+- **M4 explicit transform-key Move control regression:** [e4f476d2](https://github.com/sunmughan/After-Effects-Android/commit/e4f476d22814562ef0ed97c089d7f611e02114a6) cleans up target-frame state placement; [e33d56cb](https://github.com/sunmughan/After-Effects-Android/commit/e33d56cba15b538ec0f1fd39d4d605d9ec294287) adds Android instrumentation that enters target frame 20 and asserts the exact canonical move callback. This supplements, rather than replaces, the curve graph accessibility-action test.
+- Exact-head [CI #1284](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493757859) is pending at e33d56cb; Kotlin/Rust/JNI/JVM/release/API30/cold reproducibility gates are not yet accepted. No local Android SDK/Gradle is available in this runtime.
+- Release remains NOT complete; see PHASES.md for phase-by-phase acceptance, test evidence, blockers, and the Adobe .aep / Effekseer .efkproj limitations.
+
+
+- Latest M4 source [7a4e7a15](https://github.com/sunmughan/After-Effects-Android/commit/7a4e7a15f1ff3a301f5f64997c96104e2f2a0572) uses Android's numeric keyboard and digit-only/10-digit input for the transform keyframe target. Instrumentation [e33d56cb](https://github.com/sunmughan/After-Effects-Android/commit/e33d56cba15b538ec0f1fd39d4d605d9ec294287) covers target frame 20 via the explicit Move control. Exact-head CI is pending; no acceptance claim.
+
+
+## Engineering progress (2026-11-08 21:46 IST)
+
+- **CI #1290 failure diagnosed and test corrected:** the build, Rust dual-ABI bridge, Rust/JVM suites and unsigned release R8/APK/AAB passed; API30 instrumentation had 1 failure among 177 tests. The explicit transform-key Move test appended `20` to a prefilled `0`, then searched for a semantics label containing `020`; the test's cursor/selection assumption was not stable. [95713180](https://github.com/sunmughan/After-Effects-Android/commit/95713180dea7f2d9fd0bf09b7d6e1c186ff214ef) clears the numeric field, enters `20`, checks the Move control is enabled and verifies the same exact callback. No feature or assertion was weakened.
+- Exact failure evidence: [Actions #1290](https://github.com/sunmughan/After-Effects-Android/actions/runs/42493884493), `AdaptiveWorkspaceSmokeTest.explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame`; API30 176/177 passed, one failed. Cold reproducibility was skipped after the primary job failure. New CI at `95713180` is required before acceptance.
+- Tracker: [PHASES.md](PHASES.md) records the precise failure, source/test SHA, remediation and pending fresh run. PR #4 remains Draft. Release remains **NOT complete**; physical GPU/media/device, signed artifact/install and full M0–M7 gates are outstanding.
+
+
+
+- **M4 keyframe target validation hardened:** [f097ac95](https://github.com/sunmughan/After-Effects-Android/commit/f097ac955557c326f5d95bbdf6600c45cffbac0f) extends explicit Move instrumentation with a mixed/negative oversized input, verifies digit-only 10-character sanitization and overflow-disabled Move, then clears and confirms frame 20 succeeds. This is additional boundary coverage; no tests removed. See [PHASES.md](PHASES.md).
+
+- Follow-up [47604d3c](https://github.com/sunmughan/After-Effects-Android/commit/47604d3cccca4d6387e8de00f9fff08b092991e3) removes the obsolete test comment that described appending to the prefilled frame. The source now explicitly describes clearing and entering a target frame. Current exact test SHA remains `f097ac95`; tracker/docs follow-up [22b273f8](https://github.com/sunmughan/After-Effects-Android/commit/22b273f88558c5d2a2b731c2404184a0369e5670). CI acceptance is still pending.
+
+
+## Engineering progress (2026-11-08 22:55 IST)
+
+- CI #1304 pinpointed the explicit transform Move instrumentation failure: its fixture omitted `transformKeyframes`, leaving the button disabled by design. [729f8409](https://github.com/sunmughan/After-Effects-Android/commit/729f840984aa0407df863c7805049e27fc578861) adds canonical position keys (0/15/30); no app gate was relaxed.
+- M4 native test [c09fe485](https://github.com/sunmughan/After-Effects-Android/commit/c09fe4854a61ef39a3b4c7d14eba5cd07cffa9ce) now verifies moving a Bezier key onto an occupied frame replaces the neighbor and preserves the moved key's value/interpolation in serialized project data. Fresh exact-head CI is required.
+- [PHASES.md](PHASES.md) is the authoritative M0–M7 ledger. Release remains NOT complete; physical device/GPU/media/install and owner-controlled signing are still blockers; Adobe `.aep` is not natively supported.
+
+
+## Engineering progress (2026-11-08 23:35 IST)
+
+- **CI #1309 green at exact docs HEAD 1a826388:** 70 Rust tests passed; API30 instrumentation 177/177; both CI jobs succeeded, including independent debug APK byte/content and ARM64/x86_64 JNI .so reproducibility. [Run #1309](https://github.com/sunmughan/After-Effects-Android/actions/runs/42504897643), [test artifact](https://github.com/sunmughan/After-Effects-Android/actions/runs/42504897643/artifacts/13627114212), [repro report](https://github.com/sunmughan/After-Effects-Android/actions/runs/42504897643/artifacts/13628206022). This evidence applies only to that SHA.
+- **M2 import integrity:** commit [09d2dad2](https://github.com/sunmughan/After-Effects-Android/commit/09d2dad24cb5eab8dedcd6a35099010b07290376) adds duplicate JSON object member rejection before JSONObject parsing, including escaped-equivalent names, with JVM tests for nested collisions and false-positive-safe string/array handling. Fresh CI at this new HEAD is pending.
+- See [PHASES.md](PHASES.md) for the acceptance ledger, exact SHAs, failures, evidence and blockers. Release is not complete; Effekseer .efkproj and Adobe .aep native parser support are not claimed, and physical device/signing gates remain open.
+
+
+
+## Engineering progress — 2026-11-09
+
+- **Exact-head CI #1317 passed** at `791a44b9`: Rust 70/70, ARM64+x86_64 JNI, Kotlin/JVM, unsigned release APK/AAB + R8, API30 177/177 and independent cold APK/JNI reproducibility. [Run #1317](https://github.com/sunmughan/After-Effects-Android/actions/runs/42515531444). This is historical evidence for that SHA only; newer Hexagon work needs fresh CI.
+- **M4 Add Hexagon implemented end-to-end:** upstream native six-sided polygon + fill, JNI bridge, canonical inspector button, app save/selection integration, native actual-pixel compositor regression and Android callback instrumentation. Commits: [d029dc8a](https://github.com/sunmughan/After-Effects-Android/commit/d029dc8aadf7c16f7ad62341398cedcab79fbed0), [7ac65cdb](https://github.com/sunmughan/After-Effects-Android/commit/7ac65cdb6c5a55bba38d1161448a3d97934c2d65), [6a766299](https://github.com/sunmughan/After-Effects-Android/commit/6a766299bc0d327aec6d398d11e41dd6e1fcf61e), [4ef2ec2d](https://github.com/sunmughan/After-Effects-Android/commit/4ef2ec2d052117462dc3be9a497c6a5c158fdfb0), [d6d8cedd](https://github.com/sunmughan/After-Effects-Android/commit/d6d8cedd0b8664416878de73da76163c08756e86).
+- See [PHASES.md](PHASES.md) for acceptance criteria, exact evidence, phase status and blockers. Release remains **NOT COMPLETE**; physical-device and signing gates remain open.
+
+
+## Engineering progress — 2026-11-09 02:48 IST
+
+- CI [#1328](https://github.com/sunmughan/After-Effects-Android/actions/runs/42520953988) built the Hexagon implementation and ran 177 API30 tests, with two failures caused by test navigation across the canonical inspector's outer sheet scroll and nested layer-list scroll containers. No product/runtime failure was indicated; cold reproducibility was skipped after instrumentation failed.
+- Fixed the tests to scroll the sheet header and then the inner layer row: [Adaptive test f94933c9](https://github.com/sunmughan/After-Effects-Android/commit/f94933c9692568bdab2dd6a71fbd2a2603fcf13a), [selection test edde8aeb](https://github.com/sunmughan/After-Effects-Android/commit/edde8aeb3486696cfee02e9bd59f5de1dc5e9dee). Assertions remain intact. Fresh exact-head CI is pending.
+- [PHASES.md](PHASES.md) records failure logs, root cause, commits and acceptance gate. Release remains **NOT COMPLETE**; see the phase ledger for device/signing/format blockers.
+
+
+## Engineering progress — 2026-11-09 03:02 IST
+
+- **M4 Add Pentagon:** native Rust Shape+Fill authoring and actual compositor pixel/JSON round-trip regression, JNI/Kotlin bridge, canonical inspector action, save/selection wiring and Android callback test are committed ([native 5da1ad74](https://github.com/sunmughan/After-Effects-Android/commit/5da1ad742634360d4d62781e4c542a502df8fb82), [bridge 28f5f6b7](https://github.com/sunmughan/After-Effects-Android/commit/28f5f6b706f93d4794d8ecf264ee6d7be0850119), [UI a6b22d7f](https://github.com/sunmughan/After-Effects-Android/commit/a6b22d7fe081fe9a8cc4c9f4ecb13d470357ff06), [app 1affcbc5](https://github.com/sunmughan/After-Effects-Android/commit/1affcbc5b91393ff30d7021df371ffe3e8280c1d), [test cff48e65](https://github.com/sunmughan/After-Effects-Android/commit/cff48e65d068456088c46c50aa375013b0530dd8)).
+- CI #1328 exposed two clipped layer-row assertions due to nested sheet/list scroll state. Test navigation was repaired with explicit sheet-header then inner-list scrolling (f94933c9, edde8aeb); assertions remain. Exact-head CI #1341 is pending at cff48e65; #1331 was superseded/cancelled.
+- [PHASES.md](PHASES.md) records exact failure evidence, remediation, new feature and acceptance gates. EffectCraft release remains NOT COMPLETE.
+
+
+- Follow-up after CI #1328: test navigation now scrolls the outer `Layers` section into view before the nested row, not just the sheet header ([Adaptive ce94ed30](https://github.com/sunmughan/After-Effects-Android/commit/ce94ed309e98d5df78d7021907404c9db935bb11), [CanonicalSelection 56758bbf](https://github.com/sunmughan/After-Effects-Android/commit/56758bbfac3054ab328795d1be1c4dca385f61d3)). Latest full verification #1345 is queued; no acceptance until all gates pass.
+
+
+## Engineering progress — 2026-11-09 03:16 IST
+
+- CI #1347 failed after 177 API30 tests with two canonical layer-row visibility failures; native/JNI, Kotlin/JVM, debug and unsigned release packaging passed. The nested 210dp independently scrollable layer list was the product/UI root cause.
+- Fixed the actual inspector scroll architecture at [dfec81cb](https://github.com/sunmughan/After-Effects-Android/commit/dfec81cb18549e736d0af586c38b45995ccb4143): layer rows now use the same outer inspector scroll container, improving touch/semantics/TalkBack reachability for off-fold layers. Existing test assertions remain intact. Fresh exact-head CI and cold APK reproducibility are pending.
+- Acceptance remains M0 historical / M1–M6 partial / M7 NOT ACCEPTED. Physical GPU/media/codec/audio/performance/accessibility/install-run and owner signing gates remain open; Adobe .aep and complete Effekseer .efkproj support are not claimed.
+
+
+- **Long layer-stack regression:** Android instrumentation now creates a 53-layer canonical composition, scrolls to Layer 54, verifies it is displayed, then returns to Background and continues the selection/edit assertions ([a3db126e](https://github.com/sunmughan/After-Effects-Android/commit/a3db126e1e7d95419aea24e81970f9f60255d3cd)). This covers the single-scroll inspector fix [dfec81cb](https://github.com/sunmughan/After-Effects-Android/commit/dfec81cb18549e736d0af586c38b45995ccb4143); fresh exact-head CI is pending.
+
+
+**2026-11-09 responsive inspector fix:** CI #1355 found Add Hexagon clipped horizontally on the phone emulator because shape actions shared one non-wrapping Row. [ff31b29b](https://github.com/sunmughan/After-Effects-Android/commit/ff31b29bb5445f20253b9ef6082f637eb112d96a) changes the shape actions to a wrapping FlowRow; fresh API30 and cold APK verification is pending. M0–M7 release acceptance remains open.
+
+
+**2026-11-09 CI #1358 test correction:** hosted build/JVM/native/release packaging passed, but API30 instrumentation failed only because the canonical editor test asserted `Frame 15 / 89` after scrolling the inspector down to layer/shape controls. The render callback had already been observed; the assertion was off-screen. [Test fix 1fe762bf](https://github.com/sunmughan/After-Effects-Android/commit/1fe762bf7934333be949c177de76f684a018afb2) now scrolls that label into view before asserting. Fresh exact-head CI including cold APK comparison is pending; no new acceptance claim.
+
+
+## Engineering progress — 2026-11-09 06:50 IST
+
+- Exact-head [CI #1362](https://github.com/sunmughan/After-Effects-Android/actions/runs/42538199606) succeeded at `d4c2cbe4`: Rust 72/72, both JNI ABIs, Kotlin/JVM, debug + unsigned release APK/AAB/R8, API30 177/177 and independent cold APK reproducibility. Artifacts: [tests](https://github.com/sunmughan/After-Effects-Android/actions/runs/42538199606/artifacts/13641585356), [repro](https://github.com/sunmughan/After-Effects-Android/actions/runs/42538199606/artifacts/13642025075).
+- M4 Add Diamond is now implemented through native polygon+Fill authoring, JNI/Kotlin, app persistence/selection, responsive inspector and callback instrumentation. Native test requires JSON round-trip and real compositor pixels. Commits: [b102ad8d](https://github.com/sunmughan/After-Effects-Android/commit/b102ad8d1e1c627e7bdc728636d693d7d0687077), [194a499d](https://github.com/sunmughan/After-Effects-Android/commit/194a499d2a96a724bf06278e7b86d11aa8e9ec4f), [4f6c8f2e](https://github.com/sunmughan/After-Effects-Android/commit/4f6c8f2e96e614476acf60e285fbe6eb4c5d9aa4), [8da8ebf7](https://github.com/sunmughan/After-Effects-Android/commit/8da8ebf71a237db4bdf77c95d64e68cd3cb19ad0), [5781a02c](https://github.com/sunmughan/After-Effects-Android/commit/5781a02c618ac2eb87713ad644126d73d19aa6c2). Exact-head CI pending.
+- Release remains **NOT COMPLETE**; physical device, GPU/media/codec/audio, accessibility and owner-controlled signing gates remain open. See [PHASES.md](PHASES.md).
+
+
+- M4 Diamond test-fixture cleanup: native regression now uses/asserts the Diamond name rather than copied Pentagon labels ([0fbe1084](https://github.com/sunmughan/After-Effects-Android/commit/0fbe1084bf44cbfc8d421d2fb13781325767fdd9)). Exact-head CI pending; #1369 was superseded and #1370 is for prior docs SHA only. [PHASES.md](PHASES.md) remains the acceptance ledger.
+
+
+## Engineering progress — 2026-11-09 (native reproducibility)
+
+- CI [#1373](https://github.com/sunmughan/After-Effects-Android/actions/runs/42545389447) passed the complete primary job (Rust/JNI, JVM, release R8/APK/AAB and API30 **177/177**) but its independent cold rebuild detected packaged native-library byte differences on both ABIs. See [repro artifact/log](https://github.com/sunmughan/After-Effects-Android/actions/runs/42545389447/artifacts/13644122640). This is an actual M0 reproducibility failure; do not treat the primary job alone as green.
+- Mitigation [0e874688](https://github.com/sunmughan/After-Effects-Android/commit/0e874688575f801e0e99bb92c7d160111a8f785f) sets Rust release `codegen-units = 1`, addressing suspected nondeterministic merged constant ordering. Fresh independent CI comparison must validate it. Latest phase evidence/blockers are in [PHASES.md](PHASES.md).
+- Release remains NOT COMPLETE; physical device/GPU/media/codec/audio/accessibility and owner-controlled signing gates remain open.

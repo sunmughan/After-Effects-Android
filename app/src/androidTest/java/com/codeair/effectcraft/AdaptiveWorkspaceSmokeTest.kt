@@ -603,6 +603,52 @@ class AdaptiveWorkspaceSmokeTest {
     }
 
     @Test
+    fun explicitTransformKeyMoveControlTargetsSelectedLayerAndFrame() {
+        var moved: List<Any>? = null
+        val base = canonicalM4Layer(locked = false)
+        val composition = base.compositions.single()
+        val keyedLayer = composition.layers.first().copy(
+            // The Move control gates on transformKeyframes (same as the
+            // interpolation presets and the TRANSFORM-lane drag owner), so
+            // a keyed layer carries both maps, as canonicalRovingLayer
+            // does in this file. Curves alone leave the button disabled.
+            transformKeyframes = mapOf("position" to listOf(0, 15, 30)),
+            transformCurves = mapOf(
+                "position" to listOf(
+                    CanonicalCurveKey(frame = 0, value = 100.0),
+                    CanonicalCurveKey(frame = 15, value = 320.0),
+                    CanonicalCurveKey(frame = 30, value = 500.0)
+                )
+            )
+        )
+        val canonical = base.copy(
+            compositions = listOf(composition.copy(layers = listOf(keyedLayer, composition.layers[1])))
+        )
+        setCanonicalEditorContent(
+            canonical, CanonicalCaptures(),
+            onMoveCurveKey = { c, l, selector, from, to -> moved = listOf(c, l, selector, from, to) }
+        )
+        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        // Clear the prefilled playhead frame explicitly so the target is
+        // unambiguous; this exercises the Move button, not the graph shortcut.
+        val targetInput = compose.onNodeWithContentDescription("Move key target frame").performScrollTo()
+        // performTextClearance() returns Unit in ui-test-junit4, so it cannot
+        // be chained into performTextInput(); clear and type as separate calls
+        // (same pattern as the shape-path t-field below in this file).
+        targetInput.performTextClearance()
+        targetInput.performTextInput("-x99999999999")
+        // The field strips non-digits, caps at ten digits, and the Move
+        // action rejects values outside Int frame range instead of crashing.
+        compose.onNodeWithContentDescription("Move position keyframe to frame 9999999999")
+            .performScrollTo().assertIsNotEnabled()
+        targetInput.performTextClearance()
+        targetInput.performTextInput("20")
+        compose.onNodeWithContentDescription("Move position keyframe to frame 20")
+            .performScrollTo().assertIsEnabled().performClick()
+        assertEquals(listOf<Any>(10L, 2L, "transform:position", 0, 20), moved)
+    }
+
+    @Test
     fun curveGraphLongPressDeletesNearestKeyThroughCanonicalCallback() {
         var removed: List<Any>? = null
         val base = canonicalM4Layer(locked = false)
@@ -678,6 +724,10 @@ class AdaptiveWorkspaceSmokeTest {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalM4Layer(locked = false), captures)
         compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        // The sheet and the layer list have independent scroll containers.
+        // Bring the sheet header into view first, then scroll the inner list.
+        compose.onNodeWithText("CANONICAL .ECPROJ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Layers").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("● Headline", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Anchor Point · X / Y").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("3D Rotation · Orientation X / Y / Z (°)").performScrollTo().assertIsDisplayed()
