@@ -168,9 +168,16 @@ class DraftPreviewInstrumentedTest {
         // emulator runs, while the same frame passed
         // editorLaunches in the same run's second attempt, so the
         // render lands late rather than never. Budget is 60 s.
+        // Run 42576011373: 60 s was too short in the retry
+        // attempt (the first attempt passed the same test in the
+        // same run, on a portrait pixel_2 emulator the landscape
+        // change cannot affect) — the render lands late rather
+        // than never. Budget is 120 s; waitUntil returns as soon
+        // as the frame lands, so this costs nothing when the
+        // runner is fast.
         // The assertions below are unchanged and still fail
         // if the frame never renders.
-        compose.waitUntil(timeoutMillis = 60_000) {
+        compose.waitUntil(timeoutMillis = 120_000) {
             compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
         }
         compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
