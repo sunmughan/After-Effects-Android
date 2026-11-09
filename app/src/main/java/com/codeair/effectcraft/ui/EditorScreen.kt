@@ -213,6 +213,7 @@ fun EditorScreen(
     onOpenProject: (String) -> Unit,
     onDeleteOfflineAsset: (String) -> Unit,
     onValidateEcproj: () -> Unit,
+    onImportProjectBundle: () -> Unit = {},
     isImportingCanonicalProject: Boolean = false,
     onCancelCanonicalImport: () -> Unit = {},
     onExportEcproj: () -> Unit,
@@ -436,6 +437,7 @@ fun EditorScreen(
                 onOpenProject = { showProjectPicker = true },
                 onOpenMediaLibrary = { showMediaLibrary = true },
                 onValidateEcproj = onValidateEcproj,
+                onImportProjectBundle = onImportProjectBundle,
                 isImportingCanonicalProject = isImportingCanonicalProject,
                 onCancelCanonicalImport = onCancelCanonicalImport,
                 onExportEcproj = onExportEcproj,
@@ -1009,6 +1011,7 @@ private fun HeaderBar(
     onOpenProject: () -> Unit,
     onOpenMediaLibrary: () -> Unit,
     onValidateEcproj: () -> Unit,
+    onImportProjectBundle: () -> Unit,
     isImportingCanonicalProject: Boolean,
     onCancelCanonicalImport: () -> Unit,
     onExportEcproj: () -> Unit,
@@ -1101,6 +1104,9 @@ private fun HeaderBar(
                     IconButton(onClick = onOpenProject, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = "Open offline project", tint = EditorPalette.mint)
                     }
+                    IconButton(onClick = onImportProjectBundle, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Import ZIP project bundle", tint = EditorPalette.amber)
+                    }
                     IconButton(onClick = onOpenMediaLibrary, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet)
                     }
@@ -1178,6 +1184,7 @@ private fun HeaderBar(
                         color = EditorPalette.mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
                 IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet) }
+                IconButton(onClick = onImportProjectBundle) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Import ZIP project bundle", tint = EditorPalette.amber) }
                 IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj) {
                     Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.Description,
                         contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
