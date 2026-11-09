@@ -38,6 +38,27 @@ class EditorRotationLifecycleTest {
     }
 
 
+
+    /**
+     * Starts a fresh composition. A previous case in this run may have
+     * left a recovery journal behind, in which case the app opens
+     * straight in the editor (no "New" pill on screen); the same
+     * action then lives behind "More options" as "New composition",
+     * and unsaved changes ask first — discard them, exactly as a
+     * user starting over would.
+     */
+    private fun startFreshComposition() {
+        if (compose.onAllNodesWithText("New").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("New").performClick()
+        } else {
+            compose.onNodeWithContentDescription("More options").performClick()
+            compose.onNodeWithText("New composition").performScrollTo().performClick()
+        }
+        if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Discard").performClick()
+        }
+    }
+
     /**
      * Batch 2 (P11): the track list is a LazyColumn, so the selected
      * fourth row is not composed until it is scrolled into view.
@@ -49,7 +70,7 @@ class EditorRotationLifecycleTest {
 
     @Test
     fun rotationKeepsSavedEditorStateWithoutDataLoss() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()

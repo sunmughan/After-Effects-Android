@@ -124,7 +124,9 @@ class OfflineAcceptanceInstrumentedTest {
         // itself lists it.
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
-        compose.onNodeWithText("New").performClick()
+        // Recreate after a previous case's journal lands straight in
+        // the editor (no "New" pill); the helper covers both starts.
+        startFreshComposition()
         // Phone bar: the library entry lives behind "More options".
         compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Offline media library").performScrollTo().performClick()

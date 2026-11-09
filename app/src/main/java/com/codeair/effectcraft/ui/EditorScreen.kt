@@ -4143,12 +4143,20 @@ private fun TimelinePanel(
                         }
                     }
                 }
+                    // The horizontal zoom scroll lives on this wrapping
+                    // Box, NOT on the LazyColumn: a horizontalScroll on
+                    // the list itself hijacks the list's vertical
+                    // ScrollBy semantics action (CI 42706710590: the
+                    // canonical-lane test's ScrollBy(0, 500) became a
+                    // horizontal no-op and the lane never composed).
+                    // drawWithContent stays outside the scroll, so the
+                    // playhead line draws in viewport coordinates.
+                    .horizontalScroll(timelineScroll)
         ) {
         LazyColumn(
             state = trackListState,
             modifier = Modifier
                 .width(trackContentWidth)
-                .horizontalScroll(timelineScroll)
                 .testTag("timeline-track-list"),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {

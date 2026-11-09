@@ -716,9 +716,11 @@ class M7FunctionCoverageTest {
         // for the error to be composed first; the scroll, the
         // displayed assertion and the exported==0 check below are
         // unchanged and still fail (timeout) if the error never
-        // appears. The dialog flow itself is intact — this test
-        // passed the run's fresh-emulator retry unchanged.
-        compose.waitUntil(timeoutMillis = 5_000) {
+        // appears. Run 42706710590: the error still had not landed
+        // within 5 s on the loaded retry emulator (it passed attempt
+        // 1), so the budget is 10 s — the test still fails if the
+        // error never appears.
+        compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithText("Enter valid numeric settings").fetchSemanticsNodes().isNotEmpty()
         }
         // Gate-run-727 diagnosis: the error text IS composed when the

@@ -55,6 +55,27 @@ class EditorLifecycleInstrumentedTest {
         compose.onNodeWithContentDescription("Editor status: $message").assertExists()
     }
 
+
+    /**
+     * Starts a fresh composition. A previous case in this run may have
+     * left a recovery journal behind, in which case the app opens
+     * straight in the editor (no "New" pill on screen); the same
+     * action then lives behind "More options" as "New composition",
+     * and unsaved changes ask first — discard them, exactly as a
+     * user starting over would.
+     */
+    private fun startFreshComposition() {
+        if (compose.onAllNodesWithText("New").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("New").performClick()
+        } else {
+            compose.onNodeWithContentDescription("More options").performClick()
+            compose.onNodeWithText("New composition").performScrollTo().performClick()
+        }
+        if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Discard").performClick()
+        }
+    }
+
     /**
      * Batch 2 (P11): the track list is a LazyColumn, so a row below the
      * fold is not composed until it is scrolled into view — exactly as a
@@ -69,7 +90,7 @@ class EditorLifecycleInstrumentedTest {
 
     @Test
     fun unsavedEditSurvivesActivityRecreationWithCanonicalDataIntact() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         assertEditorStatus("Unsaved changes")
         waitForJournalFile()
@@ -95,7 +116,7 @@ class EditorLifecycleInstrumentedTest {
 
     @Test
     fun savedEditDoesNotReportRecoveryAfterRecreation() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")

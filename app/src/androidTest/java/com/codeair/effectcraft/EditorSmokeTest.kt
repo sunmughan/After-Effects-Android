@@ -92,7 +92,7 @@ class EditorSmokeTest {
 
     @Test
     fun offlineMediaLibraryOpensAndExplainsEmptyState() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         // Phone bar: the library entry lives behind "More options".
         compose.onNodeWithContentDescription("More options").performClick()
         compose.onNodeWithText("Offline media library").performScrollTo().performClick()
@@ -108,7 +108,7 @@ class EditorSmokeTest {
         // Isolate this catalog test from drafts left by other instrumentation cases.
         InstrumentationRegistry.getInstrumentation().targetContext.filesDir
             .resolve("projects").listFiles()?.forEach { it.delete() }
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
@@ -203,14 +203,14 @@ class EditorSmokeTest {
 
     @Test
     fun addLayerActionAddsTrackToTimeline() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         assertEditorStatus("Unsaved changes")
     }
 
     @Test
     fun layerMutationCanBeUndoneAndRedone() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Undo").performClick()
         assertEditorStatus("Undo · unsaved")
@@ -221,7 +221,7 @@ class EditorSmokeTest {
 
     @Test
     fun inspectorRenamesSelectedLayer() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Props").performClick()
         // The inspector now has three text fields (layer name, trim in,
         // trim out): address the rename field by its description instead
@@ -236,7 +236,7 @@ class EditorSmokeTest {
 
     @Test
     fun appearanceSectionCollapsesAndExpands() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Props").performClick()
         // The section starts expanded: the opacity slider is there.
         compose.onNodeWithContentDescription("Layer opacity").assertIsDisplayed()
@@ -252,7 +252,7 @@ class EditorSmokeTest {
 
     @Test
     fun inspectorOpacityAndVisibilityControlsUpdateSelectedLayerAndUndoRedo() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Props").performClick()
         val visibility = compose.onNodeWithContentDescription("Layer visibility")
         visibility.assertIsOn()
@@ -301,7 +301,7 @@ class EditorSmokeTest {
 
     @Test
     fun timelinePlayheadScrubsAndTransportToggles() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithContentDescription("Timeline playhead")
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
         compose.onNodeWithText("00:00:02:00").assertIsDisplayed()
@@ -323,7 +323,7 @@ class EditorSmokeTest {
 
     @Test
     fun inspectorCanReorderAndDeleteAddedLayer() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
@@ -341,7 +341,7 @@ class EditorSmokeTest {
 
     @Test
     fun deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
@@ -365,7 +365,7 @@ class EditorSmokeTest {
 
     @Test
     fun compositionSettingsApplyAndParticipateInUndo() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Comp").performClick()
         compose.onNodeWithContentDescription("Composition frame rate")
             .performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(60f) }
@@ -388,7 +388,7 @@ class EditorSmokeTest {
 
     @Test
     fun compositionSettingsNumericFieldsTypeAndApply() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithText("Comp").performClick()
         // Type a width: clear the draft first (it holds the current
         // value), then type — performTextClearance returns Unit, so
@@ -413,7 +413,7 @@ class EditorSmokeTest {
 
     @Test
     fun timelineSelectionUpdatesInspectorProperties() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         // The timeline is a LazyColumn: the third layer is not composed
         // until it is scrolled into view, so scroll the list first and
         // then tap the row, exactly as a user would.
