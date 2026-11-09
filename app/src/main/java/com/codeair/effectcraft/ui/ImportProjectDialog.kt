@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Movie
@@ -127,7 +127,7 @@ private fun ImportOption(title: String, icon: ImageVector, onClick: () -> Unit) 
         )
         Spacer(Modifier.weight(1f))
         Icon(
-            Icons.AutoMirrored.Outlined.ChevronRight,
+            Icons.Outlined.ChevronRight,
             contentDescription = null,
             tint = AstryxTheme.Colors.textSecondary,
             modifier = Modifier.size(20.dp)
