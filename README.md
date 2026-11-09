@@ -1,3 +1,9 @@
+## Engineering progress (2026-11-09 11:20 IST)
+
+- **M2 ZIP bundle import wired into editor (CI pending):** a new accessible ZIP action in both adaptive header layouts opens SAF, streams bounded extraction, validates the canonical project through the native bridge, stores media in the content-addressed offline library, relinks footage with exact path/unique basename matches, saves repository/canonical document and offline item references, and refreshes editor media state. Implementation commits: [streaming ZIP 61dcf2f3](https://github.com/sunmughan/After-Effects-Android/commit/61dcf2f3c06176afa5242678eb13d8880dcf4aa0), [test bd2f087a](https://github.com/sunmughan/After-Effects-Android/commit/bd2f087a857290d2cf8f75408dbb12366ee12fd1), [workflow b35d28b0](https://github.com/sunmughan/After-Effects-Android/commit/b35d28b0099c8d7565abf51fa6f0aa08214b8a1b), [suspend correction 05692f36](https://github.com/sunmughan/After-Effects-Android/commit/05692f369e73d9c76edd5e277c313cfc00479df5), [UI 40ea68c7](https://github.com/sunmughan/After-Effects-Android/commit/40ea68c763b41365025a79be9f6a6d89584af69a), [instrumentation e2e86160](https://github.com/sunmughan/After-Effects-Android/commit/e2e8616032c66705d5411a9bb609d8589835e476). No CI acceptance claim yet.
+- **CI #1386 infra failure diagnosed:** exact job log shows Temurin JDK 17 download returned HTTP 504 twice; runner had 108 GiB free. Native/Gradle/test steps were skipped, so this is not a code regression. Job retry was superseded by new implementation commits; fresh exact-head run required.
+- PR #1 is merged; active continuation remains Draft PR #4. See [PHASES.md](PHASES.md) for all M0–M7 acceptance and blockers.
+
 # EffectCraft for Android
 
 ## Engineering progress (2026-11-09 09:22 IST)
