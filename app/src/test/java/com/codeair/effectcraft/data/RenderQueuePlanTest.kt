@@ -158,18 +158,22 @@ class RenderQueuePlanTest {
     }
 
     @Test
-    fun enforcesPerFramePixelsAndTotalRgbaBudget() {
+    fun enforcesPerFramePixelsBudget() {
         assertThrows(IllegalArgumentException::class.java) {
             RenderQueuePlan.create(settings(width = 4096, height = 4096))
         }
-        // 3840×2160 is a valid UHD frame; the queue budget bounds its length.
+        // 3840×2160 is a valid UHD frame; the estimate is still
+        // reported, but it is NOT a bound any more: the executors
+        // stream one frame at a time and never hold the queue, so
+        // a long queue's total uncompressed size is not a resource.
+        // The old 8 GiB total bound rejected a 1080p export longer
+        // than ~35 seconds at 30 fps.
         val uhd = RenderQueuePlan.create(settings(start = 0, end = 0, width = 3840, height = 2160))
         assertEquals(33_177_600L, uhd.estimatedUncompressedRgbaBytes)
-        assertTrue(uhd.estimatedUncompressedRgbaBytes <= RenderQueuePlan.MAX_UNCOMPRESSED_RGBA_BYTES)
-        // 258 UHD frames = 8,559,820,800 bytes, still under the 8 GiB budget;
-        // 259 frames = 8,592,998,400 bytes, the first count that exceeds it.
-        assertThrows(IllegalArgumentException::class.java) {
-            RenderQueuePlan.create(settings(start = 0, end = 258, width = 3840, height = 2160))
-        }
+        // 259 UHD frames = 8,592,998,400 bytes estimated, past the
+        // old 8 GiB budget — and now accepted.
+        val longUhd = RenderQueuePlan.create(settings(start = 0, end = 258, width = 3840, height = 2160))
+        assertEquals(259, longUhd.frameCount)
+        assertTrue(longUhd.estimatedUncompressedRgbaBytes > RenderQueuePlan.MAX_UNCOMPRESSED_RGBA_BYTES)
     }
 }
