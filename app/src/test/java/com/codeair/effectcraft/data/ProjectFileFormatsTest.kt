@@ -22,7 +22,10 @@ class ProjectFileFormatsTest {
             ProjectFileFormats.importError("scene.efkproj")
         )
         assertEquals(
-            "Adobe .aep is proprietary and cannot be imported without a compatible licensed parser/converter.",
+            "Direct .aep import is not in this build yet — it is being built from the official " +
+                "EffectCraft .aep importer. For now, export the project from After Effects with " +
+                "the included ExtendScript (docs/ae-export/ExportToEffectCraft.jsx) and import " +
+                "the .zip it creates.",
             ProjectFileFormats.importError("scene.aep")
         )
     }

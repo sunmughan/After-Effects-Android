@@ -7,8 +7,13 @@ import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -31,7 +37,7 @@ import com.codeair.effectcraft.data.AudioTimeline
 import com.codeair.effectcraft.data.AudioTrackDocument
 import com.codeair.effectcraft.data.AudioTranscodeDecision
 import com.codeair.effectcraft.data.AudioStatus
-import com.codeair.effectcraft.data.AudioTimelineStore
+import com.codeair.effectcraft.data.LegacyAudioTimelineMigration
 import com.codeair.effectcraft.data.MediaCodecAudioDecoder
 import com.codeair.effectcraft.data.CanonicalEditHistory
 import com.codeair.effectcraft.data.CanonicalEditSnapshot
@@ -39,6 +45,7 @@ import com.codeair.effectcraft.data.CanonicalLayerSelection
 import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalProjectDocument
 import com.codeair.effectcraft.data.CanonicalProjectRepository
+import com.codeair.effectcraft.data.ImportDocumentResolver
 import com.codeair.effectcraft.data.ClipEditOutcome
 import com.codeair.effectcraft.data.ClipRenderCoverage
 import com.codeair.effectcraft.data.ClipTimeline
@@ -60,6 +67,7 @@ import com.codeair.effectcraft.data.ProjectEditorActions
 import com.codeair.effectcraft.data.ProjectDocument
 import com.codeair.effectcraft.data.ProjectFileFormats
 import com.codeair.effectcraft.data.ProjectKeyframeStore
+import com.codeair.effectcraft.data.PropertyTrackEditor
 import com.codeair.effectcraft.data.FinalCopyRecovery
 import com.codeair.effectcraft.data.ForegroundPngSequenceExport
 import com.codeair.effectcraft.data.Mp4ExportWorker
@@ -116,7 +124,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     val offlineAssetStore = remember(context) { OfflineAssetStore(File(context.filesDir, "media-library")) }
     val offlineAssetReferences = remember(context) { OfflineAssetReferences(File(context.filesDir, "media-library/references.properties")) }
     val projectKeyframeStore = remember(context) { ProjectKeyframeStore(File(context.filesDir, "keyframes")) }
-    val audioTimelineStore = remember(context) { AudioTimelineStore(File(context.filesDir, "audio-timelines")) }
     val audioDecoder = remember(context) { MediaCodecAudioDecoder(context) }
     val manifestStore = remember(context) { ProjectAssetManifestStore(File(context.filesDir, "asset-manifests")) }
     val projectRepository = remember(context) { CanonicalProjectRepository(File(context.filesDir, "canonical-projects-repo")) }
@@ -208,9 +215,44 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     var playheadFrame by remember { mutableIntStateOf(recoveredSession?.state?.playheadFrame ?: 0) }
     var isPlaying by remember { mutableStateOf(false) }
 
+    // Batch 2 (P21): the audible audio preview player. One clip at a
+    // time — the unmuted clip under the playhead — via MediaPlayer.
+    var audioPreviewError by remember { mutableStateOf<String?>(null) }
+    var audioClipEndedTick by remember { mutableIntStateOf(0) }
+    val audioPlayer = remember {
+        DraftAudioPlayer().apply {
+            onError = { audioPreviewError = it }
+            onClipEnded = { audioClipEndedTick++ }
+        }
+    }
+
+    /** The unmuted audio clip covering [frame], or null in a gap / muted. */
+    fun audibleClipAtPlayhead(frame: Int = playheadFrame): AudioClipDocument? =
+        AudioClipTimeline.audioClipAtPlayhead(project.audioTracks, frame)?.takeIf { !it.muted }
+
+    /** Starts the audible clip under the playhead from its position; stops audio when there is none. */
+    fun startAudioPreview() {
+        audioPreviewError = null
+        val clip = audibleClipAtPlayhead() ?: run {
+            audioPlayer.stop()
+            return
+        }
+        audioPlayer.play(clip, playheadFrame, project.frameRate)
+    }
+
     var saveMessage by remember {
         mutableStateOf(if (recoveredDraft != null) "Recovered unsaved changes" else "Stored on this device")
     }
+    // New-project guard (P07): true whenever the working draft holds
+    // edits no explicit save has committed. The New button asks first
+    // while this is true; saving or opening a saved project clears it.
+    // A recovered starter nobody edited is not unsaved work — New over
+    // it loses nothing, so the dialog stays silent for it.
+    var hasUnsavedChanges by remember {
+        mutableStateOf(recoveredDraft != null && !ProjectDocument.isUneditedStarter(recoveredDraft))
+    }
+    var showNewProjectConfirm by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
     var undoStack by remember {
         mutableStateOf(
             recoveredSession?.state?.undoStack?.map {
@@ -239,14 +281,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
     var projectKeyframeTracks by remember { mutableStateOf(projectKeyframeStore.load(project.id)) }
-    var audioTimeline by remember { mutableStateOf(audioTimelineStore.load(project.id)) }
-
-    /** Persists an edited audio timeline and updates the editor state, or reports the failure. */
-    fun updateAudioTimeline(next: AudioTimeline) {
-        runCatching { audioTimelineStore.save(project.id, next) }
-            .onSuccess { audioTimeline = next }
-            .onFailure { failure -> saveMessage = "Audio timeline save failed · ${failure.message ?: "storage error"}" }
-    }
 
     // One place decides whether a payload is still referenced: every project
     // manifest, the legacy current-project references, and the payload files
@@ -309,6 +343,66 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         redoStack = emptyList()
         project = next
         saveMessage = message
+        hasUnsavedChanges = true
+    }
+
+    /** The track holding audio clip [clipId], or null when no track has it. */
+    fun audioTrackForClip(clipId: String): AudioTrackDocument? =
+        project.audioTracks.firstOrNull { track -> track.clips.any { it.id == clipId } }
+
+    /**
+     * Removes one audio clip from its track, dropping the track when it
+     * becomes empty, through the same undo system as every other draft
+     * edit. This is the one removal path for the unified audio model.
+     * (Declared after [applyProjectChange]: Kotlin local functions are
+     * only visible after their declaration point.)
+     */
+    fun removeAudioClip(clipId: String) {
+        val track = audioTrackForClip(clipId) ?: run {
+            saveMessage = "Audio clip is no longer in the project"
+            return
+        }
+        val remaining = track.clips.filterNot { it.id == clipId }
+        val tracks = if (remaining.isEmpty()) {
+            project.audioTracks.filterNot { it.id == track.id }
+        } else {
+            project.audioTracks.map { if (it.id == track.id) it.copy(clips = remaining) else it }
+        }
+        applyProjectChange(project.copy(audioTracks = tracks), "Audio clip removed · unsaved")
+        if (selectedAudioClipId == clipId) selectedAudioClipId = null
+    }
+
+    /** Saves the current draft; true only when the save landed. */
+    fun saveCurrentProject(): Boolean {
+        var saved = false
+        runCatching { projectStore.save(project) }
+            .onSuccess {
+                // The edits are committed now, so the journal for this
+                // project must go: keeping it would resurrect old edits.
+                runCatching { recoveryJournal.discard(project.id) }
+                savedProjects = projectStore.listSavedProjects()
+                saveMessage = "Saved locally · ${project.name}"
+                hasUnsavedChanges = false
+                saved = true
+            }
+            .onFailure { saveMessage = "Save failed · ${it.message ?: "storage error"}" }
+        return saved
+    }
+
+    /**
+     * Replaces the working draft with a fresh starter. Only called after
+     * the New guard has cleared: no unsaved changes, saved just now, or
+     * explicitly discarded by the user in the New dialog.
+     */
+    fun switchToNewProject() {
+        applyProjectChange(ProjectDocument.starter(), "New offline composition")
+        projectKeyframeTracks = emptyList()
+        selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
+        selectedClipId = null
+        selectedAudioClipId = null
+        playheadFrame = 0
+        isPlaying = false
+        hasUnsavedChanges = false
     }
 
     /**
@@ -369,14 +463,18 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     }
 
     /**
-     * Imports one audio file as a clip on the first audio track (or a new
-     * "Audio 1" track): the file is copied into app-private storage, its
-     * audio track is probed, and only AAC/WAV/MP3/FLAC/Opus sources are
-     * accepted — anything else is refused with its reason and the copy
-     * is deleted. The clip starts at frame 0 and runs to the shorter of
-     * the composition and the source, so the project stays valid.
+     * Batch 2 (P15): the ONE audio import. The file is copied into
+     * app-private storage, its audio track is probed, and only
+     * AAC/WAV/MP3/FLAC/Opus sources are accepted — anything else is
+     * refused with its reason and the copy is deleted. The clip starts at
+     * [startFrame] (the playhead when added from the Audio section) and
+     * runs to the shorter of the composition and the source, so the
+     * project stays valid; it lands on the first track it does not
+     * overlap, or a new "Audio N" track. The clip lives in
+     * [ProjectDocument.audioTracks]: the timeline lanes, the Audio
+     * section, undo, save/reload and the MP4 mix all read this one model.
      */
-    fun importAudioClip(uri: Uri) {
+    fun importAudioClip(uri: Uri, startFrame: Int = 0) {
         exportScope.launch {
             try {
                 val displayName = withContext(Dispatchers.IO) {
@@ -410,29 +508,23 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     return@launch
                 }
                 val sourceLengthFrames = ((probe.durationUs * project.frameRate) / 1_000_000L).toInt().coerceAtLeast(1)
-                val endFrame = minOf(project.durationFrames, sourceLengthFrames)
-                if (endFrame < 1) {
+                val endFrame = minOf(project.durationFrames, startFrame + sourceLengthFrames)
+                if (endFrame <= startFrame) {
                     target.delete()
-                    saveMessage = "Audio is too short for this composition"
+                    saveMessage = "Audio starts past the end of the composition"
                     return@launch
                 }
                 val clip = AudioClipDocument.covering(
-                    startFrame = 0,
+                    startFrame = startFrame,
                     endFrame = endFrame,
                     sourceStartFrame = 0,
-                    sourceEndFrame = endFrame,
+                    sourceEndFrame = endFrame - startFrame,
                     sourceLengthFrames = sourceLengthFrames,
                     sourcePath = target.absolutePath,
                     sourceMime = probe.mimeType,
                     sourceDurationUs = probe.durationUs
                 )
-                val tracks = if (project.audioTracks.isEmpty()) {
-                    listOf(AudioTrackDocument.named("Audio 1").copy(clips = listOf(clip)))
-                } else {
-                    project.audioTracks.mapIndexed { index, track ->
-                        if (index == 0) track.copy(clips = track.clips + clip) else track
-                    }
-                }
+                val tracks = AudioClipTimeline.placeClip(project.audioTracks, clip)
                 applyProjectChange(project.copy(audioTracks = tracks), "Audio clip added · unsaved")
                 selectedClipId = null
                 selectedAudioClipId = clip.id
@@ -442,16 +534,17 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
-    val audioImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri == null) saveMessage = "Audio import cancelled" else importAudioClip(uri)
-    }
-
-    val validateEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    // Batch 3: the single import entry point. The picker hands over a
+    // document (.ecproj/.ecprojx, an AE interchange file, or a ZIP
+    // bundle); ImportDocumentResolver turns it into canonical JSON.
+    // A null uri means the user dismissed the picker — that, and only
+    // that, is reported as "Project import cancelled".
+    val importProjectLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) saveMessage = "Project import cancelled" else {
             canonicalImportJob?.cancel()
             canonicalImportInProgress = true
             canonicalImportBytes = 0L
-            saveMessage = "Importing canonical project…"
+            saveMessage = "Importing project…"
             canonicalImportJob = exportScope.launch {
                 val importJob = currentCoroutineContext()[Job]
                 try {
@@ -462,9 +555,9 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             ?: uri.lastPathSegment?.substringAfterLast('/') ?: "selected document"
                     }
                     ProjectFileFormats.importError(displayName)?.let(::error)
-                    val rawDocument = withContext(Dispatchers.IO) {
+                    val rawBytes = withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(uri)?.use { input ->
-                            CanonicalProjectDocument.readUtf8(input, onProgress = { bytes ->
+                            CanonicalProjectDocument.readBytes(input, onProgress = { bytes ->
                                 if (importJob?.isActive != true) throw CancellationException("Project import cancelled")
                                 if (bytes - canonicalImportBytes >= 256 * 1024) {
                                     canonicalImportBytes = bytes
@@ -474,7 +567,10 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         } ?: error("Unable to read selected document")
                     }
                     currentCoroutineContext().ensureActive()
-                    val source = withContext(Dispatchers.Default) { CanonicalProjectDocument.toCanonicalJson(rawDocument) }
+                    val resolved = withContext(Dispatchers.Default) {
+                        ImportDocumentResolver.resolve(rawBytes, File(context.filesDir, "ae-imports"))
+                    }
+                    val source = resolved.canonicalJson
                     val native = withContext(Dispatchers.Default) { NativeProjectBridge.inspectEcproj(source) }
                         ?: error("Native .ecproj validation is unavailable on this ABI; file was not imported")
                     val parsedInfo = withContext(Dispatchers.Default) { CanonicalProjectDocument.validateNativeEnvelope(native) }
@@ -501,8 +597,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     canonicalUndoStack = emptyList()
                     canonicalRedoStack = emptyList()
                     refreshReferences()
-                    canonicalImportBytes = rawDocument.toByteArray(Charsets.UTF_8).size.toLong()
-                    saveMessage = "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
+                    canonicalImportBytes = rawBytes.size.toLong()
+                    saveMessage = if (resolved.wasAeInterchange) {
+                        "Imported from After Effects · ${parsedInfo.compositions.size} compositions"
+                    } else {
+                        "Canonical EffectCraft project validated · ${parsedInfo.compositions.size} compositions"
+                    }
                 } catch (cancelled: CancellationException) {
                     saveMessage = "Project import cancelled"
                 } catch (failure: Throwable) {
@@ -674,36 +774,15 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    // Batch 2 (P15): the ONE "Add audio" entry point. The Audio section's
+    // button feeds the unified project.audioTracks model through
+    // importAudioClip, starting the clip at the playhead — the retired
+    // AudioTimeline model and its separate launcher are gone.
     val addAudioClipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) {
             saveMessage = "Audio import cancelled"
         } else {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            val info = audioDecoder.probe(uri.toString())
-            if (info == null || info.durationUs <= 0L) {
-                saveMessage = "Audio file has no audio track"
-            } else {
-                val composition = canonicalProjectInfo?.compositions?.firstOrNull()
-                val startUs = if (composition != null) {
-                    playheadFrame.toLong() * 1_000_000L * composition.frameRateDen.coerceAtLeast(1) /
-                        composition.frameRateNum.coerceAtLeast(1)
-                } else {
-                    playheadFrame.toLong() * 1_000_000L / project.frameRate.coerceAtLeast(1)
-                }
-                val durationUs = if (composition != null) {
-                    val compositionEndUs = composition.durationFrames.toLong() * 1_000_000L *
-                        composition.frameRateDen.coerceAtLeast(1) / composition.frameRateNum.coerceAtLeast(1)
-                    minOf(info.durationUs, (compositionEndUs - startUs).coerceAtLeast(0L))
-                } else {
-                    info.durationUs
-                }
-                if (durationUs <= 0L) {
-                    saveMessage = "Audio clip would start past the end of the composition"
-                } else {
-                    updateAudioTimeline(audioTimeline.addClip(uri.toString(), info.durationUs, startUs, durationUs = durationUs))
-                    saveMessage = "Audio clip added at ${startUs / 1_000} ms"
-                }
-            }
+            importAudioClip(uri, playheadFrame)
         }
     }
 
@@ -776,7 +855,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             hasAudioItems = audio.hasAudioItems,
                             compositionFrameRateNum = composition.frameRateNum,
                             compositionFrameRateDen = composition.frameRateDen,
-                            audioTimeline = audioTimeline,
+                            audioTimeline = AudioTimeline.fromAudioTracks(
+                                project.audioTracks,
+                                composition.frameRateNum,
+                                composition.frameRateDen
+                            ),
                             pcmSource = audioDecoder,
                             audioMix = if (clipsApply) {
                                 // The draft's audio clips describe this
@@ -1028,8 +1111,56 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     LaunchedEffect(project.id) {
         projectKeyframeTracks = runCatching { projectKeyframeStore.load(project.id) }
             .getOrElse { failure -> saveMessage = "Keyframe load failed · ${failure.message ?: "storage error"}"; emptyList() }
-        audioTimeline = runCatching { audioTimelineStore.load(project.id) }
-            .getOrElse { failure -> saveMessage = "Audio timeline load failed · ${failure.message ?: "storage error"}"; AudioTimeline.EMPTY }
+        // One-shot migration (Batch 2, P15): clips added under the retired
+        // AudioTimeline store move into the unified project.audioTracks
+        // model. Only when this project has no audio clips yet, so a
+        // re-run can never duplicate them; the legacy file is cleared
+        // after the attempt either way.
+        runCatching {
+            val legacyRoot = File(context.filesDir, "audio-timelines")
+            val legacy = LegacyAudioTimelineMigration.load(legacyRoot, project.id)
+            if (!legacy.isEmpty && project.audioTracks.isEmpty()) {
+                var tracks = project.audioTracks
+                var migrated = 0
+                var skipped = 0
+                legacy.clips.forEach { legacyClip ->
+                    val converted = runCatching {
+                        val displayName = legacyClip.sourceUri.substringAfterLast('/').ifBlank { "audio" }
+                        val extension = displayName.substringAfterLast('.', "")
+                            .filter { it.isLetterOrDigit() }.take(10).ifBlank { "audio" }
+                        val audioDir = File(context.filesDir, "audio").apply { mkdirs() }
+                        val target = File(audioDir, "${java.util.UUID.randomUUID()}.$extension")
+                        withContext(Dispatchers.IO) {
+                            context.contentResolver.openInputStream(android.net.Uri.parse(legacyClip.sourceUri))?.use { input ->
+                                target.outputStream().use { output -> input.copyTo(output) }
+                            } ?: error("Unable to read the legacy audio source")
+                        }
+                        val probe = withContext(Dispatchers.IO) { AudioDecoder.probe(target) }
+                            ?: error("Legacy audio file has no audio track")
+                        AudioClipTimeline.migratedClip(
+                            legacyClip, project.frameRate, project.durationFrames,
+                            target.absolutePath, probe.mimeType
+                        ) ?: error("Legacy audio clip has no frame inside the composition")
+                    }.getOrNull()
+                    if (converted == null) skipped++ else {
+                        tracks = AudioClipTimeline.placeClip(tracks, converted)
+                        migrated++
+                    }
+                }
+                if (migrated > 0) {
+                    applyProjectChange(
+                        project.copy(audioTracks = tracks),
+                        "Recovered $migrated audio clip(s) from the previous audio store · unsaved" +
+                            if (skipped > 0) " · $skipped could not be recovered" else ""
+                    )
+                } else if (skipped > 0) {
+                    saveMessage = "Previous audio clips could not be recovered · $skipped skipped"
+                }
+            }
+            runCatching { LegacyAudioTimelineMigration.clear(legacyRoot, project.id) }
+        }.onFailure { failure ->
+            saveMessage = "Previous audio clips could not be read · ${failure.message ?: "storage error"}"
+        }
     }
 
     // Autosave journal: every working-project change is journaled off the UI
@@ -1041,8 +1172,14 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // document. The effect keys on every piece of that state because
     // scrubbing the playhead or picking a layer changes no document.
     // A journal failure must never break editing, so it is
-    // swallowed here; the committed draft remains the fallback. Journals for
-    // abandoned projects are pruned so they can never resurrect later.
+    // swallowed here; the committed draft remains the fallback. Nothing
+    // here prunes other projects' journals: a project switch used to
+    // call discardAllExcept, which destroyed the previous draft's
+    // unsaved work on every New (P07). Journals are now discarded
+    // only on an explicit save (saveCurrentProject) or an explicit
+    // Discard in the New dialog. A lingering journal is inert —
+    // recovery reads the newest journal, so an abandoned one can
+    // never resurrect.
     // One writer for one file: the canonical-only writeFull effect from
     // feat/ec-recovery-export is intentionally not kept alongside this one —
     // the session write already carries the canonical stacks, and a second
@@ -1067,7 +1204,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                         canonicalSelectedIds = canonicalSelectedIds
                     )
                 )
-                recoveryJournal.discardAllExcept(project.id)
             }
         }
     }
@@ -1076,6 +1212,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         onDispose {
             renderSessionHolder.session?.close()
             renderSessionHolder.session = null
+            audioPlayer.release()
         }
     }
 
@@ -1147,10 +1284,50 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
         }
     }
 
+    // Batch 2 (P21): Play starts the audible clip under the playhead
+    // from its position; Pause pauses it. The effect keys on isPlaying
+    // only — never on the playhead, or every frame would restart audio.
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) startAudioPreview() else audioPlayer.pause()
+    }
+
+    // An edit that changes the audio tracks while playing restarts the
+    // preview from the (possibly new) clip under the playhead.
+    LaunchedEffect(project.audioTracks) {
+        if (isPlaying) startAudioPreview()
+    }
+
+    // A clip that plays to its end hands over to whatever clip the
+    // playhead has reached by then; silence when there is none.
+    LaunchedEffect(audioClipEndedTick) {
+        if (audioClipEndedTick == 0) return@LaunchedEffect
+        if (isPlaying) startAudioPreview()
+    }
+
     val selectedLayer = project.layers.firstOrNull { it.id == selectedLayerId }
     val selectedOpacityKeyframes = projectKeyframeTracks
         .firstOrNull { it.layerId == selectedLayerId && it.track.property == "opacity" }
         ?.track?.keyframes.orEmpty()
+    // Batch 2 (P05/P21): what audio sits under the playhead, for the
+    // transport row — the live playback state once the P21 player runs,
+    // never a claim the player cannot back.
+    val audioPreviewLabel = when {
+        audioPreviewError != null -> audioPreviewError!!
+        isPlaying -> audibleClipAtPlayhead()?.let { "Playing audio · ${it.sourcePath.substringAfterLast('/')}" }
+            ?: "Playing · no audio at playhead"
+        else -> audibleClipAtPlayhead()?.let { "Audio · ${it.sourcePath.substringAfterLast('/')} · Play to listen" }
+            ?: ""
+    }
+    // Batch 2 (P06): opacity at the playhead for every layer, so the draft
+    // renderer draws keyframed opacity instead of the static layer value.
+    val layerOpacityAtPlayhead = remember(project, projectKeyframeTracks, playheadFrame) {
+        project.layers.associate { layer ->
+            val keyframed = projectKeyframeTracks
+                .firstOrNull { it.layerId == layer.id && it.track.property == "opacity" }
+                ?.let { PropertyTrackEditor.evaluate(it.track, playheadFrame.toDouble()) }
+            layer.id to (keyframed ?: layer.opacity)
+        }
+    }
     val selectedCanonicalTransformComposition = canonicalProjectInfo?.compositions
         ?.firstOrNull { composition -> composition.layers.any { it.id in canonicalSelectedIds } }
     val selectedCanonicalTransformKeyframes = selectedCanonicalTransformComposition?.layers
@@ -1274,6 +1451,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             selectedLayerId = selectedLayerId,
             playheadFrame = playheadFrame,
             selectedOpacityKeyframes = selectedOpacityKeyframes,
+            layerOpacityAtPlayhead = layerOpacityAtPlayhead,
+            audioPreviewLabel = audioPreviewLabel,
             canonicalTransformKeyframes = selectedCanonicalTransformKeyframes,
             canonicalTransformDurationFrames = selectedCanonicalTransformDurationFrames,
             canonicalColorKeys = selectedCanonicalColorKeys,
@@ -1300,6 +1479,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     playheadFrame = previous.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     undoStack = undoStack.dropLast(1)
                     saveMessage = "Undo · unsaved"
+                    hasUnsavedChanges = true
                 }
             },
             onRedo = {
@@ -1314,6 +1494,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     playheadFrame = next.playheadFrame.coerceIn(0, project.durationFrames - 1)
                     redoStack = redoStack.dropLast(1)
                     saveMessage = "Redo · unsaved"
+                    hasUnsavedChanges = true
                 }
             },
             onOpenProject = { projectId ->
@@ -1331,6 +1512,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     undoStack = emptyList()
                     redoStack = emptyList()
                     saveMessage = "Opened locally · ${opened.name}"
+                    hasUnsavedChanges = false
                 }
             },
             onDeleteOfflineAsset = { sha256 ->
@@ -1343,7 +1525,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                     .onFailure { saveMessage = "Media removal failed · ${it.message ?: "storage error"}" }
             },
-            onValidateEcproj = { validateEcprojLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
+            onImportProject = { showImportDialog = true },
             isImportingCanonicalProject = canonicalImportInProgress,
             onCancelCanonicalImport = { canonicalImportJob?.cancel() },
             onExportEcproj = {
@@ -1430,25 +1612,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     }
                 }
             },
-            onSave = {
-                runCatching { projectStore.save(project) }
-                    .onSuccess {
-                        // The edits are committed now, so the journal for this
-                        // project must go: keeping it would resurrect old edits.
-                        runCatching { recoveryJournal.discard(project.id) }
-                        savedProjects = projectStore.listSavedProjects()
-                        saveMessage = "Saved locally · ${project.name}"
-                    }
-                    .onFailure { saveMessage = "Save failed · ${it.message ?: "storage error"}" }
-            },
+            onSave = { saveCurrentProject() },
             onNewProject = {
-                applyProjectChange(ProjectDocument.starter(), "New offline composition")
-                projectKeyframeTracks = emptyList()
-                selectedLayerId = project.layers.firstOrNull()?.id.orEmpty()
-                selectedClipId = null
-                selectedAudioClipId = null
-                playheadFrame = 0
-                isPlaying = false
+                // Never silently destroy work: with unsaved changes the
+                // user picks Save / Discard / Cancel first (P07).
+                if (hasUnsavedChanges) showNewProjectConfirm = true else switchToNewProject()
             },
             onAddLayer = {
                 val layer = LayerDocument.newShape(project.layers.size + 1)
@@ -1538,7 +1706,6 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     selectedClipId = null
                 }
             },
-            onAddAudioTrackClip = { audioImportLauncher.launch(arrayOf("audio/*")) },
             onTrimAudioClip = { newStart, newEnd ->
                 val track = project.audioTracks.firstOrNull { t -> t.clips.any { it.id == selectedAudioClipId } }
                 val clipId = selectedAudioClipId
@@ -1609,7 +1776,18 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     )
                 }
             },
-            onScrub = { playheadFrame = it.coerceIn(0, project.durationFrames - 1) },
+            onScrub = { frame ->
+                val next = frame.coerceIn(0, project.durationFrames - 1)
+                playheadFrame = next
+                // Batch 2 (P21): scrubbing seeks the preview audio. The
+                // clip under the new playhead keeps playing from its new
+                // position; a gap stops audio until the next clip starts.
+                if (isPlaying) {
+                    val clip = audibleClipAtPlayhead(next)
+                    if (clip == null) audioPlayer.stop()
+                    else if (!audioPlayer.seekToFrame(clip, next, project.frameRate)) startAudioPreview()
+                }
+            },
             onAddOpacityKeyframe = {
                 val layer = project.layers.firstOrNull { it.id == selectedLayerId }
                 if (layer == null) saveMessage = "Select a layer before adding a keyframe"
@@ -1650,12 +1828,44 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                 }
             },
             canonicalProject = canonicalProjectInfo,
-            audioTimeline = audioTimeline,
             onAddAudioClip = { addAudioClipLauncher.launch(arrayOf("audio/*")) },
-            onRemoveAudioClip = { id -> updateAudioTimeline(audioTimeline.removeClip(id)) },
-            onAudioVolumeChange = { id, volume -> updateAudioTimeline(audioTimeline.setVolume(id, volume)) },
-            onAudioClipMove = { id, startUs -> updateAudioTimeline(audioTimeline.moveClip(id, startUs)) },
-            onAudioClipTrim = { id, sourceStartUs, durationUs -> updateAudioTimeline(audioTimeline.trimClip(id, sourceStartUs, durationUs)) },
+            onRemoveAudioClip = { id -> removeAudioClip(id) },
+            onAudioVolumeChange = { id, volume ->
+                val track = audioTrackForClip(id)
+                if (track == null) {
+                    saveMessage = "Select an audio clip before changing volume"
+                } else {
+                    applyAudioClipEdit(
+                        AudioClipTimeline.setGain(track.clips, id, volume.toFloat()),
+                        track.id,
+                        "Audio volume set · unsaved"
+                    )
+                }
+            },
+            onAudioClipMove = { id, newStartFrame ->
+                val track = audioTrackForClip(id)
+                if (track == null) {
+                    saveMessage = "Select an audio clip before moving it"
+                } else {
+                    applyAudioClipEdit(
+                        AudioClipTimeline.moveAudioClip(track.clips, id, newStartFrame, project.durationFrames),
+                        track.id,
+                        "Audio clip moved · unsaved"
+                    )
+                }
+            },
+            onAudioClipTrim = { id, newStartFrame, newEndFrame ->
+                val track = audioTrackForClip(id)
+                if (track == null) {
+                    saveMessage = "Select an audio clip before trimming it"
+                } else {
+                    applyAudioClipEdit(
+                        AudioClipTimeline.trimAudioClip(track.clips, id, newStartFrame, newEndFrame, project.durationFrames),
+                        track.id,
+                        "Audio clip trimmed · unsaved"
+                    )
+                }
+            },
             canEditCanonicalProject = NativeProjectBridge.isAvailable(),
             onRenameCanonicalLayer = { compositionId, layerId, name ->
                 val source = importedEcproj
@@ -2367,5 +2577,55 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             },
             isVerifyingOfflineAssets = mediaVerificationInProgress
         )
+
+        // P07: starting a new composition with unsaved changes asks
+        // first. Save commits the old draft and then switches; Discard
+        // is the user's explicit choice to drop it (the only path that
+        // discards the old journal on New); Cancel keeps editing.
+        if (showNewProjectConfirm) {
+            AlertDialog(
+                onDismissRequest = { showNewProjectConfirm = false },
+                title = { Text("Start a new composition?") },
+                text = { Text("The current composition has unsaved changes. Save them before starting over, or discard them.") },
+                confirmButton = {
+                    Row {
+                        TextButton(onClick = {
+                            showNewProjectConfirm = false
+                            runCatching { recoveryJournal.discard(project.id) }
+                            switchToNewProject()
+                        }, modifier = Modifier.height(48.dp)) { Text("Discard", color = Color(0xFFFF858D)) }
+                        TextButton(onClick = {
+                            showNewProjectConfirm = false
+                            if (saveCurrentProject()) switchToNewProject()
+                        }, modifier = Modifier.height(48.dp)) { Text("Save") }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNewProjectConfirm = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Batch 3: import is a labelled dialog, not a hidden icon.
+        // Each option launches the same picker with the mime types
+        // that option accepts; the resolver sniffs the content, so
+        // a mislabelled file still takes the right path.
+        if (showImportDialog) {
+            ImportProjectDialog(
+                onDismiss = { showImportDialog = false },
+                onPickEcproj = {
+                    showImportDialog = false
+                    importProjectLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
+                },
+                onPickZipBundle = {
+                    showImportDialog = false
+                    importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
+                },
+                onPickAeExport = {
+                    showImportDialog = false
+                    importProjectLauncher.launch(arrayOf("application/zip", "*/*"))
+                }
+            )
+        }
     }
 }

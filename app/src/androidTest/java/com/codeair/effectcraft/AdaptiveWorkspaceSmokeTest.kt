@@ -74,7 +74,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onSave = {},
                     onOpenProject = {},
                     onDeleteOfflineAsset = {},
-                    onValidateEcproj = {},
+                    onImportProject = {},
                     onExportEcproj = {},
                     onExportEcprojx = {},
                     isExportingFrame = false,
@@ -175,7 +175,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onSave = {},
                     onOpenProject = {},
                     onDeleteOfflineAsset = {},
-                    onValidateEcproj = {},
+                    onImportProject = {},
                     onExportEcproj = {},
                     onExportEcprojx = {},
                     isExportingFrame = false,
@@ -234,11 +234,15 @@ class AdaptiveWorkspaceSmokeTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("Export PNG sequence ZIP").assertIsDisplayed().performClick()
+        // The four exports now live in the overflow menu (Batch 2
+        // export fix): open it first, then tap the labelled entry.
+        compose.onNodeWithContentDescription("More export options").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Export PNG sequence ZIP").assertIsDisplayed().performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         compose.onNodeWithText("Render ZIP").performClick()
         assertEquals(listOf(640, 360, 30, 0, 89), added)
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithText("Opacity keys · 1", substring = true).performScrollTo().assertIsDisplayed()
         // The Add/Remove buttons now sit in a plain full-width Row (the
         // horizontal scroller was removed by the responsive rework), so
@@ -319,7 +323,7 @@ class AdaptiveWorkspaceSmokeTest {
                     onSave = {},
                     onOpenProject = {},
                     onDeleteOfflineAsset = {},
-                    onValidateEcproj = {},
+                    onImportProject = {},
                     onExportEcproj = {},
                     onExportEcprojx = {},
                     isExportingFrame = false,
@@ -491,7 +495,8 @@ class AdaptiveWorkspaceSmokeTest {
                 captures.curveKey = listOf(c, l, selector, frame, x, y, z)
             }
         )
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         // Curve selector chips now wrap in the inspector instead of
         // clipping behind a horizontal scroller. Scroll the inspector to
         // the selector and activate the actual visible Anchor X chip.
@@ -541,7 +546,8 @@ class AdaptiveWorkspaceSmokeTest {
             compositions = listOf(composition.copy(layers = listOf(headline, composition.layers[1])))
         )
         setCanonicalEditorContent(canonical, captures)
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         // Checkbox toggle with no keys edits the static value.
         compose.onNodeWithContentDescription("Canonical shape bool parameter Rectangle Path 1 Per-Corner Roundness")
             .performScrollTo().performClick()
@@ -590,7 +596,8 @@ class AdaptiveWorkspaceSmokeTest {
         setCanonicalEditorContent(canonical, CanonicalCaptures(), onMoveCurveKey = { c, l, selector, from, to ->
             moved = listOf(c, l, selector, from, to)
         })
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         // The official test API for this is performCustomAccessibilityActionWithLabel
         // (finds the node's custom action by label and invokes it); the earlier
         // performCustomAction name does not exist, and the CustomActions
@@ -622,7 +629,8 @@ class AdaptiveWorkspaceSmokeTest {
         setCanonicalEditorContent(canonical, CanonicalCaptures(), onRemoveCurveKey = { c, l, selector, frame ->
             removed = listOf(c, l, selector, frame)
         })
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         val graph = compose.onNodeWithContentDescription(
             "Curve graph for Position X with keys 0: 100.0, 15: 320.0, 30: 500.0"
         ).performScrollTo()
@@ -658,7 +666,8 @@ class AdaptiveWorkspaceSmokeTest {
             compositions = listOf(composition.copy(layers = listOf(headline, composition.layers[1])))
         )
         setCanonicalEditorContent(canonical, CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         val graph = compose.onNodeWithContentDescription(
             "Curve graph for Position X with keys 0: 100.0, 30: 320.0"
         ).performScrollTo()
@@ -677,7 +686,8 @@ class AdaptiveWorkspaceSmokeTest {
     fun canonicalAnchor3dRotationTextShapeEffectAndLockControlsTargetSelectedLayer() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalM4Layer(locked = false), captures)
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithText("● Headline", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Anchor Point · X / Y").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("3D Rotation · Orientation X / Y / Z (°)").performScrollTo().assertIsDisplayed()
@@ -716,7 +726,8 @@ class AdaptiveWorkspaceSmokeTest {
         // whole layer.
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalM4Layer(locked = false), captures)
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Toggle Source Text keyframes").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Keyframes off · edits change the whole layer everywhere.", substring = true)
             .performScrollTo().assertIsDisplayed()
@@ -742,7 +753,8 @@ class AdaptiveWorkspaceSmokeTest {
         )
         val keyedCaptures = CanonicalCaptures()
         setCanonicalEditorContent(keyedCanonical, keyedCaptures, playheadFrame = 15)
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithText("Keyframes on · edits change only the hold key at the playhead.", substring = true)
             .performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().performClick()
@@ -758,7 +770,8 @@ class AdaptiveWorkspaceSmokeTest {
     fun lockedCanonicalLayerDisablesItsEditControls() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalM4Layer(locked = true), captures)
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Canonical layer locked").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Apply canonical anchor").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithContentDescription("Apply canonical text").performScrollTo().assertIsNotEnabled()
@@ -790,7 +803,8 @@ class AdaptiveWorkspaceSmokeTest {
         ))
         val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
         setCanonicalEditorContent(canonical, CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         val toggle = compose.onNodeWithContentDescription("Toggle canonical shape path closed Custom Shape Mask Path")
         toggle.performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Open path").performScrollTo().assertIsDisplayed()
@@ -816,7 +830,8 @@ class AdaptiveWorkspaceSmokeTest {
         ))
         val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
         setCanonicalEditorContent(canonical, CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Select canonical shape path segment start P1 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Insert canonical shape path vertex after selected point Custom Shape Mask Path")
@@ -844,7 +859,8 @@ class AdaptiveWorkspaceSmokeTest {
         ))
         val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
         setCanonicalEditorContent(canonical, CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Select canonical shape path segment start P1 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Canonical shape path insertion t Custom Shape Mask Path")
@@ -877,7 +893,8 @@ class AdaptiveWorkspaceSmokeTest {
             ))
         ))
         setCanonicalEditorContent(CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer)))), CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Select canonical shape path segment start P2 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Align canonical shape path handles at vertex 2 Custom Shape Mask Path")
@@ -903,7 +920,8 @@ class AdaptiveWorkspaceSmokeTest {
             ))
         ))
         setCanonicalEditorContent(CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer)))), CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Select canonical shape path segment start P2 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Smooth canonical shape path handles at vertex 2 Custom Shape Mask Path")
@@ -929,7 +947,8 @@ class AdaptiveWorkspaceSmokeTest {
             ))
         ))
         setCanonicalEditorContent(CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer)))), CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Select canonical shape path segment start P2 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Make canonical shape path vertex 2 a corner Custom Shape Mask Path")
@@ -959,7 +978,8 @@ class AdaptiveWorkspaceSmokeTest {
         ))
         val canonical = CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer))))
         setCanonicalEditorContent(canonical, CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Select canonical shape path segment start P2 Custom Shape Mask Path")
             .performScrollTo().performClick()
         compose.onNodeWithContentDescription("Remove selected canonical shape path vertex Custom Shape Mask Path")
@@ -1024,7 +1044,8 @@ class AdaptiveWorkspaceSmokeTest {
         // it must share the image's exact bounds, not the sheet width. The
         // inspector is a sheet, so open it first; the overlay size follows
         // the image measurement, so poll until the bounds converge.
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.waitUntil(timeoutMillis = 10_000) {
             runCatching {
                 val imageBounds = compose.onNodeWithContentDescription("EffectCraft rendered composition frame")
@@ -1064,7 +1085,8 @@ class AdaptiveWorkspaceSmokeTest {
     fun rovingToggleTargetsSelectedLayerAndCurrentFrame() {
         val captures = CanonicalCaptures()
         setCanonicalEditorContent(canonicalRovingLayer(), captures, playheadFrame = 15)
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         // The inspector opens on the position property at the playhead (frame
         // 15), where the middle key sits: the roving switch, the auto-path
         // switch and the straight-path button are all present and operable
@@ -1105,7 +1127,8 @@ class AdaptiveWorkspaceSmokeTest {
             ))
         ))
         setCanonicalEditorContent(CanonicalProjectInfo(compositions = listOf(base.copy(layers = listOf(layer)))), CanonicalCaptures())
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithContentDescription("Reverse canonical shape path direction Custom Shape Mask Path")
             .performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("VERTICES · 3").performScrollTo().assertIsDisplayed()

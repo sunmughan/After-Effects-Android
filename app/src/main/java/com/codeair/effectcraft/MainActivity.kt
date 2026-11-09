@@ -2,12 +2,13 @@ package com.codeair.effectcraft
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Color as AndroidColor
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.push.FirebaseInit
 import com.codeair.effectcraft.ui.EffectCraftApp
@@ -28,9 +29,12 @@ class MainActivity : ComponentActivity() {
         FirebaseInit.ensureInitialized(applicationContext)
         requestNotificationPermissionIfNeeded()
 
-        window.statusBarColor = AndroidColor.rgb(10, 12, 17)
-        window.navigationBarColor = AndroidColor.rgb(10, 12, 17)
-        window.decorView.systemUiVisibility = 0
+        // Android 15+ enforces edge-to-edge: the old window colour calls
+        // were ignored and the app drew under the status bar. The editor
+        // reserves the system bars with WindowInsets padding instead, and
+        // the dark theme keeps light status-bar icons.
+        enableEdgeToEdge()
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
 
         val projectStore = DraftProjectStore(applicationContext)
         setContent {

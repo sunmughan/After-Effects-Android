@@ -3,8 +3,10 @@ package com.codeair.effectcraft
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.platform.app.InstrumentationRegistry
 import com.codeair.effectcraft.data.DraftProjectStore
 import org.junit.Assert.assertEquals
@@ -39,10 +41,22 @@ class EditorLifecycleInstrumentedTest {
         compose.onNodeWithContentDescription("Editor status: $message").assertExists()
     }
 
+    /**
+     * Batch 2 (P11): the track list is a LazyColumn, so a row below the
+     * fold is not composed until it is scrolled into view — exactly as a
+     * user must scroll to see it. Scroll before asserting an off-screen
+     * layer, and assert the visible rows first: scrolling away uncomposes
+     * them.
+     */
+    private fun scrollTimelineToLayer(index: Int) {
+        compose.onNodeWithTag("timeline-track-list").performScrollToIndex(index)
+        compose.waitForIdle()
+    }
+
     @Test
     fun unsavedEditSurvivesActivityRecreationWithCanonicalDataIntact() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         assertEditorStatus("Unsaved changes")
         waitForJournalFile()
 
@@ -51,8 +65,9 @@ class EditorLifecycleInstrumentedTest {
         compose.waitForIdle()
 
         assertEditorStatus("Recovered unsaved changes")
-        compose.onNodeWithText("Shape 4").assertExists()
         compose.onNodeWithText("Background").assertExists()
+        scrollTimelineToLayer(3)
+        compose.onNodeWithText("Shape 4").assertExists()
 
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
@@ -67,7 +82,7 @@ class EditorLifecycleInstrumentedTest {
     @Test
     fun savedEditDoesNotReportRecoveryAfterRecreation() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 
@@ -76,6 +91,7 @@ class EditorLifecycleInstrumentedTest {
 
         // The explicit save discarded the journal, so recreation must load
         // the committed draft normally, not as a recovery.
+        scrollTimelineToLayer(3)
         compose.onNodeWithText("Shape 4").assertExists()
         compose.onNodeWithText("Recovered unsaved changes").assertDoesNotExist()
     }

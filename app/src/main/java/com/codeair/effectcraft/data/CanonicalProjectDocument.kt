@@ -29,6 +29,28 @@ object CanonicalProjectDocument {
     private const val XML_ROOT = "EffectCraftProject"
 
     fun readUtf8(input: InputStream, maxBytes: Int = MAX_IMPORT_BYTES, onProgress: (Long) -> Unit = {}): String {
+        val bytes = readBytes(input, maxBytes, onProgress)
+        // Charset's convenience conversion silently replaces malformed byte
+        // sequences with U+FFFD. That changes project keys/paths before schema
+        // validation and can make a corrupt import appear valid. Decode strictly
+        // so the caller can reject the original bytes and avoid caching them.
+        return try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes))
+                .toString()
+        } catch (failure: CharacterCodingException) {
+            throw IllegalArgumentException("Project document is not valid UTF-8", failure)
+        }
+    }
+
+    /**
+     * Reads a picked document as raw bytes (ZIP bundles are binary;
+     * decoding them as UTF-8 first would corrupt them). Same limits
+     * and progress contract as [readUtf8].
+     */
+    fun readBytes(input: InputStream, maxBytes: Int = MAX_IMPORT_BYTES, onProgress: (Long) -> Unit = {}): ByteArray {
         require(maxBytes > 0) { "Import byte limit must be positive" }
         val output = ByteArrayOutputStream(minOf(maxBytes, 8192))
         val buffer = ByteArray(8192)
@@ -41,19 +63,7 @@ object CanonicalProjectDocument {
             output.write(buffer, 0, count)
             onProgress(output.size().toLong())
         }
-        // Charset's convenience conversion silently replaces malformed byte
-        // sequences with U+FFFD. That changes project keys/paths before schema
-        // validation and can make a corrupt import appear valid. Decode strictly
-        // so the caller can reject the original bytes and avoid caching them.
-        return try {
-            Charsets.UTF_8.newDecoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .decode(ByteBuffer.wrap(output.toByteArray()))
-                .toString()
-        } catch (failure: CharacterCodingException) {
-            throw IllegalArgumentException("Project document is not valid UTF-8", failure)
-        }
+        return output.toByteArray()
     }
 
     /** Normalizes a supported .ecproj JSON or .ecprojx XML document to canonical JSON. */

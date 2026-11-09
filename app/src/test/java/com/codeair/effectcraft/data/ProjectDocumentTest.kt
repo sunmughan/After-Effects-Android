@@ -1,6 +1,7 @@
 package com.codeair.effectcraft.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,6 +26,32 @@ class ProjectDocumentTest {
         assertEquals(30, project.frameRate)
         assertEquals(150, project.durationFrames)
         assertTrue(project.layers.isNotEmpty())
+    }
+
+    @Test
+    fun isUneditedStarterAcceptsFreshStarterDespiteRandomIds() {
+        // Two starters never share ids or timestamps, yet both are unedited.
+        assertTrue(ProjectDocument.isUneditedStarter(ProjectDocument.starter()))
+        assertTrue(ProjectDocument.isUneditedStarter(ProjectDocument.starter()))
+    }
+
+    @Test
+    fun isUneditedStarterRejectsAnyEdit() {
+        val starter = ProjectDocument.starter()
+        assertFalse(
+            ProjectDocument.isUneditedStarter(
+                starter.copy(layers = starter.layers + LayerDocument.newShape(starter.layers.size + 1))
+            )
+        )
+        assertFalse(
+            ProjectDocument.isUneditedStarter(
+                starter.copy(layers = starter.layers.mapIndexed { index, layer ->
+                    if (index == 0) layer.copy(opacity = 0.5f) else layer
+                })
+            )
+        )
+        assertFalse(ProjectDocument.isUneditedStarter(starter.copy(name = "Renamed")))
+        assertFalse(ProjectDocument.isUneditedStarter(starter.copy(width = 1920)))
     }
 
     @Test

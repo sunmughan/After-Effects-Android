@@ -4,8 +4,10 @@ import android.content.pm.ActivityInfo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import org.junit.Rule
 import org.junit.Test
 
@@ -22,10 +24,19 @@ class EditorRotationLifecycleTest {
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
 
+    /**
+     * Batch 2 (P11): the track list is a LazyColumn, so the selected
+     * fourth row is not composed until it is scrolled into view.
+     */
+    private fun scrollTimelineToLayer(index: Int) {
+        compose.onNodeWithTag("timeline-track-list").performScrollToIndex(index)
+        compose.waitForIdle()
+    }
+
     @Test
     fun rotationKeepsSavedEditorStateWithoutDataLoss() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
 
@@ -39,11 +50,13 @@ class EditorRotationLifecycleTest {
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         compose.waitForIdle()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
+        scrollTimelineToLayer(3)
         compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
 
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         compose.waitForIdle()
         compose.onNodeWithText("Saved locally · Untitled Composition").assertIsDisplayed()
+        scrollTimelineToLayer(3)
         compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
     }
 }

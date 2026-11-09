@@ -108,7 +108,7 @@ class CanonicalSelectionEditorTest {
                     onSave = {},
                     onOpenProject = {},
                     onDeleteOfflineAsset = {},
-                    onValidateEcproj = {},
+                    onImportProject = {},
                     onExportEcproj = {},
                     onExportEcprojx = {},
                     isExportingFrame = false,
@@ -210,7 +210,8 @@ class CanonicalSelectionEditorTest {
         }
         assertEquals(15, workspaceFrame.intValue)
 
-        compose.onNodeWithContentDescription("Edit imported .ecproj").performClick()
+        compose.onNodeWithContentDescription("Composition menu").performClick()
+        compose.onNodeWithText("Edit imported .ecproj").performClick()
         compose.onNodeWithText("CANONICAL .ECPROJ").assertIsDisplayed()
         compose.onNodeWithText("● Background", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Add Ellipse").performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()

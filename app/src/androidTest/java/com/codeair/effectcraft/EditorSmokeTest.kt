@@ -1,6 +1,7 @@
 package com.codeair.effectcraft
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -19,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import com.codeair.effectcraft.ui.EditorScreen
 import com.codeair.effectcraft.data.DraftProjectStore
 import com.codeair.effectcraft.data.CanonicalProjectDocument
@@ -43,10 +45,33 @@ class EditorSmokeTest {
         compose.onNodeWithContentDescription("Editor status: $message").assertExists()
     }
 
+    /**
+     * Starts a fresh composition. A previous case in this run may have
+     * left unsaved changes behind, in which case New asks first (P07);
+     * discard them to start fresh, exactly as a user starting over would.
+     */
+    private fun startFreshComposition() {
+        compose.onNodeWithText("New").performClick()
+        if (compose.onAllNodesWithText("Discard").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Discard").performClick()
+        }
+    }
+
+    /**
+     * Batch 2 (P11): the track list is a LazyColumn, so a row below the
+     * fold is not composed until it is scrolled into view — exactly as a
+     * user must scroll to see it.
+     */
+    private fun scrollTimelineToLayer(index: Int) {
+        compose.onNodeWithTag("timeline-track-list").performScrollToIndex(index)
+        compose.waitForIdle()
+    }
+
 
     @Test
     fun offlineMediaLibraryOpensAndExplainsEmptyState() {
-        compose.onNodeWithContentDescription("Offline media library").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Offline media library").performClick()
         compose.onNodeWithText("Offline media library").assertIsDisplayed()
         compose.onNodeWithText(
             "No media imported yet. Relink footage from a canonical project to copy it here for offline use."
@@ -60,13 +85,13 @@ class EditorSmokeTest {
         InstrumentationRegistry.getInstrumentation().targetContext.filesDir
             .resolve("projects").listFiles()?.forEach { it.delete() }
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 
         // Saving the same project ID again must update its catalog entry, not
         // leave an older 4-layer snapshot beside the newer 5-layer revision.
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 
@@ -77,7 +102,8 @@ class EditorSmokeTest {
 
         val firstProjectId = DraftProjectStore(appContext).listSavedProjects()
             .first { it.layers.size == 5 }.id
-        compose.onNodeWithContentDescription("Open offline project").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Open offline project").performClick()
         compose.onNodeWithText("1080×1920 · 30 FPS · 5 layers").performClick()
 
         assertEditorStatus("Opened locally · Untitled Composition")
@@ -117,7 +143,26 @@ class EditorSmokeTest {
         compose.onNodeWithText("EFFECTCRAFT").assertIsDisplayed()
         compose.onNodeWithText("OFFLINE").assertIsDisplayed()
         compose.onNodeWithText("COMPOSITION VIEWER", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Draft preview not rendered").assertIsDisplayed()
+        // Batch 2 (P06): a fresh draft renders its own layers now — the
+        // dead "Draft preview not rendered" placeholder is gone.
+        // Run 42444179683: the draft render lands on
+        // Dispatchers.Default, outside Compose idle tracking, so on a
+        // loaded emulator the frame had not landed when this asserted
+        // right after launch. Wait for it (same fix as the
+        // DraftPreview test in run 42441138764). Run 42445908283:
+        // 10 s was still too short on a cold emulator — the budget
+        // is 30 s, matching AdaptiveWorkspaceSmokeTest's wait for
+        // this same frame node. Run 42476880237: 30 s was too short
+        // on loaded runners — this test failed the wait while the
+        // same frame passed here in the run's second attempt, so
+        // the render lands late rather than never. Budget is 60 s.
+        // The assertions below are unchanged and still fail if the
+        // frame never renders.
+        compose.waitUntil(timeoutMillis = 60_000) {
+            compose.onNodeWithContentDescription("Rendered composition frame").isDisplayed()
+        }
+        compose.onNodeWithContentDescription("Rendered composition frame").assertIsDisplayed()
+        compose.onNodeWithText("Draft preview not rendered").assertDoesNotExist()
         compose.onNodeWithText("TIMELINE").assertIsDisplayed()
     }
 
@@ -130,14 +175,14 @@ class EditorSmokeTest {
     @Test
     fun addLayerActionAddsTrackToTimeline() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         assertEditorStatus("Unsaved changes")
     }
 
     @Test
     fun layerMutationCanBeUndoneAndRedone() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Undo").performClick()
         assertEditorStatus("Undo · unsaved")
         compose.onNodeWithText("Redo").performClick()
@@ -187,7 +232,7 @@ class EditorSmokeTest {
 
     @Test
     fun opacityKeyframesCanBeAuthoredAtPlayheadAndPersistPerProject() {
-        compose.onNodeWithText("New").performClick()
+        startFreshComposition()
         compose.onNodeWithContentDescription("Add opacity keyframe").performClick()
         assertEditorStatus("Opacity keyframe added · frame 0")
         compose.onNodeWithContentDescription("Timeline playhead")
@@ -219,7 +264,12 @@ class EditorSmokeTest {
         val playhead = compose.onNodeWithContentDescription("Timeline playhead")
         compose.onNodeWithContentDescription("Play timeline").performClick()
         compose.onNodeWithContentDescription("Pause timeline").assertIsDisplayed()
-        compose.waitUntil(timeoutMillis = 3_000) {
+        // Run 42444179683: the playhead advances one frame per 33 ms,
+        // but on a loaded emulator even one frame had not landed
+        // inside the old 3 s budget, so the condition timed out. The
+        // condition is unchanged — only the wait budget grows, to the
+        // 10 s used elsewhere for async content.
+        compose.waitUntil(timeoutMillis = 10_000) {
             playhead.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current > 60f
         }
         compose.onNodeWithContentDescription("Pause timeline").performClick()
@@ -229,7 +279,7 @@ class EditorSmokeTest {
     @Test
     fun inspectorCanReorderAndDeleteAddedLayer() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Delete selected layer").performScrollTo().assertIsDisplayed().performClick()
@@ -247,7 +297,7 @@ class EditorSmokeTest {
     @Test
     fun deletingLayerUndoAndRedoRestoreTheExpectedTimelineSelection() {
         compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithText("Props").performClick()
         compose.onNodeWithContentDescription("Move selected layer up").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Delete selected layer").performScrollTo().assertIsDisplayed().performClick()
@@ -257,11 +307,14 @@ class EditorSmokeTest {
 
         // Shape 4 was moved into slot 3. Deletion selects the surviving layer
         // now occupying that slot (Accent Shapes), not a stale deleted ID.
+        scrollTimelineToLayer(2)
         compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
 
         compose.onNodeWithText("Undo").performClick()
+        scrollTimelineToLayer(3)
         compose.onNodeWithContentDescription("Selected timeline layer: Shape 4").assertExists()
         compose.onNodeWithText("Redo").performClick()
+        scrollTimelineToLayer(2)
         compose.onNodeWithContentDescription("Selected timeline layer: Accent Shapes").assertExists()
     }
 
@@ -291,10 +344,11 @@ class EditorSmokeTest {
     @Test
     fun timelineSelectionUpdatesInspectorProperties() {
         compose.onNodeWithText("New").performClick()
-        // The timeline panel scrolls: with 48dp tracks the third layer
-        // sits below the visible fold, so scroll it into view before
-        // tapping it, exactly as a user would.
-        compose.onNodeWithText("Accent Shapes").performScrollTo().performClick()
+        // The timeline is a LazyColumn: the third layer is not composed
+        // until it is scrolled into view, so scroll the list first and
+        // then tap the row, exactly as a user would.
+        scrollTimelineToLayer(2)
+        compose.onNodeWithText("Accent Shapes").performClick()
         compose.onNodeWithText("Props").performClick()
         // The inspector scrolls; the opacity row may sit below the fold.
         compose.onNodeWithTag("layer-opacity-value")
@@ -303,8 +357,8 @@ class EditorSmokeTest {
 
     @Test
     fun editorSaveButtonPersistsTheCurrentOfflineLayerStack() {
-        compose.onNodeWithText("New").performClick()
-        compose.onNodeWithText("Layer").performClick()
+        startFreshComposition()
+        compose.onNodeWithText("Add layer").performClick()
         compose.onNodeWithContentDescription("Save draft").performClick()
         assertEditorStatus("Saved locally · Untitled Composition")
 

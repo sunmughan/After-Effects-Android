@@ -1,7 +1,5 @@
 package com.codeair.effectcraft.ui
 
-import com.codeair.effectcraft.data.AudioClip
-import com.codeair.effectcraft.data.AudioTimeline
 import com.codeair.effectcraft.data.BezierCurveEditor
 import com.codeair.effectcraft.data.CanonicalCompositionInfo
 import com.codeair.effectcraft.data.CanonicalCurveKey
@@ -35,11 +33,15 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -48,8 +50,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -58,13 +62,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Tune
@@ -77,9 +77,12 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -105,6 +108,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -193,6 +197,10 @@ fun EditorScreen(
     selectedLayerId: String,
     playheadFrame: Int,
     selectedOpacityKeyframes: List<PropertyKeyframe>,
+    /** Opacity per layer at the playhead (keyframe-evaluated where keyed). */
+    layerOpacityAtPlayhead: Map<String, Float> = emptyMap(),
+    /** Audio under the playhead, for the transport row ("" when none). */
+    audioPreviewLabel: String = "",
     canonicalTransformKeyframes: List<Int> = emptyList(),
     canonicalTransformDurationFrames: Int = project.durationFrames,
     canonicalColorKeys: List<CanonicalCurveKey> = emptyList(),
@@ -212,7 +220,7 @@ fun EditorScreen(
     onSave: () -> Unit,
     onOpenProject: (String) -> Unit,
     onDeleteOfflineAsset: (String) -> Unit,
-    onValidateEcproj: () -> Unit,
+    onImportProject: () -> Unit,
     isImportingCanonicalProject: Boolean = false,
     onCancelCanonicalImport: () -> Unit = {},
     onExportEcproj: () -> Unit,
@@ -230,12 +238,11 @@ fun EditorScreen(
     onOpenMp4Settings: () -> Unit = {},
     onCancelMp4Sequence: () -> Unit = {},
     mp4ExportProgress: Int = 0,
-    audioTimeline: AudioTimeline = AudioTimeline.EMPTY,
     onAddAudioClip: () -> Unit = {},
     onRemoveAudioClip: (String) -> Unit = {},
     onAudioVolumeChange: (String, Double) -> Unit = { _, _ -> },
-    onAudioClipMove: (String, Long) -> Unit = { _, _ -> },
-    onAudioClipTrim: (String, Long, Long) -> Unit = { _, _, _ -> },
+    onAudioClipMove: (String, Int) -> Unit = { _, _ -> },
+    onAudioClipTrim: (String, Int, Int) -> Unit = { _, _, _ -> },
     onExportMp4Sequence: (width: Int, height: Int, fps: Int, startFrame: Int, endFrame: Int, bitrate: Int, outputFormat: RenderOutputFormat) -> Unit = { _, _, _, _, _, _, _ -> },
     onNewProject: () -> Unit,
     onAddLayer: () -> Unit,
@@ -254,7 +261,6 @@ fun EditorScreen(
     audioTracks: List<AudioTrackDocument> = emptyList(),
     selectedAudioClipId: String? = null,
     onSelectAudioClip: (String) -> Unit = {},
-    onAddAudioTrackClip: () -> Unit = {},
     onTrimAudioClip: (Int, Int) -> Unit = { _, _ -> },
     onSplitAudioClipAtPlayhead: () -> Unit = {},
     onSetAudioGain: (Float) -> Unit = {},
@@ -340,7 +346,6 @@ fun EditorScreen(
     onVerifyOfflineAssets: () -> Unit = {},
     isVerifyingOfflineAssets: Boolean = false
 ) {
-    val selectedTool = remember { mutableStateOf("Select") }
     var interpolationProperty by remember { mutableStateOf("position") }
     var interpolationSide by remember { mutableStateOf("both") }
     var showPhoneInspector by remember { mutableStateOf(false) }
@@ -370,12 +375,13 @@ fun EditorScreen(
     // only when a hardware HEVC encoder exists. Probed once, when the
     // export settings dialog first opens.
     var hevcAvailable by remember { mutableStateOf<Boolean?>(null) }
-    val openSequenceSettings: (RenderOutputFormat) -> Unit = { format ->
+    val openSequenceSettings: (RenderOutputFormat) -> Boolean = { format ->
         sequenceOutputFormat = format
         sequenceBitrateText = "8000000"
         val composition = canonicalProject?.compositions?.firstOrNull()
         if (composition == null) {
             sequenceSettingsError = "Import a canonical composition first"
+            false
         } else {
             sequenceWidthText = composition.width.toString()
             sequenceHeightText = composition.height.toString()
@@ -384,6 +390,7 @@ fun EditorScreen(
             sequenceEndText = (composition.durationFrames - 1).toString()
             sequenceSettingsError = null
             showSequenceSettings = true
+            true
         }
     }
 
@@ -416,21 +423,44 @@ fun EditorScreen(
         } else null
     }
 
+    // Batch 2 (P06): the draft preview. With no imported canonical
+    // project the draft renders itself — the real renderer draws the
+    // draft layers to a bitmap on every project/playhead change, so the
+    // preview follows edits and playback. With a canonical project the
+    // native frame wins and no draft bitmap is produced.
+    var draftFrame by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(project, playheadFrame, layerOpacityAtPlayhead) {
+        draftFrame = if (previewComposition == null) {
+            withContext(Dispatchers.Default) {
+                DraftFrameRenderer.render(project, playheadFrame, layerOpacityAtPlayhead)
+            }
+        } else null
+    }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(EditorPalette.background)
     ) {
         val isTabletLayout = maxWidth >= 760.dp
+        // Adaptive timeline height (P11), captured here: BoxWithConstraints
+        // scope values are not reachable with an implicit receiver from
+        // inside the nested Column below.
+        val timelineCardHeight = (maxHeight * 0.42f).coerceIn(260.dp, 340.dp)
 
-        Column(Modifier.fillMaxSize()) {
+        // Edge-to-edge: the header starts below the status bar and the
+        // audio section clears the navigation bar / gesture area.
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            // Dim scrim behind the header (not a solid bar): content
+            // beneath stays dimmed while the status icons stay crisp.
+            // A true RenderEffect blur is Batch 3 work.
+            Surface(color = EditorPalette.background.copy(alpha = 0.85f), modifier = Modifier.fillMaxWidth()) {
             HeaderBar(
-                projectName = project.name,
                 saveMessage = saveMessage,
                 onSave = onSave,
                 onOpenProject = { showProjectPicker = true },
                 onOpenMediaLibrary = { showMediaLibrary = true },
-                onValidateEcproj = onValidateEcproj,
+                onImportProject = onImportProject,
                 isImportingCanonicalProject = isImportingCanonicalProject,
                 onCancelCanonicalImport = onCancelCanonicalImport,
                 onExportEcproj = onExportEcproj,
@@ -446,16 +476,23 @@ fun EditorScreen(
                 isExportingMp4 = isExportingMp4,
                 isMp4ExportWritingOutput = isMp4ExportWritingOutput,
                 onExportMp4Sequence = {
-                    openSequenceSettings(RenderOutputFormat.MP4_H264)
-                    onOpenMp4Settings()
+                    if (openSequenceSettings(RenderOutputFormat.MP4_H264)) onOpenMp4Settings()
                 },
                 onCancelMp4Sequence = onCancelMp4Sequence,
                 mp4ExportProgress = mp4ExportProgress,
                 onNewProject = onNewProject,
                 hasCanonicalProject = canonicalProject != null,
                 onOpenCanonicalEditor = { showCanonicalEditor = true },
-                onOpenRepositoryPicker = { showRepositoryPicker = true }
+                onOpenRepositoryPicker = { showRepositoryPicker = true },
+                canUndo = canUndo,
+                canRedo = canRedo,
+                onUndo = onUndo,
+                onRedo = onRedo,
+                onOpenInspector = { showPhoneInspector = true },
+                onOpenCompositionSettings = { showCompositionSettings = true },
+                onAddLayer = onAddLayer
             )
+            }
 
             if (isTabletLayout) {
                 Row(
@@ -469,7 +506,7 @@ fun EditorScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
-                        bitmap = workspaceFrame,
+                        bitmap = workspaceFrame ?: draftFrame,
                         compositionName = previewComposition?.name,
                         motionPathKeys = workspaceMotionPathKeys,
                         compositionWidth = previewComposition?.width ?: 0,
@@ -498,7 +535,7 @@ fun EditorScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .padding(horizontal = 14.dp, vertical = 4.dp),
-                    bitmap = workspaceFrame,
+                    bitmap = workspaceFrame ?: draftFrame,
                     compositionName = previewComposition?.name,
                     motionPathKeys = workspaceMotionPathKeys,
                     compositionWidth = previewComposition?.width ?: 0,
@@ -509,12 +546,11 @@ fun EditorScreen(
             }
 
             ToolBar(
-                selectedTool = selectedTool.value,
                 canUndo = canUndo,
                 canRedo = canRedo,
                 onUndo = onUndo,
                 onRedo = onRedo,
-                onSelectTool = { selectedTool.value = it },
+                onSave = onSave,
                 onOpenInspector = { showPhoneInspector = true },
                 onOpenCompositionSettings = { showCompositionSettings = true },
                 onAddLayer = onAddLayer
@@ -531,7 +567,6 @@ fun EditorScreen(
                 audioTracks = audioTracks,
                 selectedAudioClipId = selectedAudioClipId,
                 onSelectAudioClip = onSelectAudioClip,
-                onAddAudioClip = onAddAudioTrackClip,
                 onTrimAudioClip = onTrimAudioClip,
                 onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
                 onSetAudioGain = onSetAudioGain,
@@ -545,18 +580,24 @@ fun EditorScreen(
                 isPlaying = isPlaying,
                 onSelectLayer = onSelectLayer,
                 onScrub = onScrub,
+                audioPreviewLabel = audioPreviewLabel,
                 onMoveCanonicalTransformKeyframe = onMoveCanonicalTransformKeyframe,
                 onAddOpacityKeyframe = onAddOpacityKeyframe,
                 onRemoveOpacityKeyframe = onRemoveOpacityKeyframe,
                 onTogglePlayback = onTogglePlayback,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (isTabletLayout) 222.dp else 204.dp)
+                    // Adaptive height (P11): the card takes ~42% of the
+                    // available height instead of a fixed dp value, so
+                    // the track viewport scales with the screen. The
+                    // transport row's +48dp is inside that budget.
+                    .height(timelineCardHeight)
                     .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
             )
 
             AudioTimelinePanel(
-                timeline = audioTimeline,
+                tracks = audioTracks,
+                frameRate = project.frameRate,
                 onAddAudioClip = onAddAudioClip,
                 onRemoveAudioClip = onRemoveAudioClip,
                 onVolumeChange = onAudioVolumeChange,
@@ -600,7 +641,7 @@ fun EditorScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showProjectPicker = false }) { Text("Close") }
+                    TextButton(onClick = { showProjectPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
             )
         }
@@ -639,7 +680,7 @@ fun EditorScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showRepositoryPicker = false }) { Text("Close") }
+                    TextButton(onClick = { showRepositoryPicker = false }, modifier = Modifier.height(48.dp)) { Text("Close") }
                 }
             )
         }
@@ -659,11 +700,11 @@ fun EditorScreen(
                         if (offlineAssets.isEmpty()) {
                             Text("No media imported yet. Relink footage from a canonical project to copy it here for offline use.", color = EditorPalette.muted)
                         } else {
-                            TextButton(onClick = onVerifyOfflineAssets, enabled = !isVerifyingOfflineAssets) {
+                            TextButton(onClick = onVerifyOfflineAssets, enabled = !isVerifyingOfflineAssets, modifier = Modifier.height(48.dp)) {
                                 Text(if (isVerifyingOfflineAssets) "Verifying media…" else "Verify media integrity", color = EditorPalette.violet, fontSize = 11.sp)
                             }
                             if (offlineAssets.any { it.sha256 !in referencedOfflineAssetIds }) {
-                                TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }) {
+                                TextButton(onClick = { showMediaLibrary = false; onCollectUnusedOfflineAssets() }, modifier = Modifier.height(48.dp)) {
                                     Text("Remove unused media", color = EditorPalette.violet, fontSize = 11.sp)
                                 }
                             }
@@ -679,11 +720,11 @@ fun EditorScreen(
                                     }
                                     if (asset.sha256 in referencedOfflineAssetIds) {
                                         Text("Linked", color = EditorPalette.mint, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp))
-                                        TextButton(onClick = { showMediaLibrary = false; onReplaceOfflineAsset(asset.sha256) }) {
+                                        TextButton(onClick = { showMediaLibrary = false; onReplaceOfflineAsset(asset.sha256) }, modifier = Modifier.height(48.dp)) {
                                             Text("Replace", color = EditorPalette.violet, fontSize = 11.sp)
                                         }
                                     } else {
-                                        TextButton(onClick = { assetPendingDelete = asset }) {
+                                        TextButton(onClick = { assetPendingDelete = asset }, modifier = Modifier.height(48.dp)) {
                                             Text("Remove", color = Color(0xFFFF8B91), fontSize = 11.sp)
                                         }
                                     }
@@ -707,7 +748,7 @@ fun EditorScreen(
                                             fontSize = 10.sp
                                         )
                                     }
-                                    TextButton(onClick = { onReleaseSafGrant(grant.uri, grant.kind) }) {
+                                    TextButton(onClick = { onReleaseSafGrant(grant.uri, grant.kind) }, modifier = Modifier.height(48.dp)) {
                                         Text("Release", color = Color(0xFFFF8B91), fontSize = 11.sp)
                                     }
                                 }
@@ -715,7 +756,7 @@ fun EditorScreen(
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { showMediaLibrary = false }) { Text("Close") } }
+                confirmButton = { TextButton(onClick = { showMediaLibrary = false }, modifier = Modifier.height(48.dp)) { Text("Close") } }
             )
         }
 
@@ -729,9 +770,9 @@ fun EditorScreen(
                     TextButton(onClick = {
                         if (asset.sha256 !in referencedOfflineAssetIds) onDeleteOfflineAsset(asset.sha256)
                         assetPendingDelete = null
-                    }, enabled = asset.sha256 !in referencedOfflineAssetIds) { Text("Delete", color = Color(0xFFFF8B91)) }
+                    }, enabled = asset.sha256 !in referencedOfflineAssetIds, modifier = Modifier.height(48.dp)) { Text("Delete", color = Color(0xFFFF8B91)) }
                 },
-                dismissButton = { TextButton(onClick = { assetPendingDelete = null }) { Text("Cancel") } }
+                dismissButton = { TextButton(onClick = { assetPendingDelete = null }, modifier = Modifier.height(48.dp)) { Text("Cancel") } }
             )
         }
 
@@ -767,13 +808,29 @@ fun EditorScreen(
                             color = EditorPalette.muted,
                             fontSize = 12.sp
                         )
+                        // Real selector: the current format is visibly
+                        // selected (P17). The dialog title already names
+                        // it ("H.264 MP4 settings" etc.).
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP }) { Text("PNG ZIP") }
-                            TextButton(onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 }) { Text("MP4 H.264") }
-                            TextButton(
+                            FilterChip(
+                                selected = sequenceOutputFormat == RenderOutputFormat.PNG_SEQUENCE_ZIP,
+                                onClick = { sequenceOutputFormat = RenderOutputFormat.PNG_SEQUENCE_ZIP },
+                                label = { Text("PNG ZIP") },
+                                modifier = Modifier.height(48.dp)
+                            )
+                            FilterChip(
+                                selected = sequenceOutputFormat == RenderOutputFormat.MP4_H264,
+                                onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_H264 },
+                                label = { Text("MP4 H.264") },
+                                modifier = Modifier.height(48.dp)
+                            )
+                            FilterChip(
+                                selected = sequenceOutputFormat == RenderOutputFormat.MP4_HEVC,
                                 onClick = { sequenceOutputFormat = RenderOutputFormat.MP4_HEVC },
-                                enabled = hevcAvailable == true
-                            ) { Text("MP4 H.265") }
+                                enabled = hevcAvailable == true,
+                                label = { Text("MP4 H.265") },
+                                modifier = Modifier.height(48.dp)
+                            )
                         }
                         if (hevcAvailable == null) {
                             Text("Checking for a hardware HEVC encoder…", color = EditorPalette.muted, fontSize = 11.sp)
@@ -850,10 +907,10 @@ fun EditorScreen(
                                 }
                                 .onFailure { sequenceSettingsError = it.message ?: "Render settings are invalid" }
                         }
-                    }) { Text(if (isMp4) "Render MP4" else "Render ZIP") }
+                    }, modifier = Modifier.height(48.dp)) { Text(if (isMp4) "Render MP4" else "Render ZIP") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showSequenceSettings = false }) { Text("Cancel") }
+                    TextButton(onClick = { showSequenceSettings = false }, modifier = Modifier.height(48.dp)) { Text("Cancel") }
                 }
             )
         }
@@ -991,14 +1048,146 @@ fun EditorScreen(
     }
 }
 
+/**
+ * Batch 2 (P10): visible export progress in the header area. While a
+ * PNG-sequence or MP4 export runs, the user sees a progress bar, the
+ * percentage as text, and the same Cancel action the Pause icon
+ * provides. Nothing renders when no export is running.
+ */
+@Composable
+private fun ExportProgressRow(
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    sequenceExportProgress: Int,
+    onCancelSequenceExport: () -> Unit,
+    isExportingMp4: Boolean,
+    isMp4ExportWritingOutput: Boolean,
+    mp4ExportProgress: Int,
+    onCancelMp4Sequence: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (!isExportingSequence && !isExportingMp4) return
+    val isMp4 = isExportingMp4
+    val progress = if (isMp4) mp4ExportProgress else sequenceExportProgress
+    val writing = if (isMp4) isMp4ExportWritingOutput else isSequenceExportWritingOutput
+    val label = when {
+        isMp4 && writing -> "Writing MP4 · $progress%"
+        isMp4 -> "Exporting MP4 · $progress%"
+        writing -> "Writing PNG sequence · $progress%"
+        else -> "Exporting PNG sequence · $progress%"
+    }
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LinearProgressIndicator(
+            progress = progress.coerceIn(0, 100) / 100f,
+            modifier = Modifier.weight(1f).height(6.dp)
+                .semantics { contentDescription = label },
+            color = EditorPalette.mint,
+            trackColor = EditorPalette.border
+        )
+        Text(
+            label,
+            color = EditorPalette.text,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+        TextButton(
+            onClick = if (isMp4) onCancelMp4Sequence else onCancelSequenceExport,
+            modifier = Modifier.height(48.dp).semantics { contentDescription = "Cancel export" }
+        ) {
+            Text("Cancel", color = EditorPalette.amber, fontSize = 11.sp)
+        }
+    }
+}
+
+/**
+ * Batch 2 export fix (user-verified defect): the phone and wide headers
+ * showed four identical FileDownload icons with no labels — .ecproj,
+ * .ecprojx, rendered frame PNG and PNG sequence ZIP were
+ * indistinguishable. One MoreVert overflow control now holds all four
+ * as labelled menu entries; each entry keeps the exact callback and
+ * enabled state its old icon button had (frame/sequence entries toggle
+ * to Cancel while their export runs). MP4 export stays separate: the
+ * labelled "Export video" button on phones, the MP4 icon on wide
+ * layouts. Used by both header branches so the menu is identical
+ * everywhere.
+ */
+@Composable
+private fun ExportOverflowMenu(
+    onExportEcproj: () -> Unit,
+    onExportEcprojx: () -> Unit,
+    isExportingFrame: Boolean,
+    onExportRenderedFrame: () -> Unit,
+    onCancelFrameExport: () -> Unit,
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    onExportPngSequence: () -> Unit,
+    onCancelSequenceExport: () -> Unit,
+    sequenceExportProgress: Int,
+    hasCanonicalProject: Boolean
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                Icons.Outlined.MoreVert,
+                contentDescription = "More export options",
+                tint = EditorPalette.text
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Export .ecproj") },
+                onClick = { expanded = false; onExportEcproj() }
+            )
+            DropdownMenuItem(
+                text = { Text("Export .ecprojx XML") },
+                onClick = { expanded = false; onExportEcprojx() }
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG")
+                },
+                onClick = {
+                    expanded = false
+                    if (isExportingFrame) onCancelFrameExport() else onExportRenderedFrame()
+                },
+                enabled = isExportingFrame || hasCanonicalProject
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        when {
+                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
+                            isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
+                            else -> "Export PNG sequence ZIP"
+                        }
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport() else onExportPngSequence()
+                },
+                enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame
+            )
+        }
+    }
+}
+
 @Composable
 private fun HeaderBar(
-    projectName: String,
     saveMessage: String,
     onSave: () -> Unit,
     onOpenProject: () -> Unit,
     onOpenMediaLibrary: () -> Unit,
-    onValidateEcproj: () -> Unit,
+    onImportProject: () -> Unit,
     isImportingCanonicalProject: Boolean,
     onCancelCanonicalImport: () -> Unit,
     onExportEcproj: () -> Unit,
@@ -1019,210 +1208,292 @@ private fun HeaderBar(
     onNewProject: () -> Unit,
     hasCanonicalProject: Boolean,
     onOpenCanonicalEditor: () -> Unit,
-    onOpenRepositoryPicker: () -> Unit = {}
+    onOpenRepositoryPicker: () -> Unit = {},
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onOpenInspector: () -> Unit,
+    onOpenCompositionSettings: () -> Unit,
+    onAddLayer: () -> Unit
 ) {
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
-    ) {
-        // The single-row desktop header needs ~840dp to fit its action bar
-        // (logo, OFFLINE chip, nine icon buttons, three text buttons) without
-        // squeezing the status column to zero width — on a 731dp landscape
-        // phone the old 620dp threshold chose it and the status text was
-        // measured to zero and never displayed. Narrower windows use the
-        // two-row header, where the status has its own full-width row.
-        if (maxWidth < 840.dp) {
-            // Three compact rows on phones: the title row, the status on
-            // its own full-width line, and the action bar as a scrollable
-            // row. Eight 48dp action buttons cannot share one row with the
-            // status on a 360dp phone, and squeezing the status to zero
-            // width hid it entirely (see the old 620dp threshold bug).
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
-                            .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 18.sp)
-                    }
-                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text("EFFECTCRAFT", color = EditorPalette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                        Text(projectName, color = EditorPalette.muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Surface(
-                        color = Color(0xFF13231F),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color(0xFF24453E))
-                    ) {
-                        Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                            color = EditorPalette.mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
-                    }
-                    IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
-                    }
-                    TextButton(onClick = onNewProject, modifier = Modifier.height(48.dp)) {
-                        Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-                    }
-                }
-                // Status on its own full-width line: it is never squeezed
-                // by the action bar, and it stays a single ellipsized line.
-                Text(
-                    saveMessage,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
-                        .semantics { contentDescription = "Editor status: $saveMessage" },
-                    color = EditorPalette.mint,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // Action bar: every button is a full 48dp target. Eight
-                // 48dp buttons do not fit a 360dp phone side by side, so
-                // this row scrolls horizontally instead of squeezing or
-                // clipping any action.
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(onClick = onOpenProject, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.FolderOpen, contentDescription = "Open offline project", tint = EditorPalette.mint)
-                    }
-                    IconButton(onClick = onOpenMediaLibrary, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet)
-                    }
-                    IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj, modifier = Modifier.size(48.dp)) {
-                        Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.Description,
-                            contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
-                            tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
-                    }
-                    IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
-                    }
-                    IconButton(onClick = onExportEcproj, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text)
-                    }
-                    IconButton(onClick = onExportEcprojx, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint)
-                    }
-                    IconButton(
-                        onClick = if (isExportingFrame) onCancelFrameExport else onExportRenderedFrame,
-                        enabled = isExportingFrame || hasCanonicalProject,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                            contentDescription = if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG",
-                            tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
-                        )
-                    }
-                    IconButton(
-                        onClick = if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport else onExportPngSequence,
-                        enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                            contentDescription = when {
-                                isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
-                                isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
-                                else -> "Export PNG sequence ZIP"
-                            },
-                            tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
-                        )
-                    }
-                }
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(68.dp),
-                verticalAlignment = Alignment.CenterVertically
+    // Batch 3: one header for every width. The title row is the app
+    // name only — no tagline, no project name under it (the project
+    // name lives in the Composition viewer tab and in the status
+    // line). Below it: the status on its own full-width line, the
+    // export progress row, and the AE-style menu bar. The old 840dp
+    // split and the scrolling row of unlabelled icons are gone.
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
+                    .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(11.dp))
-                        .background(Brush.linearGradient(listOf(EditorPalette.violet, Color(0xFF6851C7)))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 21.sp)
-                }
-                Column(Modifier.weight(1f).padding(start = 11.dp)) {
-                    Text("EFFECTCRAFT", color = EditorPalette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.1.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(projectName, color = EditorPalette.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("  ·  ", color = EditorPalette.border, fontSize = 12.sp)
-                        Text(
-                            saveMessage,
-                            modifier = Modifier.semantics { contentDescription = "Editor status: $saveMessage" },
-                            color = EditorPalette.mint, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                Surface(
-                    color = Color(0xFF13231F), shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, Color(0xFF24453E))
-                ) {
-                    Text("OFFLINE", modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        color = EditorPalette.mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                }
-                IconButton(onClick = onOpenMediaLibrary) { Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Offline media library", tint = EditorPalette.violet) }
-                IconButton(onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onValidateEcproj) {
-                    Icon(if (isImportingCanonicalProject) Icons.Outlined.Pause else Icons.Outlined.Description,
-                        contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Validate .ecproj",
-                        tint = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.text)
-                }
-                IconButton(onClick = onOpenCanonicalEditor, enabled = hasCanonicalProject) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "Edit imported .ecproj", tint = if (hasCanonicalProject) EditorPalette.mint else EditorPalette.muted)
-                }
-                IconButton(onClick = onExportEcproj) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecproj", tint = EditorPalette.text) }
-                IconButton(onClick = onExportEcprojx) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export .ecprojx XML", tint = EditorPalette.mint) }
-                IconButton(
-                    onClick = if (isExportingFrame) onCancelFrameExport else onExportRenderedFrame,
-                    enabled = isExportingFrame || hasCanonicalProject
-                ) {
-                    Icon(
-                        if (isExportingFrame) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                        contentDescription = if (isExportingFrame) "Cancel frame export" else "Export rendered frame PNG",
-                        tint = if (isExportingFrame) EditorPalette.amber else EditorPalette.violet
-                    )
-                }
-                IconButton(
-                    onClick = if (isExportingSequence && !isSequenceExportWritingOutput) onCancelSequenceExport else onExportPngSequence,
-                    enabled = if (isExportingSequence) !isSequenceExportWritingOutput else hasCanonicalProject && !isExportingFrame,
-                ) {
-                    Icon(
-                        if (isExportingSequence) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                        contentDescription = when {
-                            isExportingSequence && isSequenceExportWritingOutput -> "Writing PNG sequence ZIP · $sequenceExportProgress%"
-                            isExportingSequence -> "Cancel PNG sequence export · $sequenceExportProgress%"
-                            else -> "Export PNG sequence ZIP"
-                        },
-                        tint = if (isExportingSequence) EditorPalette.amber else EditorPalette.mint
-                    )
-                }
-                IconButton(onClick = onSave) { Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text) }
-                IconButton(
-                    onClick = if (isExportingMp4 && !isMp4ExportWritingOutput) onCancelMp4Sequence else onExportMp4Sequence,
-                    enabled = if (isExportingMp4) !isMp4ExportWritingOutput else hasCanonicalProject && !isExportingFrame && !isExportingSequence
-                ) {
-                    Icon(
-                        if (isExportingMp4) Icons.Outlined.Pause else Icons.Outlined.FileDownload,
-                        contentDescription = when {
-                            isExportingMp4 && isMp4ExportWritingOutput -> "Writing MP4 · $mp4ExportProgress%"
-                            isExportingMp4 -> "Cancel MP4 export · $mp4ExportProgress%"
-                            else -> "Export H.264 MP4"
-                        },
-                        tint = if (isExportingMp4) EditorPalette.amber else EditorPalette.violet
-                    )
-                }
-                TextButton(onClick = onOpenProject) { Text("Open", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
-                TextButton(onClick = onOpenRepositoryPicker) { Text("Projects", color = EditorPalette.mint, fontWeight = FontWeight.SemiBold) }
-                TextButton(onClick = onNewProject) { Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold) }
+                Text("E", color = Color(0xFF171326), fontWeight = FontWeight.Black, fontSize = 18.sp)
+            }
+            Text(
+                "EFFECTCRAFT",
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
+                color = EditorPalette.text, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
+                maxLines = 1
+            )
+            Surface(
+                color = Color(0xFF13231F),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Color(0xFF24453E))
+            ) {
+                Text("OFFLINE", modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                    color = EditorPalette.mint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
+            }
+            IconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Outlined.Save, contentDescription = "Save draft", tint = EditorPalette.text)
+            }
+            TextButton(onClick = onNewProject, modifier = Modifier.height(48.dp)) {
+                Text("New", color = EditorPalette.violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
             }
         }
+        // Status on its own full-width line: it is never squeezed
+        // by the action bar, and it stays a single ellipsized line.
+        // 12sp so the save state ("Saved locally" vs "Unsaved
+        // changes") is readable at a glance (P14).
+        Text(
+            saveMessage,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp)
+                .semantics { contentDescription = "Editor status: $saveMessage" },
+            color = EditorPalette.mint,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        // Batch 2 (P10): export progress is visible in the header
+        // while a render runs — bar + percentage + Cancel — not
+        // just a TalkBack description on the Pause icon.
+        ExportProgressRow(
+            isExportingSequence = isExportingSequence,
+            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+            sequenceExportProgress = sequenceExportProgress,
+            onCancelSequenceExport = onCancelSequenceExport,
+            isExportingMp4 = isExportingMp4,
+            isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+            mp4ExportProgress = mp4ExportProgress,
+            onCancelMp4Sequence = onCancelMp4Sequence
+        )
+        MenuBar(
+            isImportingCanonicalProject = isImportingCanonicalProject,
+            onImportProject = onImportProject,
+            onCancelCanonicalImport = onCancelCanonicalImport,
+            onNewProject = onNewProject,
+            onOpenProject = onOpenProject,
+            onOpenMediaLibrary = onOpenMediaLibrary,
+            onOpenRepositoryPicker = onOpenRepositoryPicker,
+            onSave = onSave,
+            canUndo = canUndo,
+            onUndo = onUndo,
+            canRedo = canRedo,
+            onRedo = onRedo,
+            onOpenCompositionSettings = onOpenCompositionSettings,
+            hasCanonicalProject = hasCanonicalProject,
+            onOpenCanonicalEditor = onOpenCanonicalEditor,
+            onAddLayer = onAddLayer,
+            onOpenInspector = onOpenInspector,
+            onExportEcproj = onExportEcproj,
+            onExportEcprojx = onExportEcprojx,
+            isExportingFrame = isExportingFrame,
+            onExportRenderedFrame = onExportRenderedFrame,
+            onCancelFrameExport = onCancelFrameExport,
+            isExportingSequence = isExportingSequence,
+            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+            onExportPngSequence = onExportPngSequence,
+            onCancelSequenceExport = onCancelSequenceExport,
+            sequenceExportProgress = sequenceExportProgress,
+            onExportMp4Sequence = onExportMp4Sequence,
+            isExportingMp4 = isExportingMp4,
+            isMp4ExportWritingOutput = isMp4ExportWritingOutput,
+            onCancelMp4Sequence = onCancelMp4Sequence,
+            mp4ExportProgress = mp4ExportProgress
+        )
     }
+}
+
+/**
+ * Batch 3: the After Effects-style menu bar. File / Edit /
+ * Composition / Layer / Window dropdowns hold every command the old
+ * scrolling row of unlabelled icons held, with labelled items —
+ * the same menu style as the desktop app. Import stays a labelled
+ * button first in the row so it is visible without scrolling on
+ * any width; Export video stays a labelled button too. The four
+ * file exports stay behind the single overflow menu (Batch 2 rule).
+ */
+@Composable
+private fun MenuBar(
+    isImportingCanonicalProject: Boolean,
+    onImportProject: () -> Unit,
+    onCancelCanonicalImport: () -> Unit,
+    onNewProject: () -> Unit,
+    onOpenProject: () -> Unit,
+    onOpenMediaLibrary: () -> Unit,
+    onOpenRepositoryPicker: () -> Unit,
+    onSave: () -> Unit,
+    canUndo: Boolean,
+    onUndo: () -> Unit,
+    canRedo: Boolean,
+    onRedo: () -> Unit,
+    onOpenCompositionSettings: () -> Unit,
+    hasCanonicalProject: Boolean,
+    onOpenCanonicalEditor: () -> Unit,
+    onAddLayer: () -> Unit,
+    onOpenInspector: () -> Unit,
+    onExportEcproj: () -> Unit,
+    onExportEcprojx: () -> Unit,
+    isExportingFrame: Boolean,
+    onExportRenderedFrame: () -> Unit,
+    onCancelFrameExport: () -> Unit,
+    isExportingSequence: Boolean,
+    isSequenceExportWritingOutput: Boolean,
+    onExportPngSequence: () -> Unit,
+    onCancelSequenceExport: () -> Unit,
+    sequenceExportProgress: Int,
+    onExportMp4Sequence: () -> Unit,
+    isExportingMp4: Boolean,
+    isMp4ExportWritingOutput: Boolean,
+    onCancelMp4Sequence: () -> Unit,
+    mp4ExportProgress: Int
+) {
+    var expandedMenu by remember { mutableStateOf<String?>(null) }
+    val closeMenu = { expandedMenu = null }
+    Row(
+        modifier = Modifier.fillMaxWidth().height(48.dp)
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        // Import first, labelled, always visible without scrolling.
+        // While an import runs it becomes the cancel action, with
+        // the same content description the accessibility test asserts.
+        TextButton(
+            onClick = if (isImportingCanonicalProject) onCancelCanonicalImport else onImportProject,
+            modifier = Modifier.height(48.dp)
+                .semantics {
+                    contentDescription = if (isImportingCanonicalProject) "Cancel canonical project import" else "Import project"
+                }
+        ) {
+            Text(
+                if (isImportingCanonicalProject) "Cancel import" else "Import project",
+                color = if (isImportingCanonicalProject) EditorPalette.amber else EditorPalette.violet,
+                fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1
+            )
+        }
+        // Batch 2 (P12): the app's main output, one labelled tap
+        // from the header. It opens the sequence settings with MP4
+        // H.264 pre-selected. Disabled without an imported
+        // composition, like the other render buttons.
+        TextButton(
+            onClick = onExportMp4Sequence,
+            enabled = hasCanonicalProject && !isExportingFrame && !isExportingSequence,
+            modifier = Modifier.height(48.dp)
+                .semantics { contentDescription = "Export video (MP4)" }
+        ) {
+            Text("Export video", color = if (hasCanonicalProject) EditorPalette.violet else EditorPalette.muted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1)
+        }
+        // Batch 2 export fix: the four FileDownload icons were
+        // indistinguishable — one overflow menu with labelled
+        // entries now holds all four exports.
+        ExportOverflowMenu(
+            onExportEcproj = onExportEcproj,
+            onExportEcprojx = onExportEcprojx,
+            isExportingFrame = isExportingFrame,
+            onExportRenderedFrame = onExportRenderedFrame,
+            onCancelFrameExport = onCancelFrameExport,
+            isExportingSequence = isExportingSequence,
+            isSequenceExportWritingOutput = isSequenceExportWritingOutput,
+            onExportPngSequence = onExportPngSequence,
+            onCancelSequenceExport = onCancelSequenceExport,
+            sequenceExportProgress = sequenceExportProgress,
+            hasCanonicalProject = hasCanonicalProject
+        )
+        MenuDropdown(
+            label = "File",
+            expanded = expandedMenu == "File",
+            onExpand = { expandedMenu = if (expandedMenu == "File") null else "File" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("New composition") { closeMenu(); onNewProject() }
+            MenuItem("Open offline project") { closeMenu(); onOpenProject() }
+            MenuItem("Import project…") { closeMenu(); onImportProject() }
+            MenuItem("Offline media library") { closeMenu(); onOpenMediaLibrary() }
+            MenuItem("Projects") { closeMenu(); onOpenRepositoryPicker() }
+            MenuItem("Save draft") { closeMenu(); onSave() }
+        }
+        MenuDropdown(
+            label = "Edit",
+            expanded = expandedMenu == "Edit",
+            onExpand = { expandedMenu = if (expandedMenu == "Edit") null else "Edit" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Undo", enabled = canUndo) { closeMenu(); onUndo() }
+            MenuItem("Redo", enabled = canRedo) { closeMenu(); onRedo() }
+        }
+        MenuDropdown(
+            label = "Composition",
+            expanded = expandedMenu == "Composition",
+            onExpand = { expandedMenu = if (expandedMenu == "Composition") null else "Composition" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Composition settings") { closeMenu(); onOpenCompositionSettings() }
+            MenuItem("Edit imported .ecproj", enabled = hasCanonicalProject) { closeMenu(); onOpenCanonicalEditor() }
+        }
+        MenuDropdown(
+            label = "Layer",
+            expanded = expandedMenu == "Layer",
+            onExpand = { expandedMenu = if (expandedMenu == "Layer") null else "Layer" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Add shape layer") { closeMenu(); onAddLayer() }
+        }
+        MenuDropdown(
+            label = "Window",
+            expanded = expandedMenu == "Window",
+            onExpand = { expandedMenu = if (expandedMenu == "Window") null else "Window" },
+            onDismiss = closeMenu
+        ) {
+            MenuItem("Inspector") { closeMenu(); onOpenInspector() }
+        }
+    }
+}
+
+@Composable
+private fun MenuDropdown(
+    label: String,
+    expanded: Boolean,
+    onExpand: () -> Unit,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box {
+        TextButton(
+            onClick = onExpand,
+            modifier = Modifier.height(48.dp)
+                .semantics { contentDescription = "$label menu" }
+        ) {
+            Text(label, color = EditorPalette.text, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun MenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label, fontSize = 13.sp, maxLines = 1) },
+        onClick = onClick,
+        enabled = enabled
+    )
 }
 
 @Composable
@@ -1349,13 +1620,13 @@ private fun PreviewStage(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        if (compositionName == null) "Draft preview not rendered" else "Native frame unavailable",
+                        if (compositionName == null) "Draft preview unavailable" else "Native frame unavailable",
                         color = EditorPalette.text,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        if (compositionName == null) "Import a supported .ecproj to see the actual composition here. Draft editing remains offline."
+                        if (compositionName == null) "This composition has no usable size, so no frame could be drawn."
                         else "The project is loaded, but its native renderer did not return a frame for this ABI.",
                         color = EditorPalette.muted,
                         fontSize = 11.sp,
@@ -1407,6 +1678,10 @@ private fun InspectorPanel(
             Text("No layer selected", color = EditorPalette.muted, modifier = Modifier.padding(top = 8.dp))
         } else {
             var layerNameDraft by remember(layer.id, layer.name) { mutableStateOf(layer.name) }
+            // Appearance is a real collapsible section (P18): the old
+            // "⌄" was a dead character on a non-clickable row. It starts
+            // expanded, so nothing the user could see before is hidden.
+            var appearanceExpanded by remember(layer.id) { mutableStateOf(true) }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1436,7 +1711,7 @@ private fun InspectorPanel(
                     // The inspector now has two Apply buttons (rename and
                     // trim); a stable description keeps each addressable
                     // to TalkBack and to tests.
-                    modifier = Modifier.semantics { contentDescription = "Apply layer rename" }
+                    modifier = Modifier.height(48.dp).semantics { contentDescription = "Apply layer rename" }
                 ) {
                     Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
                 }
@@ -1450,8 +1725,21 @@ private fun InspectorPanel(
             }
             Spacer(Modifier.height(12.dp))
             Spacer(Modifier.height(18.dp))
-            PropertyLine("Appearance", "⌄")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { appearanceExpanded = !appearanceExpanded }
+                    .padding(vertical = 8.dp)
+                    .semantics { contentDescription = if (appearanceExpanded) "Collapse appearance" else "Expand appearance" },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Appearance", color = EditorPalette.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text(if (appearanceExpanded) "⌃" else "⌄", color = EditorPalette.muted, fontSize = 14.sp)
+            }
             Spacer(Modifier.height(12.dp))
+            if (appearanceExpanded) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Opacity", color = EditorPalette.text, fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
@@ -1468,6 +1756,7 @@ private fun InspectorPanel(
                 valueRange = 0f..1f,
                 modifier = Modifier.padding(top = 3.dp).semantics { contentDescription = "Layer opacity" }
             )
+            }
             Spacer(Modifier.height(12.dp))
             Text("Trim · frames 0–${(durationFrames - 1).coerceAtLeast(0)}", color = EditorPalette.text, fontSize = 12.sp)
             var trimInDraft by remember(layer.id, layer.inFrame) { mutableStateOf(layer.inFrame.toString()) }
@@ -1514,7 +1803,7 @@ private fun InspectorPanel(
                     enabled = trimChanged,
                     // See the rename Apply above: two Apply buttons share
                     // this inspector, so each carries its own description.
-                    modifier = Modifier.semantics { contentDescription = "Apply layer trim" }
+                    modifier = Modifier.height(48.dp).semantics { contentDescription = "Apply layer trim" }
                 ) {
                     Text("Apply", color = EditorPalette.violet, fontSize = 11.sp)
                 }
@@ -1526,21 +1815,21 @@ private fun InspectorPanel(
                     fontSize = 10.sp,
                     modifier = Modifier.padding(top = 2.dp)
                 )
-                TextButton(onClick = onClearTrim, modifier = Modifier.semantics { contentDescription = "Clear clip trim" }) {
+                TextButton(onClick = onClearTrim, modifier = Modifier.height(48.dp).semantics { contentDescription = "Clear clip trim" }) {
                     Text("Clear trim", color = EditorPalette.amber, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { onMoveLayer(-1) }, modifier = Modifier.semantics { contentDescription = "Move selected layer up" }) {
+                TextButton(onClick = { onMoveLayer(-1) }, modifier = Modifier.height(48.dp).semantics { contentDescription = "Move selected layer up" }) {
                     Text("Move ↑", color = EditorPalette.muted, fontSize = 11.sp)
                 }
-                TextButton(onClick = { onMoveLayer(1) }, modifier = Modifier.semantics { contentDescription = "Move selected layer down" }) {
+                TextButton(onClick = { onMoveLayer(1) }, modifier = Modifier.height(48.dp).semantics { contentDescription = "Move selected layer down" }) {
                     Text("Move ↓", color = EditorPalette.muted, fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onDeleteLayer, modifier = Modifier.semantics { contentDescription = "Delete selected layer" }) {
+            TextButton(onClick = onDeleteLayer, modifier = Modifier.height(48.dp).semantics { contentDescription = "Delete selected layer" }) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Color(0xFFFF858D))
                 Spacer(Modifier.width(6.dp))
                 Text("Remove layer", color = Color(0xFFFF858D), fontSize = 12.sp)
@@ -3083,7 +3372,7 @@ private fun CanonicalParamGroupRows(
                     val (xText, yText, _) = vertexDrafts[index]
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(
-                            modifier = Modifier.width(28.dp).height(48.dp)
+                            modifier = Modifier.width(48.dp).height(48.dp)
                                 .clickable(enabled = editable) { selectedCanvasVertex = index }
                                 .semantics { contentDescription = "Select canonical $section path segment start P${index + 1} ${group.name} ${param.name}" },
                             contentAlignment = Alignment.Center
@@ -3496,43 +3785,28 @@ private fun CompositionSettingsPanel(
         Text("COMPOSITION SETTINGS", color = EditorPalette.violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Text("Changes apply to this offline draft and participate in undo/redo.", color = EditorPalette.muted, fontSize = 12.sp)
         Text("Width · ${width} px", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = width.toFloat(), onValueChange = { width = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.semantics { contentDescription = "Composition width" })
+        Slider(value = width.toFloat(), onValueChange = { width = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition width" })
         Text("Height · ${height} px", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = height.toFloat(), onValueChange = { height = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.semantics { contentDescription = "Composition height" })
+        Slider(value = height.toFloat(), onValueChange = { height = it.roundToInt() }, valueRange = 320f..3840f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition height" })
         Text("Frame rate · ${fps} FPS", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = fps.toFloat(), onValueChange = { fps = it.roundToInt() }, valueRange = 1f..120f, modifier = Modifier.semantics { contentDescription = "Composition frame rate" })
+        Slider(value = fps.toFloat(), onValueChange = { fps = it.roundToInt() }, valueRange = 1f..120f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition frame rate" })
         Text("Duration · ${duration} frames", color = EditorPalette.text, fontSize = 12.sp)
-        Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..3600f, modifier = Modifier.semantics { contentDescription = "Composition duration" })
+        Slider(value = duration.toFloat(), onValueChange = { duration = it.roundToInt() }, valueRange = 1f..3600f, modifier = Modifier.height(48.dp).semantics { contentDescription = "Composition duration" })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onCancel) { Text("Cancel", color = EditorPalette.muted) }
+            TextButton(onClick = onCancel, modifier = Modifier.height(48.dp)) { Text("Cancel", color = EditorPalette.muted) }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { onApply(width, height, fps, duration) }) { Text("Apply settings", color = EditorPalette.violet) }
+            TextButton(onClick = { onApply(width, height, fps, duration) }, modifier = Modifier.height(48.dp)) { Text("Apply settings", color = EditorPalette.violet) }
         }
     }
 }
 
 @Composable
-private fun PropertyLine(title: String, trailing: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, color = EditorPalette.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.weight(1f))
-        Text(trailing, color = EditorPalette.muted, fontSize = 14.sp)
-    }
-}
-
-@Composable
 private fun ToolBar(
-    selectedTool: String,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
-    onSelectTool: (String) -> Unit,
+    onSave: () -> Unit,
     onOpenInspector: () -> Unit,
     onOpenCompositionSettings: () -> Unit,
     onAddLayer: () -> Unit
@@ -3544,22 +3818,29 @@ private fun ToolBar(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Only Shape survives the tool row: it is the one tool with real
+        // behaviour behind it (onAddLayer adds a shape layer, and selects
+        // it). Select/Move/Text/Effects had no behaviour anywhere — the
+        // selection state was written and never read — so those chips are
+        // gone instead of highlighted-but-dead. The chip is an action,
+        // not a mode, so it never renders as selected.
         Row(
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            listOf("Select", "Move", "Text", "Shape", "Effects").forEach { tool ->
-                FilterChip(
-                    selected = selectedTool == tool,
-                    onClick = { onSelectTool(tool) },
-                    label = { Text(tool, fontSize = 11.sp) }
-                )
-            }
+            FilterChip(
+                selected = false,
+                onClick = onAddLayer,
+                label = { Text("Shape", fontSize = 11.sp) }
+            )
         }
 
+        // Labelled Save: the header icon alone never told the user where
+        // Save lives (P14). The header icon stays as a secondary action.
+        TextButton(onClick = onSave, modifier = Modifier.height(48.dp)) {
+            Icon(Icons.Outlined.Save, contentDescription = null, tint = EditorPalette.violet)
+            Text("Save", color = EditorPalette.violet, fontSize = 11.sp)
+        }
         TextButton(onClick = onUndo, enabled = canUndo) {
             Text("Undo", color = if (canUndo) EditorPalette.violet else EditorPalette.muted, fontSize = 11.sp)
         }
@@ -3575,7 +3856,7 @@ private fun ToolBar(
         }
         TextButton(onClick = onAddLayer) {
             Icon(Icons.Outlined.Add, contentDescription = null, tint = EditorPalette.violet)
-            Text("Layer", color = EditorPalette.violet, fontSize = 11.sp)
+            Text("Add layer", color = EditorPalette.violet, fontSize = 11.sp, maxLines = 1)
         }
     }
 }
@@ -3592,7 +3873,6 @@ private fun TimelinePanel(
     audioTracks: List<AudioTrackDocument> = emptyList(),
     selectedAudioClipId: String? = null,
     onSelectAudioClip: (String) -> Unit = {},
-    onAddAudioClip: () -> Unit = {},
     onTrimAudioClip: (Int, Int) -> Unit = { _, _ -> },
     onSplitAudioClipAtPlayhead: () -> Unit = {},
     onSetAudioGain: (Float) -> Unit = {},
@@ -3606,6 +3886,7 @@ private fun TimelinePanel(
     isPlaying: Boolean,
     onSelectLayer: (String) -> Unit,
     onScrub: (Int) -> Unit,
+    audioPreviewLabel: String = "",
     onMoveCanonicalTransformKeyframe: (Int, Int) -> Unit = { _, _ -> },
     onAddOpacityKeyframe: () -> Unit,
     onRemoveOpacityKeyframe: () -> Unit,
@@ -3619,6 +3900,9 @@ private fun TimelinePanel(
             .border(1.dp, EditorPalette.border, RoundedCornerShape(18.dp))
             .padding(horizontal = 13.dp, vertical = 9.dp)
     ) {
+        // Row 1 — title only. The transport lives on its own row below
+        // (P05): Play and the timecode never share a row with the
+        // keyframe buttons, so neither can be squeezed off-screen again.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Layers, contentDescription = null, tint = EditorPalette.violet, modifier = Modifier.size(17.dp))
             Text(
@@ -3630,24 +3914,23 @@ private fun TimelinePanel(
                 letterSpacing = 1.4.sp
             )
             Spacer(Modifier.weight(1f))
-            TextButton(
-                onClick = onAddOpacityKeyframe,
-                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add opacity keyframe" }
-            ) { Text("K+", color = EditorPalette.violet, fontSize = 9.sp) }
-            TextButton(
-                onClick = onRemoveOpacityKeyframe,
-                modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove opacity keyframe" }
-            ) { Text("K−", color = EditorPalette.amber, fontSize = 9.sp) }
-            TextButton(
-                onClick = onAddAudioClip,
-                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add audio clip" }
-            ) { Text("+ Audio", color = EditorPalette.mint, fontSize = 9.sp) }
             Text(
-                timecode(playheadFrame, project.frameRate),
-                color = EditorPalette.mint,
+                "${project.layers.size} layers",
+                color = EditorPalette.muted,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+        }
+        // Row 2 — transport: Play/Pause + timecode + what audio (if any)
+        // sits under the playhead. Always visible, never shared with the
+        // keyframe controls. Play advances the playhead (the
+        // LaunchedEffect in EffectCraftApp) and the preview re-renders
+        // per frame; it is never a dead button.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             IconButton(onClick = onTogglePlayback, modifier = Modifier.size(48.dp)) {
                 Icon(
                     if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
@@ -3655,7 +3938,47 @@ private fun TimelinePanel(
                     tint = EditorPalette.text
                 )
             }
+            Text(
+                timecode(playheadFrame, project.frameRate),
+                color = EditorPalette.mint,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (audioPreviewLabel.isNotBlank()) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    audioPreviewLabel,
+                    color = EditorPalette.muted,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(
+                onClick = onAddOpacityKeyframe,
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add opacity keyframe" }
+            ) { Text("+ Keyframe", color = EditorPalette.violet, fontSize = 11.sp) }
+            TextButton(
+                onClick = onRemoveOpacityKeyframe,
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove opacity keyframe" }
+            ) { Text("− Keyframe", color = EditorPalette.amber, fontSize = 11.sp) }
+        }
+
+        // Batch 3: a real time ruler above the playhead, After
+        // Effects-style — second ticks with mm:ss labels — so the
+        // playhead position reads against time instead of floating
+        // over a bare slider.
+        TimelineRuler(
+            durationFrames = project.durationFrames,
+            frameRate = project.frameRate,
+            modifier = Modifier.fillMaxWidth().height(20.dp)
+                .semantics { contentDescription = "Timeline ruler" }
+        )
 
         Slider(
             value = playheadFrame.toFloat(),
@@ -3663,7 +3986,7 @@ private fun TimelinePanel(
             valueRange = 0f..(project.durationFrames - 1).coerceAtLeast(1).toFloat(),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(28.dp)
+                .height(48.dp)
                 .semantics { contentDescription = "Timeline playhead" }
         )
 
@@ -3673,23 +3996,67 @@ private fun TimelinePanel(
                 .padding(bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("LAYER", color = EditorPalette.muted, fontSize = 8.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
-            Text("OPACITY · ${selectedOpacityKeyframes.size} KEYS", color = EditorPalette.amber, fontSize = 8.sp)
+            Text("LAYER", color = EditorPalette.muted, fontSize = 11.sp, letterSpacing = 1.1.sp, modifier = Modifier.width(72.dp))
+            Text("OPACITY · ${selectedOpacityKeyframes.size} KEYS", color = EditorPalette.amber, fontSize = 11.sp)
             Spacer(Modifier.width(8.dp))
-            Text("00:00", color = EditorPalette.muted, fontSize = 8.sp)
+            Text("00:00", color = EditorPalette.muted, fontSize = 11.sp)
             Spacer(Modifier.weight(1f))
-            Text("00:${(project.durationFrames / project.frameRate).toString().padStart(2, '0')}", color = EditorPalette.muted, fontSize = 8.sp)
+            Text("00:${(project.durationFrames / project.frameRate).toString().padStart(2, '0')}", color = EditorPalette.muted, fontSize = 11.sp)
         }
 
-        Column(
+        // Every layer renders: the old take(4) cap hid layers 5+ with a
+        // dead "+ N more layers" line. The track list is a LazyColumn
+        // (P11): rows compose on demand, a scrollbar thumb rides the
+        // right edge, and the fade at the bottom edge shows only while
+        // more rows sit below the fold, so a cut row reads as "scroll
+        // for more" instead of "broken".
+        val trackListState = rememberLazyListState()
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .testTag("timeline-track-list")
-                .verticalScroll(rememberScrollState()),
+                .drawWithContent {
+                    drawContent()
+                    val info = trackListState.layoutInfo
+                    val visible = info.visibleItemsInfo
+                    if (info.totalItemsCount > 0 && visible.isNotEmpty()) {
+                        val avgSize = visible.map { it.size }.average().toFloat()
+                        val totalPx = avgSize * info.totalItemsCount
+                        val viewportPx = size.height
+                        if (avgSize > 0f && totalPx > viewportPx) {
+                            val thumbWidth = 4.dp.toPx()
+                            val thumbHeight = (viewportPx / totalPx * viewportPx)
+                                .coerceAtLeast(28.dp.toPx())
+                                .coerceAtMost(viewportPx)
+                            val scrolledPx = trackListState.firstVisibleItemIndex * avgSize +
+                                trackListState.firstVisibleItemScrollOffset
+                            val maxScroll = totalPx - viewportPx
+                            val thumbOffset = if (maxScroll > 0f) {
+                                (scrolledPx / maxScroll * (viewportPx - thumbHeight))
+                                    .coerceIn(0f, viewportPx - thumbHeight)
+                            } else 0f
+                            drawRoundRect(
+                                color = EditorPalette.muted.copy(alpha = 0.55f),
+                                topLeft = androidx.compose.ui.geometry.Offset(
+                                    size.width - thumbWidth - 2.dp.toPx(), thumbOffset
+                                ),
+                                size = androidx.compose.ui.geometry.Size(thumbWidth, thumbHeight),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                                    thumbWidth / 2f, thumbWidth / 2f
+                                )
+                            )
+                        }
+                    }
+                }
+        ) {
+        LazyColumn(
+            state = trackListState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("timeline-track-list"),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            project.layers.take(4).forEach { layer ->
+            items(project.layers, key = { it.id }) { layer ->
                 LayerTrack(
                     layer = layer,
                     selected = layer.id == selectedLayerId,
@@ -3702,13 +4069,10 @@ private fun TimelinePanel(
                     onClick = { onSelectLayer(layer.id) }
                 )
             }
-            if (project.layers.size > 4) {
-                Text("+ ${project.layers.size - 4} more layers", color = EditorPalette.muted, fontSize = 9.sp)
-            }
             // Audio lanes: one row per audio track, clips as blocks like
             // the layer tracks. With no audio tracks nothing renders here,
             // so the timeline is pixel-identical to the pre-audio layout.
-            audioTracks.forEach { track ->
+            items(audioTracks, key = { it.id }) { track ->
                 AudioTrackLane(
                     track = track,
                     durationFrames = project.durationFrames,
@@ -3721,35 +4085,57 @@ private fun TimelinePanel(
             }
             val selectedAudioClip = selectedAudioTrack?.clips?.firstOrNull { it.id == selectedAudioClipId }
             if (selectedAudioClip != null && selectedAudioTrack != null) {
-                AudioClipInspector(
-                    clip = selectedAudioClip,
-                    trackName = selectedAudioTrack.name,
-                    playheadFrame = playheadFrame,
-                    onTrimAudioClip = onTrimAudioClip,
-                    onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
-                    onSetAudioGain = onSetAudioGain,
-                    onSetAudioFades = onSetAudioFades,
-                    onSetAudioMuted = onSetAudioMuted
-                )
+                item(key = "audio-clip-inspector") {
+                    AudioClipInspector(
+                        clip = selectedAudioClip,
+                        trackName = selectedAudioTrack.name,
+                        playheadFrame = playheadFrame,
+                        onTrimAudioClip = onTrimAudioClip,
+                        onSplitAudioClipAtPlayhead = onSplitAudioClipAtPlayhead,
+                        onSetAudioGain = onSetAudioGain,
+                        onSetAudioFades = onSetAudioFades,
+                        onSetAudioMuted = onSetAudioMuted
+                    )
+                }
             }
             val selectedClipLayer = project.layers.firstOrNull { layer ->
                 layer.clips.any { it.id == selectedClipId }
             }
             val selectedClip = selectedClipLayer?.clips?.firstOrNull { it.id == selectedClipId }
             if (selectedClip != null && selectedClipLayer != null) {
-                ClipInspector(
-                    clip = selectedClip,
-                    layerName = selectedClipLayer.name,
-                    playheadFrame = playheadFrame,
-                    onTrimClip = onTrimClip,
-                    onSplitClipAtPlayhead = onSplitClipAtPlayhead
-                )
+                item(key = "clip-inspector") {
+                    ClipInspector(
+                        clip = selectedClip,
+                        layerName = selectedClipLayer.name,
+                        playheadFrame = playheadFrame,
+                        onTrimClip = onTrimClip,
+                        onSplitClipAtPlayhead = onSplitClipAtPlayhead
+                    )
+                }
             }
             if (canonicalTransformKeyframes.isNotEmpty()) {
-                CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub, onMoveCanonicalTransformKeyframe)
+                item(key = "canonical-transform-track") {
+                    CanonicalTransformTrack(canonicalTransformKeyframes, canonicalTransformDurationFrames, playheadFrame, onScrub, onMoveCanonicalTransformKeyframe)
+                }
             }
             if (canonicalColorKeys.isNotEmpty()) {
-                CanonicalColorTrack(canonicalColorKeys, canonicalColorDurationFrames, playheadFrame, onScrub)
+                item(key = "canonical-color-track") {
+                    CanonicalColorTrack(canonicalColorKeys, canonicalColorDurationFrames, playheadFrame, onScrub)
+                }
+            }
+        }
+            if (trackListState.canScrollForward) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(18.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, EditorPalette.panel)
+                            )
+                        )
+                )
             }
         }
     }
@@ -4819,43 +5205,89 @@ private fun timecode(frame: Int, fps: Int): String {
 }
 
 /**
- * Project audio timeline: clips added from the device are listed with
- * their timeline window, a volume slider, 1-second move buttons,
- * 1-second trim buttons and remove. Every control writes through the
- * callbacks into the persisted [AudioTimelineStore] and the mixed
- * result is what the MP4 export encodes.
+ * Project audio: the clips of the unified [ProjectDocument.audioTracks]
+ * model, listed with their timeline window, a volume slider, 1-second
+ * move buttons, 1-second trim buttons and remove. Every control writes
+ * through the callbacks into the project model — the same clips the
+ * timeline lanes show, undo tracks, save persists and the MP4 export
+ * mixes. Times are frames; the panel converts to milliseconds for
+ * display with the composition frame rate.
  */
 @Composable
+private fun TimelineRuler(
+    durationFrames: Int,
+    frameRate: Int,
+    modifier: Modifier = Modifier
+) {
+    val durationSeconds = if (frameRate > 0) durationFrames / frameRate.toFloat() else 0f
+    // Labels every second on short comps, every five on long ones,
+    // so labels never collide.
+    val labelEverySeconds = if (durationSeconds <= 30f) 1 else 5
+    val textMeasurer = rememberTextMeasurer()
+    Canvas(modifier) {
+        if (durationSeconds <= 0f || size.width <= 0f) return@Canvas
+        val secondsToX = { seconds: Float -> seconds / durationSeconds * size.width }
+        var seconds = 0f
+        while (seconds <= durationSeconds) {
+            val x = secondsToX(seconds)
+            val isMajor = (seconds.toInt() % labelEverySeconds == 0)
+            drawLine(
+                EditorPalette.muted,
+                Offset(x, size.height - if (isMajor) 12f else 7f),
+                Offset(x, size.height),
+                strokeWidth = 1f
+            )
+            if (isMajor) {
+                val totalSeconds = seconds.toInt()
+                val label = "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+                drawText(
+                    textMeasurer,
+                    label,
+                    topLeft = Offset(x + 3f, 0f),
+                    style = androidx.compose.ui.text.TextStyle(color = EditorPalette.muted, fontSize = 9.sp)
+                )
+            }
+            seconds += 0.5f
+        }
+    }
+}
+
+@Composable
 private fun AudioTimelinePanel(
-    timeline: AudioTimeline,
+    tracks: List<AudioTrackDocument>,
+    frameRate: Int,
     onAddAudioClip: () -> Unit,
     onRemoveAudioClip: (String) -> Unit,
     onVolumeChange: (String, Double) -> Unit,
-    onMove: (String, Long) -> Unit,
-    onTrim: (String, Long, Long) -> Unit,
+    onMove: (String, Int) -> Unit,
+    onTrim: (String, Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val clips = tracks.flatMap { track -> track.clips.map { clip -> track to clip } }
+    val safeFps = frameRate.coerceAtLeast(1)
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Audio", color = EditorPalette.text, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))
             TextButton(
                 onClick = onAddAudioClip,
-                modifier = Modifier.semantics { contentDescription = "Add audio clip" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Add audio clip" }
             ) {
                 Text("Add audio", color = EditorPalette.violet, fontSize = 12.sp)
             }
         }
-        if (timeline.isEmpty) {
+        if (clips.isEmpty()) {
             Text(
                 "No audio clips yet. Added clips are mixed into the MP4 export.",
                 color = EditorPalette.muted,
                 fontSize = 11.sp
             )
         }
-        timeline.clips.forEach { clip ->
+        clips.forEach { (track, clip) ->
             AudioClipRow(
+                trackName = track.name,
                 clip = clip,
+                frameRate = safeFps,
                 onRemoveAudioClip = onRemoveAudioClip,
                 onVolumeChange = onVolumeChange,
                 onMove = onMove,
@@ -4867,15 +5299,20 @@ private fun AudioTimelinePanel(
 
 @Composable
 private fun AudioClipRow(
-    clip: AudioClip,
+    trackName: String,
+    clip: AudioClipDocument,
+    frameRate: Int,
     onRemoveAudioClip: (String) -> Unit,
     onVolumeChange: (String, Double) -> Unit,
-    onMove: (String, Long) -> Unit,
-    onTrim: (String, Long, Long) -> Unit
+    onMove: (String, Int) -> Unit,
+    onTrim: (String, Int, Int) -> Unit
 ) {
+    val startMs = clip.clip.startFrame * 1_000L / frameRate.coerceAtLeast(1)
+    val endMs = clip.clip.endFrame * 1_000L / frameRate.coerceAtLeast(1)
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(
-            "${clip.sourceUri.substringAfterLast('/')} · ${clip.timelineStartUs / 1_000}–${clip.timelineEndUs / 1_000} ms",
+            "$trackName · ${clip.sourcePath.substringAfterLast('/')} · $startMs–${endMs} ms" +
+                if (clip.muted) " · muted" else "",
             color = EditorPalette.text,
             fontSize = 11.sp,
             maxLines = 1,
@@ -4884,35 +5321,36 @@ private fun AudioClipRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Vol", color = EditorPalette.muted, fontSize = 11.sp)
             Slider(
-                value = clip.volume.toFloat(),
+                value = clip.gain.coerceIn(0f, 1f),
                 onValueChange = { onVolumeChange(clip.id, it.toDouble()) },
                 valueRange = 0f..1f,
                 modifier = Modifier.weight(1f)
+                    .height(48.dp)
                     .semantics { contentDescription = "Audio clip volume" }
             )
             TextButton(
-                onClick = { onMove(clip.id, (clip.timelineStartUs - 1_000_000L).coerceAtLeast(0L)) },
-                modifier = Modifier.semantics { contentDescription = "Move audio clip back 1 second" }
+                onClick = { onMove(clip.id, (clip.clip.startFrame - frameRate).coerceAtLeast(0)) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Move audio clip back 1 second" }
             ) { Text("−1s", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
-                onClick = { onMove(clip.id, clip.timelineStartUs + 1_000_000L) },
-                modifier = Modifier.semantics { contentDescription = "Move audio clip forward 1 second" }
+                onClick = { onMove(clip.id, clip.clip.startFrame + frameRate) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Move audio clip forward 1 second" }
             ) { Text("+1s", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
                 onClick = { onRemoveAudioClip(clip.id) },
-                modifier = Modifier.semantics { contentDescription = "Remove audio clip" }
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Remove audio clip" }
             ) { Text("Remove", color = EditorPalette.amber, fontSize = 10.sp) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(
-                enabled = clip.durationUs > 1_000_000L,
-                onClick = { onTrim(clip.id, clip.sourceStartUs + 1_000_000L, clip.durationUs - 1_000_000L) },
-                modifier = Modifier.semantics { contentDescription = "Trim audio clip start by 1 second" }
+                enabled = clip.timelineLength > frameRate,
+                onClick = { onTrim(clip.id, clip.clip.startFrame + frameRate, clip.clip.endFrame) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Trim audio clip start by 1 second" }
             ) { Text("Trim start −1s", color = EditorPalette.violet, fontSize = 10.sp) }
             TextButton(
-                enabled = clip.durationUs > 1_000_000L,
-                onClick = { onTrim(clip.id, clip.sourceStartUs, clip.durationUs - 1_000_000L) },
-                modifier = Modifier.semantics { contentDescription = "Trim audio clip end by 1 second" }
+                enabled = clip.timelineLength > frameRate,
+                onClick = { onTrim(clip.id, clip.clip.startFrame, clip.clip.endFrame - frameRate) },
+                modifier = Modifier.height(48.dp).semantics { contentDescription = "Trim audio clip end by 1 second" }
             ) { Text("Trim end −1s", color = EditorPalette.violet, fontSize = 10.sp) }
         }
     }

@@ -28,6 +28,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -610,7 +611,7 @@ class M7FunctionCoverageTest {
                     onSave = {},
                     onOpenProject = {},
                     onDeleteOfflineAsset = {},
-                    onValidateEcproj = {},
+                    onImportProject = {},
                     onExportEcproj = {},
                     onExportEcprojx = {},
                     isExportingFrame = false,
@@ -677,7 +678,8 @@ class M7FunctionCoverageTest {
         sequenceSettingsScreen(onExport = { w, h, fps, start, end ->
             exported.add(listOf(w, h, fps, start, end))
         })
-        compose.onNodeWithContentDescription("Export PNG sequence ZIP").performClick()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export PNG sequence ZIP").performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         compose.onNodeWithText("Render ZIP").performClick()
         // Opening the dialog resets the fields from the composition
@@ -691,7 +693,8 @@ class M7FunctionCoverageTest {
     fun settings_pngSequenceSettingsRejectsBlankNumericField() {
         var exported = 0
         sequenceSettingsScreen(onExport = { _, _, _, _, _ -> exported++ })
-        compose.onNodeWithContentDescription("Export PNG sequence ZIP").performClick()
+        compose.onNodeWithContentDescription("More export options").performClick()
+        compose.onNodeWithText("Export PNG sequence ZIP").performClick()
         compose.onNodeWithText("PNG sequence settings").assertIsDisplayed()
         // Integration note: the original ec-m7 test selected the FPS
         // field by position via onAllNodes(hasSetTextAction())[2], but
@@ -707,6 +710,17 @@ class M7FunctionCoverageTest {
         // not call back. Same field, same assertion — no weakening.
         compose.onNodeWithContentDescription("Export FPS").performTextClearance()
         compose.onNodeWithText("Render ZIP").performClick()
+        // Run 42441138764 (attempt 1): the validation error is set by
+        // the click's recomposition, which can land after the fetch on
+        // a loaded emulator, so performScrollTo found no node. Wait
+        // for the error to be composed first; the scroll, the
+        // displayed assertion and the exported==0 check below are
+        // unchanged and still fail (timeout) if the error never
+        // appears. The dialog flow itself is intact — this test
+        // passed the run's fresh-emulator retry unchanged.
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithText("Enter valid numeric settings").fetchSemanticsNodes().isNotEmpty()
+        }
         // Gate-run-727 diagnosis: the error text IS composed when the
         // FPS field is blank, but the settings dialog content scrolls
         // (height-capped column) and the error sits below the fold, so
@@ -729,7 +743,8 @@ class M7FunctionCoverageTest {
             offlineAssets = listOf(asset),
             onVerifyOfflineAssets = { verificationCalls++ },
         )
-        compose.onNodeWithContentDescription("Offline media library").performClick()
+        compose.onNodeWithContentDescription("File menu").performClick()
+        compose.onNodeWithText("Offline media library").performClick()
         compose.onNodeWithText("Verify media integrity").assertIsDisplayed().performClick()
         assertEquals(1, verificationCalls)
     }
