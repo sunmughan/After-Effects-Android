@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
 import java.util.zip.ZipInputStream
 
 /**
@@ -32,7 +33,7 @@ object ProjectBundleZip {
 
     fun unpack(zipBytes: ByteArray, destDir: File): Unpacked {
         require(isZip(zipBytes)) { "Not a ZIP bundle (missing PK signature)" }
-        require(!destDir.isSymbolicLink()) { "Import destination must not be a symbolic link" }
+        require(!Files.isSymbolicLink(destDir.toPath())) { "Import destination must not be a symbolic link" }
         val created = destDir.mkdirs()
         require(created || destDir.isDirectory) {
             "Cannot create import directory ${destDir.absolutePath}"
