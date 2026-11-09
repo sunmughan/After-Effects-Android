@@ -236,7 +236,7 @@ class CanonicalSelectionEditorTest {
         // directions; scrubbing the main playhead requests that real frame.
         workspaceFrame.intValue = 15
         compose.waitUntil(timeoutMillis = 5_000) { renderedFrames.contains(15L) }
-        compose.onNodeWithText("Frame 15 / 89").assertIsDisplayed()
+        compose.onNodeWithText("Frame 15 / 89").performScrollTo().assertIsDisplayed()
 
         // Native transform metadata exposes key markers; tapping the inspector
         // jump action updates the shared playhead and requests that preview.
