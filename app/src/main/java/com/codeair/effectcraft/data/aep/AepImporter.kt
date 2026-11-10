@@ -36,10 +36,11 @@ import kotlin.math.roundToLong
  * cannot resolve are listed as missing, never a refusal); expressions kept as
  * source text; shape contents (groups, rect, ellipse, polystar, bezier paths, fill,
  * stroke, gradient fill and stroke, trim, round corners, merge, offset and repeater,
- * with keyframes and expressions).
+ * with keyframes and expressions); every composition in the project, and precomp
+ * layers pointing at them.
  * NOT imported in v1 (all reported as losses): camera and
- * light layers, precomp layers, layer styles, 3D rotations,
- * project settings, compositions after the first, folders. Text imports with
+ * light layers, layer styles, 3D rotations,
+ * project settings, folders. Text imports with
  * its first-run style, runs, paragraphs and box; text animators, Source Text
  * keyframes and expressions are losses.
  * There is no `.aep` export in this build.
@@ -195,8 +196,8 @@ object AepImporter {
     private data class Built(
         val project: AeProject,
         val report: AepImportReport.ImportReport,
-        val compPatch: CompPatch,
-        val layerPatches: List<LayerPatch>
+        val compPatches: List<CompPatch>,
+        val layerPatches: List<List<LayerPatch>>
     )
 
     private enum class PropKind { ANCHOR, POSITION, SCALE, ROTATION, OPACITY }
@@ -277,14 +278,8 @@ object AepImporter {
             )
         val allItems = project.allItems()
         val comps = allItems.filter { it.kind() == AepTypedView.ItemKind.Composition }
-        val firstComp = comps.firstOrNull()
-            ?: throw IllegalArgumentException("This .aep file has no composition to import.")
-        for (comp in comps.drop(1)) {
-            col.lose(
-                AepImportReport.LossCategory.UnsupportedItems,
-                "composition '${comp.name() ?: "Composition"}' is not imported in this build " +
-                    "(only the first composition is imported)"
-            )
+        if (comps.isEmpty()) {
+            throw IllegalArgumentException("This .aep file has no composition to import.")
         }
         for (item in allItems) {
             when (item.kind()) {
@@ -307,23 +302,95 @@ object AepImporter {
                 "time display); the defaults are used"
         )
 
-        val compView = firstComp.comp()
+        // Which compositions are readable at all; the rest are skipped with a loss, so
+        // one damaged composition does not take the whole project down with it.
+        val importableComps = ArrayList<AepTypedView.Item>()
+        for (comp in comps) {
+            val view = comp.comp()
+            if (view == null || view.header() == null) {
+                col.lose(
+                    AepImportReport.LossCategory.DamagedData,
+                    "composition '${comp.name() ?: "Composition"}': the composition data is " +
+                        "unreadable, the composition is skipped"
+                )
+                continue
+            }
+            importableComps.add(comp)
+        }
+        if (importableComps.isEmpty()) {
+            throw IllegalArgumentException("This .aep file has no composition to import.")
+        }
+        // Index of each imported composition in the project's comp list, by item id;
+        // precomp layers use it to point at the composition they reference.
+        val compIndexById = importableComps.mapIndexedNotNull { index, comp ->
+            comp.id()?.let { it to index }
+        }.toMap()
+
+        // Effect group skeletons come from the native registry; patch uids start at 1 and
+        // are remapped with the converter's `next_id` in the patch step. The counter is
+        // shared across compositions, so patch uids stay unique project-wide.
+        val defs = AepEffects.EffectDefinitions.of(project)
+        var patchUid = 1L
+        val allocBlock: (Int) -> Long = { n ->
+            val base = patchUid
+            patchUid += n
+            base
+        }
+
+        val aeComps = ArrayList<AeComp>()
+        val compPatches = ArrayList<CompPatch>()
+        val layerPatches = ArrayList<List<LayerPatch>>()
+        for (compItem in importableComps) {
+            val built = buildComp(
+                compItem, project, compIndexById, defs, provider, allocBlock, mediaResolver, col
+            ) ?: continue
+            aeComps.add(built.first)
+            compPatches.add(built.second)
+            layerPatches.add(built.third)
+        }
+        col.imported.compositions = aeComps.size
+        col.imported.layers = aeComps.sumOf { it.layers.size }
+        val aeProject = AeProject("Imported Project", aeComps, warnings = emptyList())
+        return Built(aeProject, col.finish(versions), compPatches, layerPatches)
+    }
+
+    /**
+     * Builds one composition: its layers, its patch and its markers. Returns null (with the
+     * loss recorded) when the composition's frame rate or duration is unreadable.
+     */
+    private fun buildComp(
+        compItem: AepTypedView.Item,
+        project: AepTypedView.Project,
+        compIndexById: Map<Long, Int>,
+        defs: AepEffects.EffectDefinitions,
+        provider: AepEffectImport.EffectSpecProvider,
+        allocBlock: (Int) -> Long,
+        mediaResolver: (String) -> String?,
+        col: AepImportReport.Collector
+    ): Triple<AeComp, CompPatch, List<LayerPatch>>? {
+        val compView = compItem.comp()
             ?: throw IllegalArgumentException(
-                "composition \"${firstComp.name() ?: "Composition"}\": the composition data is unreadable"
+                "composition \"${compItem.name() ?: "Composition"}\": the composition data is unreadable"
             )
         val compName = compView.name() ?: "Composition"
         val header = compView.header()
             ?: throw IllegalArgumentException(
                 "composition \"$compName\": the composition header is unreadable"
             )
-        val frameRate = header.frameRate()
-            ?: throw IllegalArgumentException(
-                "composition \"$compName\": the frame rate is unreadable"
+        val frameRate = header.frameRate() ?: run {
+            col.lose(
+                AepImportReport.LossCategory.DamagedData,
+                "composition \"$compName\": the frame rate is unreadable, the composition is skipped"
             )
-        val durationSeconds = header.durationSeconds()
-            ?: throw IllegalArgumentException(
-                "composition \"$compName\": the duration is unreadable"
+            return null
+        }
+        val durationSeconds = header.durationSeconds() ?: run {
+            col.lose(
+                AepImportReport.LossCategory.DamagedData,
+                "composition \"$compName\": the duration is unreadable, the composition is skipped"
             )
+            return null
+        }
         val background = header.backgroundRgb().toList()
         val compWidth = header.width
         val compHeight = header.height
@@ -405,19 +472,10 @@ object AepImporter {
 
         val aeLayers = ArrayList<AeLayer>()
         val layerPatches = ArrayList<LayerPatch>()
-        // Effect group skeletons come from the native registry; patch uids start at 1 and
-        // are remapped with the converter's `next_id` in the patch step.
-        val defs = AepEffects.EffectDefinitions.of(project)
-        var patchUid = 1L
-        val allocBlock: (Int) -> Long = { n ->
-            val base = patchUid
-            patchUid += n
-            base
-        }
         for ((layerIndex, row) in importable.withIndex()) {
             val built = buildLayer(
                 row, project, compView, header, durationSeconds, parentNameById[row.header.id],
-                compName, layerIndex, defs, provider, allocBlock, mediaResolver, col
+                compName, layerIndex, compIndexById, defs, provider, allocBlock, mediaResolver, col
             )
             if (built == null) {
                 col.lose(
@@ -442,8 +500,7 @@ object AepImporter {
                 }
             }
         }
-        col.imported.compositions = 1
-        col.imported.layers = aeLayers.size
+        // (The composition and layer totals are set in build(), after every comp.)
 
         val pixelAspect = header.pixelAspectRatio()?.takeIf { it.isFinite() && it > 0.0 }
             ?: run {
@@ -483,22 +540,16 @@ object AepImporter {
             } ?: JSONArray()
         )
 
-        val aeProject = AeProject(
-            projectName = compName,
-            comps = listOf(
-                AeComp(
-                    name = compName,
-                    width = compWidth,
-                    height = compHeight,
-                    frameRate = frameRate,
-                    durationSeconds = durationSeconds,
-                    background = background,
-                    layers = aeLayers
-                )
-            ),
-            warnings = emptyList()
+        val aeComp = AeComp(
+            name = compName,
+            width = compWidth,
+            height = compHeight,
+            frameRate = frameRate,
+            durationSeconds = durationSeconds,
+            background = background,
+            layers = aeLayers
         )
-        return Built(aeProject, col.finish(versions), compPatch, layerPatches)
+        return Triple(aeComp, compPatch, layerPatches)
     }
 
     private data class LayerRow(
@@ -541,13 +592,9 @@ object AepImporter {
                     return false
                 }
                 when (source.kind()) {
-                    AepTypedView.ItemKind.Composition -> {
-                        col.lose(
-                            AepImportReport.LossCategory.UnsupportedLayers,
-                            "precomp layer '$name' is not imported in this build"
-                        )
-                        false
-                    }
+                    // A precomp layer imports as a COMP layer pointing at the
+                    // referenced composition (converted with every other comp).
+                    AepTypedView.ItemKind.Composition -> true
                     AepTypedView.ItemKind.Footage -> {
                         val footage = source.footage()
                         if (footage == null) {
@@ -595,6 +642,8 @@ object AepImporter {
         parentName: String?,
         compName: String,
         layerIndex: Int,
+        /** The index of each imported composition in the project's comp list, by item id. */
+        compIndexById: Map<Long, Int>,
         defs: AepEffects.EffectDefinitions,
         provider: AepEffectImport.EffectSpecProvider,
         allocBlock: (Int) -> Long,
@@ -625,6 +674,7 @@ object AepImporter {
         var font = "Inter"
         var fontSize = 72.0
         var textDoc: JSONObject? = null
+        var compIndex: Int? = null
         when (header.layerType) {
             AepHeader.LayerType.Text -> {
                 type = AeLayerType.TEXT
@@ -662,33 +712,52 @@ object AepImporter {
                     col.imported.nullLayers++
                 } else {
                     val source = project.layerSource(layer) ?: return null
-                    val footage = source.footage() ?: return null
-                    width = footage.width.toInt().coerceAtLeast(1)
-                    height = footage.height.toInt().coerceAtLeast(1)
-                    if (footage.isSolid) {
-                        type = AeLayerType.SOLID
-                        col.imported.solids++
-                        col.imported.solidLayers++
-                        val rgb = footage.solidRgb()
-                        color = if (rgb != null) {
-                            listOf(rgb[0].toDouble(), rgb[1].toDouble(), rgb[2].toDouble())
-                        } else {
-                            listOf(1.0, 1.0, 1.0)
+                    if (source.kind() == AepTypedView.ItemKind.Composition) {
+                        val targetIndex = source.id()?.let { compIndexById[it] }
+                        if (targetIndex == null) {
+                            col.lose(
+                                AepImportReport.LossCategory.DamagedData,
+                                "layer '$name': the precomp it points at is not imported, " +
+                                    "the layer is skipped"
+                            )
+                            return null
+                        }
+                        type = AeLayerType.COMP
+                        compIndex = targetIndex
+                        col.imported.precompLayers++
+                        sourceSize?.let {
+                            width = it.first.toInt().coerceAtLeast(1)
+                            height = it.second.toInt().coerceAtLeast(1)
                         }
                     } else {
-                        type = AeLayerType.FOOTAGE
-                        col.imported.footage++
-                        col.imported.footageLayers++
-                        val storedPath = footage.path!!.replace('\\', '/')
-                        file = storedPath
-                        if (mediaResolver(storedPath) == null) {
-                            col.missingFootage.add(storedPath)
+                        val footage = source.footage() ?: return null
+                        width = footage.width.toInt().coerceAtLeast(1)
+                        height = footage.height.toInt().coerceAtLeast(1)
+                        if (footage.isSolid) {
+                            type = AeLayerType.SOLID
+                            col.imported.solids++
+                            col.imported.solidLayers++
+                            val rgb = footage.solidRgb()
+                            color = if (rgb != null) {
+                                listOf(rgb[0].toDouble(), rgb[1].toDouble(), rgb[2].toDouble())
+                            } else {
+                                listOf(1.0, 1.0, 1.0)
+                            }
+                        } else {
+                            type = AeLayerType.FOOTAGE
+                            col.imported.footage++
+                            col.imported.footageLayers++
+                            val storedPath = footage.path!!.replace('\\', '/')
+                            file = storedPath
+                            if (mediaResolver(storedPath) == null) {
+                                col.missingFootage.add(storedPath)
+                            }
+                            hasAudio = footage.audioSampleRate != null
+                            kind = footageKind(storedPath, hasAudio, footage.width)
+                            frameRate = footage.nativeFrameRate.takeIf { it > 0 }?.toDouble()
+                            durationSeconds = footage.duration?.toDoubleOrNull()
+                                ?.takeIf { it > 0.0 && it.isFinite() } ?: compDuration
                         }
-                        hasAudio = footage.audioSampleRate != null
-                        kind = footageKind(storedPath, hasAudio, footage.width)
-                        frameRate = footage.nativeFrameRate.takeIf { it > 0 }?.toDouble()
-                        durationSeconds = footage.duration?.toDoubleOrNull()
-                            ?.takeIf { it > 0.0 && it.isFinite() } ?: compDuration
                     }
                 }
             }
@@ -971,6 +1040,7 @@ object AepImporter {
             color = color,
             textDoc = textDoc,
             shapesProvided = shapesProvided,
+            compIndex = compIndex,
             file = file,
             kind = kind,
             hasAudio = hasAudio,
@@ -1318,20 +1388,55 @@ object AepImporter {
     private fun patchCanonical(json: String, built: Built): String {
         val root = JSONObject(json)
         val items = root.getJSONObject("items")
-        var compKind: JSONObject? = null
+        // The converter writes one item per composition, in project order; match each
+        // patch to its composition by name (two compositions with the same name would
+        // collide, as they already do for layer names in the converter).
+        val compKindByName = HashMap<String, JSONObject>()
         val itemKeys = items.keys()
         while (itemKeys.hasNext()) {
             val key = itemKeys.next()
             val item = items.getJSONObject(key)
             val kind = item.optJSONObject("kind") ?: continue
             if (kind.optString("type") == "Comp") {
-                compKind = kind
-                break
+                compKindByName[item.optString("name")] = kind
             }
         }
-        val comp = compKind
-            ?: throw IllegalStateException("converter output has no composition")
-        val patch = built.compPatch
+        // Effect groups carry patch-space uids (from 1); they live above the converter's
+        // `next_id`, so every patch uid is shifted by next_id - 1 and the root's next_id
+        // moves past the highest patch uid. The offset and the counters stay project-global,
+        // so patch uids never collide across compositions.
+        val uidOffset = root.optLong("next_id", 1L) - 1L
+        val state = PatchUidState()
+        for ((index, aeComp) in built.project.comps.withIndex()) {
+            val comp = compKindByName[aeComp.name]
+                ?: throw IllegalStateException("converter output has no composition '${aeComp.name}'")
+            patchOneComp(
+                root, comp, built.compPatches[index], built.layerPatches[index], uidOffset, state
+            )
+        }
+        if (state.maxPatchUid > 0L || state.extraUid > 0L) {
+            root.put("next_id", root.optLong("next_id", 1L) + state.maxPatchUid + state.extraUid)
+        }
+        return root.toString()
+    }
+
+    /** Uids created by the patch step, shared across compositions so they never collide. */
+    private class PatchUidState(var maxPatchUid: Long = 0L, var extraUid: Long = 0L)
+
+    /**
+     * Patches one composition: its fields and markers, then each layer's stretch, blend,
+     * switches, rich keys, expressions, effect/mask/shape groups and time remap, then
+     * resolves that composition's layer references. Layer ids can repeat across
+     * compositions in a real .aep, so the file-id map is scoped to this composition.
+     */
+    private fun patchOneComp(
+        root: JSONObject,
+        comp: JSONObject,
+        patch: CompPatch,
+        layerPatches: List<LayerPatch>,
+        uidOffset: Long,
+        state: PatchUidState
+    ) {
         comp.put("pixel_aspect", patch.pixelAspect)
         comp.put("display_start", patch.displayStartTicks)
         comp.put("work_area", JSONArray().put(patch.workAreaStartTicks).put(patch.workAreaEndTicks))
@@ -1341,29 +1446,23 @@ object AepImporter {
         if (patch.markers.length() > 0) comp.put("markers", patch.markers)
         val layers = comp.getJSONArray("layers")
         // Effect groups carry patch-space uids (from 1); they live above the converter's
-        // `next_id`, so every patch uid is shifted by next_id - 1 and the root's next_id
-        // moves past the highest patch uid.
-        val uidOffset = root.optLong("next_id", 1L) - 1L
-        var maxPatchUid = 0L
-        // Groups created by the patch step itself (a masks group for a null layer)
-        // take uids past the patch space.
-        var extraUid = 0L
+        // `next_id`, so every patch uid is shifted by next_id - 1.
         val allRefs = ArrayList<AepEffectImport.PendingLayerRef>()
         val fileIdToEcId = HashMap<Long, Long>()
         for (i in 0 until layers.length()) {
             val layerJson = layers.getJSONObject(i)
-            val layerPatch = built.layerPatches.getOrNull(i) ?: continue
+            val layerPatch = layerPatches.getOrNull(i) ?: continue
             fileIdToEcId[layerPatch.aepLayerId] = layerJson.optLong("id")
             for (group in layerPatch.effectGroups) {
-                maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
+                state.maxPatchUid = maxOf(state.maxPatchUid, AepEffectImport.maxUid(group).toLong())
             }
             for (group in layerPatch.maskGroups) {
-                maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
+                state.maxPatchUid = maxOf(state.maxPatchUid, AepEffectImport.maxUid(group).toLong())
             }
             for (group in layerPatch.shapeGroups) {
-                maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
+                state.maxPatchUid = maxOf(state.maxPatchUid, AepEffectImport.maxUid(group).toLong())
             }
-            layerPatch.timeRemap?.let { maxPatchUid = maxOf(maxPatchUid, it.optLong("uid")) }
+            layerPatch.timeRemap?.let { state.maxPatchUid = maxOf(state.maxPatchUid, it.optLong("uid")) }
             for (ref in layerPatch.pendingLayerRefs) {
                 allRefs.add(
                     AepEffectImport.PendingLayerRef(
@@ -1374,7 +1473,7 @@ object AepImporter {
         }
         for (i in 0 until layers.length()) {
             val layerJson = layers.getJSONObject(i)
-            val layerPatch = built.layerPatches.getOrNull(i) ?: continue
+            val layerPatch = layerPatches.getOrNull(i) ?: continue
             layerJson.put("stretch", layerPatch.stretch)
             layerJson.put("blend_mode", layerPatch.blendMode)
             layerJson.put("switches", switchesJson(layerPatch.switches))
@@ -1427,8 +1526,8 @@ object AepImporter {
                     if (child.optString("match") == "masks") masksChild = child
                 }
                 if (masksChild == null) {
-                    val freshUid = root.optLong("next_id", 1L) + maxPatchUid + extraUid
-                    extraUid += 1
+                    val freshUid = root.optLong("next_id", 1L) + state.maxPatchUid + state.extraUid
+                    state.extraUid += 1
                     masksChild = JSONObject()
                         .put("node", "Group")
                         .put("uid", freshUid)
@@ -1476,10 +1575,6 @@ object AepImporter {
                 reportMissing = false
             )
         }
-        if (maxPatchUid > 0L || extraUid > 0L) {
-            root.put("next_id", root.optLong("next_id", 1L) + maxPatchUid + extraUid)
-        }
-        return root.toString()
     }
 
     private fun switchesJson(switches: Switches): JSONObject = JSONObject()

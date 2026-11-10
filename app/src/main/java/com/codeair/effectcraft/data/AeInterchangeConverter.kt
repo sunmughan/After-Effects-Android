@@ -32,8 +32,11 @@ object AeInterchangeConverter {
     ): String {
         val ids = Ids()
         val items = JSONObject()
-        for (comp in project.comps) {
-            convertComp(comp, ids, items, mediaResolver)
+        // Allocate every composition id first, so a precomp layer can point at
+        // a composition that is converted after it.
+        val compIdByIndex = project.comps.map { ids.alloc() }
+        for ((index, comp) in project.comps.withIndex()) {
+            convertComp(comp, ids, items, mediaResolver, compIdByIndex[index], compIdByIndex)
         }
         return JSONObject()
             .put("savedBy", "effectcraft-ae-import-1")
@@ -116,9 +119,10 @@ object AeInterchangeConverter {
         comp: AeComp,
         ids: Ids,
         items: JSONObject,
-        mediaResolver: (String) -> String?
+        mediaResolver: (String) -> String?,
+        compId: Long,
+        compIdByIndex: List<Long>
     ) {
-        val compId = ids.alloc()
         val (rateNum, rateDen) = frameRate(comp.frameRate)
         val durationTicks = ticks(comp.durationSeconds)
         val layersJson = JSONArray()
@@ -132,7 +136,7 @@ object AeInterchangeConverter {
         }
         val layerIdByName = resolved.associate { it.ae.name to it.layerId }
         for (entry in resolved) {
-            val layer = convertLayer(entry.ae, entry.layerId, entry.itemId, layerIdByName, ids)
+            val layer = convertLayer(entry.ae, entry.layerId, entry.itemId, layerIdByName, ids, compIdByIndex)
             layersJson.put(layer)
             if (entry.itemId != null) {
                 items.put(entry.itemId.toString(), buildSourceItem(entry.ae, entry.itemId, comp, mediaResolver))
@@ -182,7 +186,8 @@ object AeInterchangeConverter {
         layerId: Long,
         itemId: Long?,
         layerIdByName: Map<String, Long>,
-        ids: Ids
+        ids: Ids,
+        compIdByIndex: List<Long>
     ): JSONObject {
         val source = when (layer.type) {
             AeLayerType.FOOTAGE -> JSONObject().put("type", "Footage").put("item", itemId)
@@ -190,6 +195,8 @@ object AeInterchangeConverter {
             AeLayerType.TEXT -> JSONObject().put("type", "Text")
             AeLayerType.SHAPE -> JSONObject().put("type", "Shape")
             AeLayerType.NULL -> JSONObject().put("type", "Null")
+            AeLayerType.COMP -> JSONObject().put("type", "Comp")
+                .put("item", layer.compIndex?.let { compIdByIndex.getOrNull(it) } ?: JSONObject.NULL)
         }
         val label = when (layer.type) {
             AeLayerType.TEXT -> "Red"
@@ -197,6 +204,8 @@ object AeInterchangeConverter {
             AeLayerType.FOOTAGE -> "Aqua"
             AeLayerType.SOLID -> "Red"
             AeLayerType.NULL -> "Red"
+            // The official default label for a comp source.
+            AeLayerType.COMP -> "Sandstone"
         }
         val parentId = layer.parentName?.let { layerIdByName[it] }
         return JSONObject()
@@ -248,12 +257,15 @@ object AeInterchangeConverter {
         if (layer.type != AeLayerType.NULL) children += emptyGroup(ids, "masks", "Masks")
         children += emptyGroup(ids, "effects", "Effects")
         children += transformGroup(layer, ids)
+        // build::layer: material options for every AV source (a precomp is one),
+        // and the audio group for footage with audio and for every precomp.
         if (layer.type == AeLayerType.FOOTAGE || layer.type == AeLayerType.SOLID ||
-            layer.type == AeLayerType.TEXT || layer.type == AeLayerType.SHAPE
+            layer.type == AeLayerType.TEXT || layer.type == AeLayerType.SHAPE ||
+            layer.type == AeLayerType.COMP
         ) {
             children += materialOptionsGroup(ids)
         }
-        if (layer.type == AeLayerType.FOOTAGE && layer.hasAudio) {
+        if ((layer.type == AeLayerType.FOOTAGE && layer.hasAudio) || layer.type == AeLayerType.COMP) {
             children += audioGroup(ids)
         }
         return JSONObject()

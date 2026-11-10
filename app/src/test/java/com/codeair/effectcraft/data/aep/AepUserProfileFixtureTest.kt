@@ -694,6 +694,60 @@ class AepUserProfileFixtureTest {
             out
         }
 
+        // --- Nested Comp: a precomp layer pointing at a second composition. The
+        // layer is the solid layer's copy (an AV layer, no type change needed)
+        // with the Effect Parade stripped, so it tests only the comp link and
+        // adds no effects of its own. ---
+        val precompLdta = solidLayer.child("ldta")!!.bytes()!!.copyOf()
+        u32(23).copyInto(precompLdta, 0) // fresh layer id
+        u32(21).copyInto(precompLdta, 40) // source: the nested composition
+        "Nested Comp".toByteArray(Charsets.US_ASCII).copyInto(precompLdta, 64)
+        var precompLayer = withChildren(
+            solidLayer,
+            solidLayer.children().map { child ->
+                when {
+                    child.`is`("ldta") -> AepContainer.Chunk.data("ldta", precompLdta)
+                    child.`is`("Utf8") ->
+                        AepContainer.Chunk.data("Utf8", "Nested Comp".toByteArray(Charsets.UTF_8))
+                    else -> child
+                }
+            }
+        )
+        precompLayer = withRootProps(precompLayer) { rootKids ->
+            val out = ArrayList<AepContainer.Chunk>()
+            var i = 0
+            while (i < rootKids.size) {
+                val kid = rootKids[i]
+                if (kid.`is`("tdmn") && tdmnText(kid) == "ADBE Effect Parade") {
+                    i += 2 // skip the parade name + its group
+                    continue
+                }
+                out.add(kid)
+                i++
+            }
+            out
+        }
+
+        // --- Nested: a second composition, cloned from the original (its two
+        // layers: the footage and the solid, with their Levels and Glow), with
+        // a fresh item id and name. ---
+        val nestedBase = deepCopy(compItem)
+        val nestedCompItem = withChildren(
+            nestedBase,
+            nestedBase.children().map { child ->
+                when {
+                    child.`is`("idta") -> {
+                        val bytes = child.bytes()!!.copyOf()
+                        u32(21).copyInto(bytes, 16)
+                        AepContainer.Chunk.data("idta", bytes)
+                    }
+                    child.`is`("Utf8") ->
+                        AepContainer.Chunk.data("Utf8", "Nested".toByteArray(Charsets.UTF_8))
+                    else -> child
+                }
+            }
+        )
+
         // --- Composition markers: the existing SecL list is the "Markers" view
         // layer, and that is where After Effects stores composition markers, so
         // the mrst goes inside it (a second SecL would be shadowed: childList
@@ -715,11 +769,11 @@ class AepUserProfileFixtureTest {
                     else -> child
                 }
             }.let { if (sawSecL) it else it + AepContainer.Chunk.list("SecL", listOf(compMrst)) } +
-                controlLayer + titleLayer + shapesLayer
+                controlLayer + titleLayer + shapesLayer + precompLayer
         )
         val newFold = withChildren(
             fold,
-            fold.children().map { if (it === compItem) newCompItem else it }
+            fold.children().map { if (it === compItem) newCompItem else it } + nestedCompItem
         )
         val newChunks = chunks.map { if (it === fold) newFold else it }
         return AepContainer.write(AepContainer.AepFile(newChunks, file.trailer))
@@ -758,27 +812,31 @@ class AepUserProfileFixtureTest {
         assertTrue(result is AepImporter.ImportResult.Imported)
         val imported = result as AepImporter.ImportResult.Imported
         val counts = imported.report.imported
-        assertEquals(1, counts.compositions)
-        assertEquals(5, counts.layers)
-        assertEquals(1, counts.footage)
-        assertEquals(1, counts.solids)
+        assertEquals(2, counts.compositions)
+        assertEquals(8, counts.layers)
+        assertEquals(2, counts.footage)
+        assertEquals(2, counts.solids)
+        assertEquals(1, counts.precompLayers)
         assertEquals(1, counts.textLayers)
         assertEquals(1, counts.shapeLayers)
         assertEquals(4, counts.shapeItems)
-        assertEquals(5, counts.effects)
+        // 3 on the Control Layer + 2 on Vignette + 2 on the nested comp's solid
+        // (the clone keeps its Levels and Glow).
+        assertEquals(7, counts.effects)
         assertEquals(2, counts.masks)
         assertEquals(3, counts.markers)
         assertEquals(1, counts.timeRemaps)
         assertEquals(6, counts.keyframes)
         assertEquals(2, counts.expressions)
-        // The only losses left are non-content: the two converted expressions on
+        // The only losses left are non-content: the converted expressions on
         // Levels/Glow (a popup and a scaled slider cannot carry an expression),
-        // the two folders, and one unread project setting. Nothing in the user's
+        // on the main solid and again on the nested comp's solid, the two
+        // folders, and one unread project setting. Nothing in the user's
         // screenshot profile (effects, masks, markers, time remap) is lost.
         val losses = imported.report.losses.associate { it.category to it.count }
         assertEquals(
             mapOf(
-                AepImportReport.LossCategory.Effects to 2,
+                AepImportReport.LossCategory.Effects to 4,
                 AepImportReport.LossCategory.UnsupportedItems to 2,
                 AepImportReport.LossCategory.ProjectSettings to 1
             ),
@@ -792,7 +850,17 @@ class AepUserProfileFixtureTest {
         val root = JSONObject(imported.canonicalJson)
         val comp = findComp(root)
         val layers = comp.getJSONArray("layers")
-        assertEquals(5, layers.length())
+        assertEquals(6, layers.length())
+
+        // Nested Comp: the precomp layer points at the nested composition, which
+        // carries its two original layers.
+        val precomp = layers.getJSONObject(5)
+        assertEquals("Nested Comp", precomp.getString("name"))
+        val nestedItem = compItemByName(root, "Nested")
+        assertEquals("Comp", precomp.getJSONObject("source").getString("type"))
+        assertEquals(nestedItem.getLong("id"), precomp.getJSONObject("source").getLong("item"))
+        val nestedLayers = nestedItem.getJSONObject("kind").getJSONArray("layers")
+        assertEquals(2, nestedLayers.length())
 
         // Vignette: two masks, layer marker, time remap first, Opacity expression.
         val vignette = layers.getJSONObject(1)
@@ -916,15 +984,37 @@ class AepUserProfileFixtureTest {
 
     // ------------------------------------------------------------------ JSON helpers
 
-    private fun findComp(root: JSONObject): JSONObject {
+    /** The main composition's kind: the comp whose item is not the nested one. */
+    private fun findComp(root: JSONObject): JSONObject =
+        mainCompItem(root).getJSONObject("kind")
+
+    /** The composition item with the given name (its `id` is the precomp target). */
+    private fun compItemByName(root: JSONObject, name: String): JSONObject {
         val items = root.getJSONObject("items")
         val keys = items.keys()
         while (keys.hasNext()) {
             val item = items.getJSONObject(keys.next())
-            val kind = item.getJSONObject("kind")
-            if (kind.optString("type") == "Comp") return kind
+            if (item.optJSONObject("kind")?.optString("type") == "Comp" &&
+                item.optString("name") == name
+            ) {
+                return item
+            }
         }
-        throw AssertionError("no composition in canonical JSON")
+        throw AssertionError("no composition named $name in canonical JSON")
+    }
+
+    private fun mainCompItem(root: JSONObject): JSONObject {
+        val items = root.getJSONObject("items")
+        val keys = items.keys()
+        while (keys.hasNext()) {
+            val item = items.getJSONObject(keys.next())
+            if (item.optJSONObject("kind")?.optString("type") == "Comp" &&
+                item.optString("name") != "Nested"
+            ) {
+                return item
+            }
+        }
+        throw AssertionError("no main composition in canonical JSON")
     }
 
     private fun childGroup(layer: JSONObject, match: String): JSONObject {

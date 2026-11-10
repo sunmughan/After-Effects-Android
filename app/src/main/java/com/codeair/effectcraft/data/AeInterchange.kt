@@ -20,7 +20,7 @@ import org.json.JSONObject
  * precise error (missing comp, bad dimensions) instead of a crash.
  */
 enum class AeLayerType {
-    TEXT, SOLID, FOOTAGE, SHAPE, NULL;
+    TEXT, SOLID, FOOTAGE, SHAPE, NULL, COMP;
 
     companion object {
         fun fromName(name: String): AeLayerType? = when (name.lowercase()) {
@@ -29,6 +29,7 @@ enum class AeLayerType {
             "footage" -> FOOTAGE
             "shape" -> SHAPE
             "null" -> NULL
+            "comp" -> COMP
             else -> null
         }
     }
@@ -69,6 +70,11 @@ data class AeLayer(
      * converter then writes an empty Contents group and the patch step appends the
      * imported shape groups. */
     val shapesProvided: Boolean = false,
+    /** Comp only: the index of the referenced composition in the project's comp list. */
+    val compIndex: Int? = null,
+    /** Comp only, interchange JSON form: the name of the referenced composition,
+     * resolved to [compIndex] when the document is parsed. */
+    val compName: String? = null,
     /** Shape only: [width, height] of the rectangle. */
     val size: List<Double> = listOf(200.0, 200.0),
     val position: Pair<Double, Double> = 0.0 to 0.0,
@@ -135,7 +141,26 @@ object AeInterchange {
         val comps = (0 until compsJson.length()).map { index ->
             parseComp(compsJson.getJSONObject(index), warnings, index)
         }
-        return AeProject(projectName, comps, warnings)
+        // Comp layers name their composition; resolve the names to indices now
+        // that every composition is known. An unresolvable name drops the layer
+        // with a warning rather than writing a comp source with no target.
+        val compIndexByName = comps.mapIndexed { index, comp -> comp.name to index }.toMap()
+        val resolved = comps.map { comp ->
+            comp.copy(
+                layers = comp.layers.mapNotNull { layer ->
+                    if (layer.type != AeLayerType.COMP) return@mapNotNull layer
+                    val target = layer.compIndex
+                        ?: layer.compName?.let { compIndexByName[it] }
+                    if (target == null) {
+                        warnings += "Skipped layer \"${layer.name}\": precomp \"${layer.compName ?: ""}\" not found"
+                        null
+                    } else {
+                        layer.copy(compIndex = target)
+                    }
+                }
+            )
+        }
+        return AeProject(projectName, resolved, warnings)
     }
 
     private fun parseComp(json: JSONObject, warnings: MutableList<String>, index: Int): AeComp {
@@ -226,6 +251,7 @@ object AeInterchange {
             inPoint = inPoint,
             outPoint = outPoint,
             parentName = json.optString("parent", "").ifBlank { null },
+            compName = if (type == AeLayerType.COMP) json.optString("comp", "").ifBlank { null } else null,
             keyframes = keyframes
         )
     }

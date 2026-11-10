@@ -188,4 +188,61 @@ class AeInterchangeConverterTest {
         assertEquals(30000, rate.getInt("num"))
         assertEquals(1001, rate.getInt("den"))
     }
+
+    @Test
+    fun precompLayerPointsAtTheNestedComp() {
+        val nested = AeComp(
+            name = "Nested", width = 640, height = 360, frameRate = 25.0,
+            durationSeconds = 2.0, background = listOf(0.0, 0.0, 0.0),
+            layers = listOf(
+                AeLayer(name = "Inner", type = AeLayerType.SOLID, color = listOf(1.0, 0.0, 0.0), width = 640, height = 360)
+            )
+        )
+        val main = AeComp(
+            name = "Main", width = 1920, height = 1080, frameRate = 25.0,
+            durationSeconds = 5.0, background = listOf(0.0, 0.0, 0.0),
+            layers = listOf(
+                AeLayer(name = "Precomp", type = AeLayerType.COMP, compIndex = 1, width = 640, height = 360),
+                AeLayer(name = "Title", type = AeLayerType.TEXT, text = "Hi")
+            )
+        )
+        val project = AeProject(projectName = "Main", comps = listOf(main, nested), warnings = emptyList())
+        val doc = JSONObject(AeInterchangeConverter.toCanonicalJson(project) { null })
+        val items = doc.getJSONObject("items")
+        // Composition ids are pre-allocated in project order, so the precomp
+        // layer can point at a composition converted after it.
+        val nestedId = items.keys().asSequence()
+            .first { items.getJSONObject(it).optString("name") == "Nested" }
+        val mainId = items.keys().asSequence()
+            .first { items.getJSONObject(it).optString("name") == "Main" }
+        val precompLayer = items.getJSONObject(mainId).getJSONObject("kind")
+            .getJSONArray("layers").getJSONObject(0)
+        assertEquals("Comp", precompLayer.getJSONObject("source").getString("type"))
+        assertEquals(
+            nestedId.toLong(),
+            precompLayer.getJSONObject("source").getLong("item")
+        )
+        // The nested composition itself is converted, with its own layers.
+        assertEquals(
+            1,
+            items.getJSONObject(nestedId).getJSONObject("kind").getJSONArray("layers").length()
+        )
+        // Uid invariant: every non-zero uid unique and below next_id.
+        val nextId = doc.getLong("next_id")
+        val uids = ArrayList<Long>()
+        fun collect(node: Any?) {
+            when (node) {
+                is JSONObject -> {
+                    if (node.has("uid")) uids.add(node.getLong("uid"))
+                    val keys = node.keys()
+                    while (keys.hasNext()) collect(node.get(keys.next()))
+                }
+                is org.json.JSONArray -> for (i in 0 until node.length()) collect(node.get(i))
+            }
+        }
+        collect(doc)
+        assertTrue(uids.all { it < nextId })
+        val realUids = uids.filter { it != 0L }
+        assertEquals(realUids.size, realUids.toSet().size)
+    }
 }
