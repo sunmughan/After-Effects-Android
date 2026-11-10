@@ -242,6 +242,20 @@ object AepTypedView {
             }
             return out
         }
+
+        /** The text document of a text layer (`LIST btdk` below `ADBE Text Properties`). */
+        fun textDocument(): AepTextDoc.TextDocument? =
+            chunk.findList("btdk")?.bytes()?.let { AepTextDoc.TextDocument.parse(it) }
+
+        /** The Source Text property record: the `tdbs` in `btds[ADBE Text Document]`. */
+        fun sourceTextProperty(): Property? {
+            val btds = chunk.walk().map { it.second }.firstOrNull { it.isList("btds") } ?: return null
+            return btds.childList("tdbs")?.let { Property.fromChunk(it) }
+        }
+
+        /** The number of text documents (`LIST btdk`) of the layer: 1 in every sample. */
+        fun textDocumentCount(): Int =
+            chunk.walk().count { it.second.isList("btdk") }
     }
 
     /** A keyframe of a keyed Orientation. */

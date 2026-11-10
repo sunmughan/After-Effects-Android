@@ -35,9 +35,11 @@ import kotlin.math.roundToLong
  * resolver maps the stored path onto the folder the project lives in; files it
  * cannot resolve are listed as missing, never a refusal); expressions kept as
  * source text.
- * NOT imported in v1 (all reported as losses): text content, shape contents, camera and
+ * NOT imported in v1 (all reported as losses): shape contents, camera and
  * light layers, precomp layers, layer styles, 3D rotations,
- * project settings, compositions after the first, folders.
+ * project settings, compositions after the first, folders. Text imports with
+ * its first-run style, runs, paragraphs and box; text animators, Source Text
+ * keyframes and expressions are losses.
  * There is no `.aep` export in this build.
  *
  * Ports the mapping of `import/build.rs`, `import/props.rs`, `import/time.rs` and
@@ -615,15 +617,36 @@ object AepImporter {
         var height = compHeight
         var durationSeconds = compDuration
         var color = listOf(1.0, 1.0, 1.0, 1.0)
+        var text = ""
+        var font = "Inter"
+        var fontSize = 72.0
+        var textDoc: JSONObject? = null
         when (header.layerType) {
             AepHeader.LayerType.Text -> {
                 type = AeLayerType.TEXT
                 col.imported.textLayers++
-                col.lose(
-                    AepImportReport.LossCategory.TextLayers,
-                    "text layer '$name': the text itself is not imported in this build " +
-                        "(an empty text layer is imported)"
-                )
+                val doc = layer.textDocument()
+                if (doc == null) {
+                    col.lose(
+                        AepImportReport.LossCategory.DamagedData,
+                        "text layer '$name': the text document is unreadable, an empty text layer is imported"
+                    )
+                } else {
+                    val what = "text layer '$name'"
+                    textDoc = AepTextImport.textDoc(doc, what, col)
+                    text = doc.text
+                    font = doc.font ?: "Inter"
+                    fontSize = doc.fontSize
+                    // Straight RGBA 0..1 of the first run's fill.
+                    val fill = doc.fillArgb
+                    color = listOf(
+                        fill[1].coerceIn(0.0, 1.0),
+                        fill[2].coerceIn(0.0, 1.0),
+                        fill[3].coerceIn(0.0, 1.0),
+                        fill[0].coerceIn(0.0, 1.0)
+                    )
+                }
+                AepTextImport.reportTextExtras(layer, "text layer '$name'", col)
             }
             AepHeader.LayerType.Shape -> {
                 type = AeLayerType.SHAPE
@@ -932,7 +955,11 @@ object AepImporter {
         val aeLayer = AeLayer(
             name = name,
             type = type,
+            text = text,
+            font = font,
+            fontSize = fontSize,
             color = color,
+            textDoc = textDoc,
             file = file,
             kind = kind,
             hasAudio = hasAudio,

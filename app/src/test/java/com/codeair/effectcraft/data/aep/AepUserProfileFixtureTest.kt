@@ -1,5 +1,6 @@
 package com.codeair.effectcraft.data.aep
 
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -9,8 +10,9 @@ import org.junit.Test
 /**
  * The user's real-file profile, rebuilt as a synthetic `.aep`: a null "Control Layer"
  * carrying Color Control effects (one with keyframes, one static) plus a Slider
- * Control with an expression, and a "Vignette" solid with two masks, layer markers,
- * keyed time remapping and an expression on Opacity. The fixture is the shipped
+ * Control with an expression, a "Vignette" solid with two masks, layer markers,
+ * keyed time remapping and an expression on Opacity, and a "Title" text layer
+ * ("Hello World" in two runs). The fixture is the shipped
  * `synthetic.aep` cloned and mutated, so the binary path (RIFX parse, typed view,
  * converter, patch) is exercised end to end, and the loss count for exactly the
  * profile the user imported must drop to the non-content remainder.
@@ -335,6 +337,68 @@ class AepUserProfileFixtureTest {
         return tdgp(*(mask1 + mask2).toTypedArray())
     }
 
+    /** A PostScript string: `(` + BOM + UTF-16BE + `)`, with `\`, `(`, `)` escaped. */
+    private fun utf16Str(s: String): ByteArray {
+        val raw = ByteArray(2 + s.length * 2)
+        raw[0] = 0xFE.toByte()
+        raw[1] = 0xFF.toByte()
+        s.forEachIndexed { i, c ->
+            raw[2 + i * 2] = (c.code shr 8).toByte()
+            raw[2 + i * 2 + 1] = c.code.toByte()
+        }
+        val out = ByteArrayOutputStream()
+        out.write('('.code)
+        for (b in raw) {
+            if (b == '\\'.code.toByte() || b == '('.code.toByte() || b == ')'.code.toByte()) {
+                out.write('\\'.code)
+            }
+            out.write(b.toInt())
+        }
+        out.write(')'.code)
+        return out.toByteArray()
+    }
+
+    /** The `btdk` body for the Title layer: "Hello World" in two runs
+     * ("Hello " red 72, "World" blue 48), one left-justified paragraph. */
+    private fun titleBtdk(): ByteArray {
+        val out = ByteArrayOutputStream()
+        fun write(bytes: ByteArray) = out.write(bytes)
+        fun write(text: String) = out.write(text.toByteArray(Charsets.US_ASCII))
+        write("/0 << /1 << /0 [ << /0 << /0 << /0 ")
+        write(utf16Str("MyriadPro-Regular"))
+        write(" >> >> >> ] >>")
+        write(" >> /1 << /1 [ << /0 << /0 ")
+        write(utf16Str("Hello World\r"))
+        write(" /5 << /0 [ << /0 << /0 << /5 << /0 0 >> >> >> /1 12 >> ] >>")
+        write(" /6 << /0 [ ")
+        write("<< /0 << /0 << /6 << /0 0 /1 72 /53 << /0 << /1 [ 1 1 0 0 ] >> >> >> >> >> /1 6 >> ")
+        write("<< /0 << /0 << /6 << /0 0 /1 48 /53 << /0 << /1 [ 1 0 0 1 ] >> >> >> >> >> /1 6 >> ")
+        write("] >> >> >> ] >>")
+        return out.toByteArray()
+    }
+
+    /** The "ADBE Text Properties" group: the Source Text placeholder record
+     * (`btds`, no keys, no expression) and the `btdk` text document. */
+    private fun textPropertiesGroup(): AepContainer.Chunk {
+        val sourceText = AepContainer.Chunk.list(
+            "btds",
+            listOf(
+                tdbs(
+                    tdsb(3),
+                    AepContainer.Chunk.data("tdb4", tdb4(1, false, TIME_SCALE)),
+                    AepContainer.Chunk.data("cdat", f64(0.0))
+                )
+            )
+        )
+        val body = titleBtdk()
+        val btdk = AepContainer.Chunk(
+            AepContainer.LIST,
+            AepContainer.ChunkBody.OpaqueList("btdk", body),
+            if ((4 + body.size) % 2 == 1) 0 else null
+        )
+        return tdgp(tdmn("ADBE Text Document"), sourceText, btdk)
+    }
+
     // ------------------------------------------------------------------ markers
 
     private fun markerRecord(time: Int): ByteArray {
@@ -543,6 +607,33 @@ class AepUserProfileFixtureTest {
             }
         )
 
+        // --- Title: a text layer ("Hello World", two runs) whose property tree
+        // is the solid layer's, with a Text Properties group appended before
+        // the group end. ---
+        val titleLdta = solidLayer.child("ldta")!!.bytes()!!.copyOf()
+        u32(19).copyInto(titleLdta, 0) // fresh layer id
+        u32(0).copyInto(titleLdta, 40) // no source item
+        u32(3).copyInto(titleLdta, 128) // Text layer type
+        "Title".toByteArray(Charsets.US_ASCII).copyInto(titleLdta, 64)
+        var titleLayer = withChildren(
+            solidLayer,
+            solidLayer.children().map { child ->
+                when {
+                    child.`is`("ldta") -> AepContainer.Chunk.data("ldta", titleLdta)
+                    child.`is`("Utf8") ->
+                        AepContainer.Chunk.data("Utf8", "Title".toByteArray(Charsets.UTF_8))
+                    else -> child
+                }
+            }
+        )
+        titleLayer = withRootProps(titleLayer) { rootKids ->
+            val out = rootKids.toMutableList()
+            val endIdx = out.indexOfFirst { it.`is`("tdmn") && tdmnText(it) == "ADBE Group End" }
+            val entry = listOf(tdmn("ADBE Text Properties"), textPropertiesGroup())
+            if (endIdx >= 0) out.addAll(endIdx, entry) else out.addAll(entry)
+            out
+        }
+
         // --- Composition markers: the existing SecL list is the "Markers" view
         // layer, and that is where After Effects stores composition markers, so
         // the mrst goes inside it (a second SecL would be shadowed: childList
@@ -564,7 +655,7 @@ class AepUserProfileFixtureTest {
                     else -> child
                 }
             }.let { if (sawSecL) it else it + AepContainer.Chunk.list("SecL", listOf(compMrst)) } +
-                controlLayer
+                controlLayer + titleLayer
         )
         val newFold = withChildren(
             fold,
@@ -608,9 +699,10 @@ class AepUserProfileFixtureTest {
         val imported = result as AepImporter.ImportResult.Imported
         val counts = imported.report.imported
         assertEquals(1, counts.compositions)
-        assertEquals(3, counts.layers)
+        assertEquals(4, counts.layers)
         assertEquals(1, counts.footage)
         assertEquals(1, counts.solids)
+        assertEquals(1, counts.textLayers)
         assertEquals(5, counts.effects)
         assertEquals(2, counts.masks)
         assertEquals(3, counts.markers)
@@ -638,7 +730,7 @@ class AepUserProfileFixtureTest {
         val root = JSONObject(imported.canonicalJson)
         val comp = findComp(root)
         val layers = comp.getJSONArray("layers")
-        assertEquals(3, layers.length())
+        assertEquals(4, layers.length())
 
         // Vignette: two masks, layer marker, time remap first, Opacity expression.
         val vignette = layers.getJSONObject(1)
@@ -692,6 +784,21 @@ class AepUserProfileFixtureTest {
         val sliderProp = propOf(effects.getJSONObject(2), "slider")
         assertEquals(50.0, sliderProp.getJSONObject("value").getDouble("v"), 0.0)
         assertEquals("time * 10", sliderProp.getJSONObject("expr").getString("text"))
+
+        // Title: the text imports with its runs, not as an empty layer.
+        val title = layers.getJSONObject(3)
+        assertEquals("Title", title.getString("name"))
+        assertEquals("Text", title.getJSONObject("source").getString("type"))
+        val sourceText = propOf(childGroup(title, "text"), "sourceText")
+            .getJSONObject("value").getJSONObject("v")
+        assertEquals("Hello World", sourceText.getString("text"))
+        assertEquals("MyriadPro-Regular", sourceText.getString("font"))
+        assertEquals(72.0, sourceText.getDouble("size"), 0.0)
+        assertEquals("[1,0,0,1]", sourceText.getJSONArray("fill").toString())
+        val textRuns = sourceText.getJSONArray("runs")
+        assertEquals(2, textRuns.length())
+        assertEquals(6, textRuns.getJSONObject(0).getInt("len"))
+        assertEquals(48.0, textRuns.getJSONObject(1).getJSONObject("style").getDouble("size"), 0.0)
 
         // Composition markers.
         assertEquals(2, comp.getJSONArray("markers").length())

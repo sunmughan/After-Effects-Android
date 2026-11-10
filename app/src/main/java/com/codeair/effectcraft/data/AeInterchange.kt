@@ -49,6 +49,10 @@ data class AeLayer(
     val fontSize: Double = 72.0,
     /** Straight RGBA, 0..1. Text and shape fill; solids use [r, g, b]. */
     val color: List<Double> = listOf(1.0, 1.0, 1.0, 1.0),
+    /** Text only: the full canonical TextDoc value (runs, paragraphs, box);
+     * null keeps the single-style document built from [text], [font],
+     * [fontSize] and [color]. */
+    val textDoc: JSONObject? = null,
     /** Footage only: path relative to the bundle root, e.g. "media/Clip.mp4". */
     val file: String? = null,
     /** Footage only: "video", "still" or "audio". */

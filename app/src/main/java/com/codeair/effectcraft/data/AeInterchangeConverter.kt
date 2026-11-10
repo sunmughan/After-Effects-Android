@@ -397,7 +397,9 @@ object AeInterchangeConverter {
     /** Mirrors build::text: Source Text + Per-character 3D + Path/More Options + Animators. */
     private fun textGroup(layer: AeLayer, ids: Ids): JSONObject {
         val fill = layer.color.padTo(4, 1.0)
-        val doc = JSONObject()
+        // An imported text document carries its runs, paragraphs and box; a
+        // plain layer keeps the single-style document built from its fields.
+        val doc = layer.textDoc ?: JSONObject()
             .put("text", layer.text)
             .put("font", layer.font)
             .put("style", "Regular")
