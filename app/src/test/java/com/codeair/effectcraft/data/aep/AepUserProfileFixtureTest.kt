@@ -401,6 +401,39 @@ class AepUserProfileFixtureTest {
 
     // ------------------------------------------------------------------ markers
 
+    /** The shape contents of the fixture's shape layer: one group with a rectangle,
+     * a red fill and a blue stroke, plus a group transform position. */
+    private fun shapeVectorsGroup(): AepContainer.Chunk {
+        fun entry(name: String, prop: AepContainer.Chunk): List<AepContainer.Chunk> =
+            listOf(tdmn(name), prop)
+        val rectKids = ArrayList<AepContainer.Chunk>()
+        rectKids += entry("ADBE Vector Rect Size", staticProp(2, listOf(200.0, 100.0)))
+        rectKids += entry("ADBE Vector Rect Position", staticProp(2, listOf(10.0, 20.0)))
+        rectKids += entry("ADBE Vector Rect Roundness", staticProp(1, listOf(5.0)))
+        val fillKids = ArrayList<AepContainer.Chunk>()
+        fillKids += entry("ADBE Vector Fill Color", staticProp(4, listOf(255.0, 255.0, 0.0, 0.0)))
+        fillKids += entry("ADBE Vector Fill Opacity", staticProp(1, listOf(80.0)))
+        fillKids += entry("ADBE Vector Fill Rule", staticProp(1, listOf(1.0)))
+        val strokeKids = ArrayList<AepContainer.Chunk>()
+        strokeKids += entry("ADBE Vector Stroke Color", staticProp(4, listOf(255.0, 0.0, 0.0, 255.0)))
+        strokeKids += entry("ADBE Vector Stroke Opacity", staticProp(1, listOf(100.0)))
+        strokeKids += entry("ADBE Vector Stroke Width", staticProp(1, listOf(3.0)))
+        val contentsKids = ArrayList<AepContainer.Chunk>()
+        contentsKids += listOf(tdmn("ADBE Vector Shape - Rect"), tdgp(*rectKids.toTypedArray()))
+        contentsKids += listOf(tdmn("ADBE Vector Graphic - Fill"), tdgp(*fillKids.toTypedArray()))
+        contentsKids += listOf(tdmn("ADBE Vector Graphic - Stroke"), tdgp(*strokeKids.toTypedArray()))
+        val transformKids = ArrayList<AepContainer.Chunk>()
+        transformKids += entry("ADBE Vector Position", staticProp(2, listOf(5.0, 5.0)))
+        val groupKids = ArrayList<AepContainer.Chunk>()
+        groupKids.add(tdsn("Shapes 1"))
+        groupKids += listOf(tdmn("ADBE Vectors Group"), tdgp(*contentsKids.toTypedArray()))
+        groupKids += listOf(tdmn("ADBE Vector Transform Group"), tdgp(*transformKids.toTypedArray()))
+        return tdgp(
+            tdmn("ADBE Vector Group"),
+            tdgp(*groupKids.toTypedArray())
+        )
+    }
+
     private fun markerRecord(time: Int): ByteArray {
         val b = ByteArray(16)
         u32(time.toLong()).copyInto(b, 0)
@@ -634,6 +667,33 @@ class AepUserProfileFixtureTest {
             out
         }
 
+        // --- Shapes: a shape layer (one group: rectangle + red fill + blue stroke)
+        // whose property tree is the solid layer's, with a Root Vectors Group
+        // appended before the group end. ---
+        val shapesLdta = solidLayer.child("ldta")!!.bytes()!!.copyOf()
+        u32(20).copyInto(shapesLdta, 0) // fresh layer id
+        u32(0).copyInto(shapesLdta, 40) // no source item
+        u32(4).copyInto(shapesLdta, 128) // Shape layer type
+        "Shapes".toByteArray(Charsets.US_ASCII).copyInto(shapesLdta, 64)
+        var shapesLayer = withChildren(
+            solidLayer,
+            solidLayer.children().map { child ->
+                when {
+                    child.`is`("ldta") -> AepContainer.Chunk.data("ldta", shapesLdta)
+                    child.`is`("Utf8") ->
+                        AepContainer.Chunk.data("Utf8", "Shapes".toByteArray(Charsets.UTF_8))
+                    else -> child
+                }
+            }
+        )
+        shapesLayer = withRootProps(shapesLayer) { rootKids ->
+            val out = rootKids.toMutableList()
+            val endIdx = out.indexOfFirst { it.`is`("tdmn") && tdmnText(it) == "ADBE Group End" }
+            val entry = listOf(tdmn("ADBE Root Vectors Group"), shapeVectorsGroup())
+            if (endIdx >= 0) out.addAll(endIdx, entry) else out.addAll(entry)
+            out
+        }
+
         // --- Composition markers: the existing SecL list is the "Markers" view
         // layer, and that is where After Effects stores composition markers, so
         // the mrst goes inside it (a second SecL would be shadowed: childList
@@ -655,7 +715,7 @@ class AepUserProfileFixtureTest {
                     else -> child
                 }
             }.let { if (sawSecL) it else it + AepContainer.Chunk.list("SecL", listOf(compMrst)) } +
-                controlLayer + titleLayer
+                controlLayer + titleLayer + shapesLayer
         )
         val newFold = withChildren(
             fold,
@@ -699,10 +759,12 @@ class AepUserProfileFixtureTest {
         val imported = result as AepImporter.ImportResult.Imported
         val counts = imported.report.imported
         assertEquals(1, counts.compositions)
-        assertEquals(4, counts.layers)
+        assertEquals(5, counts.layers)
         assertEquals(1, counts.footage)
         assertEquals(1, counts.solids)
         assertEquals(1, counts.textLayers)
+        assertEquals(1, counts.shapeLayers)
+        assertEquals(4, counts.shapeItems)
         assertEquals(5, counts.effects)
         assertEquals(2, counts.masks)
         assertEquals(3, counts.markers)
@@ -730,7 +792,7 @@ class AepUserProfileFixtureTest {
         val root = JSONObject(imported.canonicalJson)
         val comp = findComp(root)
         val layers = comp.getJSONArray("layers")
-        assertEquals(4, layers.length())
+        assertEquals(5, layers.length())
 
         // Vignette: two masks, layer marker, time remap first, Opacity expression.
         val vignette = layers.getJSONObject(1)
@@ -799,6 +861,33 @@ class AepUserProfileFixtureTest {
         assertEquals(2, textRuns.length())
         assertEquals(6, textRuns.getJSONObject(0).getInt("len"))
         assertEquals(48.0, textRuns.getJSONObject(1).getJSONObject("style").getDouble("size"), 0.0)
+
+        // Shapes: the group imports with its rectangle, fill and stroke.
+        val shapes = layers.getJSONObject(4)
+        assertEquals("Shapes", shapes.getString("name"))
+        assertEquals("Shape", shapes.getJSONObject("source").getString("type"))
+        val shapeContents = childGroup(shapes, "contents").getJSONArray("children")
+        assertEquals(1, shapeContents.length())
+        val shapeGroup = shapeContents.getJSONObject(0)
+        assertEquals("group", shapeGroup.getString("match"))
+        assertEquals("Shapes 1", shapeGroup.getString("name"))
+        val shapeTransform = propOf(shapeGroup, "transform")
+        assertEquals(5.0, propOf(shapeTransform, "position").getJSONObject("value").getJSONArray("v").getDouble(0), 0.0)
+        assertEquals(5.0, propOf(shapeTransform, "position").getJSONObject("value").getJSONArray("v").getDouble(1), 0.0)
+        val shapeItems = propOf(shapeGroup, "contents").getJSONArray("children")
+        assertEquals(3, shapeItems.length())
+        val shapeRect = shapeItems.getJSONObject(0)
+        assertEquals("rect", shapeRect.getString("match"))
+        assertEquals(200.0, propOf(shapeRect, "size").getJSONObject("value").getJSONArray("v").getDouble(0), 0.0)
+        assertEquals(100.0, propOf(shapeRect, "size").getJSONObject("value").getJSONArray("v").getDouble(1), 0.0)
+        assertEquals(5.0, propOf(shapeRect, "roundness").getJSONObject("value").getDouble("v"), 0.0)
+        val shapeFill = shapeItems.getJSONObject(1)
+        assertEquals("fill", shapeFill.getString("match"))
+        assertEquals("[1,0,0,1]", propOf(shapeFill, "color").getJSONObject("value").getJSONArray("v").toString())
+        assertEquals(80.0, propOf(shapeFill, "opacity").getJSONObject("value").getDouble("v"), 0.0)
+        val shapeStroke = shapeItems.getJSONObject(2)
+        assertEquals("stroke", shapeStroke.getString("match"))
+        assertEquals(3.0, propOf(shapeStroke, "width").getJSONObject("value").getDouble("v"), 0.0)
 
         // Composition markers.
         assertEquals(2, comp.getJSONArray("markers").length())

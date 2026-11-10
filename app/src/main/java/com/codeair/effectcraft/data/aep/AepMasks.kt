@@ -535,7 +535,7 @@ object AepMasks {
     }
 
     /** The path keyframes: key `i` of the path property with shape `i` of `omks`. */
-    private fun importPathKeys(
+    fun importPathKeys(
         shapes: List<ShapePath?>,
         path: AepTypedView.Property,
         what: String,

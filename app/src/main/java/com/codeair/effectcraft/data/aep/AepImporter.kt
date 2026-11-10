@@ -34,8 +34,10 @@ import kotlin.math.roundToLong
  * remapping; orientation keyframes; footage linked by its stored path (a folder
  * resolver maps the stored path onto the folder the project lives in; files it
  * cannot resolve are listed as missing, never a refusal); expressions kept as
- * source text.
- * NOT imported in v1 (all reported as losses): shape contents, camera and
+ * source text; shape contents (groups, rect, ellipse, polystar, bezier paths, fill,
+ * stroke, gradient fill and stroke, trim, round corners, merge, offset and repeater,
+ * with keyframes and expressions).
+ * NOT imported in v1 (all reported as losses): camera and
  * light layers, precomp layers, layer styles, 3D rotations,
  * project settings, compositions after the first, folders. Text imports with
  * its first-run style, runs, paragraphs and box; text animators, Source Text
@@ -170,6 +172,8 @@ object AepImporter {
         val pendingLayerRefs: List<AepEffectImport.PendingLayerRef> = emptyList(),
         /** Imported mask groups, in stack order (uids in patch space, as effect groups). */
         val maskGroups: List<JSONObject> = emptyList(),
+        /** Imported shape groups, in file order (uids in patch space, as effect groups). */
+        val shapeGroups: List<JSONObject> = emptyList(),
         /** Layer markers, as canonical marker JSON, in time order. */
         val markers: JSONArray = JSONArray(),
         /** The Time Remapping property, inserted first in the layer's properties. */
@@ -651,10 +655,6 @@ object AepImporter {
             AepHeader.LayerType.Shape -> {
                 type = AeLayerType.SHAPE
                 col.imported.shapeLayers++
-                col.lose(
-                    AepImportReport.LossCategory.ShapeLayers,
-                    "shape layer '$name': shape contents are not imported in this build"
-                )
             }
             AepHeader.LayerType.Av -> {
                 if (header.isNullObject()) {
@@ -850,6 +850,10 @@ object AepImporter {
         var effectGroups: List<JSONObject> = emptyList()
         var pendingLayerRefs: List<AepEffectImport.PendingLayerRef> = emptyList()
         var maskGroups: List<JSONObject> = emptyList()
+        var shapeGroups: List<JSONObject> = emptyList()
+        /** True when the layer carries an `ADBE Root Vectors Group`: the converter then
+         * writes an empty Contents group and the patch step appends the imported groups. */
+        var shapesProvided = false
         var timeRemap: JSONObject? = null
 
         // Everything else in the layer's property tree is reported, never silent.
@@ -885,6 +889,12 @@ object AepImporter {
                         timeRemap = AepMarkers.importTimeRemap(
                             rootProps, name, timescale, { allocBlock(1) }, col
                         )
+                    }
+                    entryName.contains("Root Vectors", ignoreCase = true) -> {
+                        shapeGroups = AepShapeImport.importShapes(
+                            rootProps, "shape layer '$name'", timescale, allocBlock, col
+                        )
+                        shapesProvided = true
                     }
                     entryName.contains("Layer Styles", ignoreCase = true) -> {
                         // A style group with no entries holds nothing set (the fixture's
@@ -960,6 +970,7 @@ object AepImporter {
             fontSize = fontSize,
             color = color,
             textDoc = textDoc,
+            shapesProvided = shapesProvided,
             file = file,
             kind = kind,
             hasAudio = hasAudio,
@@ -1013,6 +1024,7 @@ object AepImporter {
             effectGroups = effectGroups,
             pendingLayerRefs = pendingLayerRefs,
             maskGroups = maskGroups,
+            shapeGroups = shapeGroups,
             markers = layerMarkers,
             timeRemap = timeRemap
         )
@@ -1348,6 +1360,9 @@ object AepImporter {
             for (group in layerPatch.maskGroups) {
                 maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
             }
+            for (group in layerPatch.shapeGroups) {
+                maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
+            }
             layerPatch.timeRemap?.let { maxPatchUid = maxOf(maxPatchUid, it.optLong("uid")) }
             for (ref in layerPatch.pendingLayerRefs) {
                 allRefs.add(
@@ -1428,6 +1443,19 @@ object AepImporter {
                 for (group in layerPatch.maskGroups) {
                     AepEffectImport.remapUids(group, uidOffset)
                     maskChildren.put(group)
+                }
+            }
+            // Shapes: the same, into the layer's contents group. The converter writes
+            // an empty contents group when the importer provides the shapes.
+            if (layerPatch.shapeGroups.isNotEmpty()) {
+                for (c in 0 until children.length()) {
+                    val child = children.getJSONObject(c)
+                    if (child.optString("match") != "contents") continue
+                    val contentsChildren = child.optJSONArray("children") ?: continue
+                    for (group in layerPatch.shapeGroups) {
+                        AepEffectImport.remapUids(group, uidOffset)
+                        contentsChildren.put(group)
+                    }
                 }
             }
             // Time Remapping goes first in the layer's properties.

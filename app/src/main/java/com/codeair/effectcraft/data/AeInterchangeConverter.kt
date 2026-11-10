@@ -479,6 +479,10 @@ object AeInterchangeConverter {
 
     /** Mirrors build::shape_group with one rectangle + fill. */
     private fun contentsGroup(layer: AeLayer, ids: Ids): JSONObject {
+        // When the .aep importer provides the shapes, the Contents group starts empty
+        // and the patch step appends the imported groups; the skeleton below is only
+        // for shape layers built without shape data.
+        if (layer.shapesProvided) return groupNode(ids, "contents", "Contents", emptyList())
         val fill = layer.color.padTo(4, 1.0)
         val rect = groupNode(
             ids, "rect", "Rectangle Path 1", listOf(

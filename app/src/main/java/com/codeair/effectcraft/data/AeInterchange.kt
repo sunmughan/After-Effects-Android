@@ -65,6 +65,10 @@ data class AeLayer(
     val height: Int = 0,
     /** Footage and still duration in seconds; defaults to the comp duration. */
     val durationSeconds: Double = 0.0,
+    /** Shape only: true when the .aep layer carries an `ADBE Root Vectors Group`; the
+     * converter then writes an empty Contents group and the patch step appends the
+     * imported shape groups. */
+    val shapesProvided: Boolean = false,
     /** Shape only: [width, height] of the rectangle. */
     val size: List<Double> = listOf(200.0, 200.0),
     val position: Pair<Double, Double> = 0.0 to 0.0,
