@@ -1,5 +1,6 @@
 package com.codeair.effectcraft.data
 
+import com.codeair.effectcraft.data.aep.AepFootageResolver
 import com.codeair.effectcraft.data.aep.AepImportReport
 import com.codeair.effectcraft.data.aep.AepImporter
 import com.codeair.effectcraft.data.aep.AepxReader
@@ -48,23 +49,33 @@ object ImportDocumentResolver {
 
     /**
      * Dry run for a raw .aep/.aepx: parses the file and returns the loss
-     * report, before the user allows the losses.
+     * report, before the user allows the losses. [mediaResolver] maps a
+     * footage path stored in the file to a file on this device; footage it
+     * cannot resolve is listed as missing.
      * @throws IllegalArgumentException with a user-facing reason for a file
      *   that cannot be read at all.
      */
-    fun analyzeAep(bytes: ByteArray): AepImportReport.ImportReport =
-        AepImporter.analyze(bytes).report
+    fun analyzeAep(
+        bytes: ByteArray,
+        mediaResolver: (String) -> String? = AepFootageResolver::default
+    ): AepImportReport.ImportReport =
+        AepImporter.analyze(bytes, mediaResolver = mediaResolver).report
 
     /**
      * Imports a raw .aep/.aepx. With [allowLosses] false and any loss in
      * the report, throws instead of silently dropping content — the
      * caller shows the report from [analyzeAep] first and calls again
-     * with the user's allowance.
+     * with the user's allowance. [mediaResolver] maps a footage path
+     * stored in the file to a file on this device.
      * @throws IllegalArgumentException with a user-facing reason for a file
      *   that cannot be read at all, or a refusal while losses are unallowed.
      */
-    fun importAep(bytes: ByteArray, allowLosses: Boolean): ResolvedImport =
-        when (val result = AepImporter.import(bytes, allowLosses)) {
+    fun importAep(
+        bytes: ByteArray,
+        allowLosses: Boolean,
+        mediaResolver: (String) -> String? = AepFootageResolver::default
+    ): ResolvedImport =
+        when (val result = AepImporter.import(bytes, allowLosses, mediaResolver = mediaResolver)) {
             is AepImporter.ImportResult.Imported -> ResolvedImport(
                 canonicalJson = result.canonicalJson,
                 wasAeInterchange = false,

@@ -9,7 +9,6 @@ import com.codeair.effectcraft.data.AeProject
 import com.codeair.effectcraft.data.AeValue
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -32,8 +31,10 @@ import kotlin.math.roundToLong
  * for Anchor Point, Position, Scale, Rotation and Opacity; effects with parameters and
  * keyframes (the 63 mapped effects, from the native effect registry); masks with path,
  * mode, feather/opacity/expansion and keyframes; layer and composition markers; time
- * remapping; orientation keyframes; footage linked by its stored path (missing files are
- * listed, never a refusal); expressions kept as source text.
+ * remapping; orientation keyframes; footage linked by its stored path (a folder
+ * resolver maps the stored path onto the folder the project lives in; files it
+ * cannot resolve are listed as missing, never a refusal); expressions kept as
+ * source text.
  * NOT imported in v1 (all reported as losses): text content, shape contents, camera and
  * light layers, precomp layers, layer styles, 3D rotations,
  * project settings, compositions after the first, folders.
@@ -69,9 +70,10 @@ object AepImporter {
      */
     fun analyze(
         bytes: ByteArray,
-        provider: AepEffectImport.EffectSpecProvider = AepEffectImport.NativeEffectSpecs()
+        provider: AepEffectImport.EffectSpecProvider = AepEffectImport.NativeEffectSpecs(),
+        mediaResolver: (String) -> String? = AepFootageResolver::default
     ): Analysis {
-        val built = build(AepxReader.parseAny(bytes), provider)
+        val built = build(AepxReader.parseAny(bytes), provider, mediaResolver)
         return Analysis(
             built.project,
             built.report,
@@ -88,15 +90,14 @@ object AepImporter {
     fun import(
         bytes: ByteArray,
         allowLosses: Boolean,
-        provider: AepEffectImport.EffectSpecProvider = AepEffectImport.NativeEffectSpecs()
+        provider: AepEffectImport.EffectSpecProvider = AepEffectImport.NativeEffectSpecs(),
+        mediaResolver: (String) -> String? = AepFootageResolver::default
     ): ImportResult {
-        val built = build(AepxReader.parseAny(bytes), provider)
+        val built = build(AepxReader.parseAny(bytes), provider, mediaResolver)
         if (!allowLosses && built.report.losses.isNotEmpty()) {
             return ImportResult.Refused(built.report)
         }
-        val json = AeInterchangeConverter.toCanonicalJson(built.project) { relative ->
-            File(relative).takeIf { it.exists() }?.absolutePath
-        }
+        val json = AeInterchangeConverter.toCanonicalJson(built.project, mediaResolver)
         return ImportResult.Imported(patchCanonical(json, built), built.report)
     }
 
@@ -259,7 +260,8 @@ object AepImporter {
 
     private fun build(
         file: AepContainer.AepFile,
-        provider: AepEffectImport.EffectSpecProvider
+        provider: AepEffectImport.EffectSpecProvider,
+        mediaResolver: (String) -> String?
     ): Built {
         val versions = AepImportReport.AeVersionInfo.of(file)
         val col = AepImportReport.Collector()
@@ -409,7 +411,7 @@ object AepImporter {
         for ((layerIndex, row) in importable.withIndex()) {
             val built = buildLayer(
                 row, project, compView, header, durationSeconds, parentNameById[row.header.id],
-                compName, layerIndex, defs, provider, allocBlock, col
+                compName, layerIndex, defs, provider, allocBlock, mediaResolver, col
             )
             if (built == null) {
                 col.lose(
@@ -590,6 +592,7 @@ object AepImporter {
         defs: AepEffects.EffectDefinitions,
         provider: AepEffectImport.EffectSpecProvider,
         allocBlock: (Int) -> Long,
+        mediaResolver: (String) -> String?,
         col: AepImportReport.Collector
     ): Pair<AeLayer, LayerPatch>? {
         val layer = row.layer
@@ -655,7 +658,7 @@ object AepImporter {
                         col.imported.footageLayers++
                         val storedPath = footage.path!!.replace('\\', '/')
                         file = storedPath
-                        if (!File(storedPath).exists()) {
+                        if (mediaResolver(storedPath) == null) {
                             col.missingFootage.add(storedPath)
                         }
                         hasAudio = footage.audioSampleRate != null

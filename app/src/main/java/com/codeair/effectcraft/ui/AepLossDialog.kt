@@ -38,7 +38,8 @@ import com.codeair.effectcraft.ui.theme.AstryxTheme
 fun AepLossDialog(
     report: AepImportReport.ImportReport,
     onAllow: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onChooseFootageFolder: (() -> Unit)? = null
 ) {
     val imported = report.imported
     val totalLosses = report.losses.sumOf { it.count }
@@ -97,6 +98,17 @@ fun AepLossDialog(
                 )
                 for (path in report.missingFootage.take(3)) {
                     Text("· $path", fontSize = 12.sp, color = AstryxTheme.Colors.textSecondary)
+                }
+                // The footage usually sits next to the .aep in the same
+                // folder; picking that folder links it and re-runs the
+                // report, so the missing list above shrinks.
+                if (onChooseFootageFolder != null) {
+                    TextButton(
+                        onClick = onChooseFootageFolder,
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Text("Choose footage folder", color = AstryxTheme.Colors.textPrimary)
+                    }
                 }
             }
             Text(

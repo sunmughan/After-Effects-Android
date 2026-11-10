@@ -57,6 +57,8 @@ import com.codeair.effectcraft.data.CanonicalProjectInfo
 import com.codeair.effectcraft.data.CanonicalProjectDocument
 import com.codeair.effectcraft.data.CanonicalProjectRepository
 import com.codeair.effectcraft.data.ImportDocumentResolver
+import com.codeair.effectcraft.data.AepFootageFolder
+import com.codeair.effectcraft.data.aep.AepFootageResolver
 import com.codeair.effectcraft.data.aep.AepImportReport
 import com.codeair.effectcraft.data.ClipEditOutcome
 import com.codeair.effectcraft.data.ClipRenderCoverage
@@ -278,6 +280,11 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
     // import coroutine waits on for the user's answer.
     var aepLossReport by remember { mutableStateOf<AepImportReport.ImportReport?>(null) }
     var aepLossGate by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
+    // The .aep footage folder: the picked .aep bytes (held while the loss
+    // gate waits, so a folder pick can re-run the analysis) and the
+    // directories holding footage copied in from the chosen folder.
+    var aepPendingBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var aepMediaDirs by remember { mutableStateOf<List<File>>(emptyList()) }
     var undoStack by remember {
         mutableStateOf(
             recoveredSession?.state?.undoStack?.map {
@@ -595,9 +602,12 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     currentCoroutineContext().ensureActive()
                     val resolved = if (ImportDocumentResolver.isAep(rawBytes)) {
                         // Raw .aep/.aepx: dry run first, show the loss report,
-                        // and import only with the user's allowance.
+                        // and import only with the user's allowance. The media
+                        // resolver points at footage already copied in from a
+                        // folder pick (empty on the first pass).
+                        aepPendingBytes = rawBytes
                         val report = withContext(Dispatchers.Default) {
-                            ImportDocumentResolver.analyzeAep(rawBytes)
+                            ImportDocumentResolver.analyzeAep(rawBytes, AepFootageResolver.resolverFor(aepMediaDirs))
                         }
                         if (report.losses.isNotEmpty()) {
                             val gate = CompletableDeferred<Boolean>()
@@ -611,7 +621,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                             }
                         }
                         withContext(Dispatchers.Default) {
-                            ImportDocumentResolver.importAep(rawBytes, allowLosses = true)
+                            ImportDocumentResolver.importAep(rawBytes, allowLosses = true, AepFootageResolver.resolverFor(aepMediaDirs))
                         }
                     } else {
                         withContext(Dispatchers.Default) {
@@ -671,12 +681,52 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
                     if (canonicalImportJob === importJob) {
                         canonicalImportInProgress = false
                         canonicalImportJob = null
+                        aepPendingBytes = null
+                        aepMediaDirs = emptyList()
                     }
                 }
             }
         }
     }
-    val exportEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+    // The .aep footage folder: the loss dialog offers it when the report
+    // lists missing media. The picker grants the whole folder; the missing
+    // files are copied into the app's ae-imports directory, the analysis
+    // re-runs against them, and the dialog shows the smaller missing list.
+    // When nothing is missing or lost any more, the gate completes and the
+    // import proceeds without another tap.
+    val aepFolderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri: Uri? ->
+        if (treeUri == null) return@rememberLauncherForActivityResult
+        val bytes = aepPendingBytes ?: return@rememberLauncherForActivityResult
+        val missing = aepLossReport?.missingFootage ?: return@rememberLauncherForActivityResult
+        exportScope.launch {
+            try {
+                runCatching { context.contentResolver.takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                val copiedDirs = withContext(Dispatchers.IO) {
+                    AepFootageFolder.copyMissing(
+                        context.contentResolver, treeUri, missing,
+                        File(context.filesDir, "ae-imports")
+                    )
+                }
+                runCatching { safRegistry.record(treeUri.toString(), SafPermissionRegistry.Kind.READ, "Footage folder") }
+                val resolver = AepFootageResolver.resolverFor(copiedDirs)
+                val newReport = withContext(Dispatchers.Default) {
+                    ImportDocumentResolver.analyzeAep(bytes, resolver)
+                }
+                aepMediaDirs = copiedDirs
+                aepLossReport = newReport
+                saveMessage = when {
+                    newReport.missingFootage.isEmpty() -> "Footage folder linked · all media found"
+                    else -> "Footage folder linked · ${newReport.missingFootage.size} file(s) still missing"
+                }
+                if (newReport.losses.isEmpty() && newReport.missingFootage.isEmpty()) {
+                    aepLossGate?.complete(true)
+                }
+            } catch (failure: Throwable) {
+                saveMessage = "Footage folder failed · ${failure.message ?: "could not read folder"}"
+            }
+        }
+    }
+    val exportEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? -> {
         if (uri != null) {
             runCatching {
                 val source = importedEcproj ?: error("No canonical .ecproj has been imported")
@@ -2779,7 +2829,8 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             AepLossDialog(
                 report = lossReport,
                 onAllow = { aepLossGate?.complete(true) },
-                onCancel = { aepLossGate?.complete(false) }
+                onCancel = { aepLossGate?.complete(false) },
+                onChooseFootageFolder = { aepFolderLauncher.launch(null) }
             )
         }
     }

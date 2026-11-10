@@ -1,5 +1,6 @@
 package com.codeair.effectcraft.data.aep
 
+import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -196,6 +197,36 @@ class AepImporterTest {
             if (child.optString("match") == match) return child.getJSONObject("value").getDouble("v")
         }
         throw AssertionError("no effect prop $match in ${group.optString("match")}")
+    }
+
+    @Test
+    fun importWithFootageFolderResolvesMissingFootage() {
+        // The fixture's footage is the sequence folder
+        // "E:/Projekte/ae-corpus/scratch/synth/seq": with a folder resolver
+        // pointing at a directory that holds a "seq" folder, the footage is
+        // found and the canonical item is not missing.
+        val dir = File.createTempFile("aep-footage-e2e-", "")
+        assertTrue(dir.delete())
+        assertTrue(dir.mkdir())
+        val seq = File(dir, "seq")
+        assertTrue(seq.mkdir())
+        val resolver = AepFootageResolver.resolverFor(listOf(dir))
+        val result = AepImporter.import(syntheticBytes(), allowLosses = true, FakeEffectSpecs(), resolver)
+        assertTrue(result is AepImporter.ImportResult.Imported)
+        val imported = result as AepImporter.ImportResult.Imported
+        assertTrue(imported.report.missingFootage.isEmpty())
+        val root = JSONObject(imported.canonicalJson)
+        val items = root.getJSONObject("items")
+        val keys = items.keys()
+        var footage: JSONObject? = null
+        while (keys.hasNext()) {
+            val item = items.getJSONObject(keys.next())
+            val kind = item.getJSONObject("kind")
+            if (kind.optString("type") == "Footage") footage = kind
+        }
+        assertTrue(footage != null)
+        assertEquals(false, footage!!.getBoolean("missing"))
+        assertEquals(seq.absolutePath, footage.getString("path"))
     }
 
     @Test
