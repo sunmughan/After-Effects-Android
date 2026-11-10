@@ -1217,7 +1217,11 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_i
     let mut next_id: u64 = 1;
     let mut ids = effectcraft_project::build::Ids(&mut next_id);
     let group = effectcraft_effects::instantiate(spec, &mut ids, &instance_name, [layer_width, layer_height]);
-    let json = match serde_json::to_string(&group) {
+    // Serialize the group as a document Node, not a bare PropGroup: the
+    // `node` tag lives on the Node enum, and a bare group serializes without
+    // it, so the document inspector rejects the patched project with
+    // "missing field `node`".
+    let json = match serde_json::to_string(&Node::Group(group)) {
         Ok(json) => json,
         Err(_) => return std::ptr::null_mut(),
     };
@@ -3876,8 +3880,11 @@ mod tests {
         let mut next_id: u64 = 1;
         let mut ids = effectcraft_project::build::Ids(&mut next_id);
         let group = effectcraft_effects::instantiate(spec, &mut ids, "Color Control", [1920.0, 1080.0]);
-        let json = serde_json::to_string(&group).unwrap();
+        // The JNI serializes the group as a document Node: a bare PropGroup
+        // has no `node` tag and the inspector rejects the patched project.
+        let json = serde_json::to_string(&Node::Group(group)).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["node"], "Group");
         assert_eq!(value["match"], "ec.control.color");
         assert_eq!(value["name"], "Color Control");
         assert_eq!(value["kind"]["kind"], "Effect");
@@ -3885,6 +3892,7 @@ mod tests {
         assert_eq!(value["uid"], 1);
         let children = value["children"].as_array().unwrap();
         assert_eq!(children.len(), 1);
+        assert_eq!(children[0]["node"], "Prop");
         assert_eq!(children[0]["match"], "color");
         assert_eq!(children[0]["value"]["t"], "Color");
         assert_eq!(children[0]["value"]["v"], serde_json::json!([1.0, 0.0, 0.0, 1.0]));
