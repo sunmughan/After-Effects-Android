@@ -30,12 +30,13 @@ import kotlin.math.roundToLong
  * Honest v1 coverage: first composition only; footage/solid/null layers with timing,
  * switches, blend mode, stretch and parent links; transform static values and keyframes
  * for Anchor Point, Position, Scale, Rotation and Opacity; effects with parameters and
- * keyframes (the 63 mapped effects, from the native effect registry); footage linked by
- * its stored path (missing files are listed, never a refusal); expressions kept as source
- * text.
+ * keyframes (the 63 mapped effects, from the native effect registry); masks with path,
+ * mode, feather/opacity/expansion and keyframes; layer and composition markers; time
+ * remapping; orientation keyframes; footage linked by its stored path (missing files are
+ * listed, never a refusal); expressions kept as source text.
  * NOT imported in v1 (all reported as losses): text content, shape contents, camera and
- * light layers, precomp layers, markers, layer styles, 3D rotations,
- * orientation, time remapping, project settings, compositions after the first, folders.
+ * light layers, precomp layers, layer styles, 3D rotations,
+ * project settings, compositions after the first, folders.
  * There is no `.aep` export in this build.
  *
  * Ports the mapping of `import/build.rs`, `import/props.rs`, `import/time.rs` and
@@ -165,7 +166,11 @@ object AepImporter {
          * every layer's project id exists. */
         val pendingLayerRefs: List<AepEffectImport.PendingLayerRef> = emptyList(),
         /** Imported mask groups, in stack order (uids in patch space, as effect groups). */
-        val maskGroups: List<JSONObject> = emptyList()
+        val maskGroups: List<JSONObject> = emptyList(),
+        /** Layer markers, as canonical marker JSON, in time order. */
+        val markers: JSONArray = JSONArray(),
+        /** The Time Remapping property, inserted first in the layer's properties. */
+        val timeRemap: JSONObject? = null
     )
 
     private data class CompPatch(
@@ -175,7 +180,9 @@ object AepImporter {
         val workAreaEndTicks: Long,
         val shutterAngle: Double,
         val shutterPhase: Double,
-        val renderer: String
+        val renderer: String,
+        /** Composition markers, as canonical marker JSON, in time order. */
+        val markers: JSONArray = JSONArray()
     )
 
     private data class Built(
@@ -459,18 +466,14 @@ object AepImporter {
             workAreaEndTicks = secondsToTicks(header.workAreaEndSeconds()) ?: ticks(durationSeconds),
             shutterAngle = header.shutterAngle.toDouble(),
             shutterPhase = header.shutterPhase?.toDouble() ?: -90.0,
-            renderer = renderer
+            renderer = renderer,
+            markers = compView.item.childList("SecL")?.let { secL ->
+                AepMarkers.importMarkers(
+                    AepMarkers.markersIn(secL), secL, "composition \"$compName\"",
+                    header.timeBase.timescale, col
+                )
+            } ?: JSONArray()
         )
-        // Composition markers are not imported in v1.
-        val secl = firstComp.chunk.findList("SecL")
-        val compMarkers = secl?.findList("mrst")
-        if (compMarkers != null) {
-            val count = markerCount(compMarkers)
-            col.lose(
-                AepImportReport.LossCategory.Markers,
-                "composition \"$compName\": $count marker(s) are not imported in this build"
-            )
-        }
 
         val aeProject = AeProject(
             projectName = compName,
@@ -745,20 +748,39 @@ object AepImporter {
             }
         }
 
-        // Orientation: the static value is imported; keyframes and expressions are not
-        // (values.rs orientation(), props.rs import_orientation_keys). Absent means the
-        // default [0, 0, 0], which the converter already writes — nothing to lose.
+        // Orientation: the static value is imported; keyframes are imported too
+        // (values.rs orientation_keys, props.rs import_orientation_keys: bezier
+        // sides become linear, a renderer difference from After Effects' slerp).
+        // An expression is reported, not decoded.
         val orientation = layer.orientation()
         if (orientation != null) {
             when {
-                orientation.animated -> col.lose(
-                    AepImportReport.LossCategory.TransformProperties,
-                    "layer '$name': ADBE Orientation keyframes are not imported in this build"
-                )
                 orientation.hasExpression -> col.lose(
                     AepImportReport.LossCategory.TransformProperties,
                     "layer '$name': ADBE Orientation expression is not imported in this build"
                 )
+                orientation.animated -> {
+                    val keys = AepMarkers.importOrientationKeys(layer, name, timescale, col)
+                    if (keys != null) {
+                        richKeys["orientation"] = keys.map { key ->
+                            RichKeyframe(
+                                timeTicks = key.timeTicks,
+                                value = key.value,
+                                isVec3 = true,
+                                inInterp = key.inInterp,
+                                outInterp = key.outInterp,
+                                inEase = emptyList(),
+                                outEase = emptyList(),
+                                spatialIn = null,
+                                spatialOut = null,
+                                spatialAuto = null,
+                                roving = false,
+                                label = 0
+                            )
+                        }
+                        staticValues["orientation"] = keys.first().value
+                    }
+                }
                 orientation.degrees.any { !it.isFinite() || abs(it) > LIMIT } -> col.lose(
                     AepImportReport.LossCategory.DamagedData,
                     "layer '$name': ADBE Orientation is unreadable, the default is used"
@@ -802,6 +824,7 @@ object AepImporter {
         var effectGroups: List<JSONObject> = emptyList()
         var pendingLayerRefs: List<AepEffectImport.PendingLayerRef> = emptyList()
         var maskGroups: List<JSONObject> = emptyList()
+        var timeRemap: JSONObject? = null
 
         // Everything else in the layer's property tree is reported, never silent.
         if (rootProps != null) {
@@ -833,15 +856,9 @@ object AepImporter {
                         )
                     }
                     entryName.contains("Time Remap", ignoreCase = true) -> {
-                        val remap = (entry.node as? AepTypedView.PropNode.Property)?.property
-                        val active = remap != null &&
-                            (remap.isAnimated() || remap.flags() == 1L || remap.expression() != null)
-                        if (active) {
-                            col.lose(
-                                AepImportReport.LossCategory.TimeRemapping,
-                                "layer '$name': time remapping is not imported in this build"
-                            )
-                        }
+                        timeRemap = AepMarkers.importTimeRemap(
+                            rootProps, name, timescale, { allocBlock(1) }, col
+                        )
                     }
                     entryName.contains("Layer Styles", ignoreCase = true) -> {
                         // A style group with no entries holds nothing set (the fixture's
@@ -892,14 +909,10 @@ object AepImporter {
             }
         }
         // Layer markers live under `mrst`, not in the property tree entries.
-        val layerMarkers = layer.chunk.findList("mrst")
-        if (layerMarkers != null) {
-            val count = markerCount(layerMarkers)
-            col.lose(
-                AepImportReport.LossCategory.Markers,
-                "layer '$name': $count marker(s) are not imported in this build"
-            )
-        }
+        val layerMarkers = AepMarkers.importMarkers(
+            AepMarkers.markersIn(layer.chunk), layer.chunk,
+            "$compName: '$name'", timescale, col
+        )
 
         val startSeconds = header.startSeconds()
         val inSeconds = header.inPointSeconds()
@@ -969,7 +982,9 @@ object AepImporter {
             aepLayerId = header.id,
             effectGroups = effectGroups,
             pendingLayerRefs = pendingLayerRefs,
-            maskGroups = maskGroups
+            maskGroups = maskGroups,
+            markers = layerMarkers,
+            timeRemap = timeRemap
         )
         return aeLayer to patch
     }
@@ -1226,15 +1241,6 @@ object AepImporter {
         return if (t.all { abs(it) <= LIMIT }) t else doubleArrayOf(0.0, 0.0, 0.0)
     }
 
-    /** The number of markers in an `mrst` list (the keyframe count of its `tdbs` property). */
-    private fun markerCount(mrstHolder: AepContainer.Chunk): Int {
-        val tdbs = mrstHolder.findList("mrst")?.childList("tdbs")
-            ?: mrstHolder.childList("tdbs")
-            ?: return 1
-        val prop = AepTypedView.Property.fromChunk(tdbs) ?: return 1
-        return prop.keys()?.len()?.takeIf { it > 0 } ?: 1
-    }
-
     /** The footage kind for the converter: still, audio or video. */
     private fun footageKind(file: String, hasAudio: Boolean, width: Long): String {
         val ext = file.substringAfterLast('.', "").lowercase()
@@ -1290,6 +1296,7 @@ object AepImporter {
         comp.put("shutter_angle", patch.shutterAngle)
         comp.put("shutter_phase", patch.shutterPhase)
         comp.put("renderer", patch.renderer)
+        if (patch.markers.length() > 0) comp.put("markers", patch.markers)
         val layers = comp.getJSONArray("layers")
         // Effect groups carry patch-space uids (from 1); they live above the converter's
         // `next_id`, so every patch uid is shifted by next_id - 1 and the root's next_id
@@ -1311,6 +1318,7 @@ object AepImporter {
             for (group in layerPatch.maskGroups) {
                 maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
             }
+            layerPatch.timeRemap?.let { maxPatchUid = maxOf(maxPatchUid, it.optLong("uid")) }
             for (ref in layerPatch.pendingLayerRefs) {
                 allRefs.add(
                     AepEffectImport.PendingLayerRef(
@@ -1325,6 +1333,7 @@ object AepImporter {
             layerJson.put("stretch", layerPatch.stretch)
             layerJson.put("blend_mode", layerPatch.blendMode)
             layerJson.put("switches", switchesJson(layerPatch.switches))
+            if (layerPatch.markers.length() > 0) layerJson.put("markers", layerPatch.markers)
             val props = layerJson.optJSONObject("props") ?: continue
             val children = props.optJSONArray("children") ?: continue
             for (c in 0 until children.length()) {
@@ -1390,6 +1399,14 @@ object AepImporter {
                     AepEffectImport.remapUids(group, uidOffset)
                     maskChildren.put(group)
                 }
+            }
+            // Time Remapping goes first in the layer's properties.
+            layerPatch.timeRemap?.let { remap ->
+                remap.put("uid", remap.optLong("uid") + uidOffset)
+                val current = props.optJSONArray("children") ?: return@let
+                val shifted = JSONArray().put(remap)
+                for (c in 0 until current.length()) shifted.put(current.get(c))
+                props.put("children", shifted)
             }
         }
         // Layer parameters that name another layer resolve now that every layer's

@@ -194,7 +194,65 @@ object AepTypedView {
                 hasExpression = property?.expression() != null
             )
         }
+
+        /** The time scale of the keyed Orientation (`otst` `tdbs`), null when absent. */
+        fun orientationTimeScale(): Long? {
+            val transform = (properties()?.get("ADBE Transform Group") as? PropNode.Group)?.group
+                ?: return null
+            val otst = (transform.get("ADBE Orientation") as? PropNode.Other)?.chunk ?: return null
+            if (!otst.isList("otst")) return null
+            return otst.childList("tdbs")?.let { Property.fromChunk(it) }?.timeScale()
+        }
+
+        /** The keyframes of a keyed Orientation: the `tdbs` of the `otst` holds one
+         * 80-byte record per key (time, interpolation sides, flags) and `otky` one
+         * `otda` (three `f64` degrees) per key, in the same order. Null when the
+         * Orientation is not keyed or the counts differ. */
+        fun orientationKeys(): List<OrientationKey>? {
+            val transform = (properties()?.get("ADBE Transform Group") as? PropNode.Group)?.group
+                ?: return null
+            val otst = (transform.get("ADBE Orientation") as? PropNode.Other)?.chunk ?: return null
+            if (!otst.isList("otst")) return null
+            val list = otst.childList("tdbs")?.let { Property.fromChunk(it) }?.keys()
+                ?: return null
+            val values = otst.childList("otky")?.children()
+                ?.filter { it.hasId("otda") }
+                ?.map { c ->
+                    val b = c.bytes() ?: return@map null
+                    if (b.size < 24) return@map null
+                    listOf(
+                        beF64(b, 0) ?: return@map null,
+                        beF64(b, 8) ?: return@map null,
+                        beF64(b, 16) ?: return@map null
+                    )
+                } ?: return null
+            val records = list.keyframes()
+            if (records.size != values.size) return null
+            val out = ArrayList<OrientationKey>()
+            for ((rec, degrees) in records.zip(values)) {
+                val d = degrees ?: return null
+                out.add(
+                    OrientationKey(
+                        timeUnits = rec.timeUnits() ?: return null,
+                        interpolationIn = rec.interpolationIn() ?: return null,
+                        interpolationOut = rec.interpolationOut() ?: return null,
+                        degrees = d
+                    )
+                )
+            }
+            return out
+        }
     }
+
+    /** A keyframe of a keyed Orientation. */
+    data class OrientationKey(
+        /** The time in the property's time units (layer time). */
+        val timeUnits: Int,
+        val interpolationIn: AepKeys.Interpolation,
+        val interpolationOut: AepKeys.Interpolation,
+        /** Degrees `[x, y, z]`. */
+        val degrees: List<Double>
+    )
 
     /** The Orientation of a 3D layer (`ADBE Orientation`, 488). */
     data class Orientation(
