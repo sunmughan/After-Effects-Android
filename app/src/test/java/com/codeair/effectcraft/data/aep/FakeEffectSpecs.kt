@@ -102,6 +102,11 @@ internal class FakeEffectSpecs : AepEffectImport.EffectSpecProvider {
                     prop("color", color(1.0, 0.0, 0.0), JSONObject().put("kind", "Color"))
                 )
             )
+            "ec.control.slider" -> group(
+                "ec.control.slider", instanceName, listOf(
+                    prop("slider", scalar(0.0))
+                )
+            )
             else -> null
         }
 }
