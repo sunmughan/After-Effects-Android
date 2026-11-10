@@ -720,7 +720,7 @@ class M7FunctionCoverageTest {
         val fpsField = compose.onNodeWithContentDescription("Export FPS")
         fpsField.performClick()
         fpsField.performTextClearance()
-        assertEquals("", fpsField.fetchSemanticsNode().config[SemanticsProperties.EditableText])
+        assertEquals("", fpsField.fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
         compose.onNodeWithText("Render ZIP").performClick()
         // Run 42441138764 (attempt 1): the validation error is set by
         // the click's recomposition, which can land after the fetch on
