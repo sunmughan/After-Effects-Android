@@ -27,14 +27,15 @@ import android.graphics.BitmapFactory
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
@@ -710,24 +711,22 @@ class M7FunctionCoverageTest {
         // text, which also contains "30". Blanking the FPS field must
         // block the export with the dialog's own validation message,
         // not call back. Same field, same assertion — no weakening.
-        // Focus the field before clearing it, and check the blank
-        // value before clicking Render: on a loaded emulator an
-        // unfocused clearance can leave "30" in place, so Render
-        // would export instead of erroring — and the failure would
-        // then surface below as a 10 s validation timeout instead of
-        // its real cause. assertTextEquals would also match the
-        // field's "FPS" label, so the editable value is checked
-        // directly from the semantics config.
+        // The blank check must read the editable value directly:
+        // assertTextEquals would also match the field's "FPS" label.
+        // If the clearance did not land, this fails here with its
+        // real cause instead of below as a 10 s validation timeout.
         val fpsField = compose.onNodeWithContentDescription("Export FPS")
-        fpsField.performClick()
         fpsField.performTextClearance()
         assertEquals("", fpsField.fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
-        // The focus above can open the soft keyboard, which covers
-        // the Render pill at the bottom of the sheet — a click on the
-        // covered pill silently misses and no error ever appears.
-        // Dismiss the keyboard first so the pill is reachable.
-        fpsField.performImeAction()
-        compose.onNodeWithText("Render ZIP").performClick()
+        // Invoke Render through its OnClick semantics action, not a
+        // touch at its coordinates: a focused field's soft keyboard
+        // can cover the pill at the bottom of the sheet, and a touch
+        // on the covered pill silently misses. The touch path itself
+        // is already proven by the sibling valid-settings test, which
+        // clicks the same pill and exports; what this test proves is
+        // the validation, not hit-testing.
+        compose.onNodeWithContentDescription("Render ZIP")
+            .performSemanticsAction(SemanticsActions.OnClick)
         // Run 42441138764 (attempt 1): the validation error is set by
         // the click's recomposition, which can land after the fetch on
         // a loaded emulator, so performScrollTo found no node. Wait
