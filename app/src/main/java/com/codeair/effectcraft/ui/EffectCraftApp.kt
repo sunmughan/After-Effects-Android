@@ -726,7 +726,7 @@ fun EffectCraftApp(projectStore: DraftProjectStore) {
             }
         }
     }
-    val exportEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? -> {
+    val exportEcprojLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) {
             runCatching {
                 val source = importedEcproj ?: error("No canonical .ecproj has been imported")
