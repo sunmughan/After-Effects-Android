@@ -721,6 +721,11 @@ class M7FunctionCoverageTest {
         fpsField.performClick()
         fpsField.performTextClearance()
         assertEquals("", fpsField.fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
+        // The focus above can open the soft keyboard, which covers
+        // the Render pill at the bottom of the sheet — a click on the
+        // covered pill silently misses and no error ever appears.
+        // Dismiss the keyboard first so the pill is reachable.
+        fpsField.performImeAction()
         compose.onNodeWithText("Render ZIP").performClick()
         // Run 42441138764 (attempt 1): the validation error is set by
         // the click's recomposition, which can land after the fetch on
