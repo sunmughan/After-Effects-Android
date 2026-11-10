@@ -19,11 +19,6 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 
 effectcraft-color = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
 effectcraft-time = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
-
-# Test-only: the stub Accelerator in the host tests implements the upstream
-# trait, whose effects() method names effectcraft-effects' Buf. It ships
-# nothing in the .so.
-[dev-dependencies]
 effectcraft-effects = { git = "https://github.com/storytold/effectcraft", rev = "e71dd629c56c78a82959ee50c271da9209c55b80" }
 
 # EffectCraft's pinned craft-pdf expects Storytold's Hayro API additions (DecodeLimits).

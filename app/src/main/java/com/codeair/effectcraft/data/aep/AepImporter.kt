@@ -29,10 +29,12 @@ import kotlin.math.roundToLong
  *
  * Honest v1 coverage: first composition only; footage/solid/null layers with timing,
  * switches, blend mode, stretch and parent links; transform static values and keyframes
- * for Anchor Point, Position, Scale, Rotation and Opacity; footage linked by its stored
- * path (missing files are listed, never a refusal); expressions kept as source text.
+ * for Anchor Point, Position, Scale, Rotation and Opacity; effects with parameters and
+ * keyframes (the 63 mapped effects, from the native effect registry); footage linked by
+ * its stored path (missing files are listed, never a refusal); expressions kept as source
+ * text.
  * NOT imported in v1 (all reported as losses): text content, shape contents, camera and
- * light layers, precomp layers, all effects, masks, markers, layer styles, 3D rotations,
+ * light layers, precomp layers, markers, layer styles, 3D rotations,
  * orientation, time remapping, project settings, compositions after the first, folders.
  * There is no `.aep` export in this build.
  *
@@ -64,8 +66,11 @@ object AepImporter {
      * @throws IllegalArgumentException with a user-facing reason for a file that cannot
      * be read at all (not a project, no composition, unreadable headers).
      */
-    fun analyze(bytes: ByteArray): Analysis {
-        val built = build(AepxReader.parseAny(bytes))
+    fun analyze(
+        bytes: ByteArray,
+        provider: AepEffectImport.EffectSpecProvider = AepEffectImport.NativeEffectSpecs()
+    ): Analysis {
+        val built = build(AepxReader.parseAny(bytes), provider)
         return Analysis(
             built.project,
             built.report,
@@ -79,8 +84,12 @@ object AepImporter {
      * @throws IllegalArgumentException with a user-facing reason for a file that cannot
      * be read at all.
      */
-    fun import(bytes: ByteArray, allowLosses: Boolean): ImportResult {
-        val built = build(AepxReader.parseAny(bytes))
+    fun import(
+        bytes: ByteArray,
+        allowLosses: Boolean,
+        provider: AepEffectImport.EffectSpecProvider = AepEffectImport.NativeEffectSpecs()
+    ): ImportResult {
+        val built = build(AepxReader.parseAny(bytes), provider)
         if (!allowLosses && built.report.losses.isNotEmpty()) {
             return ImportResult.Refused(built.report)
         }
@@ -146,7 +155,17 @@ object AepImporter {
         val expressions: Map<String, Pair<String, Boolean>>,
         /** Static values by canonical property id, for properties the converter
          * writes as a default (`rotationX`, `rotationY`, `orientation`). */
-        val staticValues: Map<String, List<Double>> = emptyMap()
+        val staticValues: Map<String, List<Double>> = emptyMap(),
+        /** The layer's id in the file, for resolving layer references in the patch step. */
+        val aepLayerId: Long = 0,
+        /** Imported effect groups, in stack order (uids in patch space; remapped with
+         * the converter's `next_id` in the patch step). */
+        val effectGroups: List<JSONObject> = emptyList(),
+        /** Layer parameters that name another layer, resolved in the patch step once
+         * every layer's project id exists. */
+        val pendingLayerRefs: List<AepEffectImport.PendingLayerRef> = emptyList(),
+        /** Imported mask groups, in stack order (uids in patch space, as effect groups). */
+        val maskGroups: List<JSONObject> = emptyList()
     )
 
     private data class CompPatch(
@@ -231,7 +250,10 @@ object AepImporter {
         else -> null
     }
 
-    private fun build(file: AepContainer.AepFile): Built {
+    private fun build(
+        file: AepContainer.AepFile,
+        provider: AepEffectImport.EffectSpecProvider
+    ): Built {
         val versions = AepImportReport.AeVersionInfo.of(file)
         val col = AepImportReport.Collector()
         val project = AepTypedView.Project.of(file)
@@ -368,8 +390,20 @@ object AepImporter {
 
         val aeLayers = ArrayList<AeLayer>()
         val layerPatches = ArrayList<LayerPatch>()
-        for (row in importable) {
-            val built = buildLayer(row, project, compView, header, durationSeconds, parentNameById[row.header.id], col)
+        // Effect group skeletons come from the native registry; patch uids start at 1 and
+        // are remapped with the converter's `next_id` in the patch step.
+        val defs = AepEffects.EffectDefinitions.of(project)
+        var patchUid = 1L
+        val allocBlock: (Int) -> Long = { n ->
+            val base = patchUid
+            patchUid += n
+            base
+        }
+        for ((layerIndex, row) in importable.withIndex()) {
+            val built = buildLayer(
+                row, project, compView, header, durationSeconds, parentNameById[row.header.id],
+                compName, layerIndex, defs, provider, allocBlock, col
+            )
             if (built == null) {
                 col.lose(
                     AepImportReport.LossCategory.DamagedData,
@@ -379,6 +413,19 @@ object AepImporter {
             }
             aeLayers.add(built.first)
             layerPatches.add(built.second)
+        }
+        // Layer references whose target was not imported stay unset (the patch step leaves
+        // them as such); the loss is recorded here, where the imported set is known.
+        val importedIds = layerPatches.map { it.aepLayerId }.toSet()
+        for (patch in layerPatches) {
+            for (ref in patch.pendingLayerRefs) {
+                if (ref.target !in importedIds) {
+                    col.lose(
+                        AepImportReport.LossCategory.Effects,
+                        "${ref.what} names a layer that is not imported (id ${ref.target}), left unset"
+                    )
+                }
+            }
         }
         col.imported.compositions = 1
         col.imported.layers = aeLayers.size
@@ -535,6 +582,11 @@ object AepImporter {
         compHeader: AepHeader.CompHeader,
         compDuration: Double,
         parentName: String?,
+        compName: String,
+        layerIndex: Int,
+        defs: AepEffects.EffectDefinitions,
+        provider: AepEffectImport.EffectSpecProvider,
+        allocBlock: (Int) -> Long,
         col: AepImportReport.Collector
     ): Pair<AeLayer, LayerPatch>? {
         val layer = row.layer
@@ -737,6 +789,20 @@ object AepImporter {
             }
         }
 
+        // Effect size: the source size for footage/solid/precomp layers, the composition
+        // size for text and shape layers (they span the composition), and 100x100 for a
+        // null layer with no source (import/build.rs).
+        val effectSize: Pair<Double, Double> = sourceSize?.let {
+            it.first.toDouble() to it.second.toDouble()
+        } ?: if (type == AeLayerType.TEXT || type == AeLayerType.SHAPE) {
+            compWidth.toDouble() to compHeight.toDouble()
+        } else {
+            100.0 to 100.0
+        }
+        var effectGroups: List<JSONObject> = emptyList()
+        var pendingLayerRefs: List<AepEffectImport.PendingLayerRef> = emptyList()
+        var maskGroups: List<JSONObject> = emptyList()
+
         // Everything else in the layer's property tree is reported, never silent.
         if (rootProps != null) {
             for (entry in rootProps.entries()) {
@@ -744,25 +810,26 @@ object AepImporter {
                 when {
                     entryName == "ADBE Transform Group" -> Unit
                     entryName.contains("Effect Parade", ignoreCase = true) -> {
-                        val parade = (entry.node as? AepTypedView.PropNode.Group)?.group
-                        val effects = parade?.entries().orEmpty()
-                        for (effect in effects) {
-                            col.lose(
-                                AepImportReport.LossCategory.Effects,
-                                "layer '$name': effect '${effect.matchName}' is not imported in this build"
-                            )
-                        }
-                        if (effects.isEmpty()) {
-                            col.lose(
-                                AepImportReport.LossCategory.Effects,
-                                "layer '$name': effects are not imported in this build"
-                            )
-                        }
+                        val result = AepEffectImport.importEffects(
+                            layer, compName, name, layerIndex, header.id, effectSize,
+                            defs, provider, allocBlock, timescale, col
+                        )
+                        effectGroups = result.groups
+                        pendingLayerRefs = result.refs
                     }
                     entryName.contains("Mask", ignoreCase = true) -> {
-                        col.lose(
-                            AepImportReport.LossCategory.Masks,
-                            "layer '$name': masks are not imported in this build"
+                        // On a text or shape layer, which has no source, the mask box is
+                        // stored in layer pixels, so the scale is 1 (import/build.rs).
+                        val maskSize: Pair<Double, Double> =
+                            if (type == AeLayerType.TEXT || type == AeLayerType.SHAPE) {
+                                1.0 to 1.0
+                            } else {
+                                effectSize
+                            }
+                        maskGroups = AepMasks.importMasks(
+                            rootProps, compName, name, maskSize,
+                            type != AeLayerType.TEXT && type != AeLayerType.SHAPE,
+                            allocBlock, timescale, col
                         )
                     }
                     entryName.contains("Time Remap", ignoreCase = true) -> {
@@ -898,7 +965,11 @@ object AepImporter {
             ),
             richKeys = richKeys,
             expressions = expressions,
-            staticValues = staticValues
+            staticValues = staticValues,
+            aepLayerId = header.id,
+            effectGroups = effectGroups,
+            pendingLayerRefs = pendingLayerRefs,
+            maskGroups = maskGroups
         )
         return aeLayer to patch
     }
@@ -1220,6 +1291,34 @@ object AepImporter {
         comp.put("shutter_phase", patch.shutterPhase)
         comp.put("renderer", patch.renderer)
         val layers = comp.getJSONArray("layers")
+        // Effect groups carry patch-space uids (from 1); they live above the converter's
+        // `next_id`, so every patch uid is shifted by next_id - 1 and the root's next_id
+        // moves past the highest patch uid.
+        val uidOffset = root.optLong("next_id", 1L) - 1L
+        var maxPatchUid = 0L
+        // Groups created by the patch step itself (a masks group for a null layer)
+        // take uids past the patch space.
+        var extraUid = 0L
+        val allRefs = ArrayList<AepEffectImport.PendingLayerRef>()
+        val fileIdToEcId = HashMap<Long, Long>()
+        for (i in 0 until layers.length()) {
+            val layerJson = layers.getJSONObject(i)
+            val layerPatch = built.layerPatches.getOrNull(i) ?: continue
+            fileIdToEcId[layerPatch.aepLayerId] = layerJson.optLong("id")
+            for (group in layerPatch.effectGroups) {
+                maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
+            }
+            for (group in layerPatch.maskGroups) {
+                maxPatchUid = maxOf(maxPatchUid, AepEffectImport.maxUid(group).toLong())
+            }
+            for (ref in layerPatch.pendingLayerRefs) {
+                allRefs.add(
+                    AepEffectImport.PendingLayerRef(
+                        ref.layerIndex, ref.propUid + uidOffset, ref.target, ref.what
+                    )
+                )
+            }
+        }
         for (i in 0 until layers.length()) {
             val layerJson = layers.getJSONObject(i)
             val layerPatch = built.layerPatches.getOrNull(i) ?: continue
@@ -1252,6 +1351,58 @@ object AepImporter {
                     }
                 }
             }
+            // Effects: append the imported groups (uids remapped into project space)
+            // to the layer's effects group.
+            if (layerPatch.effectGroups.isNotEmpty()) {
+                for (c in 0 until children.length()) {
+                    val child = children.getJSONObject(c)
+                    if (child.optString("match") != "effects") continue
+                    val fxChildren = child.optJSONArray("children") ?: continue
+                    for (group in layerPatch.effectGroups) {
+                        AepEffectImport.remapUids(group, uidOffset)
+                        fxChildren.put(group)
+                    }
+                }
+            }
+            // Masks: the same, into the layer's masks group. The converter writes no
+            // masks group for null layers, so one is created with a fresh uid.
+            if (layerPatch.maskGroups.isNotEmpty()) {
+                var masksChild: JSONObject? = null
+                for (c in 0 until children.length()) {
+                    val child = children.getJSONObject(c)
+                    if (child.optString("match") == "masks") masksChild = child
+                }
+                if (masksChild == null) {
+                    val freshUid = root.optLong("next_id", 1L) + maxPatchUid + extraUid
+                    extraUid += 1
+                    masksChild = JSONObject()
+                        .put("node", "Group")
+                        .put("uid", freshUid)
+                        .put("match", "masks")
+                        .put("name", "Masks")
+                        .put("kind", JSONObject().put("kind", "Plain"))
+                        .put("enabled", true)
+                        .put("children", JSONArray())
+                    children.put(masksChild)
+                }
+                val maskChildren = masksChild.optJSONArray("children") ?: continue
+                for (group in layerPatch.maskGroups) {
+                    AepEffectImport.remapUids(group, uidOffset)
+                    maskChildren.put(group)
+                }
+            }
+        }
+        // Layer parameters that name another layer resolve now that every layer's
+        // project id exists. A target that was not imported was already reported in
+        // build(); here it simply stays unset.
+        if (allRefs.isNotEmpty()) {
+            AepEffectImport.resolveLayerRefs(
+                layers, fileIdToEcId, allRefs, AepImportReport.Collector(),
+                reportMissing = false
+            )
+        }
+        if (maxPatchUid > 0L || extraUid > 0L) {
+            root.put("next_id", root.optLong("next_id", 1L) + maxPatchUid + extraUid)
         }
         return root.toString()
     }

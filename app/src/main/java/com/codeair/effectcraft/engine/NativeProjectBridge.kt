@@ -33,6 +33,16 @@ object NativeProjectBridge {
         return runCatching { inspectEcprojNative(json) }.getOrNull()
     }
 
+    /** Instantiates an effect group skeleton from the native effect registry
+     * (`effectcraft-effects`): the effect's parameters with their defaults and UI, as
+     * canonical JSON with uids numbered from 1. Null when the engine has no such effect
+     * or the native library is unavailable. Used by the .aep importer. */
+    fun instantiateEffectGroup(effectId: String, instanceName: String, layerWidth: Double, layerHeight: Double): String? {
+        ensureLoaded()
+        if (!available) return null
+        return runCatching { instantiateEffectGroupNative(effectId, instanceName, layerWidth, layerHeight) }.getOrNull()
+    }
+
     fun isAvailable(): Boolean {
         ensureLoaded()
         return available
@@ -654,6 +664,7 @@ object NativeProjectBridge {
 
     @JvmStatic
     private external fun inspectEcprojNative(json: String): String
+    private external fun instantiateEffectGroupNative(effectId: String, instanceName: String, layerWidth: Double, layerHeight: Double): String?
 
     @JvmStatic
     private external fun renameLayerEcprojNative(json: String, compositionId: Long, layerId: Long, name: String): String

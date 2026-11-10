@@ -109,6 +109,96 @@ class AepImporterTest {
     }
 
     @Test
+    fun importWithFakeProviderImportsEffects() {
+        // The native registry is absent on the JVM, so the fake provider stands in for
+        // it: the fixture's Levels and Glow must land in the canonical document.
+        val result = AepImporter.import(syntheticBytes(), allowLosses = true, FakeEffectSpecs())
+        assertTrue(result is AepImporter.ImportResult.Imported)
+        val imported = (result as AepImporter.ImportResult.Imported)
+        assertEquals(2, imported.report.imported.effects)
+        // The only effect losses left are the two converted expressions (a popup and a
+        // scaled slider); the effects themselves are no longer lost.
+        val losses = imported.report.losses.associate { it.category to it.count }
+        assertEquals(2, losses[AepImportReport.LossCategory.Effects])
+        val effectDetails = imported.report.losses
+            .first { it.category == AepImportReport.LossCategory.Effects }.details
+        assertTrue(effectDetails.all { it.contains("expression") })
+        assertTrue(effectDetails.none { it.contains("not imported in this build") })
+
+        val root = JSONObject(imported.canonicalJson)
+        val layers = findComp(root).getJSONArray("layers")
+        val effects = findEffectsGroup(layers.getJSONObject(0))
+        assertEquals(2, effects.length())
+        val levels = effects.getJSONObject(0)
+        assertEquals("ec.color.levels", levels.getString("match"))
+        val glow = effects.getJSONObject(1)
+        assertEquals("ec.stylize.glow", glow.getString("match"))
+        // Levels values come from the histogram arbitrary data, not the defaults.
+        val bytes = syntheticBytes()
+        val file = AepxReader.parseAny(bytes)
+        val project = AepTypedView.Project.of(file)!!
+        val comp = project.allItems().first { it.kind() == AepTypedView.ItemKind.Composition }.comp()!!
+        val fx = AepEffects.effectsOf(comp.layers().first())[0]
+        val histogram = AepArbitrary.LevelsData.parse(fx.arbitraryData("ADBE Easy Levels2-0002")!!)!!
+        val rgb = histogram.channels[0]
+        assertEquals(rgb[0].toDouble(), effectScalar(levels, "inBlack"), 1e-9)
+        assertEquals(rgb[1].toDouble(), effectScalar(levels, "inWhite"), 1e-9)
+        assertEquals(rgb[2].toDouble(), effectScalar(levels, "gamma"), 1e-9)
+        assertEquals(50.0, effectScalar(glow, "abMidpoint"), 1e-9)
+        assertEquals(60.0, effectScalar(glow, "threshold"), 1e-9)
+        // Every uid in the document is below the root's next_id: the patch remap did
+        // not collide with the converter's ids.
+        val nextId = root.getLong("next_id")
+        val uids = ArrayList<Long>()
+        fun collect(node: Any?) {
+            when (node) {
+                is JSONObject -> {
+                    if (node.has("uid")) uids.add(node.getLong("uid"))
+                    val keys = node.keys()
+                    while (keys.hasNext()) collect(node.get(keys.next()))
+                }
+                is org.json.JSONArray -> for (i in 0 until node.length()) collect(node.get(i))
+            }
+        }
+        collect(root)
+        assertTrue(uids.isNotEmpty())
+        assertTrue(uids.all { it < nextId })
+        // Uid 0 is the converter's unallocated sentinel (two nodes carry it in the
+        // converter's own output); every real uid is unique.
+        val realUids = uids.filter { it != 0L }
+        assertEquals(realUids.size, realUids.toSet().size)
+    }
+
+    private fun findComp(root: JSONObject): JSONObject {
+        val items = root.getJSONObject("items")
+        val keys = items.keys()
+        while (keys.hasNext()) {
+            val item = items.getJSONObject(keys.next())
+            val kind = item.getJSONObject("kind")
+            if (kind.optString("type") == "Comp") return kind
+        }
+        throw AssertionError("no composition in canonical JSON")
+    }
+
+    private fun findEffectsGroup(layer: JSONObject): org.json.JSONArray {
+        val children = layer.getJSONObject("props").getJSONArray("children")
+        for (i in 0 until children.length()) {
+            val child = children.getJSONObject(i)
+            if (child.optString("match") == "effects") return child.getJSONArray("children")
+        }
+        throw AssertionError("no effects group in layer ${layer.optString("name")}")
+    }
+
+    private fun effectScalar(group: JSONObject, match: String): Double {
+        val children = group.getJSONArray("children")
+        for (i in 0 until children.length()) {
+            val child = children.getJSONObject(i)
+            if (child.optString("match") == match) return child.getJSONObject("value").getDouble("v")
+        }
+        throw AssertionError("no effect prop $match in ${group.optString("match")}")
+    }
+
+    @Test
     fun analyzeRejectsGarbage() {
         assertThrows(IllegalArgumentException::class.java) {
             AepImporter.analyze(byteArrayOf(1, 2, 3, 4, 5))

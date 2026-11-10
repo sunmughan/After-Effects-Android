@@ -1191,6 +1191,42 @@ pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_i
     }
 }
 
+/// Instantiates one effect group skeleton from the native effect registry, as canonical
+/// JSON with uids numbered from 1. Null when the engine has no such effect, when a
+/// string cannot be read, or when the group cannot be serialized.
+#[no_mangle]
+pub extern "system" fn Java_com_codeair_effectcraft_engine_NativeProjectBridge_instantiateEffectGroupNative(
+    mut env: JNIEnv,
+    _class: JClass,
+    effect_id: JString,
+    instance_name: JString,
+    layer_width: jni::sys::jdouble,
+    layer_height: jni::sys::jdouble,
+) -> jstring {
+    let effect_id: String = match env.get_string(&effect_id) {
+        Ok(value) => value.into(),
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let instance_name: String = match env.get_string(&instance_name) {
+        Ok(value) => value.into(),
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let Some(spec) = effectcraft_effects::find(&effect_id) else {
+        return std::ptr::null_mut();
+    };
+    let mut next_id: u64 = 1;
+    let mut ids = effectcraft_project::build::Ids(&mut next_id);
+    let group = effectcraft_effects::instantiate(spec, &mut ids, &instance_name, [layer_width, layer_height]);
+    let json = match serde_json::to_string(&group) {
+        Ok(json) => json,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    match env.new_string(json) {
+        Ok(value) => value.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
 
 fn rename_layer(source: &str, composition_id: u64, layer_id: u64, name: &str) -> Result<String, String> {
     let normalized = name.trim();
@@ -3833,6 +3869,32 @@ mod tests {
         assert!(metadata["items"].as_array().is_some());
     }
 
+
+    #[test]
+    fn instantiate_effect_group_returns_the_control_color_skeleton() {
+        let spec = effectcraft_effects::find("ec.control.color").expect("control color exists");
+        let mut next_id: u64 = 1;
+        let mut ids = effectcraft_project::build::Ids(&mut next_id);
+        let group = effectcraft_effects::instantiate(spec, &mut ids, "Color Control", [1920.0, 1080.0]);
+        let json = serde_json::to_string(&group).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["match"], "ec.control.color");
+        assert_eq!(value["name"], "Color Control");
+        assert_eq!(value["kind"]["kind"], "Effect");
+        assert_eq!(value["kind"]["effect"], "ec.control.color");
+        assert_eq!(value["uid"], 1);
+        let children = value["children"].as_array().unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0]["match"], "color");
+        assert_eq!(children[0]["value"]["t"], "Color");
+        assert_eq!(children[0]["value"]["v"], serde_json::json!([1.0, 0.0, 0.0, 1.0]));
+        assert_eq!(children[0]["ui"]["kind"], "Color");
+    }
+
+    #[test]
+    fn instantiate_effect_group_returns_null_for_an_unknown_effect() {
+        assert!(effectcraft_effects::find("ec.no.such.effect").is_none());
+    }
 
     #[test]
     fn rename_layer_updates_non_empty_canonical_project_and_roundtrips() {
