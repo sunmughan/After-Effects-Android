@@ -59,10 +59,25 @@ fun AepLossDialog(
                 fontWeight = FontWeight.SemiBold,
                 color = AstryxTheme.Colors.textPrimary
             )
+            // Only the categories this file actually kept are listed, so the
+            // line stays short and never claims a category with a zero count.
+            val keeps = buildList {
+                if (imported.compositions > 0) add("${imported.compositions} composition(s)")
+                if (imported.layers > 0) add("${imported.layers} layer(s)")
+                if (imported.footage > 0) add("${imported.footage} footage item(s)")
+                if (imported.solids > 0) add("${imported.solids} solid(s)")
+                if (imported.textLayers > 0) add("${imported.textLayers} text layer(s)")
+                if (imported.shapeLayers > 0) add("${imported.shapeLayers} shape layer(s)")
+                if (imported.precompLayers > 0) add("${imported.precompLayers} precomp layer(s)")
+                if (imported.effects > 0) add("${imported.effects} effect(s)")
+                if (imported.masks > 0) add("${imported.masks} mask(s)")
+                if (imported.markers > 0) add("${imported.markers} marker(s)")
+                if (imported.timeRemaps > 0) add("${imported.timeRemaps} time remap(s)")
+                if (imported.keyframes > 0) add("${imported.keyframes} keyframe(s)")
+                if (imported.expressions > 0) add("${imported.expressions} expression(s)")
+            }
             Text(
-                "Keeps: ${imported.compositions} composition(s), ${imported.layers} layer(s), " +
-                    "${imported.footage} footage item(s), ${imported.solids} solid(s), " +
-                    "${imported.keyframes} keyframe(s), ${imported.expressions} expression(s).",
+                "Keeps: ${keeps.joinToString(", ")}.",
                 fontSize = 12.sp,
                 color = AstryxTheme.Colors.textSecondary,
                 modifier = Modifier.padding(top = 8.dp)

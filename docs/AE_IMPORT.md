@@ -30,31 +30,47 @@ original file is never modified.
 
 ### What v1 imports
 
-- The first composition: size, frame rate, duration, work area,
-  background, pixel aspect, display start, shutter, renderer.
-- AV, null, text (as an empty text layer) and shape (as an empty
-  shape layer) layers, with parent links, stretch, blend mode and
-  the layer switches (video, audio, solo, locked, shy, collapse,
-  quality, effects, motion blur, adjustment, 3D, guide).
+- Every composition in the project: size, frame rate, duration, work
+  area, background, pixel aspect, display start, shutter, renderer.
+- AV, null, text, shape and precomp layers (a precomp layer points at
+  the composition it references), with parent links, stretch, blend
+  mode and the layer switches (video, audio, solo, locked, shy,
+  collapse, quality, effects, motion blur, adjustment, 3D, guide).
 - Footage (still / video / audio) and solids, with the stored file
   path. A missing media file does not fail the import; that footage
-  is marked missing.
+  is marked missing. Picking the project folder links sibling footage
+  from the same directory, and the report is re-run.
+- Effects: the 63 mapped effects with parameters and keyframes,
+  including the control effects (Color, Slider, Angle, Checkbox,
+  Point, Point 3D, Layer, Dropdown). Effects outside the table are
+  reported by match name, never silently dropped.
+- Masks: path, mode, feather / opacity / expansion, with keyframes.
+- Text: Source Text with runs, paragraphs, box and fonts by name.
+- Shape contents: groups, rect, ellipse, polystar, bezier paths,
+  fill, stroke, gradient fill and stroke, trim, round corners, merge,
+  offset and repeater, with keyframes and expressions.
+- Layer and composition markers, time remapping, orientation
+  keyframes.
 - Transform: anchor point, position, scale, rotation (Z), opacity,
-  X/Y rotation, and the static orientation value — with keyframes
-  (linear, bezier with eases, hold, spatial tangents, roving,
-  labels) and expressions kept as source text.
+  X/Y rotation and orientation — with keyframes (linear, bezier with
+  eases, hold, spatial tangents, roving, labels) and expressions kept
+  as source text.
 - The project version (file / saved-by) and a loss report for
   everything else.
 
 ### What v1 loses (always reported, never silent)
 
-- Effects (including Levels, Glow and every other effect).
+- Camera and light layers: the editor has no camera or light
+  controls, so an imported camera would be an invisible layer that
+  silently changes the 3D render viewpoint. They stay losses until
+  the editor can show and edit them.
 - Layer styles (only when a style has values set).
-- Text contents, shape contents, cameras, lights, precompositions,
-  track mattes, masks, markers, time remapping.
-- Keyframed orientation and orientation expressions.
-- Compositions after the first, and folders (their contents still
-  import).
+- Text animators, Source Text keyframes and expressions; shape items
+  outside the mapped set (wiggle, zig zag, pucker, twist); gradient
+  colour stops (white to black is used); expressions on converted
+  effect parameters (a popup or a scaled slider cannot carry one).
+- Track mattes, and property groups with stored values.
+- Folders (their contents still import).
 - Project settings (working space, colour depth, time display).
 - `.aep` export, expression evaluation, Lumetri and third-party
   plug-ins: not in v1.
@@ -62,7 +78,12 @@ original file is never modified.
 Tested with After Effects 24.x, 25.x and 26.x files. The fixture
 `synthetic.aep` (one comp, an image sequence, a solid, a folder,
 Levels + Glow) imports with exactly 5 losses: 2 effects, 2 folders,
-1 project-settings note.
+1 project-settings note. The extended user-profile fixture (the same
+file plus a Control Layer, a Vignette with masks, a text layer, a
+shape layer, a nested composition and a precomp layer: 2 comps,
+8 layers) imports with 7 losses, all non-content: 4 converted effect
+expressions (Levels / Glow on two solids), 2 folders, 1
+project-settings note.
 
 ### Attribution
 
