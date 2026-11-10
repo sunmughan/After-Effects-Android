@@ -27,7 +27,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.semantics.EditableText
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -720,7 +720,7 @@ class M7FunctionCoverageTest {
         val fpsField = compose.onNodeWithContentDescription("Export FPS")
         fpsField.performClick()
         fpsField.performTextClearance()
-        assertEquals("", fpsField.fetchSemanticsNode().config.getOrNull(EditableText))
+        assertEquals("", fpsField.fetchSemanticsNode().config[SemanticsProperties.EditableText])
         compose.onNodeWithText("Render ZIP").performClick()
         // Run 42441138764 (attempt 1): the validation error is set by
         // the click's recomposition, which can land after the fetch on
