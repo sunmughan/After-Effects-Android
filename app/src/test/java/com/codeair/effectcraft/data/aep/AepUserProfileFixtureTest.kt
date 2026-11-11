@@ -830,15 +830,14 @@ class AepUserProfileFixtureTest {
         assertEquals(2, counts.expressions)
         // The only losses left are non-content: the converted expressions on
         // Levels/Glow (a popup and a scaled slider cannot carry an expression),
-        // on the main solid and again on the nested comp's solid, the two
-        // folders, and one unread project setting. Nothing in the user's
-        // screenshot profile (effects, masks, markers, time remap) is lost.
+        // on the main solid and again on the nested comp's solid. The two
+        // folders import now, and the fixture's project settings read cleanly.
+        // Nothing in the user's screenshot profile (effects, masks, markers,
+        // time remap) is lost.
         val losses = imported.report.losses.associate { it.category to it.count }
         assertEquals(
             mapOf(
-                AepImportReport.LossCategory.Effects to 4,
-                AepImportReport.LossCategory.UnsupportedItems to 2,
-                AepImportReport.LossCategory.ProjectSettings to 1
+                AepImportReport.LossCategory.Effects to 4
             ),
             losses
         )

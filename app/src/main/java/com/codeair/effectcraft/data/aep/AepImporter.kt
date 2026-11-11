@@ -39,14 +39,19 @@ import kotlin.math.roundToLong
  * with keyframes and expressions); every composition in the project, and precomp
  * layers pointing at them.
  * NOT imported in v1 (all reported as losses):
- * light layers, layer styles, 3D rotations,
- * project settings, folders. Text imports with
- * its first-run style, runs, paragraphs and box; text animators, Source Text
+ * light layers, layer styles, 3D rotations.
+ * Project settings import since the real-file fix: colour depth, working
+ * space, working gamma, the linear-light switches, time display and frame
+ * count start, each as the file stores it (an unknown value keeps the
+ * default and is reported).
+ * Text imports with its first-run style, runs, paragraphs and box; text animators, Source Text
  * keyframes and expressions are losses. Cameras import since the real-file
  * fix: source, transform (point of interest, position with depth, rotations),
  * camera options (zoom, focus distance, aperture, depth of field) and the
  * two-node auto orientation; a camera's position z is patched as a Vec3, as
- * is any 3D layer's stored depth.
+ * is any 3D layer's stored depth. Folders import since the real-file fix:
+ * every folder as a Folder item with its label and parent, and every
+ * composition and footage or solid item parented to the folder that holds it.
  * There is no `.aep` export in this build.
  *
  * Ports the mapping of `import/build.rs`, `import/props.rs`, `import/time.rs` and
@@ -191,7 +196,10 @@ object AepImporter {
          * matte layer's id in the file. */
         val trackMatte: PendingTrackMatte? = null,
         /** Text animator groups (uids in patch space), appended to text/animators. */
-        val animatorGroups: List<JSONObject> = emptyList()
+        val animatorGroups: List<JSONObject> = emptyList(),
+        /** The folder holding this layer's footage or solid item, by name; the
+         * patch step sets the source item's parent to it. */
+        val sourceParentFolder: String? = null
     )
 
     /** A track matte resolved in the patch step, once every layer's project id exists. */
@@ -213,7 +221,11 @@ object AepImporter {
         val project: AeProject,
         val report: AepImportReport.ImportReport,
         val compPatches: List<CompPatch>,
-        val layerPatches: List<List<LayerPatch>>
+        val layerPatches: List<List<LayerPatch>>,
+        /** The project folders and the parent folder of each item. */
+        val folderTree: AepFolderImport.FolderTree,
+        /** The project settings the file stores. */
+        val settingsPatch: AepProjectSettings.Patch
     )
 
     private enum class PropKind { ANCHOR, POSITION, SCALE, ROTATION, OPACITY }
@@ -297,26 +309,22 @@ object AepImporter {
         if (comps.isEmpty()) {
             throw IllegalArgumentException("This .aep file has no composition to import.")
         }
+        // Project folders: the item tree, depth-first in file order (build.rs
+        // Pass 1). Every other item kind the reader does not know is a loss.
+        val folderTree = AepFolderImport.collect(project, col)
         for (item in allItems) {
-            when (item.kind()) {
-                AepTypedView.ItemKind.Folder -> col.lose(
-                    AepImportReport.LossCategory.UnsupportedItems,
-                    "folder '${item.name() ?: "Folder"}' is not imported in this build " +
-                        "(folders are not in this project's model); its contents are still imported"
-                )
-                is AepTypedView.ItemKind.Other -> col.lose(
+            if (item.kind() is AepTypedView.ItemKind.Other) {
+                col.lose(
                     AepImportReport.LossCategory.UnsupportedItems,
                     "project item '${item.name() ?: "Item"}' is not imported in this build"
                 )
-                else -> Unit
             }
         }
-        // Project settings are not decoded in this build; the converter defaults are used.
-        col.lose(
-            AepImportReport.LossCategory.ProjectSettings,
-            "project settings were not read in this build (working space, colour depth, " +
-                "time display); the defaults are used"
-        )
+        // Project settings: the values the file stores (colour depth, working
+        // space, working gamma, linear-light switches, time display, frame
+        // count start); a setting the file does not hold keeps the converter
+        // default, an unknown one is reported by the settings import.
+        val settingsPatch = AepProjectSettings.read(file, col)
 
         // Which compositions are readable at all; the rest are skipped with a loss, so
         // one damaged composition does not take the whole project down with it.
@@ -358,7 +366,7 @@ object AepImporter {
         val layerPatches = ArrayList<List<LayerPatch>>()
         for (compItem in importableComps) {
             val built = buildComp(
-                compItem, project, compIndexById, defs, provider, allocBlock, mediaResolver, col
+                compItem, project, compIndexById, folderTree.footageParentById, defs, provider, allocBlock, mediaResolver, col
             ) ?: continue
             aeComps.add(built.first)
             compPatches.add(built.second)
@@ -367,7 +375,7 @@ object AepImporter {
         col.imported.compositions = aeComps.size
         col.imported.layers = aeComps.sumOf { it.layers.size }
         val aeProject = AeProject("Imported Project", aeComps, warnings = emptyList())
-        return Built(aeProject, col.finish(versions), compPatches, layerPatches)
+        return Built(aeProject, col.finish(versions), compPatches, layerPatches, folderTree, settingsPatch)
     }
 
     /**
@@ -378,6 +386,8 @@ object AepImporter {
         compItem: AepTypedView.Item,
         project: AepTypedView.Project,
         compIndexById: Map<Long, Int>,
+        /** Footage item id to its folder's name, for the source items' parents. */
+        footageParentById: Map<Long, String>,
         defs: AepEffects.EffectDefinitions,
         provider: AepEffectImport.EffectSpecProvider,
         allocBlock: (Int) -> Long,
@@ -497,7 +507,7 @@ object AepImporter {
         for ((layerIndex, row) in importable.withIndex()) {
             val built = buildLayer(
                 row, project, compView, header, durationSeconds, parentNameById[row.header.id],
-                compName, layerIndex, aboveIdById[row.header.id], compIndexById, defs, provider, allocBlock, mediaResolver, col
+                compName, layerIndex, aboveIdById[row.header.id], compIndexById, footageParentById, defs, provider, allocBlock, mediaResolver, col
             )
             if (built == null) {
                 col.lose(
@@ -675,6 +685,8 @@ object AepImporter {
         aboveId: Long?,
         /** The index of each imported composition in the project's comp list, by item id. */
         compIndexById: Map<Long, Int>,
+        /** Footage item id to its folder's name, for the source items' parents. */
+        footageParentById: Map<Long, String>,
         defs: AepEffects.EffectDefinitions,
         provider: AepEffectImport.EffectSpecProvider,
         allocBlock: (Int) -> Long,
@@ -706,6 +718,8 @@ object AepImporter {
         var fontSize = 72.0
         var textDoc: JSONObject? = null
         var compIndex: Int? = null
+        /** The folder holding this layer's footage or solid item, by name. */
+        var sourceParentFolder: String? = null
         when (header.layerType) {
             AepHeader.LayerType.Text -> {
                 type = AeLayerType.TEXT
@@ -770,6 +784,9 @@ object AepImporter {
                         val footage = source.footage() ?: return null
                         width = footage.width.toInt().coerceAtLeast(1)
                         height = footage.height.toInt().coerceAtLeast(1)
+                        // The folder holding this footage or solid item: the patch
+                        // step sets the source item's parent to it.
+                        sourceParentFolder = source.id()?.let { footageParentById[it] }
                         if (footage.isSolid) {
                             type = AeLayerType.SOLID
                             col.imported.solids++
@@ -1187,7 +1204,8 @@ object AepImporter {
             cameraOptions = cameraOptions,
             autoOrient = autoOrient,
             trackMatte = trackMatte,
-            animatorGroups = animatorGroups
+            animatorGroups = animatorGroups,
+            sourceParentFolder = sourceParentFolder
         )
         return aeLayer to patch
     }
@@ -1524,6 +1542,7 @@ object AepImporter {
         // patch to its composition by name (two compositions with the same name would
         // collide, as they already do for layer names in the converter).
         val compKindByName = HashMap<String, JSONObject>()
+        val compItemByName = HashMap<String, JSONObject>()
         val itemKeys = items.keys()
         while (itemKeys.hasNext()) {
             val key = itemKeys.next()
@@ -1531,6 +1550,7 @@ object AepImporter {
             val kind = item.optJSONObject("kind") ?: continue
             if (kind.optString("type") == "Comp") {
                 compKindByName[item.optString("name")] = kind
+                compItemByName[item.optString("name")] = item
             }
         }
         // Effect groups carry patch-space uids (from 1); they live above the converter's
@@ -1545,6 +1565,58 @@ object AepImporter {
             patchOneComp(
                 root, comp, built.compPatches[index], built.layerPatches[index], uidOffset, state
             )
+        }
+        // Project folders (build.rs Pass 1): folder items with fresh ids above
+        // every patch uid, then the parent of each item they hold. Folders are
+        // collected depth-first, so a parent folder always precedes its children.
+        val folderIdByName = HashMap<String, Long>()
+        for (folder in built.folderTree.folders) {
+            val folderId = root.optLong("next_id", 1L) + state.maxPatchUid + state.extraUid
+            state.extraUid += 1
+            folderIdByName.putIfAbsent(folder.name, folderId)
+            val parentId = folder.parentName?.let { folderIdByName[it] }
+            items.put(
+                folderId.toString(),
+                JSONObject()
+                    .put("id", folderId)
+                    .put("name", folder.name)
+                    .put("label", folder.label)
+                    .put("comment", "")
+                    .put("parent", parentId ?: JSONObject.NULL)
+                    .put("kind", JSONObject().put("type", "Folder"))
+            )
+        }
+        for (aeComp in built.project.comps) {
+            val parentName = built.folderTree.compParentByName[aeComp.name] ?: continue
+            val folderId = folderIdByName[parentName] ?: continue
+            compItemByName[aeComp.name]?.put("parent", folderId)
+        }
+        // Source items (one per footage or solid layer, named after the layer):
+        // their parent is the folder holding the footage item the layer uses.
+        for ((index, aeComp) in built.project.comps.withIndex()) {
+            val comp = compKindByName[aeComp.name] ?: continue
+            val layers = comp.optJSONArray("layers") ?: continue
+            val patches = built.layerPatches.getOrNull(index) ?: continue
+            for (i in 0 until layers.length()) {
+                val folderName = patches.getOrNull(i)?.sourceParentFolder ?: continue
+                val folderId = folderIdByName[folderName] ?: continue
+                val sourceItemId = layers.getJSONObject(i).optJSONObject("source")?.optLong("item") ?: continue
+                items.optJSONObject(sourceItemId.toString())?.put("parent", folderId)
+            }
+        }
+        // Project settings: the values the file stores replace the converter
+        // defaults; a setting the file does not hold keeps its default.
+        val settings = root.optJSONObject("settings")
+        if (settings != null) {
+            val patch = built.settingsPatch
+            patch.bitDepth?.let { settings.put("bit_depth", it) }
+            patch.timeDisplay?.let { settings.put("time_display", it) }
+            patch.frameStart?.let { settings.put("frame_start", it) }
+            patch.workingGamma?.let { settings.put("working_gamma", it) }
+            settings.put("linearize", patch.linearize)
+            settings.put("blend_linear", patch.blendLinear)
+            patch.workingSpace?.let { settings.put("working_space", it) }
+            patch.outputSpace?.let { settings.put("output_space", it) }
         }
         if (state.maxPatchUid > 0L || state.extraUid > 0L) {
             root.put("next_id", root.optLong("next_id", 1L) + state.maxPatchUid + state.extraUid)

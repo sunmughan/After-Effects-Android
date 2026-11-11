@@ -24,20 +24,21 @@ class AepImporterTest {
         assertEquals(0, imported.keyframes)
         assertEquals(0, imported.expressions)
         assertEquals(1, imported.compositions)
+        assertEquals(2, imported.folders)
     }
 
     @Test
     fun analyzeReportsOnlyRealLosses() {
         val analysis = AepImporter.analyze(syntheticBytes())
         val losses = analysis.report.losses.associate { it.category to it.count }
-        // The two effects, the two folders, and the unread project settings.
+        // The two effects. The two folders import now (see
+        // analyzeCountsWhatWasImported), and the fixture's project settings
+        // read cleanly.
         // No false positives: the default rotations, orientation, separated
         // dimensions, empty layer styles and always-present layer groups lose nothing.
         assertEquals(
             mapOf(
-                AepImportReport.LossCategory.Effects to 2,
-                AepImportReport.LossCategory.UnsupportedItems to 2,
-                AepImportReport.LossCategory.ProjectSettings to 1
+                AepImportReport.LossCategory.Effects to 2
             ),
             losses
         )
