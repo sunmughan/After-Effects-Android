@@ -47,6 +47,22 @@ internal class FakeEffectSpecs : AepEffectImport.EffectSpecProvider {
     }
 
     private fun scalar(v: Double) = JSONObject().put("t", "Scalar").put("v", v)
+    private fun bool(v: Boolean) = JSONObject().put("t", "Bool").put("v", v)
+    private fun vec2(x: Double, y: Double) =
+        JSONObject().put("t", "Vec2").put("v", JSONArray().put(x).put(y))
+    private fun vec3(x: Double, y: Double, z: Double) =
+        JSONObject().put("t", "Vec3").put("v", JSONArray().put(x).put(y).put(z))
+    private fun layerProp(match: String): JSONObject =
+        prop(match, JSONObject().put("t", "Layer").put("v", JSONObject.NULL), JSONObject().put("kind", "Layer"))
+
+    private fun subgroup(match: String, name: String, children: List<JSONObject>): JSONObject =
+        JSONObject()
+            .put("node", "Group")
+            .put("uid", 0)
+            .put("match", match)
+            .put("name", name)
+            .put("kind", JSONObject().put("kind", "Plain"))
+            .put("children", JSONArray(children))
     private fun color(r: Double, g: Double, b: Double) =
         JSONObject().put("t", "Color").put("v", JSONArray().put(r).put(g).put(b).put(1.0))
 
@@ -105,6 +121,139 @@ internal class FakeEffectSpecs : AepEffectImport.EffectSpecProvider {
             "ec.control.slider" -> group(
                 "ec.control.slider", instanceName, listOf(
                     prop("slider", scalar(0.0))
+                )
+            )
+            // Skeletons for the nine effects the real file uses (Digital_Slides_CC_2021_61_5ie6.aep):
+            // defaults and popup options from the pinned `effectcraft-effects` spec.
+            "ec.stylize.motiontile" -> group(
+                "ec.stylize.motiontile", instanceName, listOf(
+                    prop("tileCenter", vec2(0.5, 0.5), JSONObject().put("kind", "Point")),
+                    prop("tileWidth", scalar(100.0)),
+                    prop("tileHeight", scalar(100.0)),
+                    prop("outputWidth", scalar(100.0)),
+                    prop("outputHeight", scalar(100.0)),
+                    prop("mirrorEdges", bool(false), JSONObject().put("kind", "Checkbox")),
+                    prop("phase", scalar(0.0)),
+                    prop("horizontalPhaseShift", bool(false), JSONObject().put("kind", "Checkbox"))
+                )
+            )
+            "ec.blur.fastbox" -> group(
+                "ec.blur.fastbox", instanceName, listOf(
+                    prop("radius", scalar(0.0)),
+                    prop("iterations", scalar(3.0)),
+                    popupProp(
+                        "dimensions",
+                        listOf("Horizontal and Vertical", "Horizontal", "Vertical"), 0
+                    ),
+                    prop("repeatEdge", bool(false), JSONObject().put("kind", "Checkbox"))
+                )
+            )
+            "ec.time.posterizetime" -> group(
+                "ec.time.posterizetime", instanceName, listOf(
+                    prop("frameRate", scalar(12.0))
+                )
+            )
+            "ec.control.point3d" -> group(
+                "ec.control.point3d", instanceName, listOf(
+                    prop("point", vec3(0.0, 0.0, 0.0), JSONObject().put("kind", "Point3"))
+                )
+            )
+            "ec.noise.noise" -> group(
+                "ec.noise.noise", instanceName, listOf(
+                    prop("amount", scalar(0.0)),
+                    prop("color", bool(true), JSONObject().put("kind", "Checkbox")),
+                    prop("clip", bool(true), JSONObject().put("kind", "Checkbox"))
+                )
+            )
+            "ec.distort.opticscompensation" -> group(
+                "ec.distort.opticscompensation", instanceName, listOf(
+                    prop("fieldOfView", scalar(0.0)),
+                    prop("reverseLensDistortion", bool(false), JSONObject().put("kind", "Checkbox")),
+                    popupProp(
+                        "fovOrientation", listOf("Horizontal", "Vertical", "Diagonal"), 0
+                    ),
+                    prop("viewCenter", vec2(0.5, 0.5), JSONObject().put("kind", "Point")),
+                    prop("optimalPixels", bool(false), JSONObject().put("kind", "Checkbox")),
+                    popupProp("resize", listOf("Off", "Max 2X", "Max 4X", "Unlimited"), 0)
+                )
+            )
+            "ec.color.colorbalance" -> group(
+                "ec.color.colorbalance", instanceName, listOf(
+                    prop("shadowRed", scalar(0.0)),
+                    prop("shadowGreen", scalar(0.0)),
+                    prop("shadowBlue", scalar(0.0)),
+                    prop("midRed", scalar(0.0)),
+                    prop("midGreen", scalar(0.0)),
+                    prop("midBlue", scalar(0.0)),
+                    prop("hiRed", scalar(0.0)),
+                    prop("hiGreen", scalar(0.0)),
+                    prop("hiBlue", scalar(0.0)),
+                    prop("preserveLuminosity", bool(false), JSONObject().put("kind", "Checkbox"))
+                )
+            )
+            "ec.blur.cameralens" -> group(
+                "ec.blur.cameralens", instanceName, listOf(
+                    prop("blurRadius", scalar(10.0)),
+                    subgroup(
+                        "irisProperties", "Iris Properties", listOf(
+                            popupProp(
+                                "irisShape",
+                                listOf(
+                                    "Triangle", "Square", "Pentagon", "Hexagon", "Heptagon",
+                                    "Octagon", "Nonagon", "Decagon", "Circle"
+                                ), 3
+                            ),
+                            prop("irisRoundness", scalar(0.0)),
+                            prop("irisAspectRatio", scalar(1.0)),
+                            prop("irisRotation", scalar(0.0)),
+                            prop("diffractionFringe", scalar(0.0))
+                        )
+                    ),
+                    subgroup(
+                        "blurMap", "Blur Map", listOf(
+                            layerProp("blurMapLayer"),
+                            prop(
+                                "blurMapLayerSource",
+                                JSONObject().put("t", "Enum").put("v", 0)
+                            ),
+                            popupProp("channel", listOf("Luminance", "Alpha", "Color"), 0),
+                            popupProp("placement", listOf("Center", "Stretch"), 1),
+                            prop("blurFocalDistance", scalar(0.0)),
+                            prop("invertBlurMap", bool(false), JSONObject().put("kind", "Checkbox"))
+                        )
+                    ),
+                    subgroup(
+                        "highlight", "Highlight", listOf(
+                            prop("specularBrightness", scalar(0.0)),
+                            prop("specularThreshold", scalar(255.0)),
+                            prop("highlightSaturation", scalar(100.0))
+                        )
+                    ),
+                    prop("repeatEdge", bool(false), JSONObject().put("kind", "Checkbox")),
+                    prop("useLinear", bool(false), JSONObject().put("kind", "Checkbox"))
+                )
+            )
+            "ec.distort.wavewarp" -> group(
+                "ec.distort.wavewarp", instanceName, listOf(
+                    popupProp(
+                        "waveType",
+                        listOf(
+                            "Sine", "Square", "Triangle", "Sawtooth", "Circle", "Semicircle",
+                            "Uncircle", "Noise", "Smooth Noise"
+                        ), 0
+                    ),
+                    prop("height", scalar(10.0)),
+                    prop("width", scalar(40.0)),
+                    prop("direction", scalar(90.0)),
+                    prop("speed", scalar(1.0)),
+                    popupProp(
+                        "pinning",
+                        listOf(
+                            "None", "All Edges", "Center", "Left Edge", "Top Edge", "Right Edge",
+                            "Bottom Edge", "Horizontal Edges", "Vertical Edges"
+                        ), 0
+                    ),
+                    prop("phase", scalar(0.0))
                 )
             )
             else -> null

@@ -209,4 +209,34 @@ class AepEffectsTest {
         )
         assertEquals(AepEffects.ParamValue.Point(0.5, 0.5), fx.params()[1].value())
     }
+
+    @Test
+    fun otherKindWithThreeComponentsDecodesAsVec3() {
+        // A 3D Point Control instance: the 3D Point is kind 8 (OTHER) with a tdbs
+        // record of three f64s; it decodes as a Vec3, not as an unreadable value.
+        val part = AepContainer.Chunk.list(
+            "parT",
+            listOf(
+                tdmn("ADBE Point3D Control-0000"), AepContainer.Chunk.data("pard", pard(0, "")),
+                tdmn("ADBE Point3D Control-0001"),
+                AepContainer.Chunk.data("pard", pard(8, "3D Point"))
+            )
+        )
+        val values = AepContainer.Chunk.list(
+            "tdgp",
+            listOf(
+                tdmn("ADBE Point3D Control-0001"),
+                tdbs(1, 3, listOf(0.359, 0.7, 0.0))
+            )
+        )
+        val fx = AepEffects.Effect(
+            "ADBE Point3D Control",
+            AepContainer.Chunk.list("sspc", listOf(part, values))
+        )
+        val param = fx.params()[1]
+        assertEquals(AepEffects.ParamKind.OTHER, param.kind)
+        assertEquals(AepEffects.ParamValue.Vec3(0.359, 0.7, 0.0), param.recordedValue())
+        assertEquals(AepEffects.ParamValue.Vec3(0.359, 0.7, 0.0), param.storedValue())
+        assertEquals(AepEffects.ParamValue.Vec3(0.359, 0.7, 0.0), param.value())
+    }
 }

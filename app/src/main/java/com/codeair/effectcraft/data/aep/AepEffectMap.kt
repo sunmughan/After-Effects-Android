@@ -32,6 +32,9 @@ object AepEffectMap {
         /** An angle in degrees. */
         object Angle : Conv()
 
+        /** A 3-component vector in stored units (3D Point Control: three doubles). */
+        object Vec3 : Conv()
+
         /**
          * A popup, mapped by item name; [default] is After Effects' default (1-based)
          * for a fresh effect, used when the file's default slot cannot be trusted.
@@ -190,6 +193,21 @@ object AepEffectMap {
     val SHUTTER_CONTROL = listOf("Manual", "Automatic")
     val ECHO_OPERATOR = listOf("Add", "Maximum", "Minimum", "Screen", "Composite In Back", "Composite In Front", "Blend")
     val STABILIZE = listOf("Brightness", "Levels", "Curves")
+    val OPTICS_ORIENTATION = listOf("Horizontal", "Vertical", "Diagonal")
+    val OPTICS_RESIZE = listOf("Off", "Max 2X", "Max 4X", "Unlimited")
+    val IRIS_SHAPE = listOf(
+        "Triangle", "Square", "Pentagon", "Hexagon", "Heptagon", "Octagon", "Nonagon", "Decagon"
+    )
+    val LENS_CHANNEL = listOf("Luminance", "Red", "Green", "Blue", "Alpha")
+    val LENS_PLACEMENT = listOf("Center Map", "Stretch Map to Fit")
+    val WAVE_TYPES = listOf(
+        "Sine", "Square", "Triangle", "Sawtooth", "Circle", "Semicircle", "Uncircle", "Noise",
+        "Smooth Noise"
+    )
+    val WAVE_PINNING = listOf(
+        "None", "All Edges", "Center", "(-", "Left Edge", "Top Edge", "Right Edge", "Bottom Edge",
+        "(-", "Horizontal Edges", "Vertical Edges"
+    )
 
     /** Exposure's three sliders, by their valid maximum in the file. */
     val EXPOSURE = Conv.Plain(100.0)
@@ -872,6 +890,101 @@ object AepEffectMap {
             "ADBE Point Control", "ec.control.point", listOf(
                 pm(1, AepEffects.ParamKind.POINT, "point", Conv.Point)
             )
+        ),
+        // The nine effects the real file (Digital_Slides_CC_2021_61_5ie6.aep) uses that the
+        // table did not map: 328 instances. Each row is verified against the pinned
+        // `effectcraft-effects` spec (param ids, ranges, defaults) and the file's own
+        // `parT` layouts; the official importer maps none of these.
+        fx(
+            "ADBE Tile", "ec.stylize.motiontile", listOf(
+                pm(1, AepEffects.ParamKind.POINT, "tileCenter", Conv.Point),
+                pm(2, AepEffects.ParamKind.FIXED_SLIDER, "tileWidth", Conv.Plain(100.0)),
+                pm(3, AepEffects.ParamKind.FIXED_SLIDER, "tileHeight", Conv.Plain(100.0)),
+                pm(4, AepEffects.ParamKind.FIXED_SLIDER, "outputWidth", Conv.Plain(30000.0)),
+                pm(5, AepEffects.ParamKind.FIXED_SLIDER, "outputHeight", Conv.Plain(30000.0)),
+                pm(6, AepEffects.ParamKind.CHECKBOX, "mirrorEdges", Conv.Checkbox),
+                pm(7, AepEffects.ParamKind.ANGLE, "phase", Conv.Angle),
+                pm(8, AepEffects.ParamKind.CHECKBOX, "horizontalPhaseShift", Conv.Checkbox)
+            )
+        ),
+        fx(
+            "ADBE Fast Blur", "ec.blur.fastbox", listOf(
+                pm(1, AepEffects.ParamKind.FIXED_SLIDER, "radius", Conv.Plain(30000.0)),
+                pm(2, AepEffects.ParamKind.POPUP, "dimensions", Conv.Popup(1, BLUR_DIMENSIONS)),
+                pm(3, AepEffects.ParamKind.CHECKBOX, "repeatEdge", Conv.Checkbox)
+            )
+        ),
+        fx(
+            "ADBE Posterize Time", "ec.time.posterizetime", listOf(
+                pm(1, AepEffects.ParamKind.FIXED_SLIDER, "frameRate", Conv.Plain(999.0))
+            )
+        ),
+        fx(
+            "ADBE Point3D Control", "ec.control.point3d", listOf(
+                pm(1, AepEffects.ParamKind.OTHER, "point", Conv.Vec3)
+            )
+        ),
+        fx(
+            "ADBE Noise", "ec.noise.noise", listOf(
+                pm(1, AepEffects.ParamKind.FIXED_SLIDER, "amount", Conv.Plain(100.0)),
+                pm(2, AepEffects.ParamKind.CHECKBOX, "color", Conv.Checkbox),
+                pm(3, AepEffects.ParamKind.CHECKBOX, "clip", Conv.Checkbox)
+            )
+        ),
+        fx(
+            "ADBE Optics Compensation", "ec.distort.opticscompensation", listOf(
+                pmLimited(1, AepEffects.ParamKind.FIXED_SLIDER, "fieldOfView", Conv.Plain(180.0), 0.0, 179.0),
+                pm(2, AepEffects.ParamKind.CHECKBOX, "reverseLensDistortion", Conv.Checkbox),
+                pm(3, AepEffects.ParamKind.POPUP, "fovOrientation", Conv.Popup(1, OPTICS_ORIENTATION)),
+                pm(4, AepEffects.ParamKind.POINT, "viewCenter", Conv.Point),
+                pm(5, AepEffects.ParamKind.CHECKBOX, "optimalPixels", Conv.Checkbox),
+                pm(6, AepEffects.ParamKind.POPUP, "resize", Conv.Popup(1, OPTICS_RESIZE))
+            )
+        ),
+        fx(
+            "ADBE Color Balance 2", "ec.color.colorbalance", listOf(
+                pm(1, AepEffects.ParamKind.FIXED_SLIDER, "shadowRed", Conv.Plain(100.0)),
+                pm(2, AepEffects.ParamKind.FIXED_SLIDER, "shadowGreen", Conv.Plain(100.0)),
+                pm(3, AepEffects.ParamKind.FIXED_SLIDER, "shadowBlue", Conv.Plain(100.0)),
+                pm(4, AepEffects.ParamKind.FIXED_SLIDER, "midRed", Conv.Plain(100.0)),
+                pm(5, AepEffects.ParamKind.FIXED_SLIDER, "midGreen", Conv.Plain(100.0)),
+                pm(6, AepEffects.ParamKind.FIXED_SLIDER, "midBlue", Conv.Plain(100.0)),
+                pm(7, AepEffects.ParamKind.FIXED_SLIDER, "hiRed", Conv.Plain(100.0)),
+                pm(8, AepEffects.ParamKind.FIXED_SLIDER, "hiGreen", Conv.Plain(100.0)),
+                pm(9, AepEffects.ParamKind.FIXED_SLIDER, "hiBlue", Conv.Plain(100.0)),
+                pm(10, AepEffects.ParamKind.CHECKBOX, "preserveLuminosity", Conv.Checkbox)
+            )
+        ),
+        fx(
+            "ADBE Camera Lens Blur", "ec.blur.cameralens", listOf(
+                pm(1, AepEffects.ParamKind.FLOAT_SLIDER, "blurRadius", Conv.Plain(500.0)),
+                pm(3, AepEffects.ParamKind.POPUP, "irisProperties/irisShape", Conv.Popup(4, IRIS_SHAPE)),
+                pm(4, AepEffects.ParamKind.FLOAT_SLIDER, "irisProperties/irisRoundness", Conv.Plain(100.0)),
+                pm(5, AepEffects.ParamKind.FLOAT_SLIDER, "irisProperties/irisAspectRatio", Conv.Plain(100.0)),
+                pm(6, AepEffects.ParamKind.ANGLE, "irisProperties/irisRotation", Conv.Angle),
+                pm(7, AepEffects.ParamKind.FLOAT_SLIDER, "irisProperties/diffractionFringe", Conv.Plain(500.0)),
+                pm(10, AepEffects.ParamKind.LAYER, "blurMap/blurMapLayer", Conv.LayerRef(true)),
+                pm(11, AepEffects.ParamKind.POPUP, "blurMap/channel", Conv.Popup(1, LENS_CHANNEL)),
+                pm(12, AepEffects.ParamKind.POPUP, "blurMap/placement", Conv.Popup(1, LENS_PLACEMENT)),
+                pm(13, AepEffects.ParamKind.FLOAT_SLIDER, "blurMap/blurFocalDistance", Conv.Factor(1.0, 255.0)),
+                pm(14, AepEffects.ParamKind.CHECKBOX, "blurMap/invertBlurMap", Conv.Checkbox),
+                pm(17, AepEffects.ParamKind.FLOAT_SLIDER, "highlight/specularBrightness", Conv.Plain(100.0)),
+                pm(18, AepEffects.ParamKind.FLOAT_SLIDER, "highlight/specularThreshold", Conv.Factor(1.0, 255.0)),
+                pm(19, AepEffects.ParamKind.FLOAT_SLIDER, "highlight/highlightSaturation", Conv.Plain(100.0)),
+                pm(21, AepEffects.ParamKind.CHECKBOX, "repeatEdge", Conv.Checkbox),
+                pm(22, AepEffects.ParamKind.CHECKBOX, "useLinear", Conv.Checkbox)
+            )
+        ),
+        fx(
+            "ADBE Wave Warp", "ec.distort.wavewarp", listOf(
+                pm(1, AepEffects.ParamKind.POPUP, "waveType", Conv.Popup(1, WAVE_TYPES)),
+                pm(2, AepEffects.ParamKind.FIXED_SLIDER, "height", Conv.Plain(32000.0)),
+                pm(3, AepEffects.ParamKind.FIXED_SLIDER, "width", Conv.Plain(32000.0)),
+                pm(4, AepEffects.ParamKind.ANGLE, "direction", Conv.Angle),
+                pm(5, AepEffects.ParamKind.FIXED_SLIDER, "speed", Conv.Plain(100.0)),
+                pm(6, AepEffects.ParamKind.POPUP, "pinning", Conv.Popup(1, WAVE_PINNING)),
+                pm(7, AepEffects.ParamKind.ANGLE, "phase", Conv.Angle)
+            )
         )
     )
 
@@ -882,10 +995,16 @@ object AepEffectMap {
     fun byEffect(effect: String): EffectMap? = EFFECTS.firstOrNull { it.effect == effect }
 
     /** The key a popup item is matched by between the two programs: trimmed, lower case, and
-     * Set Matte's "Red Channel" ... "Alpha Channel" are EffectCraft's "Red" ... "Alpha". */
+     * Set Matte's "Red Channel" ... "Alpha Channel" are EffectCraft's "Red" ... "Alpha"; a
+     * trailing " Map" or " Map to Fit" is dropped too, so Camera Lens Blur's "Center Map" is
+     * EffectCraft's "Center" while Displacement Map's identical strings on both sides still
+     * match (both sides are normalised the same way). */
     fun popupKey(item: String): String {
-        val s = item.trim().lowercase()
-        return if (s.endsWith(" channel")) s.removeSuffix(" channel") else s
+        var s = item.trim().lowercase()
+        if (s.endsWith(" channel")) s = s.removeSuffix(" channel")
+        if (s.endsWith(" map to fit")) s = s.removeSuffix(" map to fit")
+        if (s.endsWith(" map")) s = s.removeSuffix(" map")
+        return s
     }
 
     /** The EffectCraft parameters Hue/Saturation's master values go to, in the order of the

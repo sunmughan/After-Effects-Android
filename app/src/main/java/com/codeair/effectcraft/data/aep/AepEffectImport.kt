@@ -222,6 +222,7 @@ object AepEffectImport {
             is AepEffectMap.Conv.Angle -> AepEffectKeys.Kind.Number(1.0)
             is AepEffectMap.Conv.Popup -> AepEffectKeys.Kind.Popup(items.size)
             is AepEffectMap.Conv.Checkbox -> AepEffectKeys.Kind.Bool
+            is AepEffectMap.Conv.Vec3 -> AepEffectKeys.Kind.Vec3
             is AepEffectMap.Conv.Percent -> {
                 if (!checked(conv.validMax)) return
                 AepEffectKeys.Kind.Number(100.0 / conv.validMax)

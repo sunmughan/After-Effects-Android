@@ -32,6 +32,9 @@ object AepEffectKeys {
         /** A 2-component vector in stored units (mask feather: pixels as stored). */
         object Vec2 : Kind()
 
+        /** A 3-component vector in stored units (3D Point Control: raw numbers). */
+        object Vec3 : Kind()
+
         /** An effect colour: stored as ARGB 0..255, imported as straight RGBA 0..1 with alpha 1. */
         object Color : Kind()
 
@@ -61,6 +64,7 @@ object AepEffectKeys {
                 is Number -> scalar(g(0)?.times(factor))
                 is Point -> vec2(g(0)?.times(w), g(1)?.times(h))
                 is Vec2 -> vec2(g(0), g(1))
+                is Vec3 -> vec3(g(0), g(1), g(2))
                 is Color -> color(g(1)?.div(255.0), g(2)?.div(255.0), g(3)?.div(255.0))
                 is Popup -> {
                     val i = g(0)?.roundToLong() ?: return null
@@ -92,6 +96,7 @@ object AepEffectKeys {
                 listOf(value.a * 255.0, value.r * 255.0, value.g * 255.0, value.b * 255.0)
             } else null
             is AepEffects.ParamValue.Point -> if (kind is Kind.Point) listOf(value.x, value.y) else null
+            is AepEffects.ParamValue.Vec3 -> if (kind is Kind.Vec3) listOf(value.x, value.y, value.z) else null
             is AepEffects.ParamValue.Number -> if (kind is Kind.Number) listOf(value.value) else null
             is AepEffects.ParamValue.Index -> if (kind is Kind.Popup) listOf(value.value.toDouble()) else null
             is AepEffects.ParamValue.Bool -> if (kind is Kind.Bool) listOf(if (value.value) 1.0 else 0.0) else null
@@ -276,6 +281,10 @@ object AepEffectKeys {
     fun vec2(x: Double?, y: Double?): JSONObject? =
         if (x == null || y == null) null
         else JSONObject().put("t", "Vec2").put("v", JSONArray().put(x).put(y))
+
+    fun vec3(x: Double?, y: Double?, z: Double?): JSONObject? =
+        if (x == null || y == null || z == null) null
+        else JSONObject().put("t", "Vec3").put("v", JSONArray().put(x).put(y).put(z))
 
     fun color(r: Double?, g: Double?, b: Double?): JSONObject? =
         if (r == null || g == null || b == null) null

@@ -99,6 +99,9 @@ object AepEffects {
         /** A popup's item index, 1-based. */
         class Index(val value: Long) : ParamValue()
 
+        /** A 3-component vector as stored (3D Point Control: three doubles). */
+        class Vec3(val x: Double, val y: Double, val z: Double) : ParamValue()
+
         override fun equals(other: Any?): Boolean = when {
             this === other -> true
             this is Number && other is Number -> value == other.value
@@ -107,6 +110,7 @@ object AepEffects {
             this is Layer && other is Layer -> id == other.id
             this is Argb && other is Argb -> a == other.a && r == other.r && g == other.g && b == other.b
             this is Index && other is Index -> value == other.value
+            this is Vec3 && other is Vec3 -> x == other.x && y == other.y && z == other.z
             else -> false
         }
 
@@ -117,6 +121,7 @@ object AepEffects {
             is Layer -> id.hashCode()
             is Argb -> (((a.hashCode() * 31 + r.hashCode()) * 31 + g.hashCode()) * 31 + b.hashCode())
             is Index -> value.hashCode()
+            is Vec3 -> ((x.hashCode() * 31 + y.hashCode()) * 31 + z.hashCode())
         }
     }
 
@@ -341,6 +346,12 @@ object AepEffects {
                 ParamKind.COLOR -> {
                     if (v.size < 4) return null
                     ParamValue.Argb(v[0] / 255.0, v[1] / 255.0, v[2] / 255.0, v[3] / 255.0)
+                }
+                // A 3D Point Control stores three doubles under kind 8 (OTHER); any
+                // other component count stays unreadable rather than guessed.
+                ParamKind.OTHER -> {
+                    if (v.size != 3) return null
+                    ParamValue.Vec3(v[0], v[1], v[2])
                 }
                 else -> null
             }

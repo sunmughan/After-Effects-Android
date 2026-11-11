@@ -198,6 +198,27 @@ class AepMarkersTest {
     }
 
     @Test
+    fun cueTypeZeroIsAPlainMarker() {
+        // The real file's 38 markers all carry cue type 0 with no cue point: a
+        // zero-initialised header, not an unknown cue type. The marker imports whole
+        // with no loss.
+        val mrst = holderWithMarkers(
+            listOf(0),
+            listOf(nmrd("Media Example", cueType = 0))
+        )
+        val col = AepImportReport.Collector()
+        val list = AepMarkers.markersIn(holder(mrst))
+        assertEquals(1, list.size)
+        assertNull(list[0].cueType)
+        val json = AepMarkers.importMarkers(list, holder(mrst), "Comp: 'Layer'", 25, col)
+        assertEquals(1, json.length())
+        assertEquals("Media Example", json.getJSONObject(0).getString("comment"))
+        assertFalse(json.getJSONObject(0).has("cue_point"))
+        val report = col.finish(AepImportReport.AeVersionInfo("26.2.1x2", "26.2.1x2", true))
+        assertTrue(report.losses.isEmpty())
+    }
+
+    @Test
     fun noMrstMeansNoMarkers() {
         assertTrue(AepMarkers.markersIn(holder()).isEmpty())
     }

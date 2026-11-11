@@ -108,6 +108,9 @@ object AepMarkers {
                 .mapNotNull { pair -> if (pair.size == 2) pair[0] to pair[1] else null }
             val cueType = header?.let { beU32(it, 0) }?.let { t ->
                 when (t) {
+                    // 0: no cue point (a zero-initialised header), a plain marker, not an
+                    // unknown cue type: the marker imports whole without a loss.
+                    0L -> null
                     4L -> CueType.Event
                     5L -> CueType.Navigation
                     else -> CueType.Other(t)
