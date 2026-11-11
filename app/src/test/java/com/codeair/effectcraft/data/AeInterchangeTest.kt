@@ -131,7 +131,7 @@ class AeInterchangeTest {
     fun unknownLayerTypeIsSkippedWithWarningNotACrash() {
         val json = sampleJson(
             layers = """
-                [{"name": "Cam", "type": "camera"},
+                [{"name": "Holo", "type": "hologram"},
                  {"name": "T", "type": "text", "text": "Hi"}]
             """.trimIndent()
         )
@@ -140,7 +140,7 @@ class AeInterchangeTest {
         assertEquals(1, project.comps[0].layers.size)
         assertEquals("T", project.comps[0].layers[0].name)
         assertEquals(1, project.warnings.size)
-        assertTrue(project.warnings[0].contains("camera"))
+        assertTrue(project.warnings[0].contains("hologram"))
     }
 
     @Test
