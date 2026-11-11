@@ -245,4 +245,73 @@ class AeInterchangeConverterTest {
         val realUids = uids.filter { it != 0L }
         assertEquals(realUids.size, realUids.toSet().size)
     }
+
+    @Test
+    fun cameraLayerHasCameraSourceTransformAndOptions() {
+        val comp = AeComp(
+            name = "Main", width = 1920, height = 1080, frameRate = 25.0,
+            durationSeconds = 6.0, background = listOf(0.0, 0.0, 0.0),
+            layers = listOf(
+                AeLayer(
+                    name = "Camera 1", type = AeLayerType.CAMERA,
+                    position = 0.0 to 0.0, anchorPoint = 0.0 to 0.0,
+                    width = 1920, height = 1080
+                )
+            )
+        )
+        val project = AeProject(projectName = "Main", comps = listOf(comp), warnings = emptyList())
+        val doc = JSONObject(AeInterchangeConverter.toCanonicalJson(project) { null })
+        val layer = doc.getJSONObject("items").getJSONObject("1").getJSONObject("kind")
+            .getJSONArray("layers").getJSONObject(0)
+        assertEquals("Camera", layer.getJSONObject("source").getString("type"))
+        assertEquals("Off", layer.getString("auto_orient"))
+        val children = layer.getJSONObject("props").getJSONArray("children")
+        // A camera has a transform and camera options, and neither masks nor
+        // effects nor material options nor audio.
+        assertEquals(2, children.length())
+        val transform = children.getJSONObject(0)
+        assertEquals("transform", transform.getString("match"))
+        val tchildren = transform.getJSONArray("children")
+        val matches = (0 until tchildren.length()).map { tchildren.getJSONObject(it).getString("match") }
+        assertEquals(
+            listOf("poi", "position", "orientation", "rotationX", "rotationY", "rotation"),
+            matches
+        )
+        fun propAt(group: org.json.JSONArray, match: String): JSONObject {
+            for (i in 0 until group.length()) {
+                val p = group.getJSONObject(i)
+                if (p.getString("match") == match) return p
+            }
+            throw AssertionError("no prop $match")
+        }
+        fun vec3Of(group: org.json.JSONArray, match: String): List<Double> {
+            val v = propAt(group, match).getJSONObject("value").getJSONArray("v")
+            return (0 until v.length()).map { v.getDouble(it) }
+        }
+        // The layer's stored position and point of interest, raw; the patch
+        // step supplies the position's z from the file.
+        assertEquals(listOf(0.0, 0.0, 0.0), vec3Of(tchildren, "poi"))
+        assertEquals(listOf(0.0, 0.0, 0.0), vec3Of(tchildren, "position"))
+        val options = children.getJSONObject(1)
+        assertEquals("cameraOptions", options.getString("match"))
+        val ochildren = options.getJSONArray("children")
+        val omatches = (0 until ochildren.length()).map { ochildren.getJSONObject(it).getString("match") }
+        assertEquals(
+            listOf(
+                "zoom", "dof", "focusDistance", "aperture", "blurLevel", "irisShape",
+                "irisRotation", "irisRoundness", "irisAspectRatio", "irisDiffractionFringe",
+                "highlightGain", "highlightThreshold", "highlightSaturation"
+            ),
+            omatches
+        )
+        // The 50 mm preset defaults for a 1920 px wide composition.
+        fun scalarOf(group: org.json.JSONArray, match: String): Double =
+            propAt(group, match).getJSONObject("value").getDouble("v")
+        assertEquals(1920.0 * 50.0 / 36.0, scalarOf(ochildren, "zoom"), 1e-9)
+        assertEquals(1920.0 * 50.0 / 36.0, scalarOf(ochildren, "focusDistance"), 1e-9)
+        assertEquals(25.3, scalarOf(ochildren, "aperture"), 1e-9)
+        assertEquals(100.0, scalarOf(ochildren, "blurLevel"), 0.0)
+        assertEquals(255.0, scalarOf(ochildren, "highlightThreshold"), 0.0)
+        assertEquals(1.0, scalarOf(ochildren, "irisAspectRatio"), 0.0)
+    }
 }

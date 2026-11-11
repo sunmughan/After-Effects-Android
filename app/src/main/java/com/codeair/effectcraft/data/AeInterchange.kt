@@ -20,7 +20,7 @@ import org.json.JSONObject
  * precise error (missing comp, bad dimensions) instead of a crash.
  */
 enum class AeLayerType {
-    TEXT, SOLID, FOOTAGE, SHAPE, NULL, COMP;
+    TEXT, SOLID, FOOTAGE, SHAPE, NULL, COMP, CAMERA;
 
     companion object {
         fun fromName(name: String): AeLayerType? = when (name.lowercase()) {
@@ -30,6 +30,7 @@ enum class AeLayerType {
             "shape" -> SHAPE
             "null" -> NULL
             "comp" -> COMP
+            "camera" -> CAMERA
             else -> null
         }
     }

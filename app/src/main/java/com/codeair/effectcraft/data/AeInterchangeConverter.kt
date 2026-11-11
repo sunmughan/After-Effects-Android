@@ -26,6 +26,12 @@ import kotlin.math.roundToLong
 object AeInterchangeConverter {
     const val TICKS_PER_SECOND = 254_016_000_000L
 
+    /** The iris-shape popup of build::camera_options_for (9 items, default 0). */
+    private val IRIS_SHAPE_OPTIONS = listOf(
+        "Fast Rectangle", "Triangle", "Square", "Pentagon", "Hexagon",
+        "Heptagon", "Octagon", "Nonagon", "Decagon"
+    )
+
     fun toCanonicalJson(
         project: AeProject,
         mediaResolver: (String) -> String? = { null }
@@ -136,7 +142,7 @@ object AeInterchangeConverter {
         }
         val layerIdByName = resolved.associate { it.ae.name to it.layerId }
         for (entry in resolved) {
-            val layer = convertLayer(entry.ae, entry.layerId, entry.itemId, layerIdByName, ids, compIdByIndex)
+            val layer = convertLayer(entry.ae, entry.layerId, entry.itemId, layerIdByName, ids, compIdByIndex, comp.width.toDouble())
             layersJson.put(layer)
             if (entry.itemId != null) {
                 items.put(entry.itemId.toString(), buildSourceItem(entry.ae, entry.itemId, comp, mediaResolver))
@@ -187,7 +193,8 @@ object AeInterchangeConverter {
         itemId: Long?,
         layerIdByName: Map<String, Long>,
         ids: Ids,
-        compIdByIndex: List<Long>
+        compIdByIndex: List<Long>,
+        compWidth: Double
     ): JSONObject {
         val source = when (layer.type) {
             AeLayerType.FOOTAGE -> JSONObject().put("type", "Footage").put("item", itemId)
@@ -195,6 +202,7 @@ object AeInterchangeConverter {
             AeLayerType.TEXT -> JSONObject().put("type", "Text")
             AeLayerType.SHAPE -> JSONObject().put("type", "Shape")
             AeLayerType.NULL -> JSONObject().put("type", "Null")
+            AeLayerType.CAMERA -> JSONObject().put("type", "Camera")
             AeLayerType.COMP -> JSONObject().put("type", "Comp")
                 .put("item", layer.compIndex?.let { compIdByIndex.getOrNull(it) } ?: JSONObject.NULL)
         }
@@ -204,6 +212,7 @@ object AeInterchangeConverter {
             AeLayerType.FOOTAGE -> "Aqua"
             AeLayerType.SOLID -> "Red"
             AeLayerType.NULL -> "Red"
+            AeLayerType.CAMERA -> "Red"
             // The official default label for a comp source.
             AeLayerType.COMP -> "Sandstone"
         }
@@ -225,7 +234,7 @@ object AeInterchangeConverter {
                 "parent",
                 if (parentId != null) parentId else JSONObject.NULL
             )
-            .put("props", layerProps(layer, ids))
+            .put("props", layerProps(layer, ids, compWidth))
     }
 
     private fun switches(): JSONObject = JSONObject()
@@ -246,7 +255,22 @@ object AeInterchangeConverter {
 
     // ------------------------------------------------------------------ props tree
 
-    private fun layerProps(layer: AeLayer, ids: Ids): JSONObject {
+    private fun layerProps(layer: AeLayer, ids: Ids, compWidth: Double): JSONObject {
+        if (layer.type == AeLayerType.CAMERA) {
+            // build::layer: a camera has a transform and camera options only;
+            // no masks, no effects, no material options, no audio.
+            val children = listOf(
+                cameraTransformGroup(layer, ids),
+                cameraOptionsGroup(ids, compWidth)
+            )
+            return JSONObject()
+                .put("uid", ids.alloc())
+                .put("match", "layer")
+                .put("name", layer.name)
+                .put("kind", JSONObject().put("kind", "Plain"))
+                .put("enabled", true)
+                .put("children", JSONArray(children))
+        }
         val children = mutableListOf<JSONObject>()
         when (layer.type) {
             AeLayerType.TEXT -> children += textGroup(layer, ids)
@@ -404,6 +428,53 @@ object AeInterchangeConverter {
                 "Slider", uiExtras = sliderUi(0.0, 100.0, 0.0, 100.0, 0), keys = opacityKeys)
         )
         return groupNode(ids, "transform", "Transform", children)
+    }
+
+    /** Mirrors build::transform for a camera: point of interest and position
+     * instead of anchor and scale, no opacity, and no three_d_only flags
+     * (a camera is always 3D). The patch step supplies the position's z. */
+    private fun cameraTransformGroup(layer: AeLayer, ids: Ids): JSONObject {
+        val children = listOf(
+            propNode(ids, "poi", "Point of Interest",
+                vec3(layer.anchorPoint.first, layer.anchorPoint.second, 0.0),
+                "Point", spatial = true, shownDims = 3),
+            propNode(ids, "position", "Position",
+                vec3(layer.position.first, layer.position.second, 0.0),
+                "Point", spatial = true, shownDims = 3),
+            propNode(ids, "orientation", "Orientation", vec3(0.0, 0.0, 0.0), "Angle"),
+            propNode(ids, "rotationX", "X Rotation", scalar(0.0), "Angle"),
+            propNode(ids, "rotationY", "Y Rotation", scalar(0.0), "Angle"),
+            propNode(ids, "rotation", "Rotation", scalar(layer.rotation), "Angle")
+        )
+        return groupNode(ids, "transform", "Transform", children)
+    }
+
+    /** Mirrors build::camera_options_for: the 50 mm preset defaults for a
+     * composition this wide. The patch step overwrites the stored values. */
+    private fun cameraOptionsGroup(ids: Ids, compWidth: Double): JSONObject {
+        val zoom = compWidth * 50.0 / 36.0
+        val children = listOf(
+            propNode(ids, "zoom", "Zoom", scalar(zoom), "Pixels"),
+            propNode(ids, "dof", "Depth of Field", boolValue(false), "Checkbox"),
+            propNode(ids, "focusDistance", "Focus Distance", scalar(zoom), "Pixels"),
+            propNode(ids, "aperture", "Aperture", scalar(25.3 * compWidth / 1920.0), "Pixels"),
+            propNode(ids, "blurLevel", "Blur Level", scalar(100.0), "Percent"),
+            propNode(ids, "irisShape", "Iris Shape", enumValue(0), "Popup",
+                uiExtras = popupUi(IRIS_SHAPE_OPTIONS)),
+            propNode(ids, "irisRotation", "Iris Rotation", scalar(0.0), "Angle"),
+            propNode(ids, "irisRoundness", "Iris Roundness", scalar(0.0), "Percent"),
+            propNode(ids, "irisAspectRatio", "Iris Aspect Ratio", scalar(1.0), "Slider",
+                uiExtras = sliderUi(0.01, 100.0, 0.01, 100.0, 2)),
+            propNode(ids, "irisDiffractionFringe", "Diffraction Fringe", scalar(0.0), "Slider",
+                uiExtras = sliderUi(0.0, 1000.0, 0.0, 1000.0, 0)),
+            propNode(ids, "highlightGain", "Highlight Gain", scalar(0.0), "Slider",
+                uiExtras = sliderUi(0.0, 100.0, 0.0, 100.0, 0)),
+            propNode(ids, "highlightThreshold", "Highlight Threshold", scalar(255.0), "Slider",
+                uiExtras = sliderUi(0.0, 255.0, 0.0, 255.0, 0)),
+            propNode(ids, "highlightSaturation", "Highlight Saturation", scalar(0.0), "Slider",
+                uiExtras = sliderUi(0.0, 100.0, 0.0, 100.0, 0))
+        )
+        return groupNode(ids, "cameraOptions", "Camera Options", children)
     }
 
     /** Mirrors build::text: Source Text + Per-character 3D + Path/More Options + Animators. */

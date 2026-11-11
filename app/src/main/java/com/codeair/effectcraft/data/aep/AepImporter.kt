@@ -38,11 +38,15 @@ import kotlin.math.roundToLong
  * stroke, gradient fill and stroke, trim, round corners, merge, offset and repeater,
  * with keyframes and expressions); every composition in the project, and precomp
  * layers pointing at them.
- * NOT imported in v1 (all reported as losses): camera and
+ * NOT imported in v1 (all reported as losses):
  * light layers, layer styles, 3D rotations,
  * project settings, folders. Text imports with
  * its first-run style, runs, paragraphs and box; text animators, Source Text
- * keyframes and expressions are losses.
+ * keyframes and expressions are losses. Cameras import since the real-file
+ * fix: source, transform (point of interest, position with depth, rotations),
+ * camera options (zoom, focus distance, aperture, depth of field) and the
+ * two-node auto orientation; a camera's position z is patched as a Vec3, as
+ * is any 3D layer's stored depth.
  * There is no `.aep` export in this build.
  *
  * Ports the mapping of `import/build.rs`, `import/props.rs`, `import/time.rs` and
@@ -178,7 +182,11 @@ object AepImporter {
         /** Layer markers, as canonical marker JSON, in time order. */
         val markers: JSONArray = JSONArray(),
         /** The Time Remapping property, inserted first in the layer's properties. */
-        val timeRemap: JSONObject? = null
+        val timeRemap: JSONObject? = null,
+        /** Imported camera options by canonical prop id (cameras only). */
+        val cameraOptions: Map<String, AepCameraImport.CameraOption> = emptyMap(),
+        /** The auto orientation of a camera layer: "Off" or "TowardsPointOfInterest". */
+        val autoOrient: String = "Off"
     )
 
     private data class CompPatch(
@@ -573,13 +581,7 @@ object AepImporter {
                 )
                 false
             }
-            AepHeader.LayerType.Camera -> {
-                col.lose(
-                    AepImportReport.LossCategory.UnsupportedLayers,
-                    "camera layer '$name' is not imported in this build"
-                )
-                false
-            }
+            AepHeader.LayerType.Camera -> true
             AepHeader.LayerType.Text, AepHeader.LayerType.Shape -> true
             AepHeader.LayerType.Av -> {
                 if (row.header.isNullObject()) return true
@@ -706,6 +708,12 @@ object AepImporter {
                 type = AeLayerType.SHAPE
                 col.imported.shapeLayers++
             }
+            AepHeader.LayerType.Camera -> {
+                // A camera's size is the composition size (import/build.rs);
+                // its options and auto orientation are imported below.
+                type = AeLayerType.CAMERA
+                col.imported.cameras++
+            }
             AepHeader.LayerType.Av -> {
                 if (header.isNullObject()) {
                     type = AeLayerType.NULL
@@ -781,6 +789,8 @@ object AepImporter {
         val expressions = HashMap<String, Pair<String, Boolean>>()
         val timescale = compHeader.timeBase.timescale
         for ((matchName, propId, propKind) in TRANSFORM_SPECS) {
+            // A camera's anchor point is its point of interest (import/camera.rs).
+            val id = if (type == AeLayerType.CAMERA && propId == "anchor") "poi" else propId
             val prop = (transformGroup?.get(matchName) as? AepTypedView.PropNode.Property)?.property
             val default = when (propKind) {
                 PropKind.ANCHOR -> anchorDefault
@@ -790,7 +800,7 @@ object AepImporter {
                 PropKind.OPACITY -> listOf(100.0)
             }
             if (prop == null) {
-                values[propId] = default
+                values[id] = default
                 continue
             }
             val read = readTransformValue(prop, default) { raw ->
@@ -802,15 +812,15 @@ object AepImporter {
                     "layer '$name': $matchName is unreadable, the default is used"
                 )
             }
-            values[propId] = read.value
+            values[id] = read.value
             if (prop.isAnimated()) {
                 val keys = importKeys(prop, propKind, name, matchName, timescale, anchorSize, col)
-                if (keys.isNotEmpty()) richKeys[propId] = keys
+                if (keys.isNotEmpty()) richKeys[id] = keys
             }
             val enabled = prop.expressionEnabled()
             val text = prop.expression()
             if (enabled != null && text != null) {
-                expressions[propId] = text to enabled
+                expressions[id] = text to enabled
                 col.imported.expressions++
             }
         }
@@ -818,6 +828,14 @@ object AepImporter {
         // 3D rotations (X/Y): imported like rotation — static value, keys, expression
         // (props.rs ROTATIONS).
         val staticValues = HashMap<String, List<Double>>()
+        // The converter writes position, anchor and scale as 2D (z 0, or 100 for
+        // scale): a stored z that differs is patched as a Vec3, so 3D layers keep
+        // their depth. 2D layers and the converter defaults are untouched.
+        for ((propId, value) in values) {
+            if (value.size != 3) continue
+            val defaultZ = if (propId == "scale") 100.0 else 0.0
+            if (value[2] != defaultZ) staticValues[propId] = value
+        }
         for ((matchName, propId) in listOf("ADBE Rotate X" to "rotationX", "ADBE Rotate Y" to "rotationY")) {
             val prop = (transformGroup?.get(matchName) as? AepTypedView.PropNode.Property)?.property
                 ?: continue
@@ -885,6 +903,20 @@ object AepImporter {
             }
         }
 
+        // Cameras: the Camera Options group (zoom, focus distance, aperture,
+        // depth of field) and the two-node auto orientation (props.rs
+        // camera_light_orient: auto-orient is set only for cameras and lights).
+        var cameraOptions: Map<String, AepCameraImport.CameraOption> = emptyMap()
+        var autoOrient = "Off"
+        if (type == AeLayerType.CAMERA) {
+            val position = AepCameraImport.cameraPosition(transformGroup)
+            val optionsGroup = (rootProps?.get("ADBE Camera Options Group") as? AepTypedView.PropNode.Group)?.group
+            cameraOptions = AepCameraImport.importCameraOptions(
+                optionsGroup, position, "$compName: '$name'", compWidth.toDouble(), timescale, col
+            )
+            if (header.isAutoOriented()) autoOrient = "TowardsPointOfInterest"
+        }
+
         // Everything else in the transform group: a property in its default state holds
         // nothing to lose (props.rs report_other_properties). Only a stored property
         // (animated, flags 1, expression) that is not in the known set is a loss.
@@ -931,28 +963,39 @@ object AepImporter {
                 val entryName = entry.matchName
                 when {
                     entryName == "ADBE Transform Group" -> Unit
+                    entryName == "ADBE Camera Options Group" -> {
+                        // Imported in the camera branch above; nothing to do here.
+                    }
                     entryName.contains("Effect Parade", ignoreCase = true) -> {
-                        val result = AepEffectImport.importEffects(
-                            layer, compName, name, layerIndex, header.id, effectSize,
-                            defs, provider, allocBlock, timescale, col
-                        )
-                        effectGroups = result.groups
-                        pendingLayerRefs = result.refs
+                        // Cameras cannot have effects (the converter writes no
+                        // effects group for them); the official importer skips
+                        // the block too.
+                        if (type != AeLayerType.CAMERA) {
+                            val result = AepEffectImport.importEffects(
+                                layer, compName, name, layerIndex, header.id, effectSize,
+                                defs, provider, allocBlock, timescale, col
+                            )
+                            effectGroups = result.groups
+                            pendingLayerRefs = result.refs
+                        }
                     }
                     entryName.contains("Mask", ignoreCase = true) -> {
-                        // On a text or shape layer, which has no source, the mask box is
-                        // stored in layer pixels, so the scale is 1 (import/build.rs).
-                        val maskSize: Pair<Double, Double> =
-                            if (type == AeLayerType.TEXT || type == AeLayerType.SHAPE) {
-                                1.0 to 1.0
-                            } else {
-                                effectSize
-                            }
-                        maskGroups = AepMasks.importMasks(
-                            rootProps, compName, name, maskSize,
-                            type != AeLayerType.TEXT && type != AeLayerType.SHAPE,
-                            allocBlock, timescale, col
-                        )
+                        // Cameras cannot have masks either, for the same reason.
+                        if (type != AeLayerType.CAMERA) {
+                            // On a text or shape layer, which has no source, the mask box is
+                            // stored in layer pixels, so the scale is 1 (import/build.rs).
+                            val maskSize: Pair<Double, Double> =
+                                if (type == AeLayerType.TEXT || type == AeLayerType.SHAPE) {
+                                    1.0 to 1.0
+                                } else {
+                                    effectSize
+                                }
+                            maskGroups = AepMasks.importMasks(
+                                rootProps, compName, name, maskSize,
+                                type != AeLayerType.TEXT && type != AeLayerType.SHAPE,
+                                allocBlock, timescale, col
+                            )
+                        }
                     }
                     entryName.contains("Time Remap", ignoreCase = true) -> {
                         timeRemap = AepMarkers.importTimeRemap(
@@ -1028,7 +1071,7 @@ object AepImporter {
                 "layer '$name': the layer times are unreadable, the composition range is used"
             )
         }
-        val anchor = values.getValue("anchor")
+        val anchor = if (type == AeLayerType.CAMERA) values.getValue("poi") else values.getValue("anchor")
         val position = values.getValue("position")
         val scale = values.getValue("scale")
         val aeLayer = AeLayer(
@@ -1060,7 +1103,8 @@ object AepImporter {
             keyframes = simpleKeys(richKeys)
         )
         val blend = blendName(header.blendMode.code())
-        if (blend == null) {
+        // Cameras and lights have no blend mode (their byte is 0): no loss.
+        if (blend == null && type != AeLayerType.CAMERA) {
             col.lose(
                 AepImportReport.LossCategory.BlendModes,
                 "layer '$name': blend mode code ${header.blendMode.code()} is not known, " +
@@ -1096,7 +1140,9 @@ object AepImporter {
             maskGroups = maskGroups,
             shapeGroups = shapeGroups,
             markers = layerMarkers,
-            timeRemap = timeRemap
+            timeRemap = timeRemap,
+            cameraOptions = cameraOptions,
+            autoOrient = autoOrient
         )
         return aeLayer to patch
     }
@@ -1476,6 +1522,7 @@ object AepImporter {
             val layerPatch = layerPatches.getOrNull(i) ?: continue
             layerJson.put("stretch", layerPatch.stretch)
             layerJson.put("blend_mode", layerPatch.blendMode)
+            layerJson.put("auto_orient", layerPatch.autoOrient)
             layerJson.put("switches", switchesJson(layerPatch.switches))
             if (layerPatch.markers.length() > 0) layerJson.put("markers", layerPatch.markers)
             val props = layerJson.optJSONObject("props") ?: continue
@@ -1501,6 +1548,27 @@ object AepImporter {
                             "expr",
                             JSONObject().put("text", expr.first).put("enabled", expr.second)
                         )
+                    }
+                }
+            }
+            // Camera options: overwrite the converter defaults with the imported values.
+            if (layerPatch.cameraOptions.isNotEmpty()) {
+                for (c in 0 until children.length()) {
+                    val child = children.getJSONObject(c)
+                    if (child.optString("match") != "cameraOptions") continue
+                    val ochildren = child.optJSONArray("children") ?: continue
+                    for (o in 0 until ochildren.length()) {
+                        val prop = ochildren.getJSONObject(o)
+                        val option = layerPatch.cameraOptions[prop.optString("match")] ?: continue
+                        prop.put("value", option.value)
+                        if (option.keys != null) prop.put("keys", option.keys)
+                        if (option.expr != null) {
+                            prop.put(
+                                "expr",
+                                JSONObject().put("text", option.expr.first)
+                                    .put("enabled", option.expr.second)
+                            )
+                        }
                     }
                 }
             }
@@ -1593,10 +1661,10 @@ object AepImporter {
         .put("three_d", switches.threeD)
         .put("guide", switches.guide)
 
-    /** The static value of a patched property: a scalar for the rotations, a Vec3
-     * for the orientation. */
+    /** The static value of a patched property: a Vec3 for the orientation and
+     * for a 3D position, anchor, point of interest or scale; a scalar otherwise. */
     private fun staticValueJson(match: String, values: List<Double>): JSONObject =
-        if (match == "orientation") {
+        if (match == "orientation" || values.size == 3) {
             JSONObject().put("t", "Vec3").put(
                 "v",
                 numberArray(listOf(values.getOrElse(0) { 0.0 }, values.getOrElse(1) { 0.0 }, values.getOrElse(2) { 0.0 }))
