@@ -47,11 +47,11 @@ class AepImportInstrumentedTest {
         val bytes = syntheticBytes()
         val report = ImportDocumentResolver.analyzeAep(bytes)
         val losses = report.losses.associate { it.category to it.count }
+        // Only the two unmapped effects remain: the synthetic file's two
+        // folders import now, and its project settings read cleanly.
         assertEquals(
             mapOf(
-                AepImportReport.LossCategory.Effects to 2,
-                AepImportReport.LossCategory.UnsupportedItems to 2,
-                AepImportReport.LossCategory.ProjectSettings to 1
+                AepImportReport.LossCategory.Effects to 2
             ),
             losses
         )
