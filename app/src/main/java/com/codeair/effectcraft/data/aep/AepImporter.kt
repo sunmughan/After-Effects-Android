@@ -189,7 +189,9 @@ object AepImporter {
         val autoOrient: String = "Off",
         /** A track matte waiting for the patch step: the canonical kind and the
          * matte layer's id in the file. */
-        val trackMatte: PendingTrackMatte? = null
+        val trackMatte: PendingTrackMatte? = null,
+        /** Text animator groups (uids in patch space), appended to text/animators. */
+        val animatorGroups: List<JSONObject> = emptyList()
     )
 
     /** A track matte resolved in the patch step, once every layer's project id exists. */
@@ -944,6 +946,17 @@ object AepImporter {
             if (header.isAutoOriented()) autoOrient = "TowardsPointOfInterest"
         }
 
+        // Text animators: the animator properties and range selectors of a text
+        // layer (text_anim.rs) into the converter's text/animators group.
+        var animatorGroups: List<JSONObject> = emptyList()
+        if (type == AeLayerType.TEXT) {
+            val animatorsGroup = (layer.properties()?.get("ADBE Text Properties") as? AepTypedView.PropNode.Group)?.group
+                ?.let { (it.get("ADBE Text Animators") as? AepTypedView.PropNode.Group)?.group }
+            animatorGroups = AepTextAnimImport.importAnimators(
+                animatorsGroup, "$compName: '$name'", timescale, allocBlock, col
+            )
+        }
+
         // Everything else in the transform group: a property in its default state holds
         // nothing to lose (props.rs report_other_properties). Only a stored property
         // (animated, flags 1, expression) that is not in the known set is a loss.
@@ -1173,7 +1186,8 @@ object AepImporter {
             timeRemap = timeRemap,
             cameraOptions = cameraOptions,
             autoOrient = autoOrient,
-            trackMatte = trackMatte
+            trackMatte = trackMatte,
+            animatorGroups = animatorGroups
         )
         return aeLayer to patch
     }
@@ -1580,6 +1594,9 @@ object AepImporter {
             for (group in layerPatch.shapeGroups) {
                 state.maxPatchUid = maxOf(state.maxPatchUid, AepEffectImport.maxUid(group).toLong())
             }
+            for (group in layerPatch.animatorGroups) {
+                state.maxPatchUid = maxOf(state.maxPatchUid, AepEffectImport.maxUid(group).toLong())
+            }
             layerPatch.timeRemap?.let { state.maxPatchUid = maxOf(state.maxPatchUid, it.optLong("uid")) }
             for (ref in layerPatch.pendingLayerRefs) {
                 allRefs.add(
@@ -1704,6 +1721,24 @@ object AepImporter {
                     for (group in layerPatch.shapeGroups) {
                         AepEffectImport.remapUids(group, uidOffset)
                         contentsChildren.put(group)
+                    }
+                }
+            }
+            // Text animators: append the imported groups (uids remapped into
+            // project space) to the text/animators group.
+            if (layerPatch.animatorGroups.isNotEmpty()) {
+                for (c in 0 until children.length()) {
+                    val child = children.getJSONObject(c)
+                    if (child.optString("match") != "text") continue
+                    val textChildren = child.optJSONArray("children") ?: continue
+                    for (t in 0 until textChildren.length()) {
+                        val textChild = textChildren.getJSONObject(t)
+                        if (textChild.optString("match") != "animators") continue
+                        val animChildren = textChild.optJSONArray("children") ?: continue
+                        for (group in layerPatch.animatorGroups) {
+                            AepEffectImport.remapUids(group, uidOffset)
+                            animChildren.put(group)
+                        }
                     }
                 }
             }

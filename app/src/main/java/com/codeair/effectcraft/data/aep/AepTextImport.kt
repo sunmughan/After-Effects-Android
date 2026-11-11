@@ -472,9 +472,9 @@ object AepTextImport {
 
     /**
      * The parts of a text layer besides its first text document that are not
-     * imported. Animators are not imported in this build (the official
-     * importer has `text_anim::import_animators`); Path Options and More
-     * Options are reported when they hold stored values.
+     * imported. Animators are imported by AepTextAnimImport (their own losses
+     * are recorded there); Path Options and More Options are reported when
+     * they hold stored values.
      */
     fun reportTextExtras(layer: AepTypedView.Layer, what: String, col: AepImportReport.Collector) {
         val sourceText = layer.sourceTextProperty()
@@ -498,12 +498,7 @@ object AepTextImport {
             val group = (entry.node as? AepTypedView.PropNode.Group)?.group ?: continue
             when (entry.matchName) {
                 "ADBE Text Animators" -> {
-                    if (hasStored(group, 0)) {
-                        col.lose(
-                            AepImportReport.LossCategory.TextLayers,
-                            "$what: text animators are not imported"
-                        )
-                    }
+                    // Imported by AepTextAnimImport; nothing to report here.
                 }
                 "ADBE Text Path Options" -> {
                     if (hasStored(group, 0)) {
