@@ -186,8 +186,14 @@ object AepImporter {
         /** Imported camera options by canonical prop id (cameras only). */
         val cameraOptions: Map<String, AepCameraImport.CameraOption> = emptyMap(),
         /** The auto orientation of a camera layer: "Off" or "TowardsPointOfInterest". */
-        val autoOrient: String = "Off"
+        val autoOrient: String = "Off",
+        /** A track matte waiting for the patch step: the canonical kind and the
+         * matte layer's id in the file. */
+        val trackMatte: PendingTrackMatte? = null
     )
+
+    /** A track matte resolved in the patch step, once every layer's project id exists. */
+    private data class PendingTrackMatte(val kind: String, val targetAepId: Long, val what: String)
 
     private data class CompPatch(
         val pixelAspect: Double,
@@ -480,10 +486,16 @@ object AepImporter {
 
         val aeLayers = ArrayList<AeLayer>()
         val layerPatches = ArrayList<LayerPatch>()
+        // The layer above in file order, for the older track matte form: the
+        // previous row, whether or not it imports.
+        val aboveIdById = HashMap<Long, Long?>()
+        for ((index, row) in layerRows.withIndex()) {
+            aboveIdById[row.header.id] = layerRows.getOrNull(index - 1)?.header?.id
+        }
         for ((layerIndex, row) in importable.withIndex()) {
             val built = buildLayer(
                 row, project, compView, header, durationSeconds, parentNameById[row.header.id],
-                compName, layerIndex, compIndexById, defs, provider, allocBlock, mediaResolver, col
+                compName, layerIndex, aboveIdById[row.header.id], compIndexById, defs, provider, allocBlock, mediaResolver, col
             )
             if (built == null) {
                 col.lose(
@@ -506,6 +518,19 @@ object AepImporter {
                         "${ref.what} names a layer that is not imported (id ${ref.target}), left unset"
                     )
                 }
+            }
+        }
+        // Track mattes whose matte layer was not imported stay unset too; a
+        // resolved matte counts as imported here, where the set is known.
+        for (patch in layerPatches) {
+            val matte = patch.trackMatte ?: continue
+            if (matte.targetAepId in importedIds) {
+                col.imported.trackMattes++
+            } else {
+                col.lose(
+                    AepImportReport.LossCategory.TrackMattes,
+                    "${matte.what} has a layer that was not imported as its track matte"
+                )
             }
         }
         // (The composition and layer totals are set in build(), after every comp.)
@@ -644,6 +669,8 @@ object AepImporter {
         parentName: String?,
         compName: String,
         layerIndex: Int,
+        /** The id of the layer above in file order, for the older track matte form. */
+        aboveId: Long?,
         /** The index of each imported composition in the project's comp list, by item id. */
         compIndexById: Map<Long, Int>,
         defs: AepEffects.EffectDefinitions,
@@ -1111,6 +1138,9 @@ object AepImporter {
                     "Normal is used"
             )
         }
+        // Track matte: the mode at ldta byte 107, the matte layer id at byte 160,
+        // or the layer above when the header holds no id (matte.rs).
+        val trackMatte = readTrackMatte(header, aboveId, "$compName: '$name'", col)
         val patch = LayerPatch(
             stretch = header.stretchPercent(),
             blendMode = blend ?: "Normal",
@@ -1142,9 +1172,51 @@ object AepImporter {
             markers = layerMarkers,
             timeRemap = timeRemap,
             cameraOptions = cameraOptions,
-            autoOrient = autoOrient
+            autoOrient = autoOrient,
+            trackMatte = trackMatte
         )
         return aeLayer to patch
+    }
+
+    /** The track matte of a layer: its canonical kind and the matte layer's id
+     * in the file. The matte layer id at `ldta` byte 160 wins; without it the
+     * matte is the layer above (the form of After Effects before 23.0). */
+    private fun readTrackMatte(
+        header: AepHeader.LayerHeader,
+        aboveId: Long?,
+        what: String,
+        col: AepImportReport.Collector
+    ): PendingTrackMatte? {
+        val kind = when (header.matteModeCode) {
+            0 -> return null
+            1 -> "Alpha"
+            2 -> "AlphaInverted"
+            3 -> "Luma"
+            4 -> "LumaInverted"
+            else -> {
+                col.lose(
+                    AepImportReport.LossCategory.TrackMattes,
+                    "$what has a track matte of unknown mode ${header.matteModeCode}"
+                )
+                return null
+            }
+        }
+        val target = header.matteLayerId ?: aboveId
+        if (target == null) {
+            col.lose(
+                AepImportReport.LossCategory.TrackMattes,
+                "$what has a track matte but no layer above it"
+            )
+            return null
+        }
+        if (target == header.id) {
+            col.lose(
+                AepImportReport.LossCategory.TrackMattes,
+                "$what is its own track matte"
+            )
+            return null
+        }
+        return PendingTrackMatte(kind, target, what)
     }
 
     private data class PropRead(val value: List<Double>, val unreadable: Boolean)
@@ -1571,6 +1643,16 @@ object AepImporter {
                         }
                     }
                 }
+            }
+            // Track matte: the matte layer's project id, resolved now that every
+            // layer's project id exists. A matte whose layer was not imported
+            // stays unset (the loss was recorded in buildComp).
+            layerPatch.trackMatte?.let { matte ->
+                val matteId = fileIdToEcId[matte.targetAepId] ?: return@let
+                layerJson.put(
+                    "track_matte",
+                    JSONObject().put("layer", matteId).put("kind", matte.kind)
+                )
             }
             // Effects: append the imported groups (uids remapped into project space)
             // to the layer's effects group.

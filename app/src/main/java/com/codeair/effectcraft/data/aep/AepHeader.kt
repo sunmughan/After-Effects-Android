@@ -286,7 +286,13 @@ object AepHeader {
         /** The id of the parent layer, null when there is none. */
         val parentId: Long?,
         /** The `u32` at byte 136 (the light type of a light layer, 0 elsewhere). */
-        val lightTypeCode: Long
+        val lightTypeCode: Long,
+        /** The track matte mode (`ldta` byte 107): 0 no matte, 1 alpha, 2 alpha
+         * inverted, 3 luma, 4 luma inverted, anything else unknown. */
+        val matteModeCode: Int,
+        /** The id of the matte layer (`u32` at `ldta` byte 160); null when 0 or
+         * the header is too short to hold it (the older "layer above" form). */
+        val matteLayerId: Long?
     ) {
         companion object {
             /** Decodes an `ldta` body; null when it is shorter than 140 bytes. */
@@ -327,7 +333,9 @@ object AepHeader {
                         else -> LayerType.Other(beU32(ldta, 128)!!)
                     },
                     parentId = if (parent != 0L) parent else null,
-                    lightTypeCode = beU32(ldta, 136) ?: return null
+                    lightTypeCode = beU32(ldta, 136) ?: return null,
+                    matteModeCode = ldta.getOrNull(107)?.toInt()?.and(0xFF) ?: return null,
+                    matteLayerId = beU32(ldta, 160)?.takeIf { it != 0L }
                 )
             }
         }
